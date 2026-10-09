@@ -360,6 +360,54 @@
     { p: 'mat', l: { droite: -20, d: 8.5 }, libre: true },
   ]);
 
+  // LA RUELLE DE LA NUIT DU MOLOSSE (09/10, « creer un decor dans une ruelle
+  // avec la piste qui se fond dans la ruelle, on fait le decor avec Tripo »).
+  //
+  // Une rangee de maisons a colombages (Tripo, onze metres) borde la piste du
+  // cote qui MONTE a l'ecran : a l'exterieur en ligne droite, a l'interieur
+  // dans les virages (« la pelouse est au-dessus de la piste », plus haut).
+  // Elles sont toutes `fond` : dessinees AVANT la piste et les coureurs, a la
+  // place des gradins — derriere eux, jamais devant. Des reverberes se
+  // dressent au bord de la piste, entre elle et les facades.
+  //
+  // UNE SEULE MAISON, TROIS VISAGES. Son plan est presque carre : tournee
+  // d'un quart de tour, elle montre un autre flanc (`rot`), et la rangee ne
+  // se repete plus a l'identique. Les rendus couvrent tous les caps (voir
+  // palettes.py, `virage`).
+  //
+  // Le cote de la piste ou elles se dressent : `d` est compte depuis la corde
+  // vers le centre ; en ligne droite, le bord exterieur est a -9,8 m.
+  const RUELLE_PAS = 5.6, RUELLE_DEHORS = -14.2, RUELLE_DEDANS = 4.2;
+  const ruelle = [];
+  {
+    // LES DEUX COTES, ET L'ECRAN CHOISIT. Selon l'endroit du tour, le cote qui
+    // monte a l'ecran n'est pas le meme : l'exterieur en ligne droite, tantot
+    // l'un tantot l'autre dans un virage. Les maisons sont donc posees des
+    // deux cotes, et `debout` ne garde, a chaque image, que celles qui se
+    // trouvent AU-DESSUS de la piste (voir `auDessus`).
+    const tours = [0, 90, 270, 0, 270, 90];
+    let i = 0;
+    const maison = (l, rot) => ruelle.push({ p: 'maison', l, rot, fond: true, libre: true });
+    for (let x = -40; x <= 175; x += RUELLE_PAS, i++) {
+      maison({ droite: x, d: RUELLE_DEHORS }, tours[i % 6]);
+      maison({ droite: x, d: RUELLE_DEDANS }, 180 + tours[(i + 2) % 6]);
+      maison({ arriere: x, d: RUELLE_DEHORS }, tours[(i + 4) % 6]);
+      maison({ arriere: x, d: RUELLE_DEDANS }, 180 + tours[(i + 1) % 6]);
+    }
+    for (let a = 0; a <= 180; a += 7, i++) {
+      for (const v of ['virage', 'virage2']) {
+        // dedans, la facade regarde la piste, donc vers l'exterieur
+        maison({ [v]: a, d: RUELLE_DEDANS }, 180 + tours[i % 6]);
+        maison({ [v]: a, d: RUELLE_DEHORS }, tours[(i + 3) % 6]);
+      }
+    }
+    for (let x = -24; x <= 168; x += 18) {
+      ruelle.push({ p: 'reverbere', l: { droite: x, d: -10.9 }, fond: true, libre: true });
+      ruelle.push({ p: 'reverbere', l: { droite: x + 9, d: 1.1 }, fond: true, libre: true });
+    }
+  }
+  PLAN.halloween = tous(ruelle);
+
   // Rendues au soleil de Blender : la nuit, une copie teinte (heure-du-jour.js).
   const nuit = (im, part) => (root.SprinterHeure ? root.SprinterHeure.image(im, part) : im);
 
@@ -397,9 +445,11 @@
     return e.l.d >= portee + MARGE_COURSE;
   }
 
-  function pieces(api, th, etape, sol) {
-    const nom = nomDuTheme(api.THEMES, th);
-    const plan = nom && PLAN[nom];
+  function pieces(api, th, etape, sol, fond) {
+    const base = nomDuTheme(api.THEMES, th);
+    const plan = base && PLAN[base];
+    // la serie rendue sous la camera du moment, s'il y en a (fabriquer --angle)
+    const nom = base && serieDeLaVue(api, base);
     const man = nom && MAN().stades[nom];
     if (!plan || !man) return [];
     const T = api.G.track;
@@ -410,7 +460,7 @@
     const Z = api.G.zoneReservee;
     const out = [];
     for (const e of plan) {
-      if (!!e.sol !== sol || etape < e.des) continue;
+      if (!!e.sol !== sol || !!e.fond !== !!fond || etape < e.des) continue;
       const L = lieu(T, e.l);
       if (!L) continue;
       if (Z && L.X >= Z.x0 && L.X <= Z.x1 && L.Y >= Z.y0 && L.Y <= Z.y1) continue;
@@ -441,15 +491,84 @@
     }
   }
 
+  /**
+   * Les pieces du FOND (`fond`) : derriere la piste, a appeler avant elle et
+   * avant les coureurs — la ou se dessinaient les gradins. Meme pose que
+   * `debout`.
+   */
+  function fond(ctx, api, th, etape) {
+    debout(ctx, api, th, etape, true);
+  }
+
+  // LA NUIT DE LA RUELLE (`assombrir` du theme). Les pieces sont rendues a la
+  // lumiere du jeu, en plein jour ; la ruelle est de nuit. Chaque image en
+  // recoit une copie teinte une fois pour toutes — multipliee par la couleur
+  // de la nuit —, plutot qu'un filtre a chaque image.
+  const _eteintes = new WeakMap();
+  function eteinte(im, teinte) {
+    let c = _eteintes.get(im);
+    if (c) return c;
+    c = document.createElement('canvas');
+    c.width = im.naturalWidth || im.width; c.height = im.naturalHeight || im.height;
+    const g = c.getContext('2d');
+    g.drawImage(im, 0, 0);
+    g.globalCompositeOperation = 'multiply';
+    g.fillStyle = 'rgb(' + teinte.join(',') + ')';
+    g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = 'destination-in';
+    g.drawImage(im, 0, 0);
+    _eteintes.set(im, c);
+    return c;
+  }
+
+  // LES REVERBERES S'ALLUMENT : un halo autour de la lanterne et une flaque
+  // de lumiere sur les pavés, peints par-dessus l'image. La lanterne est
+  // mesuree sur le rendu (x 0,71, y 0,18 de l'image).
+  function lueur(ctx, x, y, w, h, pied, m, t) {
+    const lx = x + w * 0.71, ly = y + h * 0.18;
+    const vacille = 0.92 + 0.08 * Math.sin(t * 13 + x) * Math.sin(t * 7.3);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    let g = ctx.createRadialGradient(lx, ly, 0, lx, ly, m * 2.2);
+    g.addColorStop(0, `rgba(255,190,90,${0.55 * vacille})`);
+    g.addColorStop(0.25, `rgba(255,150,60,${0.18 * vacille})`);
+    g.addColorStop(1, 'rgba(255,120,40,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(lx, ly, m * 2.2, 0, Math.PI * 2); ctx.fill();
+    // la flaque au sol, ecrasee comme le sol a l'ecran
+    ctx.translate(pied[0], pied[1]);
+    ctx.scale(1, 0.32);
+    g = ctx.createRadialGradient(0, 0, 0, 0, 0, m * 3.2);
+    g.addColorStop(0, `rgba(255,170,80,${0.22 * vacille})`);
+    g.addColorStop(1, 'rgba(255,140,60,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0, 0, m * 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+
+  /**
+   * Une piece du fond est-elle AU-DESSUS de la piste a l'image ? On regarde
+   * ou tombe, a l'ecran, un point pris trois metres vers la piste : s'il est
+   * plus haut que le pied de la piece, la piste passe au-dessus d'elle — la
+   * piece serait du cote de la camera, et on ne la dessine pas.
+   */
+  function auDessus(api, L, e) {
+    const vers = e.l.d < 0 ? 1 : -1;
+    const g0 = api.ground(L.X, L.Y);
+    const g1 = api.ground(L.X + L.nx * 3 * vers, L.Y + L.ny * 3 * vers);
+    return g1[1] >= g0[1];
+  }
+
   /** Les pieces debout : a appeler apres les coureurs. */
-  function debout(ctx, api, th, etape) {
-    const liste = pieces(api, th, etape, false);
+  function debout(ctx, api, th, etape, auFond) {
+    const liste = pieces(api, th, etape, false, !!auFond);
     if (!liste.length) return;
     const G = api.G, T = G.track, m = api.scaleM();
     const vue = T.curved ? api.WROT_DEG : 0;
     // du plus loin au plus pres
     liste.sort((a, b) => api.depthOf(b.L.X, b.L.Y) - api.depthOf(a.L.X, a.L.Y));
     for (const { e, L, nom } of liste) {
+      if (auFond && !auDessus(api, L, e)) continue;
       const ri = rendu(api, 'debout', nom, e.p, (rendus) => cap(rendus, L.yaw + vue));
       if (!ri) continue;
       const [r, im, M] = ri;
@@ -460,7 +579,9 @@
       // du cadre : faite a son entree dans le champ, elle tombait en course.
       if (G.state !== 'race') nuit(im, 'proche');
       if (x > G.VW || y > G.VH || x + w < 0 || y + h < 0) continue;
-      ctx.drawImage(nuit(im, 'proche'), x, y, w, h);
+      const base = (th.base || th);
+      ctx.drawImage(base.assombrir ? eteinte(im, base.assombrir) : nuit(im, 'proche'), x, y, w, h);
+      if (base.assombrir && e.p === 'reverbere') lueur(ctx, x, y, w, h, p, m, G.elapsed || 0);
     }
   }
 
@@ -501,24 +622,34 @@
   // sprint. Le Champ-de-Mars (15°) garde la serie du sprint : sa vue est
   // ramenee a celle-ci par capALEcran (sprinter-app.js), voir `vueGardee`.
   const SPRINT_DEG = Math.atan(0.5) * 180 / Math.PI;
-  let seriesConnues = null;
-  function materielDeLaVue(api) {
-    if (!seriesConnues) {
-      seriesConnues = [];
+  const seriesConnues = {};
+  /**
+   * La serie de `base` rendue sous l'angle le plus proche de la vue : `base`
+   * elle-meme (la vue du sprint) ou `base-a<deg>`. Vaut pour le materiel et
+   * pour tout stade rendu sous d'autres cameras (la ruelle du molosse).
+   */
+  function serieDeLaVue(api, base) {
+    let liste = seriesConnues[base];
+    if (!liste) {
+      liste = seriesConnues[base] = [];
+      const re = new RegExp('^' + base + '-a([\\d.]+)$');
       for (const k of Object.keys(MAN().stades || {})) {
-        if (k === 'materiel') seriesConnues.push([SPRINT_DEG, k]);
-        const m = /^materiel-a([\d.]+)$/.exec(k);
-        if (m) seriesConnues.push([parseFloat(m[1]), k]);
+        if (k === base) liste.push([SPRINT_DEG, k]);
+        const m = re.exec(k);
+        if (m) liste.push([parseFloat(m[1]), k]);
       }
     }
-    const sin = api.vueGardee ? api.vueGardee.sin : api.C.ISO_SIN;
+    if (liste.length < 2) return base;
+    const C = api.C || (root.SprinterCore && root.SprinterCore.C);
+    const sin = api.vueGardee ? api.vueGardee.sin : (C ? C.ISO_SIN : 1 / Math.sqrt(5));
     const deg = Math.asin(Math.max(-1, Math.min(1, sin))) * 180 / Math.PI;
-    let mieux = 'materiel', ecart = Infinity;
-    for (const [a, k] of seriesConnues) {
+    let mieux = base, ecart = Infinity;
+    for (const [a, k] of liste) {
       if (Math.abs(a - deg) < ecart) { ecart = Math.abs(a - deg); mieux = k; }
     }
     return mieux;
   }
+  const materielDeLaVue = (api) => serieDeLaVue(api, 'materiel');
 
-  root.DecorsStades = { sol, debout, bloc, demanderBloc, PLAN };
+  root.DecorsStades = { sol, fond, debout, bloc, demanderBloc, PLAN };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

@@ -108,3 +108,11 @@ STADES['materiel'] = dict(debout=['blocs'], sol=[], symetriques=[], caps=32, pxP
 # se regarde pareil de partout ; la cabine a une face, tournee vers la piste.
 PALETTES['montreuil'] = dict(BASE)
 STADES['montreuil'] = dict(debout=['cabine', 'mat'], sol=[], symetriques=['mat'])
+# La ruelle de la nuit du molosse : maisons et reverberes Tripo, rendus sous
+# les cameras basses des nuits (fabriquer.py --angle). Les maisons longent la
+# piste en ligne droite ET dans les virages : tous les caps.
+PALETTES['halloween'] = dict(BASE)
+# Sans ombre au sol : une ombre de plein soleil n'a rien a faire dans une
+# ruelle de nuit, et son rendu Cycles coutait plusieurs minutes par cap.
+STADES['halloween'] = dict(debout=['maison', 'reverbere'], sol=[], symetriques=['reverbere'],
+                           virage=['maison'], pxParM=96, sansOmbre=True)

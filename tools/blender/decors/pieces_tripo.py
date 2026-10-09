@@ -50,6 +50,20 @@ MODELES = {
     'mat': dict(f='mat-tripo-meshopt.glb', taille=25.0, axe='z', quart=0),
 }
 
+# LA RUELLE DE LA NUIT DU MOLOSSE (09/10, « creer un decor dans une ruelle,
+# on fait le decor avec Tripo »). Texte vers 3D, compte secondaire de
+# l'auteur ; registre dans assets-sources/molosse-ruelle/projets-tripo.txt.
+RUELLE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', '..', '..',
+                      'assets-sources', 'molosse-ruelle', 'modeles')
+MODELES.update({
+    # La maison etroite a colombages : trois etages et le pignon, onze metres.
+    'maison': dict(chemin=os.path.join(RUELLE, 'facade-tripo-meshopt.glb'), taille=11.0,
+                   axe='z', quart=0),
+    # Le reverbere en fonte : quatre metres vingt, lanterne comprise.
+    'reverbere': dict(chemin=os.path.join(RUELLE, 'reverbere-tripo-meshopt.glb'), taille=4.2,
+                      axe='z', quart=0),
+})
+
 # La part des faces gardee au rendu (voir l'en-tete).
 REDUCTION = 0.12
 
@@ -90,11 +104,34 @@ def matiere_texturee(nom, image, gain=1.0):
     return m
 
 
+def _cache(nom, cfg, gain):
+    """Le fichier ou garder le modele deja reduit, mis a l'echelle et peint.
+
+    fabriquer.py vide la scene a CHAQUE cap ; sans cache, un modele Tripo de
+    deux millions de faces etait reimporte et reduit vingt fois (six minutes
+    chacune pour la maison de la ruelle). La cle suit le fichier source et
+    les reglages : un modele change ou une autre reduction refont le cache.
+    """
+    src = cfg.get('chemin') or os.path.join(SOURCES, cfg['f'])
+    cle = '%s-%d-%s-%s-%s-%s' % (nom, int(os.path.getmtime(src)), REDUCTION, cfg['taille'],
+                                 cfg['quart'], gain)
+    return os.path.join('/tmp', 'tripo-cache-%s.blend' % cle)
+
+
 def importer(nom, gain=1.0):
     """Importe le modele `nom`, a l'echelle et a sa place ; rend l'objet."""
     cfg = MODELES[nom]
+    f_cache = _cache(nom, cfg, gain)
+    if os.path.exists(f_cache):
+        with bpy.data.libraries.load(f_cache) as (src, dst):
+            dst.meshes = list(src.meshes)
+        me = dst.meshes[0]
+        o = bpy.data.objects.new('tripo_' + nom, me)
+        bpy.context.collection.objects.link(o)
+        o.parent = PC._racine
+        return o
     avant = set(bpy.data.objects)
-    bpy.ops.import_scene.gltf(filepath=os.path.join(SOURCES, cfg['f']))
+    bpy.ops.import_scene.gltf(filepath=cfg.get('chemin') or os.path.join(SOURCES, cfg['f']))
     neufs = [o for o in bpy.data.objects if o not in avant and o.type == 'MESH']
     if len(neufs) != 1:
         raise RuntimeError('%s : %d maillages importes, un attendu' % (nom, len(neufs)))
@@ -138,6 +175,10 @@ def importer(nom, gain=1.0):
         raise RuntimeError('%s : pas de texture de couleur dans le modele Tripo' % nom)
     me.materials.clear()
     PC._poser(o, matiere_texturee('tripo_' + nom, image, gain))
+    # l'image doit voyager dans le cache : elle vient du glb, emballee
+    if not image.packed_file:
+        image.pack()
+    bpy.data.libraries.write(f_cache, {me}, fake_user=True, compress=True)
     return o
 
 
@@ -149,4 +190,12 @@ def mat(P):
     importer('mat', gain=P.get('gainTripo', 1.0))
 
 
-PC.DEBOUT.update({'cabine': cabine, 'mat': mat})
+def maison(P):
+    importer('maison', gain=P.get('gainTripo', 1.0))
+
+
+def reverbere(P):
+    importer('reverbere', gain=P.get('gainTripo', 1.0))
+
+
+PC.DEBOUT.update({'cabine': cabine, 'mat': mat, 'maison': maison, 'reverbere': reverbere})

@@ -305,13 +305,22 @@
       // (halloween-molosse.js) et non par le theme : elle doit passer DEVANT
       // le degrade et derriere les gradins.
       skyTop: [14, 8, 26], skyBot: [46, 24, 58], stars: 340,
-      // L'herbe d'un cimetiere la nuit : verte, mais eteinte. Le bord tire
-      // vers le brun — la terre remuee autour des tombes.
-      grass: [18, 34, 22], grassEdge: [30, 40, 24],
-      trackA: [226, 108, 26], trackB: [198, 88, 18],
-      // Les lignes sont couleur d'os, pas blanches : un blanc pur, sur cette
-      // piste-la, claquait plus fort que la piste elle-meme.
-      lane: [242, 232, 208], kerb: [124, 208, 78],
+      // LA RUELLE (09/10, « un decor dans une ruelle avec la piste qui se
+      // fond dans la ruelle »). Le sol n'est plus de l'herbe mais des pavés
+      // mouilles (`paves`, voir tuileDePaves) : la rue est d'un gris bleute
+      // sombre, et la piste, faite des memes pierres, n'en garde qu'une teinte
+      // rouille — de la peinture usee sur les pavés. Les lignes sont a moitie
+      // effacees (`ligneUsee`), le liseret vert est devenu une bordure de
+      // pierre. Les maisons et les reverberes viennent de Tripo
+      // (decors-stades.js, PLAN.halloween).
+      grass: [46, 48, 58], grassEdge: [30, 32, 40],
+      trackA: [150, 78, 40], trackB: [132, 66, 32],
+      paves: true, sansGrain: true, herbe: false, sansPanneaux: true,
+      // les maisons et les reverberes Tripo, rendus en plein jour, passent a
+      // la nuit (decors-stades.js, `eteinte`) ; les reverberes s'allument
+      assombrir: [92, 96, 128],
+      // Les lignes sont couleur d'os, pas blanches, et usees.
+      lane: [242, 232, 208], kerb: [96, 92, 96], ligneUsee: 0.42,
       tread: [64, 58, 78], riser: [40, 36, 52], roof: [18, 16, 26],
       barrier: [96, 88, 116],
       panels: [[236, 124, 32], [138, 74, 200], [124, 208, 78], [242, 232, 208]],
@@ -322,7 +331,7 @@
       // monte droit et noir — et un village endormi a l'horizon, fenetres
       // allumees. Il ne prend ni les tourbillons ni le coup de pinceau : la
       // piste doit rester nette sous les pieds de quelqu'un qui fuit.
-      arbres: 'cypres',
+      // (plus de cypres : une ruelle n'en a pas — voir `paves`)
       // LES DEUX TEINTES DU CYPRES SONT OBLIGATOIRES DES QU'ON DEMANDE CET
       // ARBRE. Le dessin les lit sans garde (cypresTile), et un theme qui
       // reclame des cypres sans les fournir fait tomber toute l'image du
@@ -4375,6 +4384,92 @@
     }
     ctx.closePath(); ctx.fillStyle = col; ctx.fill();
   }
+  // LES PAVES DE LA RUELLE (theme `paves`, la nuit du molosse, 09/10).
+  //
+  // « La piste qui se fond dans la ruelle » : la rue et la piste sont faites
+  // des memes pavés, et seule une teinte rouille et des lignes usees disent
+  // encore ou court la piste. Une tuile de pierres est dessinee une fois —
+  // joints sombres, pierres a peine teintees, un reflet mouille en haut de
+  // chacune — en TRANSPARENCE : posee sur l'aplat de la rue, elle fait des
+  // pavés gris ; sur la piste, des pavés rouilles. Elle se plaque sur le sol
+  // avec la projection meme du jeu (affine au sol, comme les pieces au sol de
+  // decors-stades.js) : elle defile avec la piste et suit la camera basse.
+  const PAVES_PX = 256;
+  let _tuilePaves = null;
+  function tuileDePaves() {
+    if (_tuilePaves) return _tuilePaves;
+    const S = PAVES_PX, c = document.createElement('canvas');
+    c.width = c.height = S;
+    const g = c.getContext('2d');
+    g.fillStyle = 'rgba(0,0,0,0.62)';
+    g.fillRect(0, 0, S, S);
+    let graine = 9;
+    const alea = () => (graine = (graine * 16807) % 2147483647) / 2147483647;
+    // DES PIERRES IRREGULIERES, PAS DES BRIQUES. Une grille reguliere de
+    // pierres rectangulaires, posee a plat a l'ecran, se lisait comme un mur :
+    // chaque pave est un galet a sept cotes, de taille et d'assise variables,
+    // et les rangs se decalent au hasard.
+    const rangs = 10, par = 7, hR = S / rangs, wP = S / par;
+    const galet = (cx, cy, rx, ry) => {
+      const n = 7, pts = [];
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + alea() * 0.4;
+        const k = 0.82 + 0.18 * alea();
+        pts.push([cx + Math.cos(a) * rx * k, cy + Math.sin(a) * ry * k]);
+      }
+      g.beginPath();
+      for (let i = 0; i < n; i++) {
+        const p0 = pts[i], p1 = pts[(i + 1) % n];
+        const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2;
+        i ? g.quadraticCurveTo(p0[0], p0[1], mx, my) : g.moveTo(mx, my);
+      }
+      const p0 = pts[0], p1 = pts[1];
+      g.quadraticCurveTo(p0[0], p0[1], (p0[0] + p1[0]) / 2, (p0[1] + p1[1]) / 2);
+      g.closePath();
+    };
+    for (let r = 0; r < rangs; r++) {
+      const decal = alea();
+      for (let k = -1; k <= par; k++) {
+        const cx = (k + decal) * wP + (alea() - 0.5) * wP * 0.15;
+        const cy = (r + 0.5) * hR + (alea() - 0.5) * hR * 0.12;
+        const rx = wP * (0.40 + 0.08 * alea()), ry = hR * (0.38 + 0.08 * alea());
+        const ombre = alea(), lustre = alea();
+        for (const dx of [0, S]) {
+          const x = cx + (cx < S / 2 ? dx : -dx);
+          g.globalCompositeOperation = 'destination-out';
+          galet(x, cy, rx, ry); g.fillStyle = 'rgba(0,0,0,0.86)'; g.fill();
+          g.globalCompositeOperation = 'source-over';
+          g.fillStyle = `rgba(0,0,0,${0.04 + 0.22 * ombre})`; g.fill();
+          const gr = g.createLinearGradient(0, cy - ry, 0, cy + ry);
+          gr.addColorStop(0, `rgba(205,220,240,${0.12 + 0.12 * lustre})`);
+          gr.addColorStop(0.5, 'rgba(205,220,240,0)');
+          gr.addColorStop(1, 'rgba(0,0,0,0.25)');
+          g.fillStyle = gr; g.fill();
+        }
+      }
+    }
+    _tuilePaves = c;
+    return c;
+  }
+  let _motifPaves = null, _motifCtx = null;
+  function motifDePaves(ctx) {
+    if (!_motifPaves || _motifCtx !== ctx) {
+      _motifPaves = ctx.createPattern(tuileDePaves(), 'repeat');
+      _motifCtx = ctx;
+    }
+    // LES PIERRES SONT POSEES A L'ECRAN, PAS AU SOL. Plaquee par la vraie
+    // projection, la tuile s'ecrasait sous les cameras basses du mode (cinq a
+    // vingt degres) en fines rayures — de la tole ondulee, pas des pavés. On
+    // la pose donc a plat a l'ecran, aplatie de moitie comme le serait un sol
+    // vu de loin, a la taille d'un pave de vingt-huit centimetres, et ACCROCHEE
+    // AU MONDE : son origine suit ground(0, 0), elle defile avec la piste.
+    const o = ground(0, 0), s = 0.20 * scaleM() / (PAVES_PX / 7);
+    if (_motifPaves && _motifPaves.setTransform) {
+      _motifPaves.setTransform(new DOMMatrix([s, 0, 0, s * 0.42, o[0], o[1]]));
+    }
+    return _motifPaves;
+  }
+
   // Meme trace que band(), mais SANS teinte : elle remplit avec ce que
   // l'appelant a deja pose dans fillStyle. C'est ce qu'il faut pour les voiles
   // de la couche de finition — une occlusion n'a pas de couleur a elle, elle
@@ -6888,8 +6983,10 @@
         ctx.closePath();
       }
       ctx.fillStyle = rgb(th.grass); ctx.fill();
+      if (th.paves) { ctx.fillStyle = motifDePaves(ctx); ctx.fill(); }
     } else {
       band(ctx, sm, rIn - 60, rIn, rgb(th.grass));
+      if (th.paves) band(ctx, sm, rIn - 60, rIn, motifDePaves(ctx));
     }
     // LA PELOUSE EXTERIEURE, ET SURTOUT OU ELLE S'ARRETE.
     //
@@ -6917,6 +7014,7 @@
     // le paysage, dans cet ordre, comme au 100 m.
     const horizon = (th.horizon || 46) + (G.ecartTribune || 0);
     band(ctx, trancheVue(sm, rOut, rOut + horizon), rOut, rOut + horizon, rgb(th.grass));
+    if (th.paves) band(ctx, trancheVue(sm, rOut, rOut + horizon), rOut, rOut + horizon, motifDePaves(ctx));
     // Les passes de tondeuse, sur les deux pelouses a la fois. Elles viennent
     // ici, avant tout ce qui se pose dessus (piscine, transats, arbres), et
     // apres les deux aplats qu'elles habillent. Voir rendu-premium.js.
@@ -6991,6 +7089,10 @@
       drawFeuillus(ctx, th, sm, rOut + ecartDehors, 1.6 + tribuneDe(th).gradins * 1.7 + 3.2);
     }
 
+    // Les pieces du FOND (la ruelle du molosse) : derriere la piste, avant
+    // elle et avant les coureurs, comme les gradins. Voir decors-stades.js.
+    if (DEC() && DEC().fond) DEC().fond(ctx, apiDecor(), th, G.levelIdx);
+
     // Tribune simplifiee : muret, gradins, toiture. Elle est dessinee AVANT
     // la piste. Ces bandes sont posees en hauteur, et dans le virage leur
     // projection retombe sur la surface de course : peintes apres, elles
@@ -7013,7 +7115,8 @@
     if (cdm) cdm.badauds(ctx, apiCdm(), th, sm, near, enTribune.dans);
     // Au Champ-de-Mars, des barrieres Vauban rendues dans Blender remplacent
     // les panneaux — quand elles sont chargees et valent pour cette vue.
-    if (!(cdm && cdm.barrieres(ctx, apiCdm(), th, near))) {
+    // (une ruelle n'a ni barriere ni panneaux : `sansPanneaux`)
+    if (!th.sansPanneaux && !(cdm && cdm.barrieres(ctx, apiCdm(), th, near))) {
       band(ctx, trancheVue(sm, near, near + 0.35, 1.05, 1.05), near, near + 0.35, rgb(th.barrier), 1.05);
       // Panneaux publicitaires : face verticale eclairee au lieu d'une bande
       // posee a plat, pour qu'ils se dressent vraiment devant les gradins.
@@ -7181,6 +7284,7 @@
     // Le grain du tartan, avant les lignes : une ligne peinte est lisse, elle
     // ne porte pas le granulat de la resine qu'elle recouvre.
     if (PREM() && !th.sansGrain) PREM().grain(ctx, PEINTRE, rIn, rOut);
+    if (th.paves) band(ctx, smPiste, rIn, rOut, motifDePaves(ctx));
 
     // LES LIGNES DE COULOIR NE SONT PAS OPAQUES, ET C'EST VOULU.
     //
@@ -7197,9 +7301,9 @@
       if (th.neon && COS()) COS().neon(ctx, PEINTRE, th, sm, rIn, rOut);
       rail(ctx, smPiste, rIn, rgb(th.kerb), 3);
       for (let e = 1; e < C.LANE_COUNT; e++) {
-        rail(ctx, smPiste, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, 0.87), 1.6);
+        rail(ctx, smPiste, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, th.ligneUsee || 0.87), 1.6);
       }
-      rail(ctx, smPiste, rOut, rgb(th.lane), 2.2);
+      rail(ctx, smPiste, rOut, th.ligneUsee ? rgba(th.lane, th.ligneUsee) : rgb(th.lane), 2.2);
       if (th.arcEnCiel && ARC()) ARC().guirlandes(ctx, PEINTRE, th, rIn, rOut);
     }
 
