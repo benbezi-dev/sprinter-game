@@ -35,6 +35,10 @@ const BanderoleMolosse = /* @__PURE__ */ lazy(() => import('./Halloween')
 // paquet public tant que DEFI_VEDETTE_OUVERT est ferme (canal.ts).
 const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
   .then(m => ({ default: m.BanderoleVedette })));
+// Le duel des marques (Team adidas contre Team Nike) : charge a la demande,
+// pour la meme raison — DUEL_MARQUES_OUVERT est ferme au public (canal.ts).
+const BanderoleMarques = /* @__PURE__ */ lazy(() => import('./DuelMarques')
+  .then(m => ({ default: m.BanderoleMarques })));
 // La carriere Legende : canal de test seulement (LEGENDE_OUVERTE, canal.ts),
 // chargee a la demande pour la meme raison que les deux autres.
 const PanneauLegende = /* @__PURE__ */ lazy(() => import('./Legende')
@@ -47,7 +51,7 @@ import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
-import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE } from '@/game/canal';
+import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT } from '@/game/canal';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
 import { legendeAccessible, type ChoixCarriere } from '@/game/legende/compte';
@@ -421,6 +425,9 @@ export function TitleScreen() {
                 Meba-Mickael Zeze sur l'accueil de Sprinter, Aurel Manga sur
                 celui de Hurdlers (`jeux`, game/vedettes.ts). */}
             {DEFI_VEDETTE_OUVERT && <Suspense fallback={null}><BanderoleVedette haies={haies} /></Suspense>}
+
+            {/* LE DUEL DES MARQUES, un 100 m : Sprinter seulement. */}
+            {!haies && DUEL_MARQUES_OUVERT && <Suspense fallback={null}><BanderoleMarques /></Suspense>}
 
 
             {!haies && HALLOWEEN_OUVERT && <Suspense fallback={null}><BanderoleMolosse /></Suspense>}

@@ -216,6 +216,18 @@ export const DEFI_VEDETTE_OUVERT = EST_TEST || evenementEnCours(LANCEMENT_DEFI_M
 export const VEDETTES_LANCEES = EST_TEST || Date.now() >= LANCEMENT_DEFI_MEBA;
 
 /**
+ * LE DUEL DES MARQUES — Team adidas contre Team Nike (09/10/2026). Ouvert sur
+ * le canal de test ; au public pendant DUREE_EVENEMENT_MS a partir de
+ * LANCEMENT_DUEL_MARQUES (vite.config.ts), nul tant qu'il n'est pas fixe.
+ * Le serveur tient sa propre date (worker/src/marques.js) : les deux bougent
+ * ensemble.
+ */
+declare const __LANCEMENT_DUEL_MARQUES__: number | null;
+export const LANCEMENT_DUEL_MARQUES: number =
+  typeof __LANCEMENT_DUEL_MARQUES__ === 'number' ? __LANCEMENT_DUEL_MARQUES__ : Infinity;
+export const DUEL_MARQUES_OUVERT = EST_TEST || evenementEnCours(LANCEMENT_DUEL_MARQUES);
+
+/**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
  *
  * Ce que Hurdlers a de casse aujourd'hui tient en une phrase : le joueur ne

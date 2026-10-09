@@ -243,12 +243,23 @@ const LANCEMENT_DEFI_MEBA = (() => {
   return Date.UTC(2026, 9, 3, 19, 30, 0);
 })();
 const DUREE_EVENEMENT_MS = 7 * 24 * 3600 * 1000;
+// LE DUEL DES MARQUES (Team adidas contre Team Nike, 09/10/2026) : ouvert en
+// permanence sur le canal de test ; au public a cette date, pour une semaine.
+// Nulle tant que l'auteur ne l'a pas fixee — et la meme date doit etre posee
+// cote serveur (worker/src/marques.js, DEBUT_PROD), sans quoi le jeu montrerait
+// un duel que le serveur refuse. Essai : LANCEMENT_DUEL_MARQUES=<ms> npx vite build.
+const LANCEMENT_DUEL_MARQUES = (() => {
+  const v = process.env.LANCEMENT_DUEL_MARQUES;
+  if (v) { const n = Number(v); return Number.isFinite(n) ? n : Date.parse(v); }
+  return null;
+})();
 
 export default defineConfig(({ mode }) => ({
   base: basePath,
   define: {
     __LANCEMENT_DEFI_MEBA__: JSON.stringify(LANCEMENT_DEFI_MEBA),
     __DUREE_EVENEMENT_MS__: JSON.stringify(DUREE_EVENEMENT_MS),
+    __LANCEMENT_DUEL_MARQUES__: JSON.stringify(LANCEMENT_DUEL_MARQUES),
   },
   plugins: [
     react(),

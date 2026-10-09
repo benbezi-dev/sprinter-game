@@ -55,6 +55,7 @@ import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
 import { contexteDeLaCourse } from './contexte-course';
+import { DUEL_MARQUES_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
          courseLancee } from './chargement';
@@ -99,6 +100,14 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
   // et ou l'historique de la distance est encore sous la main. L'ecran de fin
   // n'aura plus qu'a laisser tomber les confettis.
   jugerLaCourse(race, t, SprinterApp.G.player);
+  // LE DUEL DES MARQUES : chaque 100 m termine compte pour le camp du joueur.
+  // La trace est copiee ICI — le moteur la range puis la remet a zero au
+  // depart suivant, et l'envoi part apres un import differe.
+  if (DUEL_MARQUES_OUVERT && race === '100' && t != null && !SprinterApp.G.rejeu) {
+    const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
+    const ctx = contexteDeLaCourse(SprinterApp.G);
+    import('./marques').then(m => m.envoyerCourse(t, trace, ctx)).catch(() => { /* hors ligne */ });
+  }
 };
 
 // Meme crochet, pour une CARRIERE gagnee de bout en bout : le compte qui

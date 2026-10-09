@@ -47,6 +47,10 @@ export const RATE_LIMITS = {
   // joueur en demande un par partie ; dix par minute et par adresse laissent
   // passer une famille derriere la meme box et arretent net un script.
   '/direct/turn': { max: 10, fenetreMs: 60_000 },
+  // Le duel des marques : un camp se choisit une fois ; une course part a
+  // chaque 100 m termine, soit une toutes les quinze secondes au plus vite.
+  '/marques/camp': { max: 6, fenetreMs: 60_000 },
+  '/marques/course': { max: 12, fenetreMs: 60_000 },
   default: { max: 30, fenetreMs: 60_000 },
 };
 

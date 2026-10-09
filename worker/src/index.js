@@ -31,6 +31,8 @@ import {
   poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation,
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
+import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
+         noterCourse as noterCourseMarques } from './marques.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
@@ -2918,6 +2920,49 @@ async function servir(request, env, ctx, porteur) {
        selecteur restait vide (constat du 23 septembre 2026). Les applis
        publiees appellent ce chemin-ci : on ne le renomme pas, on y ajoute la
        liste. Elle ne depend pas de la base, et nommer les pays n'engage rien. */
+    /* ---------------------------------------------- le duel des marques
+       Team adidas contre Team Nike : voir marques.js. Trois routes, toutes
+       muettes (404) tant que le duel n'est pas ouvert sur ce canal. */
+    if (url.pathname.startsWith('/marques')) {
+      const f = fenetreMarques(canal.test);
+      if (!f.ouvert) return json({ error: 'duel ferme' }, 404);
+
+      if (url.pathname === '/marques' && request.method === 'GET') {
+        const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+        const t = await tableauMarques(env.DB, { nameKey: nom && nom !== 'anonyme' ? nom : null });
+        return json({ ...t, debut: f.debut, fin: f.fin });
+      }
+
+      if ((url.pathname === '/marques/camp' || url.pathname === '/marques/course')
+          && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        const { device_id } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const name = cleanName(body.name);
+        const key = name.trim().toLowerCase();
+        if (key === 'anonyme') return json({ error: 'choisis d abord ton nom' }, 409);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: url.pathname, nameKey: key, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        if (url.pathname === '/marques/camp') {
+          const r = await choisirCamp(env.DB, { nameKey: key, deviceId: device_id, camp: String(body.camp || '') });
+          return json(r.corps, r.status);
+        }
+        const timeMs = Math.round(Number(body.time_ms));
+        if (!Number.isFinite(timeMs) || timeMs < MIN_TIME_MS || timeMs > MAX_TIME_MS) {
+          return json({ error: 'chrono invalide' }, 400);
+        }
+        const r = await noterCourseMarques(env.DB, {
+          nameKey: key, name, timeMs, trace: body.trace,
+          contexte: typeof body.contexte === 'string' ? body.contexte : null,
+        });
+        return json(r.corps, r.status);
+      }
+      return json({ error: 'route inconnue' }, 404);
+    }
+
     if (url.pathname === '/nations' && request.method === 'GET') {
       const race = url.searchParams.get('race') || EPREUVE_NATIONS;
       if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
