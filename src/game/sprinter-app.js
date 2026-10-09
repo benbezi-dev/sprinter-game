@@ -343,6 +343,10 @@
       // fichier n'est pas charge — ou s'il ne l'est jamais — la course part
       // sur la musique ordinaire, et personne ne court en silence.
       musique: 'halloween',
+      // PAS DE GRADINS (demande de l'auteur, 09/10) : un cimetiere n'a pas de
+      // tribune. La barriere reste au bord de la piste ; derriere, l'herbe,
+      // les cypres et le village. Voir tribuneDe.
+      sansGradins: true,
       village: true, villageSombre: [16, 10, 28],
       lointain: [30, 18, 44],
       // Les lampes au-dessus des tribunes, comme au Danube : une enceinte de
@@ -608,6 +612,9 @@
     { gradins: 5, toiture: true },    // championnat du monde
   ];
   function tribuneDe(th) {
+    // Un stade sans tribune (le cimetiere d'Halloween) : la barriere reste,
+    // ni gradins, ni public, ni toit.
+    if (th.sansGradins) return { gradins: 0, toiture: false };
     // `base` : le meme stade, a une autre heure (heure-du-jour.js)
     const etape = (th.base || th) === THEMES.day ? TRIBUNE_ETAPE[G.levelIdx] : null;
     return {
@@ -7105,12 +7112,12 @@
     }
     // Le mur d'appui des tribunes a ciel ouvert, avant le public qui s'y
     // adosse (voir drawDosTribune). Le Champ-de-Mars a sa tribune provisoire.
-    if (!tribune.toiture && !cdm) drawDosTribune(ctx, th, smT, near, tiers, sr, sz);
+    if (!tribune.toiture && !cdm && tiers) drawDosTribune(ctx, th, smT, near, tiers, sr, sz);
     // LE PUBLIC ASSIS, rangee par rangee, quand ses images sont la (voir
     // tribune.js). Les escaliers passent d'abord, et personne ne s'assied
     // dessus. Sinon, l'ancienne foule en tuile, plus bas.
     let publicAssis = false;
-    if (TR && TR.pret()) {
+    if (tiers && TR && TR.pret()) {
       drawAllees(ctx, th, smT, near, tiers, sr, sz);
       const rMoy = near + tiers * sr * 0.5;
       const allees = rangeeDeToiture(smT, 15).map(q => {
@@ -7129,7 +7136,7 @@
     // aucun cout supplementaire quelle que soit la "densite" recherchee.
     // Uniquement sur les lignes droites : dans le virage, seuls les gradins
     // nus restent visibles (pas de tribune principale en courbe).
-    const crowdPat = publicAssis ? null : getCrowdPattern(ctx, G.levelIdx);
+    const crowdPat = publicAssis || !tiers ? null : getCrowdPattern(ctx, G.levelIdx);
     if (crowdPat) {
       // Le motif est ancre au MONDE, pas a l'ecran : on le decale de la
       // position ecran d'un point fixe du terrain (l'origine). Comme la
@@ -7175,7 +7182,7 @@
     // gradin vide a lui aussi ses volees, et c'est justement dans le virage —
     // ou la foule n'est pas peinte — qu'un gradin sans escalier redevient une
     // simple bande. Voir drawAllees. Avec le public assis, ils sont deja la.
-    if (!publicAssis) drawAllees(ctx, th, smT, near, tiers, sr, sz);
+    if (!publicAssis && tiers) drawAllees(ctx, th, smT, near, tiers, sr, sz);
     // les eclats d'appareils suivent le public, quel qu'il soit
     if (publicAssis && PREM() && flashsActifs()) {
       PREM().avancerFlashs(fouleDe(G.levelIdx), PEINTRE, near, tiers, sr, sz);
