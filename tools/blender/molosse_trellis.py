@@ -51,7 +51,7 @@ GARROT = 1.60
 FOULEE = 0.45
 # Le temps de contact, en part de foulee. Un galop en a moins que la moitie ;
 # le reste, la patte se replie et revient devant.
-CONTACT = 0.34
+CONTACT = 0.30
 # CE QUE LE PIED PEUT PATINER. Sans glissement, il devrait reculer de
 # CONTACT / FOULEE = 0,76 m sous le corps : plus que la patte n'en couvre
 # (premiere planche, le posterieur ne touchait plus le sol devant). On lui en
@@ -61,10 +61,32 @@ GLISSE = 0.80
 # LA BETE COURT PLUS BAS QU'ELLE NE SE TIENT. Debout, ses pattes sont presque
 # droites et la cinematique inverse n'a plus de quoi plier : en course, le
 # corps descend de ce qu'il faut pour que les pattes se ramassent.
-ACCROUPI = 0.07
-# Le galop transverse du trace : posterieur gauche, posterieur droit,
-# anterieur gauche, anterieur droit (PATTES, halloween-molosse.js).
-PHASES = {('ar', 'g'): 0.00, ('ar', 'd'): 0.20, ('av', 'g'): 0.45, ('av', 'd'): 0.65}
+ACCROUPI = 0.11
+# UNE CHARGE, PAS UN GALOP DE PROMENADE (09/10, « le style de course du
+# molosse est trop friendly »). Le premier galop etait celui d'un chien
+# content : tete haute, pattes qui levaient haut comme un trot de parade,
+# echine qui ondulait a peine, et une queue qui battait de gauche a droite —
+# le signe meme du chien qui fait la fete. Un predateur qui charge fait tout
+# le contraire, et c'est ce qui est pose ici :
+#   - les pattes vont PAR PAIRES (bond) : les deux posterieurs puis les deux
+#     anterieurs presque ensemble, c'est l'echine qui projette la bete ;
+#   - l'echine se ramasse et se detend fort, le corps plonge vers l'avant ;
+#   - la tete reste BASSE, tendue au niveau du garrot, et se jette en avant a
+#     chaque detente, comme pour mordre ;
+#   - les pattes rasent le sol et allongent, au lieu de monter haut ;
+#   - la queue est raide et ne bat plus.
+PHASES = {('ar', 'g'): 0.00, ('ar', 'd'): 0.07, ('av', 'g'): 0.50, ('av', 'd'): 0.57}
+# La levee des pattes, en part de la hauteur de la bete : avant / arriere.
+LEVEE = (0.20, 0.15)
+# La tete basse : ce que le cou descend et ce que la tete releve pour garder
+# la gueule vers l'avant, en degres (signes verifies sur la planche).
+COU_BAS = 22.0
+TETE_RELEVE = -10.0
+# La queue basse et raide : ses trois os, en degres. La relever tire une
+# membrane de peau depuis la cuisse (la ponderation du maillage TRELLIS y
+# melange les deux) ; on la laisse donc a sa pose, et on lui retire surtout
+# le battement de cote, qui etait le signe du chien qui fait la fete.
+QUEUE_LEVE = (0.0, 0.0, 0.0)
 IMAGES = 24
 
 
@@ -518,22 +540,23 @@ def galop(rig, mesure):
         cy = f / IMAGES
         for (bout, c), (t, boulet) in cibles.items():
             u = (cy + PHASES[(bout, c)]) % 1.0
-            dx, dz = pied(u, amplitude, (0.30 if bout == 'av' else 0.24) * Hw)
+            dx, dz = pied(u, amplitude, (LEVEE[0] if bout == 'av' else LEVEE[1]) * Hw)
             t.location = boulet + Vector((dx, 0, dz))
             t.keyframe_insert('location', frame=f + 1)
         # L'ECHINE SE RAMASSE ET SE DETEND, une fois par foulee : ramassee
         # quand les posterieurs reviennent sous le ventre, detendue quand les
         # anterieurs se lancent. Le corps monte au temps de suspension.
         w = 2 * math.pi * cy
-        bassin.rotation_euler = (math.radians(5) * math.sin(w), 0, 0)
+        bassin.rotation_euler = (math.radians(10) * math.sin(w), 0, 0)
         # (en coordonnees de l'os : son axe y suit l'echine, z monte)
-        bassin.location = (0, 0, (0.035 * math.sin(w - 0.8) - ACCROUPI) * Hw)
-        dos.rotation_euler = (-math.radians(9) * math.cos(w), 0, 0)
-        cou.rotation_euler = (math.radians(6) * math.cos(w + 0.6), 0, 0)
-        tete.rotation_euler = (-math.radians(5) * math.cos(w + 0.6), 0, 0)
+        bassin.location = (0, 0, (0.06 * math.sin(w - 0.8) - ACCROUPI) * Hw)
+        dos.rotation_euler = (-math.radians(12) * math.cos(w), 0, 0)
+        # la tete basse, qui se jette en avant a la detente
+        cou.rotation_euler = (math.radians(COU_BAS - 8 * math.cos(w + 0.6)), 0, 0)
+        tete.rotation_euler = (math.radians(TETE_RELEVE + 5 * math.cos(w + 0.6)), 0, 0)
         for i, b in enumerate(queue):
-            b.rotation_euler = (math.radians(10 + 4 * i) * math.sin(w - 0.9 - 0.6 * i), 0,
-                                math.radians(6) * math.sin(w - 0.6 * i))
+            b.rotation_euler = (math.radians(QUEUE_LEVE[i] + 3 * math.sin(w - 0.9 - 0.6 * i)),
+                                0, 0)
         for b in [bassin, dos, cou, tete] + queue:
             b.keyframe_insert('rotation_euler', frame=f + 1)
         bassin.keyframe_insert('location', frame=f + 1)
