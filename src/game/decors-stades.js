@@ -388,11 +388,24 @@
     const tours = [0, 90, 270, 0, 270, 90];
     let i = 0;
     const maison = (l, rot) => ruelle.push({ p: 'maison', l, rot, fond: true, libre: true });
+    // Une place sur sept, une porte cochere dans son pan de mur, alignee sur
+    // les facades (elle est mince : posee deux metres plus pres de la piste).
+    const piece = (p, l, rot) => ruelle.push({ p, l, rot, fond: true, libre: true });
     for (let x = -40; x <= 175; x += RUELLE_PAS, i++) {
-      maison({ droite: x, d: RUELLE_DEHORS }, tours[i % 6]);
-      maison({ droite: x, d: RUELLE_DEDANS }, 180 + tours[(i + 2) % 6]);
-      maison({ arriere: x, d: RUELLE_DEHORS }, tours[(i + 4) % 6]);
-      maison({ arriere: x, d: RUELLE_DEDANS }, 180 + tours[(i + 1) % 6]);
+      const porte = i % 7 === 3;
+      const [p, dh, dd] = porte ? ['porte', RUELLE_DEHORS + 2, RUELLE_DEDANS - 2]
+                                : ['maison', RUELLE_DEHORS, RUELLE_DEDANS];
+      piece(p, { droite: x, d: dh }, porte ? 0 : tours[i % 6]);
+      piece(p, { droite: x, d: dd }, 180 + (porte ? 0 : tours[(i + 2) % 6]));
+      piece(p, { arriere: x, d: dh }, porte ? 0 : tours[(i + 4) % 6]);
+      piece(p, { arriere: x, d: dd }, 180 + (porte ? 0 : tours[(i + 1) % 6]));
+    }
+    // Les tas de poubelles et de caisses, au pied des facades, entre deux
+    // reverberes : bas, ils ne cachent rien, et la ruelle cesse d'etre propre.
+    for (let x = -15; x <= 170; x += 23, i++) {
+      piece('poubelles', { droite: x, d: -11.4 }, tours[i % 6]);
+      piece('poubelles', { droite: x + 11, d: 1.6 }, 180 + tours[(i + 3) % 6]);
+      piece('poubelles', { arriere: x, d: -11.4 }, tours[(i + 2) % 6]);
     }
     for (let a = 0; a <= 180; a += 7, i++) {
       for (const v of ['virage', 'virage2']) {

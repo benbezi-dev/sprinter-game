@@ -62,6 +62,12 @@ MODELES.update({
     # Le reverbere en fonte : quatre metres vingt, lanterne comprise.
     'reverbere': dict(chemin=os.path.join(RUELLE, 'reverbere-tripo-meshopt.glb'), taille=4.2,
                       axe='z', quart=0),
+    # La porte cochere dans son pan de mur : six metres sous la lanterne.
+    'porte': dict(chemin=os.path.join(RUELLE, 'porte-tripo-meshopt.glb'), taille=6.0,
+                  axe='z', quart=0),
+    # Le tas de poubelles et de caisses : un metre cinquante.
+    'poubelles': dict(chemin=os.path.join(RUELLE, 'poubelles-tripo-meshopt.glb'), taille=1.5,
+                      axe='z', quart=0),
 })
 
 # La part des faces gardee au rendu (voir l'en-tete).
@@ -198,4 +204,13 @@ def reverbere(P):
     importer('reverbere', gain=P.get('gainTripo', 1.0))
 
 
-PC.DEBOUT.update({'cabine': cabine, 'mat': mat, 'maison': maison, 'reverbere': reverbere})
+def porte(P):
+    importer('porte', gain=P.get('gainTripo', 1.0))
+
+
+def poubelles(P):
+    importer('poubelles', gain=P.get('gainTripo', 1.0))
+
+
+PC.DEBOUT.update({'cabine': cabine, 'mat': mat, 'maison': maison, 'reverbere': reverbere,
+                  'porte': porte, 'poubelles': poubelles})

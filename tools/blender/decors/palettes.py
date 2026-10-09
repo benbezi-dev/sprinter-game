@@ -114,5 +114,6 @@ STADES['montreuil'] = dict(debout=['cabine', 'mat'], sol=[], symetriques=['mat']
 PALETTES['halloween'] = dict(BASE)
 # Sans ombre au sol : une ombre de plein soleil n'a rien a faire dans une
 # ruelle de nuit, et son rendu Cycles coutait plusieurs minutes par cap.
-STADES['halloween'] = dict(debout=['maison', 'reverbere'], sol=[], symetriques=['reverbere'],
-                           virage=['maison'], pxParM=96, sansOmbre=True)
+STADES['halloween'] = dict(debout=['maison', 'reverbere', 'porte', 'poubelles'], sol=[],
+                           symetriques=['reverbere'], virage=['maison', 'porte', 'poubelles'],
+                           pxParM=96, sansOmbre=True)
