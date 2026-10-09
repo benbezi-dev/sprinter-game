@@ -591,5 +591,60 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   }
 }
 
+/**
+ * L'OUVERTURE DU FILM, POSEE SUR LE DECOMPTE (09/10/2026).
+ *
+ * Le film commence 300 ms avant le pistolet, sur le « 3-2-1 » du jeu. Rien n'y
+ * disait QUI court ni QUOI. Un bandeau entre donc pendant le decompte : un
+ * filet d'or tire de la gauche, l'epreuve, puis le nom en grand, chacun en
+ * ressort. Il disparait net au coup de pistolet — une coupe sur le depart,
+ * comme au montage — pour laisser toute l'image a la sortie des blocs.
+ *
+ * Pas une seconde de plus au film : il habille le decompte, il ne le precede
+ * pas. Bas de l'image, la ou le jeu n'a que la pelouse et la piste.
+ * `ms` : le temps depuis le debut du film.
+ */
+export function peindreLOuverture(ctx: CanvasRenderingContext2D, l: number, h: number, ms: number) {
+  const G: any = SprinterApp.G;
+  if (!G || G.state !== 'count') return;
+  const N: any = SprinterApp.N;
+  const nom = String(getSavedName() || G?.player?.name || '').trim();
+  const epreuve = libelleEpreuves(G, N);
+  if (!nom && !epreuve) return;
+
+  const u = Math.min(l, h * 0.5625);
+  const ressort = (t: number) => {
+    if (t <= 0) return 0;
+    const w0 = Math.sqrt(260), z = 15 / (2 * w0), wd = w0 * Math.sqrt(1 - z * z);
+    return 1 - Math.exp(-z * w0 * t) * (Math.cos(wd * t) + (z * w0 / wd) * Math.sin(wd * t));
+  };
+  const s = ms / 1000;
+  const x0 = l * 0.08, y0 = h * 0.765;   // sous la pastille « a battre » du jeu (~0,70 h)
+  const tNom = u * 0.12, tEp = u * 0.04;
+
+  ctx.save();
+  // le fond du bandeau, qui s'ouvre de la gauche
+  const fond = Math.min(1, s / 0.25);
+  const g = ctx.createLinearGradient(0, 0, l, 0);
+  g.addColorStop(0, 'rgba(6,9,19,0.78)'); g.addColorStop(1, 'rgba(6,9,19,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, y0 - tEp * 1.6, l * fond, tEp * 2.4 + tNom * 1.35);
+  // le filet d'or
+  ctx.fillStyle = OR;
+  ctx.fillRect(x0, y0 - tEp * 1.1, (l * 0.3) * ressort(s - 0.05), Math.max(2, u * 0.006));
+  // l'epreuve, puis le nom
+  const kE = ressort(s - 0.12), kN = ressort(s - 0.28);
+  if (epreuve && kE > 0) {
+    ecrire(ctx, `SPRINTER · ${epreuve}`, x0 - (1 - kE) * l * 0.25, y0,
+           { taille: tEp, gras: 700, police: AFFICHE, couleur: OR, espace: tEp * 0.3, alpha: Math.min(1, kE * 1.5) });
+  }
+  if (nom && kN > 0) {
+    const e = { taille: tNom, gras: 900, police: AFFICHE, couleur: BLANC, alpha: Math.min(1, kN * 1.5) };
+    ecrire(ctx, tailler(ctx, nom.toUpperCase(), l - x0 * 2, e), x0 - (1 - kN) * l * 0.3,
+           y0 + tEp * 0.9 + tNom * 0.62, e);
+  }
+  ctx.restore();
+}
+
 // `review.ts` joue le son a l'entree du carton, s'il en a un.
 (peindreLeCarton as any).sonner = sonnerLeCarton;
