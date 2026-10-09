@@ -2947,7 +2947,9 @@ async function servir(request, env, ctx, porteur) {
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
         if (url.pathname === '/marques/camp') {
-          const r = await choisirCamp(env.DB, { nameKey: key, deviceId: device_id, camp: String(body.camp || '') });
+          const r = await choisirCamp(env.DB, {
+            nameKey: key, deviceId: device_id, camp: String(body.camp || ''), epreuve: String(body.epreuve || ''),
+          });
           return json(r.corps, r.status);
         }
         const timeMs = Math.round(Number(body.time_ms));
@@ -2955,7 +2957,7 @@ async function servir(request, env, ctx, porteur) {
           return json({ error: 'chrono invalide' }, 400);
         }
         const r = await noterCourseMarques(env.DB, {
-          nameKey: key, name, timeMs, trace: body.trace,
+          nameKey: key, name, epreuve: String(body.race_key || ''), timeMs, trace: body.trace,
           contexte: typeof body.contexte === 'string' ? body.contexte : null,
         });
         return json(r.corps, r.status);

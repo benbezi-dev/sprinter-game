@@ -100,13 +100,15 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
   // et ou l'historique de la distance est encore sous la main. L'ecran de fin
   // n'aura plus qu'a laisser tomber les confettis.
   jugerLaCourse(race, t, SprinterApp.G.player);
-  // LE DUEL DES MARQUES : chaque 100 m termine compte pour le camp du joueur.
+  // LE DUEL DES MARQUES : chaque 100, 200 ou 400 m termine compte pour le
+  // camp du joueur, s'il court l'epreuve qu'il a choisie (marques.ts trie).
   // La trace est copiee ICI — le moteur la range puis la remet a zero au
   // depart suivant, et l'envoi part apres un import differe.
-  if (DUEL_MARQUES_OUVERT && race === '100' && t != null && !SprinterApp.G.rejeu) {
+  if (DUEL_MARQUES_OUVERT && (race === '100' || race === '200' || race === '400')
+      && t != null && !SprinterApp.G.rejeu) {
     const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
     const ctx = contexteDeLaCourse(SprinterApp.G);
-    import('./marques').then(m => m.envoyerCourse(t, trace, ctx)).catch(() => { /* hors ligne */ });
+    import('./marques').then(m => m.envoyerCourse(race, t, trace, ctx)).catch(() => { /* hors ligne */ });
   }
 };
 
