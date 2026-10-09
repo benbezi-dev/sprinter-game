@@ -82,11 +82,11 @@ LEVEE = (0.20, 0.15)
 # la gueule vers l'avant, en degres (signes verifies sur la planche).
 COU_BAS = 22.0
 TETE_RELEVE = -10.0
-# La queue basse et raide : ses trois os, en degres. La relever tire une
-# membrane de peau depuis la cuisse (la ponderation du maillage TRELLIS y
-# melange les deux) ; on la laisse donc a sa pose, et on lui retire surtout
-# le battement de cote, qui etait le signe du chien qui fait la fete.
-QUEUE_LEVE = (0.0, 0.0, 0.0)
+# La queue tendue en arriere, raide : ses trois os, en degres. Sans le
+# battement de cote, qui etait le signe du chien qui fait la fete. (Elle est
+# restee basse tant que ses os etaient dans la croupe, voir mesurer et
+# reserver_la_queue.)
+QUEUE_LEVE = (-14.0, -6.0, -4.0)
 IMAGES = 24
 
 
@@ -351,9 +351,16 @@ def mesurer(h):
     bas_tete = cr[:, 2].min()
     large = np.ptp(cr[:, 1])
     oeil = Vector((museau.x - 0.30 * lt, 0.22 * large, bas_tete + 0.68 * (haut_tete - bas_tete)))
-    # LA QUEUE : du bout de la croupe a son sommet le plus en arriere, en
-    # suivant le centre des coupes
-    q = co[co[:, 2] > 0.25 * Hc]
+    # LA QUEUE : du bout de la croupe a son point le plus en arriere, en
+    # suivant le centre des coupes.
+    #
+    # LE BOUT SE CHERCHE A TOUTE HAUTEUR (09/10). On le prenait au-dessus
+    # d'un quart de la croupe : la queue de la bete TRELLIS traine au sol,
+    # et le « bout » trouve etait l'arriere des fesses. Les trois os de la
+    # queue etaient donc DANS la croupe — la relever tirait une membrane de
+    # peau depuis la cuisse. On prend le point le plus en arriere pres de
+    # l'axe, quelle que soit sa hauteur.
+    q = co[np.abs(co[:, 1]) < 0.30 * Hc]
     j = q[:, 0].argmin()
     bout_q = Vector(q[j])
     base_q = Vector((xr - 0.10 * Hc, 0, 0.80 * Hc))
@@ -361,7 +368,7 @@ def mesurer(h):
     for t in (1 / 3, 2 / 3):
         x = base_q.x + (bout_q.x - base_q.x) * t
         z = base_q.z + (bout_q.z - base_q.z) * t
-        s = q[(np.abs(q[:, 0] - x) < 0.04 * Hc) & (np.abs(q[:, 1]) < 0.15 * Hc)]
+        s = q[(np.abs(q[:, 0] - x) < 0.04 * Hc) & (np.abs(q[:, 1]) < 0.15 * Hc) & (q[:, 2] < base_q.z)]
         if len(s):
             z = float(np.median(s[:, 2]))
         pts.append(Vector((x, 0, z)))
@@ -473,6 +480,128 @@ def ponderer(h, rig, voxel=0.015):
             for g in bons[i].groups:
                 h.vertex_groups[g.group].add([v.index], g.weight, 'REPLACE')
     print('POIDS : %d sommets sans os, repris du voisin' % len(seuls))
+
+
+def queue_neuve(h, mesure):
+    """La queue TRELLIS remplacee par une queue neuve, en fouet.
+
+    La bete sortie de TRELLIS avait la queue couchee au sol, fondue aux
+    posterieurs : relevee, elle tirait une toile de peau depuis les pattes, et
+    decoupee elle partait en lambeaux (planches du 09/10). On la retire — tout
+    ce qui est en arriere de la croupe — et on tend a sa place un tube effile
+    de huit cotes, pique dans la croupe, du pelage de la croupe. Les trois os
+    de la queue sont poses dessus (`mesure['queue']`).
+    """
+    import bmesh
+    co = sommets(h)
+    Hw = mesure['Hw']
+    haut = co[co[:, 2] > 0.35 * Hw]
+    x_croupe = float(haut[:, 0].min())
+    attache = Vector((x_croupe + 0.07 * Hw, 0.0, 0.62 * Hw))
+    bm = bmesh.new()
+    bm.from_mesh(h.data)
+    uv = bm.loops.layers.uv.active
+    # le pelage de la croupe : la face la plus proche du point d'attache
+    proche = min(bm.faces, key=lambda f: (f.calc_center_median() - attache).length)
+    uv_croupe = proche.loops[0][uv].uv.copy() if uv else None
+    mat = proche.material_index
+    vieux = [v for v in bm.verts if v.co.x < x_croupe - 0.02 * Hw]
+    bmesh.ops.delete(bm, geom=vieux, context='VERTS')
+    # le tube : 12 anneaux de 8 cotes, de 7 cm a moins d'un centimetre
+    L, N, K = 0.80 * Hw, 12, 8
+    r0, r1 = 0.045 * Hw, 0.005 * Hw
+    def axe(t):
+        return attache + Vector((-L * t, 0.0, -0.10 * Hw * t * t))
+    anneaux = []
+    for i in range(N + 1):
+        t = i / N
+        c, r = axe(t), r0 + (r1 - r0) * t
+        anneaux.append([bm.verts.new(c + Vector((0.0, r * math.cos(2 * math.pi * k / K),
+                                                  r * math.sin(2 * math.pi * k / K))))
+                        for k in range(K)])
+    neuves = []
+    for i in range(N):
+        a, b = anneaux[i], anneaux[i + 1]
+        for k in range(K):
+            neuves.append(bm.faces.new((a[k], a[(k + 1) % K], b[(k + 1) % K], b[k])))
+    neuves.append(bm.faces.new(list(reversed(anneaux[-1]))))
+    for f in neuves:
+        f.material_index = mat
+        if uv:
+            for l in f.loops:
+                l[uv].uv = uv_croupe
+    bm.normal_update()
+    bm.to_mesh(h.data)
+    bm.free()
+    h.data.update()
+    mesure['queue'] = [axe(0.0), axe(1 / 3), axe(2 / 3), axe(1.0)]
+    print('QUEUE NEUVE : %d sommets de l\'ancienne retires, %.2f m de fouet' % (len(vieux), L))
+
+
+def reserver_la_queue(h, mesure):
+    """Les os de la queue ne tiennent QUE la queue.
+
+    La chaleur de Blender donne a chaque sommet les os les plus proches : la
+    croupe et le haut des cuisses recevaient une part de `queue_1`, et la
+    queue relevee les entrainait. Un sommet n'a droit aux os de la queue que
+    s'il est en arriere de sa base et pres de son trace ; les autres les
+    perdent, et passent au bassin s'il ne leur reste rien.
+    """
+    q = mesure['queue']
+    Hw = mesure['Hw']
+    rayon = 0.10 * Hw
+    def pres_du_trace(c):
+        best = 1e9
+        for a, b in zip(q[:-1], q[1:]):
+            ab = b - a
+            t = max(0.0, min(1.0, (c - a).dot(ab) / max(ab.length_squared, 1e-9)))
+            best = min(best, (a + ab * t - c).length)
+        return best < rayon
+    noms_q = {'queue_1', 'queue_2', 'queue_3'}
+    idx = {g.name: g.index for g in h.vertex_groups}
+    gq = [idx[n] for n in noms_q if n in idx]
+    bassin = h.vertex_groups.get('bassin')
+    retires = 0
+    queue = set()
+    for v in h.data.vertices:
+        dans = v.co.x < q[0].x + 0.04 * Hw and pres_du_trace(v.co)
+        if dans:
+            queue.add(v.index)
+            continue
+        a_queue = [g for g in v.groups if g.group in gq and g.weight > 0]
+        if not a_queue:
+            continue
+        for g in a_queue:
+            h.vertex_groups[g.group].remove([v.index])
+        retires += 1
+        if bassin and sum(g.weight for g in v.groups) < 1e-4:
+            bassin.add([v.index], 1.0, 'REPLACE')
+    print('QUEUE : %d sommets hors de la queue rendus au corps' % retires)
+    # LA QUEUE EST SOUDEE AUX PATTES. TRELLIS a modele la queue couchee au
+    # sol, contre les posterieurs, et a fondu les deux en une seule peau : des
+    # faces relient un sommet de la queue a un sommet de patte. Relevee, la
+    # queue les etirait en une toile noire (planche du 09/10, meme apres les
+    # poids). On coupe ces faces-la : la jointure est sous la bete, le trou ne
+    # se voit pas.
+    nom_de = {g.index: g.name for g in h.vertex_groups}
+    def patte(v):
+        gs = [g for g in h.data.vertices[v].groups if g.weight > 0]
+        if not gs:
+            return False
+        g = max(gs, key=lambda g: g.weight)
+        return '_ar_' in nom_de.get(g.group, '')
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(h.data)
+    bm.verts.ensure_lookup_table()
+    coupe = [f for f in bm.faces
+             if any(v.index in queue for v in f.verts)
+             and any(v.index not in queue and patte(v.index) for v in f.verts)]
+    bmesh.ops.delete(bm, geom=coupe, context='FACES_ONLY')
+    bm.to_mesh(h.data)
+    bm.free()
+    h.data.update()
+    print('QUEUE : %d faces de jointure queue-patte coupees' % len(coupe))
 
 
 # --- LE GALOP -----------------------------------------------------------------
@@ -677,8 +806,10 @@ def main():
     mettre_a_l_echelle(h, a['garrot'])
     decimer(h, a['faces'])
     mesure = mesurer(h)
+    queue_neuve(h, mesure)
     rig = squelette(mesure)
     ponderer(h, rig)
+    reserver_la_queue(h, mesure)
     galop(rig, mesure)
     reduire_textures(h, a['texture'])
     if a['glb']:
