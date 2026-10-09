@@ -42,6 +42,14 @@ jobs:
       # fichiers (meba-*, manga-*, defi-aurel.mp3) doivent donc deja etre en
       # ligne. Aucun evenement n'est retire aujourd'hui ; un prochain qui
       # attendrait sa date se retirerait ici, comme Aurel jusqu'au 03/10.
+      #
+      # LA RUELLE DE LA NUIT DU MOLOSSE (Halloween, canal de test seul) :
+      # maisons, porte, poubelles et reverberes rendus sous les cameras basses
+      # des nuits, en definition normale et ULTRA — une centaine de mega-octets
+      # que la production ne lit jamais. Les blocs de depart rendus sous ces
+      # memes cameras (materiel-a*) ne servent qu'a ces nuits-la.
+      - name: Retirer de la production le decor du molosse
+        run: rm -rf dist/decors/halloween-a* dist/decors-ultra/halloween-a* dist/decors/materiel-a*
 
       # La version de test, dans un sous-dossier du meme site. Un seul
       # deploiement sert les deux : pas de second depot a tenir a jour, et la
