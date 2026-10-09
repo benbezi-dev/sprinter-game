@@ -2006,9 +2006,15 @@ export function calendrierCycle(debutSamedi) {
  *
  * On rend aussi la derniere edition terminee : le sacre merite d'etre lu
  * encore un moment apres la finale, pas d'etre efface a la seconde ou elle
- * s'acheve.
+ * s'acheve. Mais UNE SEMAINE, pas davantage (09/10/2026) : au-dela, le
+ * Championnat de France fini le 27/09 occupait encore l'accueil de tous ses
+ * partants, deux semaines apres le sacre. Une edition terminee ou annulee
+ * disparait du jeu sept jours apres sa fin ; la page `?regarder=` et les
+ * titres, qui ne passent pas par ici, la gardent.
  */
-export async function editionDe(db, nameKey) {
+const VISIBLE_APRES_LA_FIN_MS = 7 * 24 * 3600 * 1000;
+
+export async function editionDe(db, nameKey, maintenant = Date.now()) {
   await ensureChampTables(db);
   const k = String(nameKey || '').trim().toLowerCase();
   if (!k) return null;
@@ -2016,9 +2022,11 @@ export async function editionDe(db, nameKey) {
     `SELECT e.id FROM champ_editions e
        JOIN champ_partants p ON p.edition = e.id
       WHERE p.name_key = ?
+        AND (e.etat NOT IN ('terminee', 'annulee')
+             OR COALESCE(e.fini_le, e.debut) > ?)
       ORDER BY e.etat = 'terminee', e.debut DESC
       LIMIT 1`
-  ).bind(k).first();
+  ).bind(k, maintenant - VISIBLE_APRES_LA_FIN_MS).first();
   return r ? r.id : null;
 }
 
