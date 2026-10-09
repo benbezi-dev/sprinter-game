@@ -688,11 +688,34 @@ function peindreLaVictoire(ctx: CanvasRenderingContext2D, im: HTMLImageElement,
   ctx.fillStyle = 'rgb(3,2,5)';
   ctx.fillRect(-L, -H, 3 * L, 3 * H);
   ctx.globalAlpha = entre;
-  ctx.drawImage(im, x0, y0, w, h);
+  // TOUT BOUGE (09/10, « anime tout ») : la photo est decoupee une fois en
+  // morceaux (decorDeVictoire) — les arbres se balancent, la bete respire,
+  // le coureur peint est efface et remplace par un coureur qui court
+  // vraiment, des nuages passent sur la lune, des chauves-souris traversent.
+  const D = decorDeVictoire(im);
+  const P = (u: number, v: number): [number, number] => [x0 + u * w, y0 + v * h];
+  ctx.drawImage(D.fond, x0, y0, w, h);
+  // les arbres, au vent : un cisaillement ancre au pied, chacun a son rythme
+  D.arbres.forEach((a, i) => {
+    const kx = 0.018 * Math.sin(t * (0.7 + 0.23 * i) + i * 1.7) + 0.006 * Math.sin(t * 2.3 + i);
+    poserMorceau(ctx, a, P, w, h, 1, 1, kx);
+  });
+  // la lune : son halo respire, et des nuages la mangent par moments
+  lune(ctx, P, w, h, t);
+  // des chauves-souris, haut dans le ciel
+  chauvesSouris(ctx, P, w, t);
+  // le coureur, qui s'eloigne vers la lune et rapetisse
+  coureurQuiFuit(ctx, D.coureur, P, w, h, t);
+  // la brume, en nappes qui derivent entre les tombes
+  brumeDeVictoire(ctx, P, w, h, t);
+  // LA BETE RESPIRE : son poitrail se souleve, une fois toutes les deux
+  // secondes et demie. Ancree au sol sous ses pattes.
+  const souffle = Math.sin(t * 2.5);
+  poserMorceau(ctx, D.bete, P, w, h, 1 + 0.006 * souffle, 1 + 0.016 * souffle, 0);
   ctx.globalCompositeOperation = 'lighter';
   if (eclair > 0.02) {
     ctx.globalAlpha = 0.35 * eclair;
-    ctx.drawImage(im, x0, y0, w, h);
+    ctx.drawImage(D.fond, x0, y0, w, h);
   }
   // LES YEUX BATTENT, et clignent lentement : l'image est une photo, ce sont
   // eux qui la font vivre.
@@ -743,8 +766,178 @@ function peindreLaVictoire(ctx: CanvasRenderingContext2D, im: HTMLImageElement,
   ctx.restore();
 }
 
+/* LA SCENE DE VICTOIRE EN MORCEAUX, decoupee une fois.
+
+   Les reperes sont mesures sur l'image (Blender, pixels sombres et rouges) :
+   le coureur peint tient dans x 0,357..0,403, y 0,428..0,499 ; la lune est
+   centree en 0,312 / 0,170, rayon 0,103 de la largeur. */
+type Morceau = { c: HTMLCanvasElement; x: number; y: number; w: number; h: number;
+                 ax: number; ay: number };
+let decorVictoire: { fond: HTMLCanvasElement; bete: Morceau; arbres: Morceau[]; coureur: Morceau } | null = null;
+
+/** Un morceau de `src`, bords fondus, avec son point d'ancrage (fractions). */
+function morceau(src: HTMLCanvasElement, u0: number, v0: number, u1: number, v1: number,
+                 ax: number, ay: number): Morceau {
+  const W = src.width, Hs = src.height;
+  const x = u0 * W, y = v0 * Hs, cw = Math.ceil((u1 - u0) * W), ch = Math.ceil((v1 - v0) * Hs);
+  const c = document.createElement('canvas');
+  c.width = cw; c.height = ch;
+  const g = c.getContext('2d')!;
+  g.drawImage(src, x, y, cw, ch, 0, 0, cw, ch);
+  g.globalCompositeOperation = 'destination-in';
+  g.save();
+  g.translate(cw / 2, ch / 2);
+  g.scale(cw / 2, ch / 2);
+  const gr = g.createRadialGradient(0, 0, 0.55, 0, 0, 1);
+  gr.addColorStop(0, 'rgba(0,0,0,1)');
+  gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr;
+  g.fillRect(-1, -1, 2, 2);
+  g.restore();
+  return { c, x: u0, y: v0, w: u1 - u0, h: v1 - v0, ax, ay };
+}
+
+function decorDeVictoire(im: HTMLImageElement) {
+  if (decorVictoire) return decorVictoire;
+  const fond = document.createElement('canvas');
+  fond.width = im.naturalWidth; fond.height = im.naturalHeight;
+  const g = fond.getContext('2d')!;
+  g.drawImage(im, 0, 0);
+  // LE COUREUR PEINT EST DECOUPE, puis efface sous un morceau de brume pris
+  // juste a sa droite (un tampon de clonage) : c'est lui, deplace, qui court.
+  // Un coureur redessine au trait se lisait comme un pictogramme de panneau.
+  const coureur = morceau(fond, 0.345, 0.415, 0.415, 0.512, 0.380, 0.499);
+  const W = fond.width, Hf = fond.height;
+  const tampon = morceau(fond, 0.415, 0.415, 0.495, 0.515, 0, 0);
+  g.drawImage(tampon.c, 0.338 * W, 0.415 * Hf, tampon.c.width, tampon.c.height);
+  g.drawImage(tampon.c, 0.338 * W, 0.415 * Hf, tampon.c.width, tampon.c.height);
+  decorVictoire = {
+    fond,
+    // la bete, ancree au sol sous ses pattes
+    bete: morceau(fond, 0.47, 0.37, 0.99, 0.72, 0.73, 0.70),
+    // les arbres de droite (cypres, arbre mort) et ceux de gauche
+    arbres: [morceau(fond, 0.70, 0.10, 1.0, 0.47, 0.86, 0.47),
+             morceau(fond, 0.0, 0.34, 0.18, 0.57, 0.08, 0.57)],
+    coureur,
+  };
+  return decorVictoire;
+}
+
+/** Poser un morceau, mis a l'echelle et cisaille autour de son ancre. */
+function poserMorceau(ctx: CanvasRenderingContext2D, m: Morceau,
+                      P: (u: number, v: number) => [number, number], w: number, h: number,
+                      sx: number, sy: number, kx: number) {
+  const [ax, ay] = P(m.ax, m.ay);
+  ctx.save();
+  ctx.translate(ax, ay);
+  ctx.transform(sx, 0, kx, sy, 0, 0);
+  ctx.drawImage(m.c, (m.x - m.ax) * w, (m.y - m.ay) * h, m.w * w, m.h * h);
+  ctx.restore();
+}
+
+/** La lune rousse de l'image : un halo qui respire, des nuages qui passent. */
+function lune(ctx: CanvasRenderingContext2D, P: (u: number, v: number) => [number, number],
+              w: number, h: number, t: number) {
+  const [cx, cy] = P(0.312, 0.170), r = 0.103 * w;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const a = 0.10 + 0.06 * Math.sin(t * 0.9);
+  const halo = ctx.createRadialGradient(cx, cy, r * 0.9, cx, cy, r * 2.6);
+  halo.addColorStop(0, `rgba(210,40,25,${a})`);
+  halo.addColorStop(1, 'rgba(210,40,25,0)');
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(cx, cy, r * 2.6, 0, TAU); ctx.fill();
+  ctx.restore();
+  for (let k = 0; k < 3; k++) {
+    const v = 0.018 + 0.008 * k;
+    const x = ((hasard(k + 200) * 1.6 + t * v) % 1.6 - 0.3);
+    const [nx, ny] = P(x, 0.170 + (hasard(k + 210) - 0.5) * 0.06);
+    const R = w * (0.16 + 0.06 * hasard(k + 220));
+    ctx.save();
+    ctx.translate(nx, ny);
+    ctx.scale(1, 0.22);
+    const n = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+    n.addColorStop(0, 'rgba(18,22,26,0.42)');
+    n.addColorStop(1, 'rgba(18,22,26,0)');
+    ctx.fillStyle = n;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  void h;
+}
+
+/** Trois chauves-souris qui traversent le ciel, ailes battantes. */
+function chauvesSouris(ctx: CanvasRenderingContext2D, P: (u: number, v: number) => [number, number],
+                       w: number, t: number) {
+  ctx.save();
+  ctx.fillStyle = 'rgba(8,10,12,0.85)';
+  for (let k = 0; k < 3; k++) {
+    const periode = 9 + 4 * hasard(k + 300);
+    const u = ((t + hasard(k + 310) * periode) % periode) / periode;
+    const sens = k % 2 ? -1 : 1;
+    const x = sens > 0 ? -0.1 + 1.2 * u : 1.1 - 1.2 * u;
+    const y = 0.08 + 0.2 * hasard(k + 320) + 0.02 * Math.sin(u * 14 + k);
+    const [bx, by] = P(x, y);
+    const e = w * (0.016 + 0.006 * hasard(k + 330));
+    const bat = Math.sin(t * (13 + k * 2) + k);
+    ctx.beginPath();
+    ctx.moveTo(bx, by);
+    ctx.quadraticCurveTo(bx - e * 0.5, by - e * 0.5 * bat, bx - e, by - e * 0.6 * bat);
+    ctx.quadraticCurveTo(bx - e * 0.55, by + e * 0.1, bx, by + e * 0.18);
+    ctx.quadraticCurveTo(bx + e * 0.55, by + e * 0.1, bx + e, by - e * 0.6 * bat);
+    ctx.quadraticCurveTo(bx + e * 0.5, by - e * 0.5 * bat, bx, by);
+    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(bx, by + e * 0.05, e * 0.12, e * 0.2, 0, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * LE COUREUR QUI FUIT : celui de la photo, decoupe, qui remonte l'allee vers
+ * la lune. Il rapetisse en s'eloignant, rebondit a chaque foulee (trois par
+ * seconde) et la brume le mange peu a peu.
+ */
+function coureurQuiFuit(ctx: CanvasRenderingContext2D, m: Morceau,
+                        P: (u: number, v: number) => [number, number], w: number, h: number, t: number) {
+  const u = Math.min(1, t / 16);
+  const e = 1 - 0.42 * u;
+  const foulee = Math.abs(Math.sin(t * 3.1 * Math.PI));
+  const [px, py] = P(m.ax + 0.012 * u, m.ay - 0.040 * u);
+  ctx.save();
+  ctx.globalAlpha *= 1 - 0.5 * u;
+  ctx.translate(px + Math.sin(t * 3.1 * Math.PI) * w * 0.0015, py - foulee * h * 0.004 * e);
+  ctx.scale(e, e * (1 - 0.03 * foulee));
+  ctx.drawImage(m.c, (m.x - m.ax) * w, (m.y - m.ay) * h, m.w * w, m.h * h);
+  ctx.restore();
+}
+
+/** La brume de la scene de victoire, en nappes qui derivent entre les tombes. */
+function brumeDeVictoire(ctx: CanvasRenderingContext2D, P: (u: number, v: number) => [number, number],
+                         w: number, h: number, t: number) {
+  ctx.save();
+  for (let k = 0; k < 5; k++) {
+    const v = 0.012 + 0.01 * hasard(k + 400);
+    const x = ((hasard(k + 410) * 1.6 + t * v * (k % 2 ? 1 : -1)) % 1.6 + 1.6) % 1.6 - 0.3;
+    const [bx, by] = P(x, 0.46 + 0.14 * hasard(k + 420));
+    const R = w * (0.35 + 0.2 * hasard(k + 430));
+    ctx.save();
+    ctx.translate(bx, by);
+    ctx.scale(1, 0.18);
+    const n = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+    n.addColorStop(0, 'rgba(150,165,172,0.16)');
+    n.addColorStop(1, 'rgba(150,165,172,0)');
+    ctx.fillStyle = n;
+    ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+  void h;
+}
+
 /** Ou sont les yeux et le croc gauche dans l'image (fractions de son cote). */
 const OEIL_G = [0.293, 0.230], OEIL_D = [0.6875, 0.215], CROC = [0.375, 0.80];
+/** La gueule ouverte de la tete, d'ou sort le souffle (fractions). */
+const GUEULE_TETE = [0.52, 0.86];
 
 /**
  * LA TETE DE LA BETE, DE FACE, AU PREMIER PLAN — l'image de la morsure.
@@ -762,7 +955,10 @@ function teteDeFace(ctx: CanvasRenderingContext2D, L: number, H: number, sol: nu
   }
   const monte = 1 - Math.pow(1 - Math.min(1, t / 1.2), 3);
   const s = Math.min(L, H) * (portrait ? 0.42 : 0.36) * (1 + Math.sin(t * 1.7) * 0.015);
-  const D = s * (portrait ? 2.2 : 2.3);
+  // ELLE S'APPROCHE ENCORE (09/10, « anime tout ») : huit pour cent sur douze
+  // secondes, pendant qu'on lit.
+  const approche = 1 + 0.08 * (1 - Math.pow(1 - Math.min(1, t / 12), 2));
+  const D = s * (portrait ? 2.2 : 2.3) * approche;
   const cx = L * (portrait ? 0.62 : 0.40);
   // la gueule au-dessus de la carte de texte, qui couvre le bas de l'image
   const cy = sol - s * (portrait ? 0.22 : 0.10) + (1 - monte) * s * 1.4;
@@ -788,6 +984,19 @@ function teteDeFace(ctx: CanvasRenderingContext2D, L: number, H: number, sol: nu
     ctx.beginPath(); ctx.arc(ox, oy, r, 0, TAU); ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
+  // SON SOUFFLE, en buee, chaud contre le froid : une bouffee toutes les
+  // 1,6 s, qui sort de la gueule ouverte et vient vers nous.
+  const [bu, bv] = GUEULE_TETE;
+  for (let i = 0; i < 2; i++) {
+    const a = ((t + i * 0.8) % 1.6) / 1.6;
+    const gx = x0 + bu * D, gy = y0 + bv * D + a * D * 0.04;
+    const r = D * (0.12 + 0.18 * a);
+    const b = ctx.createRadialGradient(gx, gy, 0, gx, gy, r);
+    b.addColorStop(0, `rgba(200,205,220,${0.13 * (1 - a) * monte})`);
+    b.addColorStop(1, 'rgba(200,205,220,0)');
+    ctx.fillStyle = b;
+    ctx.beginPath(); ctx.ellipse(gx, gy, r * 1.4, r, 0, 0, TAU); ctx.fill();
+  }
   // la bave, qui tombe d'un croc
   ctx.fillStyle = 'rgba(210,205,215,0.6)';
   const goutte = (t * 0.8) % 1;
