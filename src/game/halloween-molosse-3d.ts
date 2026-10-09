@@ -215,11 +215,15 @@ const _v = new THREE.Vector3();
  * `plongee` : le sinus de l'angle de la camera de la nuit ; le dos de la bete
  * s'y voit un peu, comme le dessus des coureurs.
  *
+ * `lacet` : de combien la bete pivote sur elle-meme (radians, vers le fond de
+ * l'image quand il est positif) — la piste qui tourne en virage, voir
+ * halloween-molosse.js.
+ *
  * Rend la place de ses yeux dans le repere de `ctx` (le plus proche d'abord),
  * ou null si le maillage n'est pas pret — le trace se dessine alors.
  */
 export function dessiner(ctx: CanvasRenderingContext2D, cycle: number, k: number,
-                         plongee: number): [number, number][] | null {
+                         plongee: number, lacet = 0): [number, number][] | null {
   const b = bete, R = rendu;
   if (!b || !R) return null;
   try {
@@ -232,6 +236,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, cycle: number, k: number
     if (R.domElement.width !== W || R.domElement.height !== Hp) R.setSize(W, Hp, false);
 
     b.melangeur.setTime(((cycle % 1) + 1) % 1 * b.duree);
+    b.racine.matrix.makeRotationZ(lacet).multiply(Q);
     b.racine.updateMatrixWorld(true);
 
     // LE PROFIL : x a l'ecran, la hauteur et un peu de profondeur en y,

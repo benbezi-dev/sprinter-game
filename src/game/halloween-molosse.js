@@ -310,6 +310,23 @@ export function molosseDe(chasse) {
       // direction : on garde la precedente plutot que de coucher la bete.
       if (Math.abs(ex) > 1e-4 || Math.abs(ey) > 1e-4) {
         piece.ex = ex; piece.ey = ey;
+        // LE VIRAGE SE TOURNE EN 3D (09/10, « dans les virages le molosse est
+        // en image plate »). Le maillage est rendu de profil, puis couche sur
+        // l'axe de la piste (voir dessiner) : en ligne droite c'est voulu,
+        // mais en virage la piste monte a l'ecran et l'image de profil n'y
+        // etait qu'INCLINEE — une carte en carton qu'on penche. La bete doit
+        // TOURNER : on mesure de combien la piste s'est relevee a l'ecran par
+        // rapport a une ligne droite, on en tire l'angle de lacet qui, sous la
+        // camera de profil (plongee p), donne ce meme relevement
+        // (tan ecran = p · tan lacet), et le maillage pivote d'autant. En
+        // ligne droite l'ecart est nul : rien n'y change.
+        const C = globalThis.SprinterCore && globalThis.SprinterCore.C;
+        const p = Math.max(0.05, C ? C.ISO_SIN : 0.447);
+        const o = ground(0, 0), x1 = ground(1, 0);
+        const th0 = Math.atan2(-(x1[1] - o[1]), Math.abs(x1[0] - o[0]));
+        const th = Math.atan2(-ey, Math.abs(ex));
+        const lacet = Math.atan(Math.tan(th) / p) - Math.atan(Math.tan(th0) / p);
+        piece.lacet = Math.max(-1.4, Math.min(1.4, lacet));
       }
       return liste;
     },
@@ -394,7 +411,9 @@ export function molosseDe(chasse) {
       // qui separe ce milieu de sa gueule, mesure sur le maillage lui-meme ;
       // l'ombre et les braises reculent avec lui. Le trace garde sa place :
       // il n'est plus qu'une doublure.
-      if (maillage && maillage.pret()) ctx.translate(-maillage.museau() * m, 0);
+      // (la bete qui pivote en virage avance sa gueule d'autant moins)
+      const lacet = pc.lacet || 0;
+      if (maillage && maillage.pret()) ctx.translate(-maillage.museau() * Math.cos(lacet) * m, 0);
       const x = 0, y = 0;
 
       // LE GALOP SE LIT SUR LA DISTANCE, PAS SUR L'HORLOGE. Un cycle cale sur
@@ -448,7 +467,7 @@ export function molosseDe(chasse) {
       // avec la distance et restent peints par-dessus.
       const C = globalThis.SprinterCore && globalThis.SprinterCore.C;
       const yeux = maillage && maillage.pret()
-        ? maillage.dessiner(ctx, cycle, m, C ? C.ISO_SIN : 0.447) : null;
+        ? maillage.dessiner(ctx, cycle, m, C ? C.ISO_SIN : 0.447, lacet) : null;
       if (yeux) {
         // l'oeil du fond, a peine : le crane le cache presque
         for (let i = yeux.length - 1; i >= 0; i--) {

@@ -20,17 +20,15 @@
 //    retourner les trois autres. Une scenette qui annoncerait la peur avant
 //    de la poser n'en ferait aucune.
 //
-// 2. ON NE MONTRE JAMAIS LA BLESSURE. Le molosse emporte un mollet, une
-//    oreille, un talon — et la scenette parle d'une fenetre, d'un miroir, d'un
-//    pas dans la rue. La peur vient de ce qui revient la nuit, pas de ce qui
-//    saigne : c'est ce qui separe une histoire qui glace d'un truc
-//    desagreable. Un jeu ou l'on court se joue aussi chez des gens de douze
-//    ans.
+// 2. ON NE MONTRE JAMAIS LA BLESSURE. La scenette parle d'une cicatrice qui
+//    chauffe, d'un miroir, de traces autour d'un lit. La peur vient de ce qui
+//    revient la nuit, pas de ce qui saigne : c'est ce qui separe une histoire
+//    qui glace d'un truc desagreable. Un jeu ou l'on court se joue aussi chez
+//    des gens de douze ans.
 //
-// CE QUI SE PERD N'EST PAS TOUJOURS UN MORCEAU. Une scenette sur deux fait
-// perdre autre chose — une ombre, un nom, le sommeil. La serie tiendrait mal
-// sur huit membres arraches : au troisieme, le joueur sait ce qu'il va lire.
-// L'alternance est ce qui garde la surprise jusqu'a la huitieme.
+// ET ON NE FAIT PAS L'INVENTAIRE DE CE QUI EST ARRACHE (09/10). La serie du
+// 08/10 faisait perdre un short, un petit doigt, une oreille, un nom : ecrit
+// au plus froid, le principe restait un gag. Voir MORSURES.
 //
 // LES TEXTES VIVENT ICI ET NON DANS sprinter-i18n.js. Tout le mode doit
 // pouvoir sortir du paquet d'un seul drapeau (canal.ts, HALLOWEEN_OUVERT) ;
@@ -159,130 +157,136 @@ export const TENUES: readonly Scene[] = [
 ];
 
 /* ---------------------------------------------------------------------------
-   CE QU'IL A PERDU — les morsures
+   APRES LA MORSURE — les nuits perdues
    ---------------------------------------------------------------------------
-   Huit facons de se faire rattraper, et une seule regle : ce qui a ete
-   arrache n'est jamais decrit. On apprend la perte par ce qui revient la nuit
-   — une odeur sous la fenetre, un pas dans la rue, une ombre sous un
-   reverbere. La bete n'a pas fini : c'est tout ce que ces huit-la disent.
+   PLUS DE LISTE DE CE QU'IL A PERDU (09/10, « les cartes restent droles »).
+   La serie precedente comptait les pertes — le short, le petit doigt,
+   l'oreille, son nom — et le principe meme faisait gag : un inventaire
+   d'objets arraches se lit comme une chute, pas comme une menace. Celle-ci
+   ne retire rien au joueur. Elle dit que la bete l'a MARQUE et qu'elle
+   revient : une cicatrice qui chauffe, des yeux dans un miroir, des traces
+   autour du lit. Toujours aucune blessure montree, et le froid sur la
+   derniere ligne.
 --------------------------------------------------------------------------- */
 export const MORSURES: readonly Scene[] = [
   {
-    cle: 'gout',
-    sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['LE MOLLET GAUCHE', 'THE LEFT CALF'],
+    cle: 'marque',
+    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
+    titre: ['LA MARQUE', 'THE MARK'],
     lignes: [
-      ['La bête n\'a pris qu\'une bouchée. Le mollet gauche.',
-       'The beast took a single bite. The left calf.'],
-      ['Les médecins disent qu\'il a eu de la chance.',
-       'The doctors say he was lucky.'],
-      ['Chaque nuit, quelque chose renifle sous sa fenêtre.',
-       'Every night, something sniffs beneath his window.'],
-      ['Elle connaît son goût, maintenant.',
-       'It knows how he tastes now.'],
+      ['La morsure a guéri en une nuit. Sans un point.',
+       'The bite healed overnight. Not a single stitch.'],
+      ['Il reste quatre petites marques, en demi-cercle.',
+       'Four small marks are left, in a half circle.'],
+      ['Chaque soir, elles sont un peu plus chaudes.',
+       'Every evening, they are a little warmer.'],
+      ['Ce soir, elles battent. Comme des pas qui approchent.',
+       'Tonight they throb. Like footsteps coming closer.'],
     ],
   },
   {
-    cle: 'doigt',
-    sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['LE PETIT DOIGT', 'THE LITTLE FINGER'],
+    cle: 'miroir',
+    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
+    titre: ['LE MIROIR', 'THE MIRROR'],
     lignes: [
-      ['Le molosse lui a pris l\'auriculaire de la main gauche.',
-       'The hound took the little finger of his left hand.'],
-      ['« Un détail », a dit le médecin des urgences.',
-       '"A detail," said the doctor in A&E.'],
-      ['Certaines nuits, il le sent encore. Il le sent bouger.',
-       'Some nights he can still feel it. He can feel it move.'],
-      ['Il le sent gratter, sous la terre, pour revenir.',
-       'He feels it scratching through the earth, coming back.'],
+      ['Rentré chez lui, il s\'est lavé le visage dans le noir.',
+       'Back home, he washed his face in the dark.'],
+      ['Dans le miroir, ses yeux ont brillé. Rouges.',
+       'In the mirror, his eyes glowed. Red.'],
+      ['Une seconde à peine. Il a cru rêver.',
+       'Only for a second. He thought he was dreaming.'],
+      ['Puis deux autres yeux se sont allumés, derrière lui.',
+       'Then two more eyes lit up, behind him.'],
     ],
   },
   {
-    cle: 'humide',
-    sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['LE SHORT', 'THE SHORTS'],
+    cle: 'appel',
+    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
+    titre: ['L’APPEL', 'THE CALL'],
     lignes: [
-      ['La gueule s\'est refermée sur le short, pas sur la jambe.',
-       'The jaws closed on the shorts, not on the leg.'],
-      ['Il a laissé le tissu entre ses crocs, et il a couru.',
-       'He left the cloth between its fangs, and he ran.'],
-      ['Le lendemain, le short était plié sur son lit.',
-       'The next day, the shorts were folded on his bed.'],
-      ['Encore humide.', 'Still damp.'],
+      ['À 3 h 12, son téléphone a sonné. Numéro masqué.',
+       'At 3:12 his phone rang. Number withheld.'],
+      ['Il a décroché. Personne. Juste un souffle, lent.',
+       'He answered. Nobody. Just slow breathing.'],
+      ['Puis des griffes, tout près du micro.',
+       'Then claws, right against the microphone.'],
+      ['Le même souffle, derrière la porte de sa chambre.',
+       'The same breathing, behind his bedroom door.'],
     ],
   },
   {
-    cle: 'ombre',
-    sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['SON OMBRE', 'HIS SHADOW'],
+    cle: 'traces',
+    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
+    titre: ['LES TRACES', 'THE TRACKS'],
     lignes: [
-      ['La bête n\'a mordu aucun morceau de lui.',
-       'The beast did not bite any part of him.'],
-      ['Elle a happé son ombre, et elle l\'a emportée.',
-       'It snapped up his shadow, and carried it off.'],
-      ['Depuis, en plein soleil, il ne projette plus rien au sol.',
-       'Since then, in full sun, he casts nothing on the ground.'],
-      ['La nuit, son ombre revient. Elle marche à quatre pattes.',
-       'At night his shadow comes back. It walks on all fours.'],
+      ['Au matin, il y avait de la terre sur son parquet.',
+       'In the morning, there was soil on his floor.'],
+      ['Des traces de pattes, larges comme une main.',
+       'Paw prints, as wide as a hand.'],
+      ['Elles faisaient le tour de son lit. Lentement.',
+       'They circled his bed. Slowly.'],
+      ['Elles ne ressortaient nulle part.',
+       'They did not lead out anywhere.'],
     ],
   },
   {
-    cle: 'hurle',
-    sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['SON NOM', 'HIS NAME'],
+    cle: 'faim',
+    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
+    titre: ['LA FAIM', 'THE HUNGER'],
     lignes: [
-      ['Ce qu\'il a laissé cette nuit-là n\'était pas un membre.',
-       'What he left behind that night was not a limb.'],
-      ['C\'était son nom. La bête l\'a emporté entre ses dents.',
-       'It was his name. The beast carried it off in its teeth.'],
-      ['Plus personne ne s\'en souvient. Ni ses amis, ni sa mère.',
-       'Nobody remembers it now. Not his friends, not his mother.'],
-      ['La nuit, au fond du cimetière, quelque chose le hurle.',
-       'At night, deep in the cemetery, something howls it.'],
+      ['Depuis la morsure, la lumière lui brûle les yeux.',
+       'Since the bite, light burns his eyes.'],
+      ['Il mange la nuit, debout, sans allumer.',
+       'He eats at night, standing, lights off.'],
+      ['Hier, les chiens du quartier aboyaient sur son passage.',
+       'Yesterday, the neighbourhood dogs barked at him.'],
+      ['Aujourd\'hui, ils se taisent. Et ils baissent la tête.',
+       'Today they fall silent. And they lower their heads.'],
     ],
   },
   {
-    cle: 'pas',
-    sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['LE TALON DROIT', 'THE RIGHT HEEL'],
+    cle: 'tombe',
+    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
+    titre: ['LA TOMBE', 'THE GRAVE'],
     lignes: [
-      ['Le molosse a emporté le talon droit.',
-       'The hound took the right heel.'],
-      ['Depuis, il boite : un pas lourd, un pas léger.',
-       'He has limped ever since: one heavy step, one light.'],
-      ['La nuit, dans la rue vide, il l\'entend derrière lui.',
-       'At night, in the empty street, he hears it behind him.'],
-      ['Il a cessé de se retourner. Le pas, lui, se rapproche.',
-       'He no longer turns round. The steps keep getting closer.'],
+      ['Le gardien l\'a appelé : une tombe neuve, au fond.',
+       'The keeper called him: a new grave, at the back.'],
+      ['Pas de fleurs, pas de date. Juste un nom gravé.',
+       'No flowers, no date. Just a carved name.'],
+      ['Le sien.',
+       'His own.'],
+      ['Et tout autour, la terre labourée par des griffes.',
+       'And all around, the earth torn up by claws.'],
     ],
   },
   {
     cle: 'sommeil',
-    sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
+    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
     titre: ['SON SOMMEIL', 'HIS SLEEP'],
     lignes: [
-      ['Elle ne lui a rien arraché. Pas même un cheveu.',
-       'It did not tear anything off him. Not even a hair.'],
-      ['Elle a pris son sommeil.', 'It took his sleep.'],
+      ['Elle ne l\'a pas lâché. Elle a seulement desserré.',
+       'It did not let go. It only loosened its grip.'],
       ['Dès qu\'il ferme les yeux, il est de retour au cimetière.',
        'Whenever he closes his eyes, he is back in the cemetery.'],
-      ['Et chaque nuit, la bête part un peu plus près de lui.',
-       'And every night, the beast starts a little closer.'],
+      ['Et il court. Il court toute la nuit.',
+       'And he runs. He runs all night.'],
+      ['Chaque nuit, la bête part un peu plus près de lui.',
+       'Every night, the beast starts a little closer.'],
     ],
   },
   {
-    cle: 'respire',
-    sur: ['CE QU\'IL A PERDU', 'WHAT HE LOST'],
-    titre: ['L\'OREILLE GAUCHE', 'THE LEFT EAR'],
+    cle: 'odeur',
+    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
+    titre: ['L’ODEUR', 'THE SCENT'],
     lignes: [
-      ['Il a perdu l\'oreille gauche entre deux tombes.',
-       'He lost his left ear between two graves.'],
-      ['Il l\'a cherchée deux heures, avec une lampe de poche.',
-       'He searched for two hours with a torch.'],
-      ['Il ne l\'a jamais retrouvée. Mais il entend encore avec.',
-       'He never found it. But he can still hear through it.'],
-      ['La nuit, il entend quelque chose respirer sous la terre.',
-       'At night, he hears something breathing under the earth.'],
+      ['Elle l\'a lâché à la grille. Elle avait son odeur.',
+       'It let go at the gate. It had his scent.'],
+      ['Il a changé de rue. Puis de ville. Puis de nom.',
+       'He changed streets. Then towns. Then his name.'],
+      ['Hier soir, sous sa fenêtre, quelque chose a reniflé.',
+       'Last night, under his window, something sniffed.'],
+      ['Elle n\'a jamais perdu une piste.',
+       'It has never lost a trail.'],
     ],
   },
 ];
@@ -532,13 +536,18 @@ export function peindreLaScene(
   const cycle = (t * 3.4) % 1;
   ctx.fillStyle = 'rgb(4,3,6)';
   ctx.strokeStyle = 'rgb(4,3,6)';
+  // RIEN DE DESSINE AU TRAIT N'Y RESTE (09/10, « les cartes restent droles ») :
+  // le chien en silhouette et l'homme couche a terre se lisaient comme des
+  // figurines de dessin anime. Il ne reste que la bete en image, et un homme
+  // minuscule en contre-jour quand il s'en sort.
   if (mordu) {
-    // L'homme a terre, au loin, contre la lune. Et la bete sur nous.
-    silhouetteTombee(ctx, L * 0.24, sol, m, t);
+    // La bete sur nous, et rien d'autre.
     teteDeFace(ctx, L, H, sol, m, t, eclair, portrait);
   } else {
-    silhouetteChien(ctx, L * 0.09, sol, m * 1.25, cycle, t);
-    silhouetteCoureur(ctx, L * 0.32, sol, m, cycle);
+    // Il court vers la lune, petit et loin. La bete ne le poursuit plus : elle
+    // le REGARDE partir, du noir du premier plan. Elle sait ou il habite.
+    silhouetteCoureur(ctx, L * 0.26, sol, m * 0.7, cycle);
+    teteQuiGuette(ctx, L, H, sol, t, eclair, portrait);
   }
 
   // LE NOIR QUI SE REFERME SUR LES BORDS, plus fort quand l'eclair retombe.
@@ -586,8 +595,9 @@ function arbreMort(ctx: CanvasRenderingContext2D, x: number, sol: number, m: num
    n'a pas de cadre.
 
    Le fichier ne part pas en production (HORS_PRODUCTION, vite.config.ts). Tant
-   qu'il n'est pas charge — ou s'il ne l'est jamais —, l'ancien trace sert de
-   doublure (`teteDessinee`). */
+   qu'il n'est pas charge — ou s'il ne l'est jamais —, seuls deux yeux brulent
+   dans le noir (`yeuxSeuls`) : l'ancien trace de la tete, qui faisait rire,
+   ne revient jamais. */
 let teteImage: HTMLImageElement | null = null;
 let teteFondueCache: HTMLCanvasElement | null = null;
 import('@/assets/molosse-tete.webp?url').then(m => {
@@ -627,7 +637,11 @@ const OEIL_G = [0.293, 0.230], OEIL_D = [0.6875, 0.215], CROC = [0.375, 0.80];
 function teteDeFace(ctx: CanvasRenderingContext2D, L: number, H: number, sol: number,
                     m: number, t: number, eclair: number, portrait: boolean) {
   const img = teteFondue();
-  if (!img) { teteDessinee(ctx, L, H, sol, m, t, eclair, portrait); return; }
+  if (!img) {
+    const D = Math.min(L, H) * (portrait ? 0.92 : 0.83);
+    yeuxSeuls(ctx, L * (portrait ? 0.62 : 0.40) - D / 2, sol - D * 0.6, D, t);
+    return;
+  }
   const monte = 1 - Math.pow(1 - Math.min(1, t / 1.2), 3);
   const s = Math.min(L, H) * (portrait ? 0.42 : 0.36) * (1 + Math.sin(t * 1.7) * 0.015);
   const D = s * (portrait ? 2.2 : 2.3);
@@ -662,92 +676,6 @@ function teteDeFace(ctx: CanvasRenderingContext2D, L: number, H: number, sol: nu
   ctx.beginPath();
   ctx.ellipse(x0 + CROC[0] * D, y0 + CROC[1] * D + goutte * D * 0.18, D * 0.005, D * 0.014, 0, 0, TAU);
   ctx.fill();
-  ctx.restore();
-}
-
-/**
- * LA TETE DESSINEE — la doublure, tant que l'image n'est pas la.
- *
- * Elle a remplace le chien assis qui hurlait a la lune : il racontait que
- * c'etait fini, la ou il fallait raconter que ca ne l'est pas. La tete monte
- * du bas de l'image, plus large que l'homme a terre n'est haut, et elle
- * respire. On ne voit d'elle que la masse noire, deux yeux en braise et les
- * crocs — l'eclair seul la decoupe en entier.
- */
-function teteDessinee(ctx: CanvasRenderingContext2D, L: number, H: number, sol: number,
-                      m: number, t: number, eclair: number, portrait: boolean) {
-  // Elle monte pendant la premiere seconde, puis respire.
-  const monte = 1 - Math.pow(1 - Math.min(1, t / 1.2), 3);
-  const s = Math.min(L, H) * (portrait ? 0.42 : 0.36) * (1 + Math.sin(t * 1.7) * 0.015);
-  const cx = L * (portrait ? 0.66 : 0.40);
-  // la gueule au-dessus de la carte de texte, qui couvre le bas de l'image
-  const cy = sol - s * (portrait ? 0.12 : 0.02) + (1 - monte) * s * 1.2;
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.fillStyle = 'rgb(3,2,5)';
-  // les epaules, qui sortent du cadre
-  ctx.beginPath(); ctx.ellipse(0, s * 0.95, s * 1.15, s * 0.65, 0, 0, TAU); ctx.fill();
-  // les oreilles, courtes et couchees : grandes et dressees, elles faisaient
-  // un chat, ou un hibou
-  for (const k of [-1, 1]) {
-    ctx.beginPath();
-    ctx.moveTo(k * s * 0.30, -s * 0.46);
-    ctx.lineTo(k * s * 0.62, -s * 0.66);
-    ctx.lineTo(k * s * 0.52, -s * 0.30);
-    ctx.closePath(); ctx.fill();
-  }
-  // les cretes de l'echine, derriere la nuque
-  for (let k = -3; k <= 3; k++) {
-    const bx = k * s * 0.17, by = -s * 0.42 + Math.abs(k) * s * 0.06;
-    ctx.beginPath();
-    ctx.moveTo(bx - s * 0.06, by); ctx.lineTo(bx + k * s * 0.02, by - s * (0.30 - Math.abs(k) * 0.03));
-    ctx.lineTo(bx + s * 0.06, by);
-    ctx.closePath(); ctx.fill();
-  }
-  // le crane et les bajoues
-  ctx.beginPath(); ctx.ellipse(0, -s * 0.18, s * 0.50, s * 0.42, 0, 0, TAU); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(0, s * 0.18, s * 0.58, s * 0.34, 0, 0, TAU); ctx.fill();
-  // la gueule ouverte : le fond rouge sombre, puis les crocs
-  const ouvre = s * (0.16 + 0.03 * Math.sin(t * 2.3));
-  ctx.fillStyle = 'rgb(62,6,10)';
-  ctx.beginPath(); ctx.ellipse(0, s * 0.30, s * 0.30, ouvre, 0, 0, TAU); ctx.fill();
-  ctx.fillStyle = 'rgb(232,226,214)';
-  const croc = (x: number, y: number, h: number) => {
-    ctx.beginPath();
-    ctx.moveTo(x - s * 0.035, y); ctx.lineTo(x, y + h); ctx.lineTo(x + s * 0.035, y);
-    ctx.closePath(); ctx.fill();
-  };
-  for (const x of [-0.20, -0.09, 0.09, 0.20]) croc(x * s, s * 0.30 - ouvre * 0.85, s * (Math.abs(x) > 0.15 ? 0.15 : 0.08));
-  for (const x of [-0.16, 0.16]) croc(x * s, s * 0.30 + ouvre * 0.85, -s * 0.10);
-  // la bave, qui tombe d'un croc
-  ctx.fillStyle = 'rgba(220,220,230,0.55)';
-  const goutte = (t * 0.8) % 1;
-  ctx.beginPath(); ctx.ellipse(s * 0.20, s * 0.47 + goutte * s * 0.5, s * 0.012, s * 0.03, 0, 0, TAU); ctx.fill();
-  // la truffe
-  ctx.fillStyle = 'rgb(3,2,5)';
-  ctx.beginPath(); ctx.ellipse(0, s * 0.02, s * 0.15, s * 0.09, 0, 0, TAU); ctx.fill();
-  // LES YEUX : deux fentes en braise, le coin interieur plus bas, et une
-  // arcade qui tombe dessus. Ronds, ils etaient ceux d'une peluche ; c'est le
-  // sourcil qui fait la colere.
-  const pulse = 0.85 + 0.15 * Math.sin(t * 6.5);
-  for (const k of [-1, 1]) {
-    const ox = k * s * 0.22, oy = -s * 0.20;
-    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, s * 0.26 * pulse);
-    g.addColorStop(0, 'rgba(255,90,40,0.7)');
-    g.addColorStop(1, 'rgba(255,40,20,0)');
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.arc(ox, oy, s * 0.26 * pulse, 0, TAU); ctx.fill();
-    ctx.fillStyle = `rgb(255,${130 + 80 * eclair},70)`;
-    ctx.beginPath(); ctx.ellipse(ox, oy, s * 0.10, s * 0.032, -k * 0.38, 0, TAU); ctx.fill();
-    // l'arcade, en biais vers la truffe
-    ctx.fillStyle = 'rgb(3,2,5)';
-    ctx.beginPath();
-    ctx.moveTo(k * s * 0.06, oy - s * 0.005);
-    ctx.lineTo(k * s * 0.38, oy - s * 0.075);
-    ctx.lineTo(k * s * 0.40, oy - s * 0.22);
-    ctx.lineTo(k * s * 0.04, oy - s * 0.22);
-    ctx.closePath(); ctx.fill();
-  }
   ctx.restore();
 }
 
@@ -791,145 +719,72 @@ function silhouetteCoureur(ctx: CanvasRenderingContext2D, x: number, sol: number
 }
 
 /**
- * La bete en contre-jour, au galop.
- *
- * SES PATTES SUIVENT LA MEME FOULEE QUE CELLE DU JEU, et pas un cercle.
- * Elles en decrivaient un — un cosinus pour l'avancee, un sinus pour la
- * hauteur — et le resultat se voyait a la page d'apercu : quatre pieds qui
- * tournaient comme des pedales sous un corps immobile. Le contact se fait
- * donc au sol, en reculant sous le corps, et le rappel ramene la patte
- * devant en la repliant, exactement comme `pied()` dans halloween-molosse.js.
+ * Deux yeux en braise dans le noir. `x0, y0, D` : le cadre de l'image de la
+ * tete (les yeux tombent ou ils sont sur elle), qu'elle soit dessinee ou non.
  */
-function silhouetteChien(ctx: CanvasRenderingContext2D, x: number, sol: number,
-                         mesure: number, cycle: number, t = 0) {
-  // LA BETE EST PLUS GRANDE ICI QUE SUR LA PISTE, ET C'EST VOULU.
-  //
-  // A l'echelle exacte — la moitie d'un coureur — elle faisait quarante
-  // pixels de haut dans cette scene, et ses pattes se confondaient en une
-  // masse : on voyait une barre noire avec un oeil rouge. Or cette image
-  // n'est pas une vue de la piste, c'est un souvenir, et un souvenir grossit
-  // ce qui a fait peur. Un tiers de plus suffit a rendre le galop lisible
-  // sans qu'elle depasse l'homme.
-  const m = mesure * 1.35;
-  const dos = sol - m * 0.86;
-  const bond = Math.max(0, Math.sin(cycle * TAU - 0.6)) * m * 0.12;
-  const y = dos - bond;
-  const amp = m * 0.52;
-  ctx.lineCap = 'round';
-
-  // Les quatre pattes, aux memes decalages de phase que le galop du jeu.
-  const phases = [0, 0.12, 0.45, 0.57];
-  for (let k = 0; k < 4; k++) {
-    const u = (cycle + phases[k]) % 1;
-    const avant = k >= 2;
-    const hx = x + (avant ? m * 0.58 : -m * 0.50);
-    const hy = y + m * 0.06;
-    // Contact sur la premiere moitie, rappel sur la seconde : la patte quitte
-    // le sol, se replie et revient devant.
-    let px: number, py: number;
-    if (u < 0.5) { px = amp * (0.5 - u / 0.5); py = 0; }
-    else { const q = (u - 0.5) / 0.5; px = amp * (-0.5 + q); py = Math.sin(q * Math.PI) * amp * 0.52; }
-    const fx = hx + px;
-    const fy = sol - bond - py;
-    // Le coude, pousse vers l'avant devant et vers l'arriere derriere : c'est
-    // lui qui fait lire un quadrupede plutot qu'un homme a quatre jambes.
-    const mx = (hx + fx) * 0.5 + (avant ? m * 0.07 : -m * 0.10);
-    const my = (hy + fy) * 0.5;
-    ctx.lineWidth = m * 0.10;
-    ctx.beginPath(); ctx.moveTo(hx, hy); ctx.lineTo(mx, my); ctx.lineTo(fx, fy); ctx.stroke();
+function yeuxSeuls(ctx: CanvasRenderingContext2D, x0: number, y0: number, D: number, t: number) {
+  // un clignement lent, toutes les quatre secondes
+  const cligne = ((t % 4.1) < 0.12) ? 0.08 : 1;
+  const pulse = 0.8 + 0.2 * Math.sin(t * 6.5);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const [u, v] of [OEIL_G, OEIL_D]) {
+    const ox = x0 + u * D, oy = y0 + v * D;
+    const r = D * 0.045 * pulse;
+    const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+    g.addColorStop(0, `rgba(255,120,50,${0.95 * cligne})`);
+    g.addColorStop(0.25, `rgba(230,40,20,${0.6 * cligne})`);
+    g.addColorStop(1, 'rgba(200,20,10,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(ox, oy, r, r * 0.55 * cligne + 0.5, 0, 0, TAU); ctx.fill();
   }
+  ctx.restore();
+}
 
-  // Le tronc : le poitrail plus haut et plus epais que le rein.
-  ctx.lineWidth = m * 0.30;
-  ctx.beginPath(); ctx.moveTo(x - m * 0.54, y + m * 0.06); ctx.lineTo(x + m * 0.58, y); ctx.stroke();
-  ctx.lineWidth = m * 0.38;
-  ctx.beginPath(); ctx.moveTo(x + m * 0.24, y); ctx.lineTo(x + m * 0.56, y + m * 0.02); ctx.stroke();
-
-  // La queue, tendue vers l'arriere comme celle du jeu.
-  ctx.lineWidth = m * 0.08;
-  ctx.beginPath();
-  ctx.moveTo(x - m * 0.54, y + m * 0.04);
-  ctx.lineTo(x - m * 1.02, y - m * 0.04 + Math.sin(cycle * TAU * 1.5) * m * 0.14);
-  ctx.stroke();
-
-  // Cou, crane, museau — la tete basse, en position de poursuite.
-  ctx.lineWidth = m * 0.22;
-  ctx.beginPath(); ctx.moveTo(x + m * 0.52, y); ctx.lineTo(x + m * 0.88, y + m * 0.16); ctx.stroke();
-  ctx.lineWidth = m * 0.16;
-  ctx.beginPath(); ctx.moveTo(x + m * 0.88, y + m * 0.16); ctx.lineTo(x + m * 1.24, y + m * 0.20); ctx.stroke();
-
-  // L'oreille, couchee vers l'arriere.
-  ctx.beginPath();
-  ctx.moveTo(x + m * 0.86, y + m * 0.02);
-  ctx.lineTo(x + m * 0.62, y - m * 0.24);
-  ctx.lineTo(x + m * 0.84, y + m * 0.10);
-  ctx.closePath(); ctx.fill();
-
-  // LA GUEULE OUVERTE, et deux crocs qui accrochent la lumiere de la lune.
-  ctx.fillStyle = 'rgb(232,226,214)';
-  for (const [dx, sens] of [[1.12, 1], [1.02, 1], [1.08, -1]] as const) {
-    ctx.beginPath();
-    ctx.moveTo(x + m * (dx - 0.025), y + m * 0.22);
-    ctx.lineTo(x + m * dx, y + m * (0.22 + sens * 0.08));
-    ctx.lineTo(x + m * (dx + 0.025), y + m * 0.22);
-    ctx.closePath(); ctx.fill();
-  }
-
-  // SON SOUFFLE, en buee devant le museau : deux bouffees par foulee.
-  for (let k = 0; k < 3; k++) {
-    const u = ((t * 2 + k / 3) % 1);
-    ctx.fillStyle = `rgba(190,170,190,${0.22 * (1 - u)})`;
-    ctx.beginPath();
-    ctx.arc(x + m * (1.30 + u * 0.5), y + m * (0.18 - u * 0.12), m * (0.06 + u * 0.16), 0, TAU);
-    ctx.fill();
-  }
-
-  // L'OEIL, le seul point clair de la silhouette, et son halo qui bat.
-  const ox = x + m * 0.96, oy = y + m * 0.12;
-  const pulse = 0.8 + 0.2 * Math.sin(t * 7);
-  const halo = ctx.createRadialGradient(ox, oy, 0, ox, oy, m * 0.30 * pulse);
-  halo.addColorStop(0, 'rgba(255,80,40,0.8)');
-  halo.addColorStop(1, 'rgba(255,40,20,0)');
-  ctx.fillStyle = halo;
-  ctx.beginPath(); ctx.arc(ox, oy, m * 0.30 * pulse, 0, TAU); ctx.fill();
-  ctx.fillStyle = 'rgb(255,120,60)';
-  ctx.beginPath(); ctx.arc(ox, oy, m * 0.055, 0, TAU); ctx.fill();
-  ctx.fillStyle = 'rgb(4,3,6)';
+let teteEteinteCache: HTMLCanvasElement | null = null;
+/** La tete fondue, assombrie aux trois quarts : on devine la masse, pas le detail. */
+function teteEteinte(img: HTMLCanvasElement): HTMLCanvasElement {
+  if (teteEteinteCache) return teteEteinteCache;
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = img.height;
+  const g = c.getContext('2d')!;
+  g.drawImage(img, 0, 0);
+  g.globalCompositeOperation = 'source-atop';
+  g.fillStyle = 'rgba(2,1,4,0.72)';
+  g.fillRect(0, 0, c.width, c.height);
+  teteEteinteCache = c;
+  return c;
 }
 
 /**
- * L'homme, au sol, qui se redresse sur un coude.
+ * LA BETE QUI GUETTE — l'image de la nuit tenue.
  *
- * Il n'est ni mort ni mange : il est assis dans l'herbe, et il regarde la bete
- * hurler. Toute la serie des morsures tient dans cet ecart — ce qui est arrive
- * est grave, et la scene est calme.
+ * La meme tete que la morsure, mais presque eteinte : posee tres sombre au
+ * premier plan, a droite, coupee par le bas de l'image. On n'en devine que
+ * l'arrondi du crane et la truffe ; ce qui se voit, ce sont les yeux, qui
+ * suivent l'homme minuscule qui s'enfuit vers la lune.
  */
-function silhouetteTombee(ctx: CanvasRenderingContext2D, x: number, sol: number,
-                          m: number, t: number) {
-  const respire = Math.sin(t * 3.1) * m * 0.015;
-  ctx.lineCap = 'round';
-  // les jambes, allongees devant lui
-  ctx.lineWidth = m * 0.14;
-  ctx.beginPath();
-  ctx.moveTo(x, sol - m * 0.16);
-  ctx.lineTo(x - m * 0.52, sol - m * 0.20);
-  ctx.lineTo(x - m * 0.86, sol - m * 0.04);
-  ctx.stroke();
-  // le tronc, incline en arriere
-  ctx.lineWidth = m * 0.24;
-  ctx.beginPath();
-  ctx.moveTo(x, sol - m * 0.18);
-  ctx.lineTo(x + m * 0.26, sol - m * 0.70 + respire);
-  ctx.stroke();
-  // le bras qui le tient
-  ctx.lineWidth = m * 0.10;
-  ctx.beginPath();
-  ctx.moveTo(x + m * 0.24, sol - m * 0.62);
-  ctx.lineTo(x + m * 0.46, sol - m * 0.30);
-  ctx.lineTo(x + m * 0.44, sol);
-  ctx.stroke();
-  // la tete, tournee vers la bete
-  ctx.beginPath();
-  ctx.arc(x + m * 0.32, sol - m * 0.88 + respire, m * 0.16, 0, TAU);
-  ctx.fill();
+function teteQuiGuette(ctx: CanvasRenderingContext2D, L: number, H: number, sol: number,
+                       t: number, eclair: number, portrait: boolean) {
+  const D = Math.min(L, H) * (portrait ? 1.05 : 0.95);
+  const cx = L * (portrait ? 0.74 : 0.70);
+  // elle se leve lentement du noir pendant les deux premieres secondes
+  const leve = 1 - Math.pow(1 - Math.min(1, t / 2.2), 3);
+  const cy = sol + D * 0.10 + (1 - leve) * D * 0.25;
+  const img = teteFondue();
+  const x0 = cx - D / 2, y0 = cy - D / 2;
+  if (!img) { yeuxSeuls(ctx, x0, y0, D, t); return; }
+  // OPAQUE, MAIS ETEINTE. Posee en transparence, elle laissait voir les
+  // tombes a travers elle : un fantome, pas une bete. On la pose pleine et
+  // assombrie (`teteEteinte`) ; l'eclair la revele en entier.
+  ctx.save();
+  ctx.globalAlpha = leve;
+  ctx.drawImage(teteEteinte(img), x0, y0, D, D);
+  if (eclair > 0.02) {
+    ctx.globalAlpha = 0.7 * eclair * leve;
+    ctx.drawImage(img, x0, y0, D, D);
+  }
+  ctx.restore();
+  // les yeux, eux, brulent fort — et ils clignent, lentement
+  yeuxSeuls(ctx, x0, y0, D, t);
 }
