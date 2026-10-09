@@ -41,6 +41,7 @@
 // plutot que d'inventer un code qui n'ouvrirait rien.
 
 import { SprinterApp } from './engine';
+import { CARTON_MS } from './review';
 import { getSavedName } from './leaderboard';
 import { defiDeLaCamera, type DefiDeLaCamera } from './defi-camera';
 import { AFFICHE, CHIFFRES, ecrire, largeur, tailler } from './pinceau-film';
@@ -98,8 +99,50 @@ const SITE = 'sprinter-game.com';
    `game/trace-affiche.js`, qui en est la source, et les remonter dans la
    palette ferait un troisieme niveau de copie au lieu d'en supprimer un.
 
-/** Le voile est pose en {V} sur cette part de la duree, puis il tient. */
-const OUVERTURE = 0.22;
+/** Le voile est pose en {V} sur cette part de la duree, puis il tient.
+    (0,11 de 3 s : le tiers de seconde d'avant, quand le carton durait 1,5 s.) */
+const OUVERTURE = 0.11;
+
+/* LE CHRONO DEFILE, PUIS SE VERROUILLE (09/10/2026).
+
+   Le carton etait une image fixe posee sur l'arrivee. Il s'ecrit maintenant
+   comme les videos du compte : le chrono part de zero et monte jusqu'a sa
+   valeur en ralentissant, se verrouille d'un coup, et le reste arrive ensuite,
+   ligne par ligne. Les instants sont en millisecondes depuis l'entree du
+   carton ; `sonnerLeCarton` joue les memes, sur l'horloge audio. */
+const DEFILE_DE = 200, DEFILE_A = 1100;
+const SUITE_DE = 1150, SUITE_PAS = 150, SUITE_DUREE = 250;
+/** La part du chrono affichee a l'instant `ms` : une sortie en puissance 4. */
+function partDuChrono(ms: number): number {
+  const x = Math.max(0, Math.min(1, (ms - DEFILE_DE) / (DEFILE_A - DEFILE_DE)));
+  return 1 - Math.pow(1 - x, 4);
+}
+/** L'opacite de la ligne `k` qui suit le chrono (0 : le nom, 1 : le mot, 2 : le code). */
+function suite(ms: number, k: number): number {
+  return Math.max(0, Math.min(1, (ms - SUITE_DE - k * SUITE_PAS) / SUITE_DUREE));
+}
+
+/**
+ * LE SON DU CARTON : un tic par dixieme du chrono franchi, puis le verrou.
+ *
+ * Joue sur la sortie du moteur, la meme que le replay enregistre (`prise`,
+ * sprinter-app.js) : il entre donc dans la video sans rien brancher. Un joueur
+ * qui a coupe le son ne l'entend pas, et la video non plus — `sfx` ne joue
+ * rien quand le son est coupe, et c'est ce qu'il a choisi.
+ *
+ * Appele par `review.ts` a l'instant exact ou le carton commence a se peindre.
+ */
+export function sonnerLeCarton() {
+  const A: any = (SprinterApp as any).Audio_;
+  if (!A || typeof A.sfx !== 'function') return;
+  for (let k = 1; k <= 9; k++) {
+    // l'instant ou la part affichee franchit k/10 : l'inverse de la puissance 4
+    const x = 1 - Math.pow(1 - k / 10, 0.25);
+    const ms = DEFILE_DE + x * (DEFILE_A - DEFILE_DE);
+    A.sfx('tic', { gain: 0.26, rate: 0.9 + 0.03 * k, delay: ms / 1000 });
+  }
+  A.sfx('go', { gain: 0.42, rate: 0.82, delay: DEFILE_A / 1000 });
+}
 
 /**
  * Le temps que met le code a se poser, une fois arrive.
@@ -302,7 +345,11 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   // monter tout droit — c'est ce qui le fait ressembler a une fin et non a une
   // coupure de courant.
   const doux = 1 - (1 - ouvert) * (1 - ouvert);
-  const A = (v = 1) => v * doux;
+  // La porte de la ligne en cours : les lignes qui suivent le chrono attendent
+  // qu'il soit verrouille (voir `suite`). A 1 pour tout le reste.
+  const ms = avancement * CARTON_MS;
+  let ouverte = 1;
+  const A = (v = 1) => v * doux * ouverte;
 
   // LE FOND DU JEU, ET SA LUEUR. Un aplat ferait un trou dans l'image ; la
   // lueur doree en haut est la signature de l'affiche, et c'est elle qui fait
@@ -399,12 +446,18 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
       ? flammeSur(ctx, cx - dispo / 2, y, dispo, tChrono)
       : OR;
     const e = { taille: tChrono, gras: 700, police: CHIFFRES, couleur, alpha: A() };
-    ecrireLeChrono(ctx, chronoEcrit(chronoMs, N?.getLang ? N.getLang() === 'fr' : true),
+    // Le verrou : un coup de zoom de 7 % qui se pose en 0,4 s.
+    const verrou = ms >= DEFILE_A ? 1 + 0.07 * Math.exp(-(ms - DEFILE_A) / 130) : 1;
+    ctx.save();
+    ctx.translate(cx, y + tChrono / 2); ctx.scale(verrou, verrou); ctx.translate(-cx, -(y + tChrono / 2));
+    ecrireLeChrono(ctx, chronoEcrit(Math.round(chronoMs * partDuChrono(ms)), N?.getLang ? N.getLang() === 'fr' : true),
                    cx, y + tChrono / 2, e);
+    ctx.restore();
     y += hChrono;
   }
 
   if (nom || epreuve) {
+    ouverte = suite(ms, 0);
     y += T(0.045);
     const e = { taille: tQui, gras: 500, police: AFFICHE, couleur: V.nom,
                 alpha: A(), aligne: 'center' as CanvasTextAlign };
@@ -414,6 +467,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   }
 
   if (lignesMot.length && bandeau?.mot) {
+    ouverte = suite(ms, 1);
     y += T(0.055);
     const eQui = { taille: tMotQui, gras: 700, police: AFFICHE,
                    couleur: jour ? flammeSur(ctx, cx - dispo / 2, y, dispo, tMotQui) : OR,
@@ -436,9 +490,10 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
      ici elle porte la seule chose qui ramene quelqu'un dans le jeu. Un seul
      filet, en haut — c'est ce que fait la maquette. */
   if (attendu) {
-    const P = (v = 1) => v * doux * poseCode;
+    ouverte = suite(ms, 2);
+    const P = (v = 1) => v * doux * poseCode * ouverte;
     y += T(0.085);
-    filet(ctx, M, y, l - M, doux, V.filet);
+    filet(ctx, M, y, l - M, doux * ouverte, V.filet);
     y += T(0.055);
 
     const eE = { taille: tEtiq, gras: 700, police: AFFICHE, couleur: V.etiquette,
@@ -486,6 +541,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
     ecrire(ctx, largeur(ctx, porte, eL) <= dispo ? porte : SITE, cx, y + tLien / 2, eL);
   }
 
+  ouverte = 1;
   /* LE PIED DU JEU, AU PIXEL : meme filet, meme graisse, meme inter-lettrage.
      A droite, la signature quand le billet porte deja l'adresse — et l'adresse
      elle-meme sinon. Elle ne disparait jamais : c'est la seule chose du carton
@@ -534,3 +590,6 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
              espace: attendu ? l * 0.006 : l * 0.001, aligne: 'right' });
   }
 }
+
+// `review.ts` joue le son a l'entree du carton, s'il en a un.
+(peindreLeCarton as any).sonner = sonnerLeCarton;

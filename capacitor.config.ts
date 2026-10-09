@@ -45,6 +45,10 @@ const config: CapacitorConfig = {
     // Sans cela, une page servie depuis le paquet n'est pas un contexte
     // securise, et le micro comme la capture video restent inaccessibles.
     allowMixedContent: false,
+    // Un APK d'ESSAI seulement (SPRINTER_WEBVIEW_DEBUG=1) : la WebView s'ouvre a
+    // chrome://inspect et un harnais peut la piloter par adb. Jamais pour le
+    // Store — un build normal laisse la variable vide.
+    webContentsDebuggingEnabled: process.env.SPRINTER_WEBVIEW_DEBUG === '1',
   },
 
   plugins: {

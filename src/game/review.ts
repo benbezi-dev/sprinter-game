@@ -95,8 +95,11 @@ export type Surcouche = (ctx: CanvasRenderingContext2D, l: number, h: number) =>
  * mieux avec un carton qu'avec un noir. Voir `carton-film.ts`, qui en est la
  * seule implementation.
  */
-export type Carton = (ctx: CanvasRenderingContext2D, l: number, h: number,
-                      avancement: number) => void;
+export type Carton = ((ctx: CanvasRenderingContext2D, l: number, h: number,
+                       avancement: number) => void) & {
+  /** Le son du carton, joue a l'instant ou il commence a se peindre. */
+  sonner?: () => void;
+};
 
 /**
  * LA DUREE DU CARTON.
@@ -108,7 +111,9 @@ export type Carton = (ctx: CanvasRenderingContext2D, l: number, h: number,
  * C'est aussi ce que le bouton de partage attend avant de s'allumer : voir
  * `arreter`, qui ne publie le fichier qu'une fois le carton ecrit dedans.
  */
-export const CARTON_MS = 1500;
+// 3 s depuis le 09/10/2026 (1,5 s avant) : le chrono y defile puis se verrouille,
+// et les lignes arrivent l'une apres l'autre — voir carton-film.ts.
+export const CARTON_MS = 3000;
 
 /**
  * UNE IMAGE DU FILM TOUS LES TRENTIEMES DE SECONDE, PAS A CHAQUE IMAGE DE L'ECRAN.
@@ -221,6 +226,60 @@ function peutPartager(type: string): boolean {
     return n.canShare({ files: [temoin] });
   } catch {
     return false;
+  }
+}
+
+/**
+ * LE PARTAGE NATIF DE LA VIDEO, POUR ANDROID (09/10/2026).
+ *
+ * Le meme defaut que l'image avant `affiche.ts` : dans une WebView Android il
+ * n'y a pas de `navigator.share`, et `<a download>` n'y declenche rien. Le
+ * bouton « LE REPLAY » ne faisait donc rien dans l'application, sans le dire.
+ * On passe, comme l'image, par les greffons Capacitor : le fichier ecrit dans
+ * le cache, puis la vraie feuille de partage du systeme.
+ *
+ * PAR MORCEAUX, parce qu'une video pese des dizaines de Mo : en base64 d'un
+ * seul tenant, elle ferait une chaine de 40 Mo de plus a traverser le pont
+ * natif — de quoi faire tomber l'onglet d'un telephone modeste. Des morceaux
+ * de 3 Mio (un multiple de 3 : chaque morceau se code en base64 sans
+ * bourrage, et le greffon decode chacun a part), ecrits puis ajoutes.
+ *
+ * Rend null hors de l'application, ou si le greffon manque : les chemins du
+ * web prennent alors la suite, comme avant.
+ */
+const MORCEAU = 3 * 1024 * 1024;
+
+function blobEnBase64(blob: Blob): Promise<string> {
+  return new Promise((resoudre, rejeter) => {
+    const l = new FileReader();
+    l.onerror = () => rejeter(l.error);
+    l.onload = () => resoudre(String(l.result).split(',')[1] ?? '');
+    l.readAsDataURL(blob);
+  });
+}
+
+async function partagerEnNatif(blob: Blob, nom: string): Promise<Sortie | null> {
+  let C: any = null;
+  try { C = (window as any).Capacitor; } catch { return null; }
+  if (!C || typeof C.isNativePlatform !== 'function' || !C.isNativePlatform()) return null;
+  const P = C.Plugins;
+  if (!P?.Share || !P?.Filesystem) return null;
+  try {
+    const ecrit = await P.Filesystem.writeFile({
+      path: nom, data: await blobEnBase64(blob.slice(0, MORCEAU)), directory: 'CACHE',
+    });
+    for (let o = MORCEAU; o < blob.size; o += MORCEAU) {
+      await P.Filesystem.appendFile({
+        path: nom, data: await blobEnBase64(blob.slice(o, o + MORCEAU)), directory: 'CACHE',
+      });
+    }
+    await P.Share.share({ files: [ecrit.uri] });
+    return 'partage';
+  } catch (e: any) {
+    // Refermer la feuille n'est pas un echec : le greffon rend « Share canceled ».
+    const m = String(e?.message ?? e);
+    if (/cancel/i.test(m) || e?.name === 'AbortError') return 'annule';
+    return null;
   }
 }
 
@@ -495,6 +554,9 @@ export class Review {
     this.gel = gel;
     this.carton = carton;
     this.cartonA = performance.now();
+    // Le son du carton part avec sa premiere image : il est joue sur la sortie
+    // du moteur, que l'enregistreur capte deja.
+    try { carton.sonner?.(); } catch { /* le carton sortira muet */ }
     // La boucle est a l'arret quand on arrive d'une pause. Sans cette ligne,
     // le carton serait peint exactement zero fois.
     if (!this.trait) this.tracer();
@@ -705,6 +767,12 @@ export class Review {
     if (!url) return 'echec';
     // Le type du fichier, pas celui de l'encodeur. Voir `typeDuFichier`.
     const type = typeDuFichier(this.format);
+    // Dans l'application Android, le chemin natif d'abord : les deux suivants
+    // n'y existent pas. Voir `partagerEnNatif`.
+    if (this.donnees) {
+      const natif = await partagerEnNatif(this.donnees, this.etat.fichier);
+      if (natif) return natif;
+    }
     if (this.donnees && peutPartager(type)) {
       try {
         const fichier = new File([this.donnees], this.etat.fichier, { type });
