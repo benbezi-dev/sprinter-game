@@ -18,6 +18,7 @@ import './rendu-premium.js';
 import './decor-cosmos.js';
 // La piste arc-en-ciel : ses couloirs de lumiere, ses reflets, ses guirlandes.
 import './piste-arc-en-ciel.js';
+import './ruelle-nuit.js';
 // Les decors des stades, rendus dans Blender : le manifeste d'abord (ou est le
 // pied de chaque piece dans son image), puis le module qui les pose.
 import decorsManifeste from './decors-manifeste.json';

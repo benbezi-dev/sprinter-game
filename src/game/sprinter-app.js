@@ -319,6 +319,8 @@
       // les maisons et les reverberes Tripo, rendus en plein jour, passent a
       // la nuit (decors-stades.js, `eteinte`) ; les reverberes s'allument
       assombrir: [92, 96, 128],
+      // caniveaux, flaques, feuilles et guirlandes (ruelle-nuit.js)
+      ruelle: true,
       // Les lignes sont couleur d'os, pas blanches, et usees.
       lane: [242, 232, 208], kerb: [96, 92, 96], ligneUsee: 0.42,
       tread: [64, 58, 78], riser: [40, 36, 52], roof: [18, 16, 26],
@@ -4550,6 +4552,8 @@
   // Les decors rendus dans Blender (decors-stades.js). Lus a chaque image
   // plutot qu'au chargement, comme la couche de finition : le jeu tourne sans.
   const DEC = () => globalThis.DecorsStades;
+  // La ruelle du molosse, ce qui s'y peint a la main (ruelle-nuit.js).
+  const RUE = () => globalThis.RuelleNuit;
   // Le Champ-de-Mars : tout son decor vit dans decor-champ-de-mars.js, et ne
   // se dessine que pour le theme qui porte `champDeMars`.
   const CDM = () => globalThis.ChampDeMars;
@@ -7091,6 +7095,8 @@
 
     // Les pieces du FOND (la ruelle du molosse) : derriere la piste, avant
     // elle et avant les coureurs, comme les gradins. Voir decors-stades.js.
+    // Le sol de la ruelle d'abord : caniveaux, flaques, feuilles (a plat).
+    if (th.ruelle && RUE()) RUE().sol(ctx, PEINTRE, th, rIn, rOut);
     if (DEC() && DEC().fond) DEC().fond(ctx, apiDecor(), th, G.levelIdx);
 
     // Tribune simplifiee : muret, gradins, toiture. Elle est dessinee AVANT
@@ -7431,6 +7437,8 @@
     // celui du couloir 8 : `markAt` donne a chacun le sien, exactement comme
     // pour les reperes peints juste au-dessus.
     if (T.markAt) drawBlocs(ctx, th);
+    // Les guirlandes de la ruelle, au-dessus de la piste, avant les coureurs.
+    if (th.ruelle && RUE()) RUE().guirlandes(ctx, PEINTRE, th, rIn, rOut);
 
     // Les poteaux d'arrivee, apres le damier qu'ils encadrent.
     if (T.total) drawPoteaux(ctx, th, rIn, rOut);
