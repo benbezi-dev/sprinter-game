@@ -8646,23 +8646,39 @@
        - 'elan' : le PRE-ELAN des sprinteurs. Pendant le decompte, et jusqu'au
          premier appui, le coureur bascule les epaules et le buste d'avant en
          arriere pour prendre de la vitesse. Partir buste EN AVANT rapporte
-         plus que le bonus de reaction ordinaire, buste en arriere moins : le
-         joueur le regle a l'oeil (`r.elan`, lu par Runner.press).
-     Jamais de blocs : `enBloc` reste a zero, du decompte a la course. */
-  const ELAN_PERIODE = 0.9, ELAN_PENCHE = 0.12, ELAN_BASCULE = 0.20;
+         plus que le bonus de reaction ordinaire, buste en arriere moins
+         (`r.elan`, lu par Runner.press).
+     Jamais de blocs : `enBloc` reste a zero, du decompte a la course.
+
+     LA BASCULE DU JOUEUR SUIT LE DECOMPTE, PAS LA MONTRE (09/10). Premiere
+     version : une bascule libre de 0,9 s, sur l'horloge du navigateur. Le
+     pistolet tombait n'importe ou dans le cycle, et une fois sur deux buste
+     en arriere — sans recours : le bonus de reaction fond de 5 % tous les dix
+     millisecondes, attendre la bascule suivante coutait toujours plus qu'elle
+     ne rapportait (calcule : a 0,9 s, 0,6 s ou 0,5 s de periode, le meilleur
+     appui possible etait le meme, 0,77 a 1,80). L'elan etait un tirage.
+     Desormais le buste du joueur passe en avant `ELAN_AVANT` apres chaque bip
+     — une seconde, le pas du decompte — et donc apres le coup de feu : la
+     bascule donne le rythme, et partir des qu'on entend le pistolet, c'est
+     partir penche. Les autres couloirs gardent un decalage, pour que la
+     ligne ne bascule pas comme un seul homme. */
+  const ELAN_PERIODE = 1.0, ELAN_AVANT = 0.15, ELAN_PENCHE = 0.12, ELAN_BASCULE = 0.20;
   function departDebout(r) {
     r.enBloc = 0;
     r.prets = 0;
     const avD = G.avantDepart, avant = avD && avD.reste > 0;
     const elan = G.departDebout === 'elan';
-    const bascule = (t) => Math.sin((t / ELAN_PERIODE) * Math.PI * 2 + (r.lane || 0) * 0.7);
+    // l'heure du pistolet : negative pendant le decompte, zero au coup de feu
+    const auPistolet = () => (G.state === 'count' ? (G.countT || 0) - DECOMPTE : (G.elapsed || 0));
+    const decalage = r === G.player ? 0 : (r.lane || 0) * 0.7;
+    const bascule = (s) => Math.cos(((s - ELAN_AVANT) / ELAN_PERIODE) * Math.PI * 2 + decalage);
     if (G.state === 'count') {
       // avant le grondement (ou les attitudes du depart ordinaire) : a l'aise
       const libre = avant && !(avD && avD.dit && avD.cri);
       r.attitudeW = libre ? 1 - Math.min(1, r.celebrate || 0) : 0;
       r.attitudeT = G.attT || 0;
       if (elan && !avant) {
-        const b = bascule(performance.now() / 1000);
+        const b = bascule(auPistolet());
         r.drivePitch = ELAN_PENCHE + ELAN_BASCULE * b;
         r.elan = 0.6 + 0.8 * (b + 1) / 2;
       } else {
@@ -8676,7 +8692,7 @@
       r.prets = 1;
       // le pre-elan continue jusqu'au premier appui : c'est la qu'il compte
       if (elan && r === G.player && r.reaction === null) {
-        const b = bascule(performance.now() / 1000);
+        const b = bascule(auPistolet());
         r.drivePitch = ELAN_PENCHE + ELAN_BASCULE * b;
         r.elan = 0.6 + 0.8 * (b + 1) / 2;
       }
