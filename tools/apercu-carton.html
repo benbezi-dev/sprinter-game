@@ -18,8 +18,11 @@ canvas{display:block;border-radius:6px}</style>
     <figcaption>ordinateur · one shot a trois epreuves</figcaption></figure>
 </div>
 
-<h2>l'entree — le voile se pose sur les premiers 22 %</h2>
+<h2>l'entree — le voile (0,33 s), le chrono qui defile puis se verrouille (1,1 s), les lignes qui suivent</h2>
 <div class="rang" id="entree"></div>
+
+<h2>l'ouverture — posee sur le decompte, coupee au pistolet (film 9:16 : 360 x 640 points)</h2>
+<div class="rang" id="ouverture"></div>
 
 <h2>le code du defi — il arrive du reseau, et sa place l'attend</h2>
 <div class="rang" id="codes"></div>
@@ -36,7 +39,7 @@ canvas{display:block;border-radius:6px}</style>
   //
   //     npx vite  puis  http://localhost:5173/tools/apercu-carton.html
   import { SprinterApp } from '/src/game/engine.ts';
-  import { peindreLeCarton } from '/src/game/carton-film.ts';
+  import { peindreLeCarton, peindreLOuverture } from '/src/game/carton-film.ts';
 
   // Un faux stade. Un fond uni ne dirait pas si le voile tient sur une piste
   // claire — et c'est justement la que le texte devient illisible.
@@ -78,14 +81,29 @@ canvas{display:block;border-radius:6px}</style>
 
   // La montee, image par image : c'est la seule facon de voir si le voile
   // arrive trop vite ou trop lentement.
-  for (const a of [0.04, 0.09, 0.15, 0.22, 0.4]) {
+  // En secondes sur les 3 s du carton (CARTON_MS) : la legende dit l'instant.
+  for (const sec of [0.15, 0.4, 0.7, 1.0, 1.15, 1.3, 1.6, 3.0]) {
+    const a = sec / 3;
     const f = document.createElement('figure');
     const cv = document.createElement('canvas');
     cv.width = 240; cv.height = 427;
     f.append(cv, Object.assign(document.createElement('figcaption'),
-                               { textContent: `avancement ${a}` }));
+                               { textContent: `${sec.toFixed(2).replace('.', ',')} s` }));
     document.getElementById('entree').append(f);
     peindre(cv, COURSES.defi, a);
+  }
+
+  for (const sec of [0.05, 0.15, 0.3, 0.5, 0.9]) {
+    const f = document.createElement('figure');
+    const cv = document.createElement('canvas');
+    cv.width = 240; cv.height = 427;
+    f.append(cv, Object.assign(document.createElement('figcaption'),
+                               { textContent: `${sec.toFixed(2).replace('.', ',')} s` }));
+    document.getElementById('ouverture').append(f);
+    const c = cv.getContext('2d');
+    stade(c, cv.width, cv.height);
+    SprinterApp.G = { ...COURSES.defi, state: 'count' };
+    peindreLOuverture(c, cv.width, cv.height, sec * 1000);
   }
 
   /* LES TROIS ETATS DU CODE, cote a cote — c'est la qu'on verifie la seule

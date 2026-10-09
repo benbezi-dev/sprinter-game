@@ -22,7 +22,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { Review, type EtatReview } from './review';
 import { SprinterApp, useGameStore } from './engine';
 import { peindreLeHud } from './hud-film';
-import { peindreLeCarton } from './carton-film';
+import { peindreLeCarton, peindreLOuverture } from './carton-film';
 import { poserLeDefiDeLaCamera, oublierLeDefiDeLaCamera } from './defi-camera';
 
 /**
@@ -164,7 +164,28 @@ export function demarrerLeFilm(
   // afficherait le defi d'une course qui n'est pas celle qu'on regarde.
   oublierLeDefiDeLaCamera();
   filmDeLaCourse().demarrer(SprinterApp.G.cv || null, [...sonDuJeu(), ...sons],
-                            peindreLeHud);
+                            hudEtOuverture());
+}
+
+/**
+ * LE HUD, ET L'OUVERTURE PAR-DESSUS — tant que l'appareil suit.
+ *
+ * L'ouverture (`peindreLOuverture`) ne coute presque rien : trois textes et
+ * deux aplats. Mais le jeu doit tourner sur le plus modeste des telephones :
+ * si les images du film arrivent a plus de 60 ms d'ecart en moyenne (moins de
+ * 17 par seconde), l'appareil peine deja, et on ne lui ajoute rien.
+ */
+function hudEtOuverture() {
+  const debut = performance.now();
+  let avant = 0, ecart = 33;
+  return (ctx: CanvasRenderingContext2D, l: number, h: number) => {
+    peindreLeHud(ctx, l, h);
+    const t = performance.now();
+    if (avant) ecart = ecart * 0.8 + (t - avant) * 0.2;
+    avant = t;
+    if (ecart > 60) return;
+    try { peindreLOuverture(ctx, l, h, t - debut); } catch { /* le film sortira sans */ }
+  };
 }
 
 /**

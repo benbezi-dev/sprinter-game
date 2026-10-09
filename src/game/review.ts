@@ -95,8 +95,11 @@ export type Surcouche = (ctx: CanvasRenderingContext2D, l: number, h: number) =>
  * mieux avec un carton qu'avec un noir. Voir `carton-film.ts`, qui en est la
  * seule implementation.
  */
-export type Carton = (ctx: CanvasRenderingContext2D, l: number, h: number,
-                      avancement: number) => void;
+export type Carton = ((ctx: CanvasRenderingContext2D, l: number, h: number,
+                       avancement: number) => void) & {
+  /** Le son du carton, joue a l'instant ou il commence a se peindre. */
+  sonner?: () => void;
+};
 
 /**
  * LA DUREE DU CARTON.
@@ -108,7 +111,9 @@ export type Carton = (ctx: CanvasRenderingContext2D, l: number, h: number,
  * C'est aussi ce que le bouton de partage attend avant de s'allumer : voir
  * `arreter`, qui ne publie le fichier qu'une fois le carton ecrit dedans.
  */
-export const CARTON_MS = 1500;
+// 3 s depuis le 09/10/2026 (1,5 s avant) : le chrono y defile puis se verrouille,
+// et les lignes arrivent l'une apres l'autre — voir carton-film.ts.
+export const CARTON_MS = 3000;
 
 /**
  * UNE IMAGE DU FILM TOUS LES TRENTIEMES DE SECONDE, PAS A CHAQUE IMAGE DE L'ECRAN.
@@ -224,6 +229,94 @@ function peutPartager(type: string): boolean {
   }
 }
 
+/**
+ * LE PARTAGE NATIF DE LA VIDEO, POUR ANDROID (09/10/2026).
+ *
+ * Le meme defaut que l'image avant `affiche.ts` : dans une WebView Android il
+ * n'y a pas de `navigator.share`, et `<a download>` n'y declenche rien. Le
+ * bouton « LE REPLAY » ne faisait donc rien dans l'application, sans le dire.
+ * On passe, comme l'image, par les greffons Capacitor : le fichier ecrit dans
+ * le cache, puis la vraie feuille de partage du systeme.
+ *
+ * PAR MORCEAUX, parce qu'une video pese des dizaines de Mo : en base64 d'un
+ * seul tenant, elle ferait une chaine de 40 Mo de plus a traverser le pont
+ * natif — de quoi faire tomber l'onglet d'un telephone modeste. Des morceaux
+ * de 3 Mio (un multiple de 3 : chaque morceau se code en base64 sans
+ * bourrage, et le greffon decode chacun a part), ecrits puis ajoutes.
+ *
+ * Rend null hors de l'application, ou si le greffon manque : les chemins du
+ * web prennent alors la suite, comme avant.
+ */
+const MORCEAU = 3 * 1024 * 1024;
+
+function blobEnBase64(blob: Blob): Promise<string> {
+  return new Promise((resoudre, rejeter) => {
+    const l = new FileReader();
+    l.onerror = () => rejeter(l.error);
+    l.onload = () => resoudre(String(l.result).split(',')[1] ?? '');
+    l.readAsDataURL(blob);
+  });
+}
+
+async function partagerEnNatif(blob: Blob, nom: string): Promise<Sortie | null> {
+  let C: any = null;
+  try { C = (window as any).Capacitor; } catch { return null; }
+  if (!C || typeof C.isNativePlatform !== 'function' || !C.isNativePlatform()) return null;
+  const P = C.Plugins;
+  if (!P?.Share || !P?.Filesystem) return null;
+  try {
+    const ecrit = await P.Filesystem.writeFile({
+      path: nom, data: await blobEnBase64(blob.slice(0, MORCEAU)), directory: 'CACHE',
+    });
+    for (let o = MORCEAU; o < blob.size; o += MORCEAU) {
+      await P.Filesystem.appendFile({
+        path: nom, data: await blobEnBase64(blob.slice(o, o + MORCEAU)), directory: 'CACHE',
+      });
+    }
+    await P.Share.share({ files: [ecrit.uri] });
+    return 'partage';
+  } catch (e: any) {
+    // Refermer la feuille n'est pas un echec : le greffon rend « Share canceled ».
+    const m = String(e?.message ?? e);
+    if (/cancel/i.test(m) || e?.name === 'AbortError') return 'annule';
+    return null;
+  }
+}
+
+/**
+ * LE CADRE DU FILM : 9:16 SUR UN TELEPHONE TENU DEBOUT (09/10/2026).
+ *
+ * Le film prenait la taille du canvas du jeu, donc celle de l'ecran : 1080 x
+ * 2640 sur un Galaxy Z Flip6, 1170 x 2532 sur un iPhone. Instagram et TikTok
+ * ne montrent que du 9:16 et rognent le reste a leur idee — le haut et le bas
+ * partaient, avec la barre du chrono.
+ *
+ * On recadre donc au moment de la recopie : le milieu de l'image, au 9:16, et
+ * au plus 1080 de large. Pour un telephone en portrait c'est MOINS de pixels a
+ * recopier et a encoder qu'avant (1080 x 1920 contre 1080 x 2640) : aucun
+ * appareil n'y perd une image pendant la course. On n'agrandit jamais : un
+ * ecran de 720 de large donne un film de 720 x 1280.
+ *
+ * Le HUD et le carton se mettent en page sur la partie VISIBLE, en points CSS :
+ * ils raisonnent deja en `l` x `h` et ne s'accrochent a aucune position de la
+ * piste (hud-film.ts, carton-film.ts).
+ *
+ * Un ecran couche, un ordinateur ou un ecran presque carre (telephone plie
+ * ouvert, tablette) garde son cadre : le rogner en 9:16 couperait la course.
+ */
+const RATIO_PORTRAIT = 1.6;
+interface Cadre { l: number; h: number; sx: number; sy: number; sl: number; sh: number; ecran?: string }
+
+function cadreDuFilm(sw: number, sh: number): Cadre {
+  const ecran = `${sw}x${sh}`;
+  if (!sw || !sh || sh / sw < RATIO_PORTRAIT) return { l: sw, h: sh, sx: 0, sy: 0, sl: sw, sh, ecran };
+  const l = Math.min(1080, sw) & ~1;
+  const h = Math.round(l * 16 / 9) & ~1;
+  const k = Math.max(l / sw, h / sh);
+  const sl = l / k, shv = h / k;
+  return { l, h, sx: (sw - sl) / 2, sy: (sh - shv) / 2, sl, sh: shv, ecran };
+}
+
 export class Review {
   private rec: MediaRecorder | null = null;
   /** Le flux tire du canvas, garde pour pouvoir le relacher. Voir `rendreLeCanvas`. */
@@ -261,6 +354,8 @@ export class Review {
   private peinteA = -Infinity;
   /** Pixels du film par point CSS. Recalcule quand le canvas change de taille. */
   private echelle = 1;
+  /** La part de l'ecran que le film garde, et sa taille. Voir `cadreDuFilm`. */
+  private cadre: Cadre | null = null;
   private morceaux: Blob[] = [];
   private url: string | null = null;
   /**
@@ -363,7 +458,8 @@ export class Review {
    */
   private ouvrirLeMontage(source: HTMLCanvasElement, surcouche: Surcouche): HTMLCanvasElement {
     const m = document.createElement('canvas');
-    m.width = source.width; m.height = source.height;
+    this.cadre = cadreDuFilm(source.width, source.height);
+    m.width = this.cadre.l; m.height = this.cadre.h;
     // `alpha: false` : le montage est opaque par construction — la premiere
     // chose qu'on y pose est l'image pleine du stade. Le dire au navigateur
     // lui epargne la composition d'une couche transparente a chaque image.
@@ -387,7 +483,9 @@ export class Review {
   private caler() {
     const s = this.source;
     if (!s) return;
-    this.echelle = s.width / (s.clientWidth || s.width) || 1;
+    // Pixels du film par point CSS : ceux de l'ecran, ramenes au cadre recadre.
+    const c = this.cadre;
+    this.echelle = (s.width / (s.clientWidth || s.width) || 1) * (c && c.sl ? c.l / c.sl : 1);
   }
 
   /**
@@ -409,12 +507,15 @@ export class Review {
     if (this.carton) { this.tracerLeCarton(ctx, m); return; }
     const s = this.source;
     if (!s) return;
-    if (m.width !== s.width || m.height !== s.height) {
-      m.width = s.width; m.height = s.height;
+    // L'ecran a pu tourner ou changer de taille : le cadre suit.
+    if (!this.cadre || this.cadre.ecran !== `${s.width}x${s.height}`) {
+      this.cadre = cadreDuFilm(s.width, s.height);
+      if (m.width !== this.cadre.l || m.height !== this.cadre.h) { m.width = this.cadre.l; m.height = this.cadre.h; }
       this.caler();
     }
+    const c = this.cadre;
     try {
-      ctx.drawImage(s, 0, 0);
+      ctx.drawImage(s, c.sx, c.sy, c.sl, c.sh, 0, 0, c.l, c.h);
       const k = this.echelle;
       ctx.save();
       ctx.scale(k, k);
@@ -495,6 +596,9 @@ export class Review {
     this.gel = gel;
     this.carton = carton;
     this.cartonA = performance.now();
+    // Le son du carton part avec sa premiere image : il est joue sur la sortie
+    // du moteur, que l'enregistreur capte deja.
+    try { carton.sonner?.(); } catch { /* le carton sortira muet */ }
     // La boucle est a l'arret quand on arrive d'une pause. Sans cette ligne,
     // le carton serait peint exactement zero fois.
     if (!this.trait) this.tracer();
@@ -705,6 +809,12 @@ export class Review {
     if (!url) return 'echec';
     // Le type du fichier, pas celui de l'encodeur. Voir `typeDuFichier`.
     const type = typeDuFichier(this.format);
+    // Dans l'application Android, le chemin natif d'abord : les deux suivants
+    // n'y existent pas. Voir `partagerEnNatif`.
+    if (this.donnees) {
+      const natif = await partagerEnNatif(this.donnees, this.etat.fichier);
+      if (natif) return natif;
+    }
     if (this.donnees && peutPartager(type)) {
       try {
         const fichier = new File([this.donnees], this.etat.fichier, { type });
