@@ -662,14 +662,26 @@ import('@/assets/molosse-victoire.webp?url').then(m => {
 
 /** Les yeux de la bete dans l'image de victoire, mesures sur l'image (fractions). */
 const YEUX_VICTOIRE = [[0.6354, 0.4825], [0.7043, 0.4811]];
+/** Sa gueule (d'ou sort le souffle) et les deux filets de bave, au meme compte. */
+const GUEULE_VICTOIRE = [0.671, 0.540];
+const BAVE_VICTOIRE = [[0.655, 0.572], [0.686, 0.574]];
+/** Le point vers lequel la camera s'avance : la bete. */
+const FOYER_VICTOIRE = [0.67, 0.50];
 
 /** L'image de victoire, en couverture (rognee sur les cotes en portrait). */
 function peindreLaVictoire(ctx: CanvasRenderingContext2D, im: HTMLImageElement,
                           L: number, H: number, t: number, eclair: number) {
   const iw = im.naturalWidth, ih = im.naturalHeight;
   const k = Math.max(L / iw, H / ih);
-  const w = iw * k, h = ih * k;
-  const x0 = (L - w) * 0.5, y0 = (H - h) * 0.42;
+  // LE TRAVELLING AVANT : la camera s'approche de la bete, lentement, sur
+  // quatorze secondes — dix pour cent, assez pour qu'on le sente sans le voir.
+  const u = Math.min(1, t / 14);
+  const zoom = 1 + 0.10 * (1 - Math.pow(1 - u, 2));
+  const w0 = iw * k, h0 = ih * k;
+  const bx = (L - w0) * 0.5, by = (H - h0) * 0.42;
+  const fx = bx + FOYER_VICTOIRE[0] * w0, fy = by + FOYER_VICTOIRE[1] * h0;
+  const w = w0 * zoom, h = h0 * zoom;
+  const x0 = fx - FOYER_VICTOIRE[0] * w, y0 = fy - FOYER_VICTOIRE[1] * h;
   // elle sort du noir pendant la premiere seconde
   const entre = Math.min(1, t / 1.0);
   ctx.save();
@@ -695,6 +707,39 @@ function peindreLaVictoire(ctx: CanvasRenderingContext2D, im: HTMLImageElement,
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.arc(ox, oy, r, 0, TAU); ctx.fill();
   }
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = entre;
+  // SON SOUFFLE, en buee devant la gueule : une bouffee toutes les 1,7 s,
+  // qui gonfle, monte un peu et se dissout dans le froid.
+  const gx = x0 + GUEULE_VICTOIRE[0] * w, gy = y0 + GUEULE_VICTOIRE[1] * h;
+  for (let i = 0; i < 2; i++) {
+    const a = ((t + i * 0.85) % 1.7) / 1.7;
+    const r = w * (0.03 + 0.09 * a);
+    const cy = gy - a * w * 0.03;
+    const b = ctx.createRadialGradient(gx, cy, 0, gx, cy, r);
+    b.addColorStop(0, `rgba(200,210,225,${0.34 * (1 - a)})`);
+    b.addColorStop(1, 'rgba(200,210,225,0)');
+    ctx.fillStyle = b;
+    ctx.beginPath(); ctx.ellipse(gx, cy, r * 1.3, r, 0, 0, TAU); ctx.fill();
+  }
+  // LA BAVE, qui s'etire puis tombe des crocs, chaque filet a son rythme.
+  BAVE_VICTOIRE.forEach(([u0, v0], i) => {
+    const a = ((t * 0.7 + i * 0.45) % 1);
+    const bx2 = x0 + u0 * w, by2 = y0 + v0 * h;
+    // le filet s'etire sous le croc, puis une goutte s'en detache et tombe
+    const long = h * (0.003 + 0.010 * Math.min(1, a / 0.62));
+    const chute = a > 0.62 ? (a - 0.62) / 0.38 : 0;
+    ctx.fillStyle = 'rgba(190,198,210,0.30)';
+    ctx.beginPath();
+    ctx.ellipse(bx2, by2 + long * 0.5, w * 0.0018, long * 0.5, 0, 0, TAU);
+    ctx.fill();
+    if (chute > 0) {
+      ctx.fillStyle = `rgba(190,198,210,${0.35 * (1 - chute)})`;
+      ctx.beginPath();
+      ctx.ellipse(bx2, by2 + long + chute * h * 0.05, w * 0.0022, w * 0.0035, 0, 0, TAU);
+      ctx.fill();
+    }
+  });
   ctx.restore();
 }
 
