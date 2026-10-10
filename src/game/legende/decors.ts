@@ -562,6 +562,20 @@ function petales(ctx: CanvasRenderingContext2D, api: any) {
 /** La largeur reelle d'une piece, en metres (manifeste, legende_pieces.py). */
 const largeurDe = (img: string): number => ((manifeste as any)?.pieces?.[img]?.largeur_m as number) || 1;
 
+/** Les objets typiques du lieu (CULTURE), pour le bord de route des voyages
+ *  (LegendeCinematiques.tsx, 10/10) : l'image chargee et sa taille reelle ;
+ *  ceux qui ne sont pas encore la manquent a la liste. */
+export function objetsCulturels(lieu: string): { im: CanvasImageSource; w: number; h: number; ax: number; ay: number; largeurM: number }[] {
+  const C = CULTURE[MONUMENT_DU_LIEU(lieu)];
+  if (!C) return [];
+  const out: { im: CanvasImageSource; w: number; h: number; ax: number; ay: number; largeurM: number }[] = [];
+  for (const ob of C.objets) {
+    const R = piece(ob.img);
+    if (R) out.push({ im: R.im, w: R.p.w, h: R.p.h, ax: R.p.ax, ay: R.p.ay, largeurM: largeurDe(ob.img) });
+  }
+  return out;
+}
+
 /** Les objets typiques du lieu, poses dans la pelouse, du plus loin au plus pres. */
 function objetsDuLieu(ctx: CanvasRenderingContext2D, api: any, rIn: number, C: Culture, graine: number) {
   const { G } = api;

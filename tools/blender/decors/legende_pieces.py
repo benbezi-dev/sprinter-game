@@ -33,7 +33,8 @@
 #   New York   taxi (le yellow cab), borne (bouche d'incendie), hotdog
 #   Londres    boite (pillar box), bus (impériale), garde (guerite et garde)
 #
-# Le drac, le taxi et le bus ne sont plus modelises ici depuis le 09/10 :
+# Le drac, le taxi, le bus (09/10) et le banc trencadis (10/10) ne sont plus
+# modelises ici :
 # ce sont des modeles Tripo, rendus de la meme facon (voir TRIPO plus bas).
 # -----------------------------------------------------------------------
 
@@ -592,6 +593,7 @@ PIECES = {'torii': torii, 'cabine': cabine, 'morris': morris,
 SOURCES = os.path.abspath(os.path.join(LM.PROJET, '..', 'assets-sources', 'legende', 'refonte-0910'))
 TRIPO = {
     'drac': dict(source='drac-tripo.glb', rot=0.0, hauteur=1.15),
+    'trencadis': dict(source='trencadis-tripo.glb', rot=180.0, hauteur=1.0),
     'taxi': dict(source='taxi-tripo.glb', rot=0.0, hauteur=1.48, sat=1.9),
     'bus': dict(source='bus-tripo.glb', rot=180.0, hauteur=4.38, sat=1.5),
 }

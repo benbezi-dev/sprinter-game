@@ -28,3 +28,11 @@ licence. **À reprendre dans les crédits du jeu avant toute ouverture publique.
 Droits d'architecte à vérifier avant ouverture publique (juridique/) : mosquée
 Hassan II (1993), Sagrada Família (en construction), Kinkaku-ji (reconstruit en
 1955).
+
+## Globe et véhicules des voyages (10/10/2026)
+
+| Élément | Fichier | Source | Licence |
+|---|---|---|---|
+| Terre du globe | `src/assets/legende/carte/terre.jpg` | NASA Visible Earth, « Blue Marble: Land Surface, Shallow Water, and Shaded Topography » (Reto Stöckli, NASA Goddard) | domaine public |
+| Banc trencadís | `trencadis.webp` | [Benches at Park Guell by Antonio Gaudi (4209976058)](https://commons.wikimedia.org/wiki/File:Benches_at_Park_Guell_by_Antonio_Gaudi_(4209976058).jpg), redessinée isolée par Nano Banana (Tripo) avant le modèle | CC BY 2.0 |
+| Vélo, avion de ligne, voiture, car d'équipe | `src/assets/legende/vehicules/` | images générées (Tripo, Nano Banana), modèles Tripo HD, sans marque ; logo BENBEZI posé au dessin sur le car | — |

@@ -1,0 +1,52 @@
+{
+ "avion": {
+  "dessus": {
+   "ax": 303.0,
+   "ay": 319.0,
+   "f": "avion-dessus.webp",
+   "h": 638,
+   "w": 606
+  },
+  "profil": {
+   "ax": 940.5,
+   "ay": 603.4,
+   "f": "avion-profil.webp",
+   "h": 622,
+   "w": 1882
+  }
+ },
+ "car": {
+  "profil": {
+   "ax": 794.5,
+   "ay": 584.8,
+   "f": "car-profil.webp",
+   "h": 624,
+   "w": 1589
+  }
+ },
+ "velo": {
+  "dessus": {
+   "ax": 119.0,
+   "ay": 311.0,
+   "f": "velo-dessus.webp",
+   "h": 622,
+   "w": 238
+  },
+  "profil": {
+   "ax": 318.5,
+   "ay": 618.6,
+   "f": "velo-profil.webp",
+   "h": 622,
+   "w": 637
+  }
+ },
+ "voiture": {
+  "profil": {
+   "ax": 746.5,
+   "ay": 580.8,
+   "f": "voiture-profil.webp",
+   "h": 622,
+   "w": 1493
+  }
+ }
+}

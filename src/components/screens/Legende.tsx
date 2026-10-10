@@ -13,7 +13,7 @@ import {
   memoire, lieuDeLEtape, rangEnCours, chronoDuBoss, type Verdict,
 } from '@/game/legende/legende';
 import { mot, chrono, dans } from '@/game/legende/mots';
-import { CarteDuVoyage } from './LegendeCarte';
+import { GlobeDuVoyage } from './LegendeGlobe';
 import { CinematiqueKarman } from './LegendeKarman';
 import { CinematiqueVoyage, CinematiqueApotheose, CinematiqueSacre } from './LegendeCinematiques';
 import { PORTRAITS, TEINTES } from './legende-commun';
@@ -223,7 +223,7 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
   const lieu = lieuDeLEtape(rang);
   const depuis = rang === 0 ? 'San-Pédro' : lieuDeLEtape(rang - 1).nom;
   const teinte = TEINTES[rang];
-  const Icone = ICONES[e.transport];
+  const Icone = rang >= 1 && rang <= 3 ? Plane : ICONES[e.transport];
   const drapeau = drapeauDe(lieu.drapeau);
   // Le voyage passe entre l'affiche et la course : a velo, en voiture, en car,
   // en avion (LegendeCinematiques.tsx), la montee vers Karman
@@ -248,10 +248,12 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
           </span>
           <span className="text-xs text-white/60">{lieu.pays}</span>
         </div>
-        <CarteDuVoyage rang={rang} teinte={teinte} boss={lieu.boss} />
+        <GlobeDuVoyage rang={rang} teinte={teinte} boss={lieu.boss} />
         <span className="flex items-center gap-2 text-[11px] text-white/70">
           <Icone size={16} color={teinte} />
-          {mot('depuis', { t: mot(e.transport), d: depuis })}
+          {rang === 1 || rang === 2
+            ? mot('trajet_vol', { v: mot('vol_ligne'), d: depuis, t: mot(rang === 1 ? 'sol_voiture' : 'sol_car') })
+            : mot('depuis', { t: mot(rang === 3 ? 'vol_jet' : e.transport), d: depuis })}
         </span>
 
         {/* LE VS. Le boss a la place d'honneur, a droite, dans sa couleur. */}

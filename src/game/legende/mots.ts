@@ -28,6 +28,13 @@ const MOTS: Record<string, [string, string]> = {
   car:          ['En car', 'By coach'],
   avion:        ['En avion', 'By plane'],
   fusee:        ['En fusée', 'By rocket'],
+  // le trajet en deux temps (10/10) : le vol sur le globe, puis le dernier
+  // bout au sol jusqu'au stade
+  trajet_vol:   ['{v} depuis {d}, puis {t} jusqu’au stade', '{v} from {d}, then {t} to the stadium'],
+  vol_ligne:    ['Vol de ligne', 'Airliner'],
+  vol_jet:      ['Jet privé BENBEZI', 'BENBEZI private jet'],
+  sol_voiture:  ['en voiture', 'by car'],
+  sol_car:      ['dans le car de l’équipe', 'on the team coach'],
   gagnee:       ['ÉTAPE GAGNÉE', 'STAGE WON'],
   passer:       ['TOUCHE POUR PASSER', 'TAP TO SKIP'],
   tropo:        ['TROPOSPHÈRE', 'TROPOSPHERE'],

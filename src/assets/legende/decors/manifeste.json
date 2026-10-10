@@ -364,13 +364,13 @@
    "w": 370
   },
   "trencadis": {
-   "ax": 1843.0,
-   "ay": 780.4,
+   "ax": 1562.5,
+   "ay": 756.88,
    "f": "trencadis.webp",
-   "h": 878,
-   "hauteur_m": 0.98,
-   "largeur_m": 5.17,
-   "w": 3686
+   "h": 874,
+   "hauteur_m": 1.0,
+   "largeur_m": 3.99,
+   "w": 3125
   },
   "wallace": {
    "ax": 171.0,

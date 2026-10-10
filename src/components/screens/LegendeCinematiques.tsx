@@ -24,11 +24,12 @@ import { getSavedName } from '@/game/leaderboard';
 import { drapeauDe } from '@/components/Insignes';
 import { DEPART, ETAPES, type Lieu } from '@/game/legende/etapes';
 import { lieuDeLEtape, memoire } from '@/game/legende/legende';
-import { monumentDuLieu } from '@/game/legende/decors';
+import { monumentDuLieu, objetsCulturels, preparerLeLointain } from '@/game/legende/decors';
 import { cumulus, chargerLesCumulus, poserCumulus } from '@/game/legende/nuages';
 import { citeCeleste, W as CITE_W, AX as CITE_AX, AY as CITE_AY } from '@/game/legende/cite-celeste';
 import { mot, dans, nombre } from '@/game/legende/mots';
 import { fusee } from './LegendeKarman';
+import { vehicule as spriteVehicule, prechargerVehicules, type NomVehicule } from '@/game/legende/vehicules';
 import { PORTRAITS, TEINTES } from './legende-commun';
 
 type Rgb = [number, number, number];
@@ -114,6 +115,80 @@ function distanceKm(a: [number, number], b: [number, number]) {
   const h = Math.sin((b[0] - a[0]) * r / 2) ** 2
           + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin((b[1] - a[1]) * r / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.sqrt(h));
+}
+
+/* ===========================================================================
+   LE VRAI DESIGN ET LE MOTION DESIGN DES VOYAGES (10/10)
+   ===========================================================================
+   L'auteur : « ameliore ou change les modes de deplacement », « ajoute du
+   motion design et du reel design ». Les vehicules sont des modeles Tripo
+   rendus de profil (game/legende/vehicules.ts) ; le dessin au canvas d'avant
+   ne sert plus que tant que l'image n'est pas chargee. Par-dessus chaque
+   voyage, un habillage : bandes cinema qui entrent avec un filet de la
+   couleur de l'etape, balayage de lumiere a l'ouverture, vignette ; entre le
+   vol et le trajet au sol, un volet en diagonale.
+   =========================================================================== */
+
+/** Le vehicule de profil, roues a yPied, haut de hPx ; false s'il n'est pas encore la. */
+function poserVehicule(ctx: CanvasRenderingContext2D, nom: NomVehicule, x: number, yPied: number, hPx: number, rot = 0): boolean {
+  const s = spriteVehicule(nom, 'profil');
+  if (!s) return false;
+  const k = hPx / s.h;
+  ctx.save();
+  ctx.translate(x, yPied); ctx.rotate(rot);
+  ctx.drawImage(s.im, -s.w * k / 2, -s.h * k, s.w * k, s.h * k);
+  ctx.restore();
+  return true;
+}
+
+/** Des traits de vitesse qui filent vers la gauche, entre y0 et y1. */
+function traitsDeVitesse(ctx: CanvasRenderingContext2D, W: number, H: number, y0: number, y1: number, t: number, force: number) {
+  if (force <= 0.02) return;
+  ctx.save();
+  for (let i = 0; i < 16; i++) {
+    const L = W * (0.08 + 0.18 * alea(i * 5));
+    const x = W + 60 - ((t * W * (1.6 + alea(i) * 1.4) + alea(i * 3) * W * 2) % (W + L + 120));
+    const y = y0 + (y1 - y0) * alea(i * 7);
+    const g = ctx.createLinearGradient(x, 0, x + L, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, `rgba(255,255,255,${0.32 * force})`);
+    ctx.fillStyle = g; ctx.fillRect(x, y, L, Math.max(1, H * 0.0018));
+  }
+  ctx.restore();
+}
+
+/** L'habillage commun : bandes cinema, filet de couleur, vignette, balayage de lumiere. */
+function habillage(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, duree: number, teinte: string) {
+  const b = H * 0.055 * fenetre(t, 0.05, 0.6) * (1 - fenetre(t, duree - 0.8, duree - 0.25));
+  const v = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.32, W / 2, H / 2, Math.max(W, H) * 0.78);
+  v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,0.36)');
+  ctx.fillStyle = v; ctx.fillRect(0, 0, W, H);
+  const s = fenetre(t, 0.15, 1.25);
+  if (s > 0 && s < 1) {
+    const x = -W * 0.5 + s * W * 2;
+    const g = ctx.createLinearGradient(x - W * 0.3, 0, x + W * 0.3, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.16)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  }
+  if (b > 0.5) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W, b); ctx.fillRect(0, H - b, W, b);
+    const lw = W * fenetre(t, 0.35, 1.2);
+    ctx.fillStyle = teinte;
+    ctx.fillRect(0, b - 2, lw, 2); ctx.fillRect(W - lw, H - b, lw, 2);
+  }
+}
+
+/** Le volet entre deux plans : une diagonale de la teinte couvre (u de 0 a 0,5) puis decouvre. */
+function volet(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
+  const a = lisse(Math.min(1, u * 2)), b = lisse(Math.max(0, u * 2 - 1));
+  const pente = W * 0.45;
+  const x1 = -pente + (W + pente * 2) * a, x0 = -pente + (W + pente * 2) * b;
+  ctx.save();
+  ctx.fillStyle = teinte;
+  ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x1, 0); ctx.lineTo(x1 - pente, H); ctx.lineTo(x0 - pente, H); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1 + 5, 0); ctx.lineTo(x1 + 5 - pente, H); ctx.lineTo(x1 - pente, H); ctx.closePath(); ctx.fill();
+  ctx.restore();
 }
 
 /* ===========================================================================
@@ -494,14 +569,39 @@ function progression(duree: number) {
   };
 }
 
+// Les voyages, coherents (10/10) : a velo jusqu'a Menole ; vol de ligne puis
+// voiture (regional) ; vol de ligne puis car de l'equipe (national) ; jet
+// prive BENBEZI (mondial). On ne traverse plus l'ocean en voiture.
+const VOL_ARRIVEE = 3.8;     // s : la part du vol, avant le volet
+const DUREES = [8.2, 11.0, 11.0, 8.6];
+
 export function CinematiqueVoyage({ rang, onFin }: { rang: number; onFin: () => void }) {
-  return <Cinematique nom={`voyage-${rang}`} duree={rang === 3 ? 8.6 : 8.2} onFin={onFin}
-                      creer={() => (rang === 3 ? peintreAvion(rang) : peintreRoute(rang))} />;
+  const duree = DUREES[rang] ?? 8.2;
+  return <Cinematique nom={`voyage-${rang}`} duree={duree} onFin={onFin}
+                      creer={() => {
+                        prechargerVehicules(['velo', 'avion', 'voiture', 'car', 'jet']);
+                        const p = rang === 3 ? peintreAvion(rang, { nom: 'jet', mode: mot('vol_jet') })
+                          : rang === 0 ? peintreRoute(0) : peintreVolPuisSol(rang);
+                        return (ctx, W, H, t) => { p(ctx, W, H, t); habillage(ctx, W, H, t, duree, TEINTES[rang]); };
+                      }} />;
+}
+
+/** Regional et national : le vol de ligne, un volet, puis le dernier bout au sol. */
+function peintreVolPuisSol(rang: number): Peintre {
+  const vol = peintreAvion(rang, { duree: VOL_ARRIVEE + 0.7, descente: false, nom: 'avion', mode: mot('vol_ligne') });
+  const sol = peintreRoute(rang, { local: true, duree: (DUREES[rang] ?? 11) - VOL_ARRIVEE,
+                                   departNom: dans(['Aéroport', 'Airport']), km: 22 + rang * 4 });
+  const teinte = TEINTES[rang];
+  return (ctx, W, H, t) => {
+    if (t < VOL_ARRIVEE) vol(ctx, W, H, t); else sol(ctx, W, H, t - VOL_ARRIVEE);
+    const u = (t - (VOL_ARRIVEE - 0.38)) / 0.76;
+    if (u > 0 && u < 1) volet(ctx, W, H, u, teinte);
+  };
 }
 
 /** Ce qui s'ecrit en haut : l'etape, d'ou vers ou, la distance, puis le lieu. */
 function hudVoyage(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, duree: number,
-                   rang: number, depart: Lieu, arrivee: Lieu, km: number) {
+                   rang: number, depart: Lieu, arrivee: Lieu, km: number, mode?: string) {
   const e = ETAPES[rang];
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 8;
@@ -512,7 +612,7 @@ function hudVoyage(ctx: CanvasRenderingContext2D, W: number, H: number, t: numbe
   ctx.textAlign = 'center';
   ctx.font = `800 ${Math.round(Math.max(10, H * 0.015))}px system-ui, sans-serif`;
   ctx.fillStyle = 'rgba(255,255,255,0.88)';
-  ctx.fillText(`${mot('etape', { n: rang + 1 })} · ${dans(e.intitule).toUpperCase()} · ${mot(e.transport).toUpperCase()}`, W / 2, H * 0.085);
+  ctx.fillText(`${mot('etape', { n: rang + 1 })} · ${dans(e.intitule).toUpperCase()} · ${(mode ?? mot(e.transport)).toUpperCase()}`, W / 2, H * 0.085);
   titre(ctx, `${depart.nom.toUpperCase()}  →  ${arrivee.nom.toUpperCase()}`, W / 2, H * 0.12,
         Math.max(14, H * 0.024), W * 0.9, 'rgba(255,255,255,0.95)', 800);
   ctx.restore();
@@ -524,22 +624,31 @@ function hudVoyage(ctx: CanvasRenderingContext2D, W: number, H: number, t: numbe
     const d = drapeauDe(arrivee.drapeau);
     titre(ctx, (d ? d + ' ' : '') + arrivee.nom.toUpperCase(), W / 2, H * 0.22 + (1 - a) * 10,
           Math.min(W * 0.13, H * 0.075), W * 0.92, '#FFFFFF');
+    // le filet de la couleur de l'etape se tire sous le nom
+    ctx.shadowBlur = 0;
+    const lw = W * 0.42 * fenetre(t, duree - 2.5, duree - 1.7);
+    ctx.fillStyle = TEINTES[rang];
+    ctx.fillRect(W / 2 - lw / 2, H * 0.22 + Math.min(W * 0.13, H * 0.075) * 0.32, lw, Math.max(2, H * 0.004));
     ctx.restore();
   }
 }
 
-function peintreRoute(rang: number): Peintre {
-  const duree = 8.2;
-  const depart = rang === 0 ? DEPART : lieuDeLEtape(rang - 1);
+function peintreRoute(rang: number, o: { local?: boolean; duree?: number; departNom?: string; km?: number } = {}): Peintre {
+  const duree = o.duree ?? 8.2;
   const arrivee = lieuDeLEtape(rang);
-  const sD = styleDe(depart), sA = styleDe(arrivee), sT = STYLES.transit;
-  const km = depart.geo && arrivee.geo ? distanceKm(depart.geo, arrivee.geo) : 0;
+  // au sol apres le vol : de l'aeroport au stade, dans la ville d'arrivee
+  const depart: Lieu = o.local ? { ...arrivee, nom: o.departNom ?? arrivee.nom } : (rang === 0 ? DEPART : lieuDeLEtape(rang - 1));
+  const sA = styleDe(arrivee);
+  const sD = o.local ? sA : styleDe(depart), sT = o.local ? sA : STYLES.transit;
+  const km = o.km ?? (depart.geo && arrivee.geo ? distanceKm(depart.geo, arrivee.geo) : 0);
   const p = progression(duree);
   const [cielH, cielB, soleil] = CIELS[rang];
   const teinte = TEINTES[rang];
   const transport = ETAPES[rang].transport;
-  // le monument et les nuages se chargent des l'ouverture
+  // le monument et les nuages se chargent des l'ouverture ; au sol apres le
+  // vol, les objets du lieu aussi (ils bordent la route)
   monumentDuLieu(arrivee.cle);
+  if (o.local) preparerLeLointain(arrivee.cle);
   chargerLesCumulus(true);
   logoBenbezi();
   const poids = (fr: number): [number, number, number] => {
@@ -557,6 +666,7 @@ function peintreRoute(rang: number): Peintre {
     const X = p(t) * D;
     const v = Math.max(0, p(Math.min(duree, t + 0.05)) - p(t)) * D / 0.05;   // px/s
     const k = Math.min(W / 400, H / 560) * (transport === 'velo' ? 1.25 : 1);
+    const parM0 = Math.min(H * 0.07, W * 0.062);          // pixels par metre, au bord de la route
     const yH = H * 0.6, yMid = H * 0.67, yR0 = H * 0.72, yR1 = H * 0.8, yRoue = H * 0.775;
     const frac = (u: number, f: number) => Math.max(0, Math.min(1, (u - W * 0.5) / (D * f)));
 
@@ -614,6 +724,33 @@ function peintreRoute(rang: number): Peintre {
       ctx.stroke();
     }
 
+    // LE STADE S'ANNONCE : au sol apres le vol, ses projecteurs s'allument a
+    // l'horizon et balaient le ciel quand on approche
+    if (o.local) {
+      const a = fenetre(p(t), 0.42, 0.72);
+      if (a > 0) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        for (let j = 0; j < 4; j++) {
+          const bx = W * (0.08 + 0.26 * j) + (1 - a) * W * 0.3, by = yH - H * 0.01;
+          const ang = -Math.PI / 2 + Math.sin(t * 0.9 + j * 1.7) * 0.32;
+          const L = H * 0.55, l = W * 0.05;
+          const gx = bx + Math.cos(ang) * L, gy = by + Math.sin(ang) * L;
+          const g = ctx.createLinearGradient(bx, by, gx, gy);
+          const scint = 0.75 + 0.25 * Math.sin(t * 23 + j * 5) * (1 - fenetre(p(t), 0.6, 0.7));
+          g.addColorStop(0, `rgba(255,248,220,${0.38 * a * scint})`); g.addColorStop(1, 'rgba(255,248,220,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.moveTo(bx - 3, by);
+          ctx.lineTo(gx - Math.sin(ang) * l, gy + Math.cos(ang) * l); ctx.lineTo(gx + Math.sin(ang) * l, gy - Math.cos(ang) * l);
+          ctx.lineTo(bx + 3, by); ctx.closePath(); ctx.fill();
+          const h = ctx.createRadialGradient(bx, by, 0, bx, by, W * 0.07);
+          h.addColorStop(0, `rgba(255,250,230,${0.8 * a * scint})`); h.addColorStop(1, 'rgba(255,250,230,0)');
+          ctx.fillStyle = h; ctx.fillRect(bx - W * 0.07, by - W * 0.07, W * 0.14, W * 0.14);
+        }
+        ctx.restore();
+      }
+    }
+
     // le monument d'arrivee, qui se leve a droite en fin de voyage
     const M = monumentDuLieu(arrivee.cle);
     if (M) {
@@ -638,6 +775,15 @@ function peintreRoute(rang: number): Peintre {
       // l'arrivee se degage : rien ne pousse devant le monument
       if (fr > 0.93) continue;
       const s = fr < 0.3 ? sD : fr > 0.66 ? sA : sT;
+      // au sol apres le vol : les vrais objets du lieu (torii, lanternes,
+      // kiosques...), un sur deux, entre les arbres
+      const objets = o.local ? objetsCulturels(arrivee.cle) : [];
+      if (objets.length && hache(i * 5) % 2 === 0) {
+        const ob = objets[hache(i * 11) % objets.length];
+        const kO = (Math.min(ob.largeurM, 6) * parM0) / ob.w;
+        ctx.drawImage(ob.im, x - ob.ax * kO, yMid + H * 0.01 - ob.ay * kO, ob.w * kO, ob.h * kO);
+        continue;
+      }
       const type = s.arbres[hache(i) % s.arbres.length];
       arbre(ctx, type, x, yMid, H * 0.1 * (0.8 + 0.5 * alea(i * 3)) * (type === 'maison' ? 0.75 : 1), s.feuille, hache(i * 7));
     }
@@ -659,16 +805,31 @@ function peintreRoute(rang: number): Peintre {
       }
     }
 
-    // le vehicule
-    const xv = W * (transport === 'car' ? 0.4 : 0.36);
+    // le vehicule : le modele Tripo de profil, sinon le dessin d'avant
+    const xv = W * (transport === 'car' ? 0.42 : 0.36);
     const ang = X / (14 * k);
+    const vite = Math.min(1, v / 300);
+    traitsDeVitesse(ctx, W, H, yR0 - H * 0.12, yR1, t, vite * (transport === 'velo' ? 0.5 : 1));
+    const parM = parM0 * (transport === 'velo' ? 1.45 : transport === 'voiture' ? 1.35 : 1);
+    const nomV: NomVehicule = transport === 'velo' ? 'velo' : transport === 'voiture' ? 'voiture' : 'car';
+    const hautM = transport === 'velo' ? 1.75 : transport === 'voiture' ? 1.48 : 3.7;
+    const cahot = Math.sin(t * (transport === 'velo' ? 9 : 19)) * 0.6 * vite;
     if (transport === 'velo') {
-      // la poussiere de sable soulevee
       for (let i = 0; i < 10; i++) {
         const age = (t * 3 + i / 10) % 1;
-        ctx.fillStyle = `rgba(236,214,170,${0.4 * (1 - age) * Math.min(1, v / 400)})`;
+        ctx.fillStyle = `rgba(236,214,170,${0.4 * (1 - age) * vite})`;
         ctx.beginPath(); ctx.arc(xv - 30 * k - age * 60 * k, yRoue - 3 - age * 10, 3 + age * 6, 0, Math.PI * 2); ctx.fill();
       }
+    }
+    if (poserVehicule(ctx, nomV, xv, yR1 - H * 0.018 + cahot, hautM * parM)) {
+      // le car de l'equipe porte le logo BENBEZI sur son flanc
+      const sp = nomV === 'car' ? spriteVehicule('car', 'profil') : null, lg = logoBenbezi();
+      if (sp && lg) {
+        const hv = hautM * parM, lv = hv * sp.w / sp.h, ll = lv * 0.3;
+        ctx.drawImage(lg, xv - lv * 0.06 - ll / 2, yR1 - H * 0.018 + cahot - hv * 0.5 - ll * lg.height / lg.width / 2,
+                      ll, ll * lg.height / lg.width);
+      }
+    } else if (transport === 'velo') {
       velo(ctx, xv, yRoue, k, ang);
     } else if (transport === 'voiture') {
       voiture(ctx, xv, yRoue + Math.sin(t * 22) * 0.5 * Math.min(1, v / 300), k, ang, teinte);
@@ -691,13 +852,14 @@ function peintreRoute(rang: number): Peintre {
       }
     }
 
-    hudVoyage(ctx, W, H, t, duree, rang, depart, arrivee, km * p(t));
+    hudVoyage(ctx, W, H, t, duree, rang, depart, arrivee, km * p(t), o.local ? mot(transport) : undefined);
   };
 }
 
 /** En avion : au-dessus de la mer de nuages, puis la descente sur la ville. */
-function peintreAvion(rang: number): Peintre {
-  const duree = 8.6;
+function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom?: 'avion' | 'jet'; mode?: string } = {}): Peintre {
+  const duree = o.duree ?? 8.6;
+  const nomAvion = o.nom ?? 'avion';
   const depart = lieuDeLEtape(rang - 1), arrivee = lieuDeLEtape(rang);
   const km = depart.geo && arrivee.geo ? distanceKm(depart.geo, arrivee.geo) : 0;
   const p = progression(duree);
@@ -708,7 +870,7 @@ function peintreAvion(rang: number): Peintre {
   logoBenbezi();
   return (ctx, W, H, t) => {
     const X = p(t) * W * 9;
-    const descente = fenetre(t, duree - 3.4, duree - 1.0);
+    const descente = o.descente === false ? 0 : fenetre(t, duree - 3.4, duree - 1.0);
     const g = ctx.createLinearGradient(0, 0, 0, H);
     g.addColorStop(0, css(mel(cielH, [70, 130, 210], descente)));
     g.addColorStop(1, css(mel(cielB, [196, 222, 244], descente)));
@@ -793,9 +955,20 @@ function peintreAvion(rang: number): Peintre {
     tr.addColorStop(0, 'rgba(255,255,255,0)'); tr.addColorStop(1, 'rgba(255,255,255,0.75)');
     ctx.strokeStyle = tr; ctx.lineWidth = 2.4 * k;
     ctx.beginPath(); ctx.moveTo(xa - W * 0.6, ya + 20 * k); ctx.lineTo(xa - 14 * k, ya + 20 * k); ctx.stroke();
-    avion(ctx, xa, ya, k, 0.04 * descente, teinte);
+    // le vrai avion (Tripo, de profil), un peu cabre en vol, qui pique a la descente
+    // (le jet prive n'est pas encore modelise : l'avion de ligne le remplace)
+    const nomVrai: 'avion' | 'jet' = spriteVehicule(nomAvion, 'profil') ? nomAvion : 'avion';
+    const sp = spriteVehicule(nomVrai, 'profil');
+    if (sp) {
+      const larg = Math.min(W * 0.66, H * 0.52) * (1 - 0.45 * loin_) * (nomVrai === 'jet' ? 0.8 : 1);
+      const hp = larg * sp.h / sp.w;
+      poserVehicule(ctx, nomVrai, xa, ya + hp * 0.5, hp, -0.035 + 0.08 * descente + Math.sin(t * 1.1) * 0.01);
+    } else {
+      avion(ctx, xa, ya, k, 0.04 * descente, teinte);
+    }
+    traitsDeVitesse(ctx, W, H, ya - H * 0.15, ya + H * 0.15, t, 0.55 * (1 - descente));
 
-    hudVoyage(ctx, W, H, t, duree, rang, depart, arrivee, km * p(t));
+    hudVoyage(ctx, W, H, t, duree, rang, depart, arrivee, km * p(t), o.mode);
   };
 }
 
