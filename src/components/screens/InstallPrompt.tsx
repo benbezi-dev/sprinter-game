@@ -23,6 +23,16 @@ const REFUS = 'sprinter_install_refuse';
 let visible = false;
 export function installVisible(): boolean { return visible; }
 
+/** Qui veut savoir quand la carte apparait ou s'en va : le bouton du tchat du
+ *  duel des marques (TchatMarques.tsx) se pose au-dessus d'elle. */
+const ecouteursInstall = new Set<() => void>();
+export function ecouterInstall(f: () => void) { ecouteursInstall.add(f); return () => { ecouteursInstall.delete(f); }; }
+function poserVisible(v: boolean) {
+  if (visible === v) return;
+  visible = v;
+  for (const f of [...ecouteursInstall]) { try { f(); } catch { /* ecouteur parti */ } }
+}
+
 /** Deja lance depuis l'ecran d'accueil du telephone ? */
 function dejaInstalle() {
   // Dans l'enveloppe native, le jeu EST l'application : il n'y a rien a
@@ -104,8 +114,8 @@ export function InstallPrompt() {
   // Le drapeau se pose dans un effet, pas dans le rendu : un rendu qui laisse
   // une trace derriere lui est un rendu qu'on ne peut plus rejouer.
   useEffect(() => {
-    visible = montre;
-    return () => { visible = false; };
+    poserVisible(montre);
+    return () => { poserVisible(false); };
   }, [montre]);
 
   if (!montre) return null;
@@ -114,6 +124,7 @@ export function InstallPrompt() {
     <AnimatePresence>
       <motion.div
         {...FEUILLE}
+        data-carte-install
         className="fixed inset-x-0 bottom-0 z-[57] pointer-events-auto
                    px-[max(env(safe-area-inset-left),0.75rem)] pr-[max(env(safe-area-inset-right),0.75rem)]
                    pb-[max(env(safe-area-inset-bottom),0.75rem)]"

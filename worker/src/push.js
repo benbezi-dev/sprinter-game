@@ -66,6 +66,16 @@ const MESSAGES = {
     fr: ['On te répond', 'Ton adversaire a répondu à ton mot.'],
     en: ['They answered', 'The runner you beat answered your word.'],
   },
+  // Le tchat du duel des marques (tchat-marques.js) : un message prive, ou un
+  // message du tchat commun qui te designe. Ni l'auteur ni le texte.
+  marques_tchat: {
+    fr: ['Duel des marques', 'Un message pour toi dans le tchat du duel.'],
+    en: ['Brand duel', 'A message for you in the duel chat.'],
+  },
+  marques_invit: {
+    fr: ['On te veut dans le duel', 'Un coureur t’invite au duel des marques. Choisis ton camp.'],
+    en: ['They want you in the duel', 'A runner invites you to the brand duel. Pick your side.'],
+  },
   // L'objectif du jour fabrique son texte a l'envoi — il porte le chrono du
   // joueur, qui n'existe pas dans une table statique. Cette entree est ce
   // qu'on dit quand ce calcul n'a pas abouti : une sonnerie generique vaut

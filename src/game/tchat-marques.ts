@@ -1,0 +1,120 @@
+// LE TCHAT DU DUEL DES MARQUES (13/10/2026) — le premier tchat en texte libre.
+//
+// Il ne vit que dans l'ecran du duel (DuelMarques.tsx) : le tchat commun des
+// deux camps, ou l'on peut designer quelqu'un ; les messages prives entre
+// inscrits ; l'invitation d'un joueur du top 500. Un message prive, une
+// designation, une invitation font vibrer le telephone vise. Les regles,
+// le filtre et les cadences sont dans worker/src/tchat-marques.js.
+//
+// Lire comme ecrire demande un nom reserve sur cet appareil : on sert des
+// messages prives, et un nom libre peut etre porte par n'importe qui. Un nom
+// libre se reserve d'un geste (identity.ts, nomPourLeDirect).
+
+import { getDeviceId, getSavedName } from './leaderboard';
+import { nomPourLeDirect } from './identity';
+import type { Camp, Epreuve } from './marques';
+
+const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
+
+export type Message = {
+  id: number; quand: number; de: string; camp: Camp;
+  /** Celui qu'on designe (commun) ou a qui l'on ecrit (prive). */
+  pour: string | null;
+  prive: boolean; texte: string;
+  a_moi: boolean; pour_moi: boolean;
+};
+export type Participant = { name: string; camp: Camp; epreuve: Epreuve };
+export type Invitation = { de: string; camp: Camp | null; quand: number };
+export type Invitable = { name: string; invite: boolean };
+
+/** Ce que le serveur refuse, dit au joueur. */
+export type Refus = 'nom' | 'camp' | 'filtre' | 'vite' | 'jour' | 'absent' | 'banni' | 'top' | 'reseau';
+/** Le filtre dit pourquoi : 'lien', 'contact', 'grossier', 'long', 'vide'. */
+export type RaisonFiltre = string;
+
+function refusDe(status: number, d: any): Refus {
+  if (status === 403 && d?.error === 'nom non reserve') return 'nom';
+  if (status === 403) return 'banni';
+  if (status === 409 && d?.error === 'aucun camp choisi') return 'camp';
+  if (status === 422) return 'filtre';
+  if (status === 429) return d?.error === 'trop vite' ? 'vite' : 'jour';
+  if (status === 404 && d?.error === 'hors du top 500') return 'top';
+  if (status === 404) return 'absent';
+  return 'reseau';
+}
+
+/**
+ * Un appel au tchat. Un nom libre qui revient en 403 est reserve une fois,
+ * en silence, puis l'appel repart : c'est le geste que fait deja le direct.
+ */
+async function appel(chemin: string, corps?: Record<string, unknown>, query: Record<string, string> = {}, reessai = true): Promise<{ status: number; d: any }> {
+  const name = getSavedName();
+  if (!name) return { status: 403, d: { error: 'nom non reserve' } };
+  const device_id = getDeviceId();
+  let r: Response;
+  try {
+    r = corps
+      ? await fetch(`${API_BASE}${chemin}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...corps, name, device_id }),
+        })
+      : await fetch(`${API_BASE}${chemin}?${new URLSearchParams({ ...query, name, device_id })}`);
+  } catch { return { status: 0, d: null }; }
+  const d = await r.json().catch(() => ({}));
+  if (reessai && r.status === 403 && d?.error === 'nom non reserve' && (await nomPourLeDirect()) === 'ok') {
+    return appel(chemin, corps, query, false);
+  }
+  return { status: r.status, d };
+}
+
+export type Lecture = {
+  messages: Message[]; dernier: number;
+  participants?: Participant[]; invitations?: Invitation[];
+};
+
+/**
+ * Lire la suite du tchat. `tout` : avec les inscrits et ses invitations.
+ * `reserver` : faux pour la pastille du tableau, qui n'a pas a reserver un
+ * nom dans le dos du joueur — seule l'ouverture du tchat le fait.
+ */
+export async function lireTchat(depuis: number, tout = false, reserver = true): Promise<Lecture | { refus: Refus }> {
+  const { status, d } = await appel('/marques/tchat', undefined,
+    { depuis: String(depuis || 0), ...(tout ? { avec: 'tout' } : {}) }, reserver);
+  if (status !== 200) return { refus: refusDe(status, d) };
+  return d as Lecture;
+}
+
+/** Ecrire. `pour` : designer (commun) ou ecrire a (prive). */
+export async function ecrire(texte: string, pour: string | null, prive: boolean): Promise<{ message: Message } | { refus: Refus; raison?: RaisonFiltre }> {
+  const { status, d } = await appel('/marques/tchat', { texte, ...(pour ? { pour } : {}), prive });
+  if (status !== 200) return { refus: refusDe(status, d), raison: d?.raison };
+  return { message: d.message };
+}
+
+export async function signalerMessage(id: number, motif: string): Promise<boolean> {
+  const { status } = await appel('/marques/tchat/signaler', { id, motif });
+  return status === 200;
+}
+
+/** Le top 500 des trois epreuves, moins les inscrits. */
+export async function lireInvitables(): Promise<Invitable[] | { refus: Refus }> {
+  const { status, d } = await appel('/marques/invitables');
+  if (status !== 200) return { refus: refusDe(status, d) };
+  return d.joueurs as Invitable[];
+}
+
+export async function inviter(nom: string): Promise<true | { refus: Refus }> {
+  const { status, d } = await appel('/marques/inviter', { cible: nom });
+  return status === 200 ? true : { refus: refusDe(status, d) };
+}
+
+/* ------------------------------------------------ les non-lus, par appareil
+   Le dernier message vu, pour la pastille du bouton TCHAT. Local : ce n'est
+   qu'une pastille, et la perdre ne cache rien. */
+const CLE_VU = 'sprinter_tchat_marques_vu';
+export function dernierVu(): number {
+  try { return Number(localStorage.getItem(CLE_VU) || 0) || 0; } catch { return 0; }
+}
+export function poserVu(id: number) {
+  try { if (id > dernierVu()) localStorage.setItem(CLE_VU, String(id)); } catch { /* stockage refuse */ }
+}

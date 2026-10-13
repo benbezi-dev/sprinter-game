@@ -13,6 +13,8 @@ import {
 import { KO, jouer } from '@/game/marques-son';
 import { useRetour } from '@/hooks/use-retour';
 import FaceAFace from './DuelMarquesIntro';
+import { TchatMarques } from './TchatMarques';
+import { surCourrier, reprendreTouchee } from '@/game/boite';
 
 /* ---------------------------------------------------------------------------
    LE DUEL DES MARQUES — Team adidas contre Team Nike (09/10/2026).
@@ -149,8 +151,22 @@ function Reflet({ vivant, periode = 4.5, delai = 1 }: { vivant: boolean; periode
 export function BanderoleMarques() {
   const fr = useFr();
   const [ouvert, setOuvert] = useState(false);
+  // une notification du tchat touchee : l'ecran s'ouvre directement sur le tchat
+  const [tchat, setTchat] = useState<'tous' | 'prives' | null>(null);
   const [ins, setIns] = useState<Inscription | null>(monInscription());
   useEffect(() => ecouterMarques(() => setIns(monInscription())), []);
+  useEffect(() => {
+    const ouvrirSur = (q: string | null) => {
+      if (!q) return;
+      setTchat(q === 'marques_tchat' ? 'prives' : 'tous');
+      setOuvert(true);
+    };
+    // touchee avant que cette banniere soit chargee (demarrage a froid)...
+    ouvrirSur(reprendreTouchee(['marques_tchat', 'marques_invit']));
+    // ...ou pendant que le jeu tourne. Une sonnerie de la boite sans
+    // notification touchee ne laisse rien a reprendre : elle n'ouvre rien.
+    return surCourrier(() => ouvrirSur(reprendreTouchee(['marques_tchat', 'marques_invit'])));
+  }, []);
   const { ref, vivant } = useVivant<HTMLButtonElement>();
   return (
     <motion.div {...MONTEE}>
@@ -217,7 +233,7 @@ export function BanderoleMarques() {
         </motion.span>
       </motion.button>
       <AnimatePresence>
-        {ouvert && <EcranMarques onClose={() => setOuvert(false)} />}
+        {ouvert && <EcranMarques tchatAuDepart={tchat} onClose={() => { setOuvert(false); setTchat(null); }} />}
       </AnimatePresence>
     </motion.div>
   );
@@ -269,12 +285,15 @@ async function defierFantome(nom: string): Promise<boolean> {
   return true;
 }
 
-export function EcranMarques({ onClose }: { onClose: () => void }) {
+export function EcranMarques({ onClose, tchatAuDepart = null }: { onClose: () => void; tchatAuDepart?: 'tous' | 'prives' | null }) {
   useRetour(onClose);
   const fr = useFr();
   const reduit = useAnimationsReduites();
-  // le face-a-face d'abord ; l'ecran entre ensuite, avec ses propres animations
-  const [intro, setIntro] = useState(!reduit);
+  // le face-a-face d'abord ; l'ecran entre ensuite, avec ses propres animations.
+  // Pas de face-a-face quand on arrive par une notification du tchat.
+  const [intro, setIntro] = useState(!reduit && !tchatAuDepart);
+  // le tchat, un tiroir en bas de l'ecran : deplie d'emblee quand on arrive par sa notification
+  const [tchatDeplie, setTchatDeplie] = useState(!!tchatAuDepart);
   const { t, erreur, essai, relire } = useTableau();
   const [enRoute, setEnRoute] = useState<string | null>(null);
   const [changer, setChanger] = useState(false);
@@ -302,7 +321,7 @@ export function EcranMarques({ onClose }: { onClose: () => void }) {
         {intro && <FaceAFace fr={fr} onDone={() => setIntro(false)} />}
       </AnimatePresence>
       {!intro && (
-      <div className="max-w-xl mx-auto px-4 pt-10 pb-6 flex flex-col items-center gap-4">
+      <div className="max-w-xl mx-auto px-4 pt-10 pb-20 flex flex-col items-center gap-4">
 
         <div className="w-full flex items-start justify-between gap-3">
           <div className="flex flex-col min-w-0">
@@ -400,6 +419,13 @@ export function EcranMarques({ onClose }: { onClose: () => void }) {
       <AnimatePresence>
         {changer && t && moi && <ChangerEpreuve t={t} fr={fr} reduit={reduit} onClose={() => setChanger(false)} />}
       </AnimatePresence>
+
+      {/* le tchat du duel : un tiroir, replie en barre sous le tableau */}
+      {!intro && t && (
+        <TchatMarques fr={fr} ouvrirSur={tchatAuDepart || 'tous'} viserLeDernier={tchatAuDepart === 'prives'}
+          moi={{ name: getSavedName() || '', inscrit: !!moi }}
+          deplie={tchatDeplie} onDeplier={setTchatDeplie} />
+      )}
     </motion.div>
   );
 }

@@ -27,8 +27,10 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 // partir. 'annonce' : on a touche sa notification. Voir AnnoncePopup.tsx.
 // 'relais_defi' : une equipe defie la tienne, ou l'un de tes coequipiers a
 // lance un defi. Voir DefiRelaisPopup.tsx.
+// 'marques_tchat' / 'marques_invit' : un message prive ou une designation dans
+// le tchat du duel des marques, une invitation au duel. Voir DuelMarques.tsx.
 export type Courrier = 'defi' | 'duel' | 'mot' | 'reponse' | 'ouverte' | 'direct' | 'relais' | 'relais_defi'
-                     | 'objectif' | 'annonce' | 'annonce_dispo';
+                     | 'objectif' | 'annonce' | 'annonce_dispo' | 'marques_tchat' | 'marques_invit';
 
 const ecouteurs = new Set<(quoi: Courrier) => void>();
 let ws: WebSocket | null = null;
@@ -148,7 +150,24 @@ export function fermerBoite() {
  * gerer au lieu d'un. C'est `push.ts` qui appelle, et lui seul.
  */
 export function signalerCourrier(quoi: Courrier) {
+  touchee = { quoi, quand: Date.now() };
   prevenir(quoi);
+}
+
+/**
+ * La derniere notification touchee, pour l'ecran qui se monte APRES elle.
+ *
+ * Au demarrage a froid, le genre arrive avant que l'ecran concerne soit
+ * charge (la banniere du duel des marques est paresseuse) : il sonnerait
+ * dans le vide. L'ecran la reprend ici, une seule fois, si elle a moins de
+ * deux minutes et qu'elle est de son genre.
+ */
+let touchee: { quoi: Courrier; quand: number } | null = null;
+export function reprendreTouchee(genres: Courrier[]): Courrier | null {
+  if (!touchee || Date.now() - touchee.quand > 120_000 || !genres.includes(touchee.quoi)) return null;
+  const q = touchee.quoi;
+  touchee = null;
+  return q;
 }
 
 /** S'abonner au courrier. Rend de quoi se desabonner. */
