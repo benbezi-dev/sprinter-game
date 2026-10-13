@@ -5,6 +5,7 @@ import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, Messa
 import { FEUILLE, VOILE, RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { useRetour } from '@/hooks/use-retour';
 import { surCourrier } from '@/game/boite';
+import { ecouterInstall, installVisible } from './InstallPrompt';
 import { etatPush, activerPush } from '@/game/push';
 import { bloquer, MOTIFS, type Motif } from '@/game/moderation';
 import { NOM_CAMP, type Camp } from '@/game/marques';
@@ -379,6 +380,20 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   const ressort = reduit ? { duration: 0 } : RESSORT.panneau;
   // le tiroir se tire par sa poignee seulement : le fil, lui, defile
   const tirer = useDragControls();
+  // La carte « installer le jeu » occupe le bas de l'ecran et passe devant
+  // (z-[57]) : tant qu'elle est la, le bouton se pose juste au-dessus d'elle,
+  // sans quoi on ne le voit pas (constat du 13/10).
+  const [carte, setCarte] = useState(0);
+  useEffect(() => {
+    const mesurer = () => {
+      const el = installVisible() ? document.querySelector('[data-carte-install]') : null;
+      setCarte(el ? Math.ceil(el.getBoundingClientRect().height) : 0);
+    };
+    mesurer();
+    const t = setTimeout(mesurer, 400);   // la carte entre en glissant
+    const quitter = ecouterInstall(() => { mesurer(); setTimeout(mesurer, 400); });
+    return () => { clearTimeout(t); quitter(); };
+  }, []);
   // Rendu sur <body> : l'ecran du duel defile et porte une transformation, et
   // un element `fixed` pose dedans defilerait avec lui (vu le 13/10 : le
   // tiroir remontait quand le clavier faisait defiler l'ecran).
@@ -392,6 +407,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
             exit={reduit ? { opacity: 0 } : { scale: 0.6, opacity: 0 }} whileTap={{ scale: 0.94 }}
             transition={reduit ? { duration: 0 } : RESSORT.trophee}
             aria-label={fr ? 'Ouvrir le tchat' : 'Open the chat'}
+            style={carte ? { bottom: carte + 8 } : undefined}
             className="fixed z-[55] right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] flex items-center gap-2 pl-3 pr-4 py-2.5
                        rounded-2xl bg-primary text-black font-black text-xs tracking-widest shadow-lg shadow-black/40">
             <MessageCircle className="w-4 h-4" aria-hidden />
@@ -414,7 +430,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
         drag={reduit ? false : 'y'} dragListener={false} dragControls={tirer}
         dragConstraints={{ top: 0, bottom: 0 }} dragElastic={{ top: 0, bottom: 0.7 }}
         onDragEnd={(_, i) => { if (i.offset.y > 90 || i.velocity.y > 500) onDeplier(false); }}
-        className="fixed inset-x-0 bottom-0 z-[55] mx-auto w-full max-w-xl h-[72vh] flex flex-col rounded-t-3xl
+        className="fixed inset-x-0 bottom-0 z-[58] mx-auto w-full max-w-xl h-[72vh] flex flex-col rounded-t-3xl
                    border border-b-0 border-white/10 bg-card/95 backdrop-blur-xl shadow-[0_-12px_40px_rgba(0,0,0,0.45)]">
 
         {/* la poignee : on la tire vers le bas, ou on touche la fleche */}
