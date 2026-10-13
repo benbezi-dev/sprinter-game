@@ -27,6 +27,7 @@ docs/instagram_charte.md
 .claude/*
 !.claude/settings.json
 !.claude/hooks/
+!.claude/agents/
 
 # Secrets de developpement wrangler.
 worker/.dev.vars
