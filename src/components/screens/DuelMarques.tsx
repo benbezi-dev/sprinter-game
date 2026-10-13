@@ -84,15 +84,45 @@ function useCompteur(cible: number, reduit: boolean): number {
   return v;
 }
 
-/** Le tableau, relu a l'ouverture et apres chaque course envoyee. */
+/** Le tableau, relu a l'ouverture et apres chaque course envoyee. Un echec
+ *  se retente seul toutes les 5 s, et tout de suite au retour du reseau ou
+ *  de l'onglet : le message promet « dans un instant », il doit le tenir
+ *  sans qu'il faille fermer et rouvrir l'ecran (constat du 13/10). */
+const NOUVEL_ESSAI_MS = 5000;
 function useTableau() {
   const [t, setT] = useState<TableauMarques | null>(null);
   const [erreur, setErreur] = useState(false);
+  const [essai, setEssai] = useState(false);
+  const minuterie = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const monte = useRef(true);
   const relire = useCallback(() => {
-    fetchMarques().then(x => { setT(x); setErreur(false); }).catch(() => setErreur(true));
+    if (minuterie.current) { clearTimeout(minuterie.current); minuterie.current = null; }
+    setEssai(true);
+    fetchMarques()
+      .then(x => { if (monte.current) { setT(x); setErreur(false); } })
+      .catch(() => {
+        if (!monte.current) return;
+        setErreur(true);
+        minuterie.current = setTimeout(relire, NOUVEL_ESSAI_MS);
+      })
+      .finally(() => { if (monte.current) setEssai(false); });
   }, []);
-  useEffect(() => { relire(); return ecouterMarques(relire); }, [relire]);
-  return { t, erreur };
+  useEffect(() => {
+    monte.current = true;
+    relire();
+    const quitter = ecouterMarques(relire);
+    const revenu = () => { if (minuterie.current && document.visibilityState === 'visible') relire(); };
+    window.addEventListener('online', revenu);
+    document.addEventListener('visibilitychange', revenu);
+    return () => {
+      monte.current = false;
+      quitter();
+      window.removeEventListener('online', revenu);
+      document.removeEventListener('visibilitychange', revenu);
+      if (minuterie.current) clearTimeout(minuterie.current);
+    };
+  }, [relire]);
+  return { t, erreur, essai, relire };
 }
 
 const MENTION_FR = 'Sprinter n’est ni affilié à adidas ni à Nike, ni soutenu par eux. Les deux noms désignent seulement les équipes que les joueurs choisissent.';
@@ -245,7 +275,7 @@ export function EcranMarques({ onClose }: { onClose: () => void }) {
   const reduit = useAnimationsReduites();
   // le face-a-face d'abord ; l'ecran entre ensuite, avec ses propres animations
   const [intro, setIntro] = useState(!reduit);
-  const { t, erreur } = useTableau();
+  const { t, erreur, essai, relire } = useTableau();
   const [enRoute, setEnRoute] = useState<string | null>(null);
   const [changer, setChanger] = useState(false);
   const defier = async (nom: string) => {
@@ -296,9 +326,18 @@ export function EcranMarques({ onClose }: { onClose: () => void }) {
           </p>
         )}
         {erreur && !t && (
-          <p className="text-sm text-muted-foreground py-8 text-center">
-            {fr ? 'Le tableau ne répond pas. Réessaie dans un instant.' : 'The board is not answering. Try again in a moment.'}
-          </p>
+          <div className="flex flex-col items-center gap-3 py-8">
+            <p className="text-sm text-muted-foreground text-center">
+              {fr ? 'Le tableau ne répond pas. Nouvel essai dans un instant…' : 'The board is not answering. Trying again in a moment…'}
+            </p>
+            <button onClick={relire} disabled={essai}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-card/80 border border-white/10 text-sm font-display hover:bg-white/10 transition-colors disabled:opacity-60">
+              {essai
+                ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                : <RotateCcw className="w-4 h-4" aria-hidden />}
+              {fr ? 'Réessayer' : 'Try again'}
+            </button>
+          </div>
         )}
 
         {t && <Score t={t} fr={fr} reduit={reduit} />}

@@ -144,7 +144,14 @@ function prevenir() { for (const f of [...ecouteurs]) { try { f(); } catch { /* 
 
 export async function fetchMarques(): Promise<TableauMarques> {
   const nom = getSavedName();
-  const r = await fetch(`${API_BASE}/marques${nom ? `?name=${encodeURIComponent(nom)}` : ''}`);
+  // une requete qui pend laisserait le sablier tourner sans fin : 10 s, puis
+  // l'ecran retente (DuelMarques.tsx, useTableau)
+  const arret = new AbortController();
+  const delai = setTimeout(() => arret.abort(), 10000);
+  let r: Response;
+  try {
+    r = await fetch(`${API_BASE}/marques${nom ? `?name=${encodeURIComponent(nom)}` : ''}`, { signal: arret.signal });
+  } finally { clearTimeout(delai); }
   if (!r.ok) throw new Error(`marques ${r.status}`);
   const t: TableauMarques = await r.json();
   // le serveur fait foi : un camp choisi sur un autre appareil arrive ici
