@@ -22,7 +22,7 @@ import { DuelRanking } from './DuelRanking';
 import { nomDuRang, Flamme, Approche, ComboBreak } from '@/components/Insignes';
 import { cleDiscipline, nomDiscipline } from '@/game/duels';
 import { pique, boost, relance } from '@/game/piques';
-import { LaisserUnMot } from './MotDuel';
+import { LaisserUnMot, LireLeMot } from './MotDuel';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { RECOMMENCER_OUVERT, SERIE_OUVERTE } from '@/game/canal';
@@ -79,6 +79,7 @@ export function OneShotEndScreen() {
   const liveNom = useGameStore(s => s.liveNom);
   const liveResultat = useGameStore(s => s.liveResultat);
   const liveDuel = useGameStore(s => s.liveDuel);
+  const liveMot = useGameStore(s => s.liveMot);
   const player = useGameStore(s => s.player);
   const { N, RACES } = SprinterApp;
 
@@ -632,6 +633,20 @@ export function OneShotEndScreen() {
     : !!maLigne && maLigne.place === 1 && !maLigne.abandon;
 
   /**
+   * LA RENCONTRE D'UN DUEL EN DIRECT, telle que la salle l'a rangee :
+   * `LIVE-<salle>-<pistolet>`. C'est a elle que le vainqueur accroche son mot,
+   * comme a un defi differe. A deux seulement — au-dela il n'y a pas UN perdant
+   * a qui parler — et entre deux noms : un anonyme court, mais la salle
+   * n'ecrit pas sa rencontre, et il n'y aurait rien ou poser le mot.
+   */
+  const nomme = (n?: string) => !!n && n.trim().toLowerCase() !== 'anonyme';
+  const duelDirect = duo && !liveNul && liveResultat.course && liveResultat.code
+      && nomme(liveResultat.hote?.nom) && nomme(liveResultat.invite?.nom)
+    ? `LIVE-${String(liveResultat.code).toUpperCase()}-${liveResultat.course}` : null;
+  /** Le mot que le vainqueur m'a laisse, s'il parle bien de cette course. */
+  const motRecu = duelDirect && liveMot && liveMot.duel === duelDirect ? liveMot : null;
+
+  /**
    * UNE MANCHE DE TOURNOI A ELIMINATION.
    *
    * Le verdict est celui d'une course a plusieurs, et l'ecran le lit comme tel
@@ -990,7 +1005,15 @@ export function OneShotEndScreen() {
               battre en meme temps que nous, et il est encore la. */}
           {/* En tournoi, seulement pour celui qui sort : passer quatrieme
               n'appelle pas de pique. */}
-          {live && !seul && !liveGagne && !liveNul && (!resTournoi || sortiIci) && (
+          {/* Le mot du vainqueur, a la place de la pique : une phrase ecrite par
+              le jeu ne vaut pas la vraie voix de celui qui vient de gagner.
+              Il arrive par la salle, quand il a fini de l'ecrire. */}
+          {motRecu && !liveGagne && (
+            <LireLeMot duel={motRecu.duel} texte={motRecu.texte} voix={motRecu.voix}
+                       voixType={motRecu.voix_type} auteur={motRecu.nom || liveNom}
+                       repondre={false} ephemere={N.t('mot_ephemere_direct')} />
+          )}
+          {!motRecu && live && !seul && !liveGagne && !liveNul && (!resTournoi || sortiIci) && (
             <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
                             px-4 py-3 flex flex-col items-center gap-1.5">
               <p className="text-sm md:text-base text-foreground text-center leading-snug">
@@ -1013,6 +1036,14 @@ export function OneShotEndScreen() {
                           text-center leading-snug px-2">
               {boost(`${liveNom}${monMs || (maLigne ? maLigne.ms : 0)}`)}
             </p>
+          )}
+
+          {/* Le mot du vainqueur, comme apres un defi releve. Les cinq
+              secondes de micro ouvert ne s'entendent que si l'autre ecoute a
+              cet instant-la ; le mot, lui, l'attend sur son ecran de fin. */}
+          {duelDirect && liveGagne && (
+            <LaisserUnMot duel={duelDirect} adversaire={liveNom || ''}
+                          confirme={N.t('mot_envoye_direct', { n: liveNom || '' })} />
           )}
 
           {/* La revanche, dans la meme salle et sous le meme code — si tout

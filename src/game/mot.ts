@@ -6,6 +6,7 @@
 // une limite mal posee.
 
 import { getSavedName, getDeviceId } from './leaderboard';
+import { rendreLeSonAuJeu } from './session-audio';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
@@ -258,12 +259,95 @@ export async function voixDuMotDeCourse(
   }
 }
 
-/** Une URL jouable a partir de ce que le serveur a renvoye. */
-export function urlDeLaVoix(b64: string, type: string): string {
+/** L'enregistrement, a partir de ce que le serveur a renvoye. */
+export function blobDeLaVoix(b64: string, type: string): Blob {
   const brut = atob(b64);
   const o = new Uint8Array(brut.length);
   for (let i = 0; i < brut.length; i++) o[i] = brut.charCodeAt(i);
-  return URL.createObjectURL(new Blob([o], { type: type || 'audio/webm' }));
+  return new Blob([o], { type: type || 'audio/webm' });
+}
+
+/** Une URL jouable a partir de ce que le serveur a renvoye. */
+export function urlDeLaVoix(b64: string, type: string): string {
+  return URL.createObjectURL(blobDeLaVoix(b64, type));
+}
+
+/* ------------------------------------------------------------ l'ecoute
+   Un vocal se joue PAR LE GRAPHE DU JEU, comme le generique (generique.ts) :
+   decode, puis branche sur `Audio_.sortie`, la ou passent deja la musique et
+   les annonces.
+
+   Il se jouait par un `new Audio(blob).play()` a cote, et le vainqueur ne
+   pouvait pas se reecouter avant d'envoyer. Sur iPhone, l'element sort par le
+   circuit de la conversation tant que la session est restee en mode voix
+   apres le micro — au volume d'un ecouteur colle a l'oreille, c'est-a-dire
+   rien sur un telephone tenu en main. Et l'echec etait avale : un bouton qui
+   ne faisait rien. Le graphe du jeu, lui, sort la ou le joueur entend deja le
+   jeu ; et quand rien ne sort du tout, on le dit.
+
+   L'element reste le recours : un appareil sans contexte audio, ou un format
+   que le decodeur refuse. */
+
+/** Le graphe du jeu, s'il est ouvert. Voir Audio_ dans sprinter-app.js. */
+function grapheDuJeu(): { ctx: AudioContext; sortie: AudioNode } | null {
+  const A = (globalThis as any).SprinterApp?.Audio_;
+  return A && A.ctx && A.sortie ? { ctx: A.ctx, sortie: A.sortie } : null;
+}
+
+/** decodeAudioData sous la forme a rappels, la seule que Safari accepte
+ *  partout ; la promesse, quand il y en a une, arrive au meme endroit. */
+function decoder(ctx: BaseAudioContext, donnees: ArrayBuffer): Promise<AudioBuffer> {
+  return new Promise((ok, non) => {
+    const p = ctx.decodeAudioData(donnees, ok, non);
+    if (p && typeof (p as any).then === 'function') (p as any).then(ok, non);
+  });
+}
+
+/** Ce qui joue en ce moment : un second appui l'interrompt au lieu de superposer. */
+let ecouteEnCours: (() => void) | null = null;
+
+function parElement(b: Blob, surEchec: () => void) {
+  const url = URL.createObjectURL(b);
+  const a = new Audio(url);
+  (a as any).playsInline = true;
+  const finir = () => URL.revokeObjectURL(url);
+  a.onended = finir;
+  a.onerror = () => { finir(); surEchec(); };
+  ecouteEnCours = () => { try { a.pause(); } catch { /* deja arrete */ } finir(); };
+  a.play().catch(() => { finir(); surEchec(); });
+}
+
+/**
+ * Joue un vocal. A appeler DANS le geste du joueur : c'est lui qui autorise le
+ * contexte a reprendre, et sur iPhone il n'y en aura pas d'autre.
+ *
+ * @param surEchec appele si rien n'a pu sortir — pour le dire a l'ecran.
+ */
+export function ecouterLaVoix(b: Blob, surEchec: () => void): void {
+  ecouteEnCours?.();
+  ecouteEnCours = null;
+  const g = grapheDuJeu();
+  if (!g) { parElement(b, surEchec); return; }
+  // Reveiller tout de suite, dans le geste : apres le premier `await` il
+  // serait trop tard. iOS met le contexte en « interrupted » quand le micro
+  // change la session ; c'est cette reprise qui l'en sort.
+  if (g.ctx.state !== 'running') g.ctx.resume().catch(() => { /* refuse */ });
+  let arrete = false;
+  let source: AudioBufferSourceNode | null = null;
+  ecouteEnCours = () => {
+    arrete = true;
+    try { source?.stop(); } catch { /* pas encore partie */ }
+  };
+  b.arrayBuffer()
+    .then(d => decoder(g.ctx, d))
+    .then(buf => {
+      if (arrete) return;
+      source = g.ctx.createBufferSource();
+      source.buffer = buf;
+      source.connect(g.sortie);
+      source.start();
+    })
+    .catch(() => { if (!arrete) parElement(b, surEchec); });
 }
 
 /* ------------------------------------------------------------ le format
@@ -342,12 +426,9 @@ export async function enWav(b: Blob): Promise<Blob> {
     const ctx = new Ctx();
     try {
       const donnees = await b.arrayBuffer();
-      const audio: AudioBuffer = await new Promise((ok, non) => {
-        // La forme a rappels est la seule que Safari accepte pour un contexte
-        // qui n'a pas ete demarre par un geste.
-        const p = (ctx as AudioContext).decodeAudioData(donnees, ok, non);
-        if (p && typeof (p as any).then === 'function') (p as any).then(ok, non);
-      });
+      // La forme a rappels est la seule que Safari accepte pour un contexte
+      // qui n'a pas ete demarre par un geste : voir `decoder`.
+      const audio: AudioBuffer = await decoder(ctx as AudioContext, donnees);
       if (!audio || !audio.length) return b;
       return wav(versMono8k(audio), WAV_HZ);
     } finally {
@@ -437,9 +518,19 @@ export class Enregistreur {
     this.dire('repos');
   }
 
+  /**
+   * Rendre le micro, ET la sortie au jeu.
+   *
+   * La seconde moitie manquait. Sur iPhone, prendre le micro bascule la
+   * session audio en mode conversation, et WebKit ne la rend jamais (voir
+   * session-audio.ts) : l'ecoute de controle sortait ensuite par l'ecouteur,
+   * inaudible. La voix du direct la rendait deja ; le mot ne le faisait pas.
+   */
   private rendreLeMicro() {
+    const avait = !!this.flux;
     try { this.flux?.getTracks().forEach(t => t.stop()); } catch { /* deja rendu */ }
     this.flux = null;
+    if (avait) rendreLeSonAuJeu();
   }
 }
 

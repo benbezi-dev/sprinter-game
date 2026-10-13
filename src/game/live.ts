@@ -145,6 +145,19 @@ export type Couloir = {
 /** Le mot du vainqueur, relaye par la salle a ceux qui y sont encore. */
 export type MotDirect = { nom: string; texte: string | null; a_voix: boolean };
 
+/**
+ * Le mot du vainqueur d'un DUEL en direct, remis au seul perdant.
+ *
+ * Voix comprise, a la difference de celui du championnat : il n'a qu'un
+ * lecteur, et ce lecteur ne le reverra nulle part ailleurs. `duel` est
+ * l'identifiant de la rencontre, `LIVE-<salle>-<pistolet>` — celui qu'un
+ * signalement designe. Voir /duel/mot dans le worker.
+ */
+export type MotDuelDirect = {
+  duel: string; nom: string;
+  texte: string | null; voix: string | null; voix_type: string | null;
+};
+
 /** La sequence de presentation, telle que la salle l'annonce. */
 export type Presentation = {
   /** Millisecondes avant le premier participant, dans notre horloge a nous. */
@@ -294,6 +307,8 @@ type Ecouteurs = {
   onSignal?: (type: 'sdp' | 'ice', charge: any) => void;
   /** Championnat : le vainqueur vient de poser son mot. */
   onMot?: (mot: MotDirect) => void;
+  /** Duel : le vainqueur m'a laisse son mot. */
+  onMotDuel?: (mot: MotDuelDirect) => void;
 };
 
 /** Demande un code de salle au serveur : meme alphabet que les defis. */
@@ -656,6 +671,9 @@ export class Salle {
         return;
       case 'mot':
         if (m.mot) this.ec.onMot?.(m.mot as MotDirect);
+        return;
+      case 'mot_duel':
+        if (m.mot && m.mot.duel) this.ec.onMotDuel?.(m.mot as MotDuelDirect);
         return;
       // La salle ne fait que transporter : ce qui arrive ici n'a de sens que
       // pour la connexion audio, qui s'en charge.

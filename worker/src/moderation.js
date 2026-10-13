@@ -28,6 +28,8 @@
    partout ailleurs dans ce worker — voir `opponent_key` et `challenger_key`.
 --------------------------------------------------------------------------- */
 
+import { idDeDuel } from './mot.js';
+
 /** Les motifs proposes. Une liste fermee : un champ libre serait lui-meme un
  *  contenu a moderer, et personne ne lit deux fois le meme probleme. */
 export const MOTIFS = ['insulte', 'haine', 'sexuel', 'menace', 'autre'];
@@ -106,14 +108,17 @@ function destinataire(r) {
  */
 export async function signaler(db, { duel, deviceId, cle, motif }) {
   await ensureModerationTables(db);
-  const id = String(duel || '').toUpperCase();
-  if (!/^[A-Z0-9]{4,10}$/.test(id)) return { erreur: 'duel invalide' };
+  // Un defi differe, ou un duel en direct a deux : ce dernier n'a pas de
+  // defi derriere lui, d'ou la jointure a gauche — son destinataire se
+  // reconnait par le nom, comme le releveur d'un defi.
+  const id = idDeDuel(duel);
+  if (!id) return { erreur: 'duel invalide' };
 
   const r = await db.prepare(
     `SELECT r.challenge_id, r.opponent_key, r.challenger_key, r.outcome,
             r.mot, r.voix, r.voix_type, c.owner_device
        FROM duel_results r
-       JOIN challenges c ON c.id = r.challenge_id
+       LEFT JOIN challenges c ON c.id = r.challenge_id
       WHERE r.challenge_id = ?`).bind(id).first();
   if (!r) return { erreur: 'duel introuvable' };
   if (!r.mot && !r.voix) return { erreur: 'rien a signaler' };

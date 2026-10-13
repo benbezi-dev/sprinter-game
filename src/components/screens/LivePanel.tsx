@@ -8,7 +8,7 @@ import {
   Salle, ouvrirSalle, etatSalle, lienSalle, codeDirectUrl, nettoyerUrlDirect,
   COULOIRS, mesPointsDe, TOURNOI_MIN, tournoiLance,
   type EtatSalle, type JoueurSalle, type Presentation, type DuelDirect,
-  type ResultatDirect, type PointsDuel,
+  type ResultatDirect, type PointsDuel, type MotDuelDirect,
 } from '@/game/live';
 import {
   regarderLaManche, recalerLeRegard, mancheRegardee, oublierLeRegard,
@@ -557,7 +557,11 @@ export function LivePanel() {
         }
         return;
       }
-      SprinterApp.G.liveResultat = { ...r, moi: salle.current?.moi || '' };
+      // Le code voyage avec le verdict : avec l'instant du pistolet, il
+      // nomme la rencontre en base — `LIVE-<salle>-<pistolet>` — a laquelle
+      // le vainqueur accroche son mot (voir OneShotEndScreen).
+      SprinterApp.G.liveResultat = { ...r, moi: salle.current?.moi || '', code: monCode };
+      SprinterApp.G.liveMot = null;
       // Au journal, tout de suite : l'issue est connue, les points suivront.
       inscrireAuJournal(r, salle.current?.moi || '', monCode,
                         r.course ?? dateDepart.current, !!salle.current?.suisHote,
@@ -622,6 +626,15 @@ export function LivePanel() {
                           !!salle.current?.suisHote, epreuvesDeLaSalle(),
                           mesPointsDe(d, moi));
       }
+    },
+    // Le mot du vainqueur, quand c'est moi qui ai perdu. La salle ne le remet
+    // qu'au perdant ; on verifie encore qu'il parle de LA course affichee —
+    // une revanche partie entre-temps a son propre verdict.
+    onMotDuel: (m: MotDuelDirect) => {
+      const r = SprinterApp.G.liveResultat;
+      if (!r || !r.course) return;
+      if (m.duel !== `LIVE-${String(r.code || '').toUpperCase()}-${r.course}`) return;
+      SprinterApp.G.liveMot = m;
     },
     onSignal: (type: 'sdp' | 'ice', charge: any) => {
       // Un pair peut recevoir l'offre avant d'avoir monte sa connexion.

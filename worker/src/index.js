@@ -3,7 +3,9 @@ import {
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
   mesDisciplines, disciplineValide, DISCIPLINES_SIMPLES,
 } from './duels.js';
-import { poserMot, poserReponse, MAX_TEXTE } from './mot.js';
+import {
+  poserMot, poserReponse, MAX_TEXTE, idDeDuel, DUEL_DIRECT, purgerVoixDuDirect,
+} from './mot.js';
 import { nettoyerInsta } from './insta.js';
 export { SalleDirecte } from './salle.js';
 export { SalleRelais } from './salle-relais.js';
@@ -1098,6 +1100,12 @@ export default {
        rendez-vous avant de le tenir pour de vrai. */
     for (const [nom, db] of [['prod', env.DB], ['test', env.DB_TEST]]) {
       if (!db) continue;
+      // La voix des duels en direct, que personne ne viendra effacer en
+      // refermant une fenetre : voir VOIX_DIRECT_MS, mot.js.
+      ctx.waitUntil(
+        purgerVoixDuDirect(db, quand)
+          .catch(e => console.log('voix du direct KO', nom, String(e && e.message || e)))
+      );
       ctx.waitUntil(
         figerLaSemaine(db, quand)
           .then(b => { if (b.figees) console.log('nations figees', nom, JSON.stringify(b)); })
@@ -3149,8 +3157,9 @@ async function servir(request, env, ctx, porteur) {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const { id, name, texte, voix, voix_type } = body || {};
-      const code = String(id || '').toUpperCase();
-      if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+      // Un defi differe, ou un duel en direct a deux (voir idDeDuel).
+      const code = idDeDuel(id);
+      if (!code) return json({ error: 'code invalide' }, 400);
       const cle = String(name || '').trim().toLowerCase();
       if (!cle) return json({ error: 'nom requis' }, 400);
 
@@ -3165,12 +3174,56 @@ async function servir(request, env, ctx, porteur) {
         id: code, cle, texte, voix, voixType: voix_type,
       });
 
+      // EN DIRECT, LA SALLE PORTE LE MOT. Le perdant est encore sur son ecran
+      // de fin, branche a la meme salle : elle le lui remet dans la seconde,
+      // voix comprise, et a lui seul. On relit la rencontre plutot que de
+      // renvoyer ce qui est arrive : c'est le contenu assaini qui part, et
+      // c'est la base qui dit qui a perdu.
+      //
+      // Une salle deja fermee — elle vit quatre-vingt-dix secondes apres le
+      // verdict — ne le remet a personne. Le mot reste en base pour un
+      // signalement, la voix s'en efface au quart d'heure (VOIX_DIRECT_MS).
+      const direct = DUEL_DIRECT.exec(code);
+      if (!r.erreur && direct) {
+        ctx.waitUntil((async () => {
+          try {
+            if (!env.SALLES) return;
+            const d = await env.DB.prepare(
+              `SELECT outcome, challenger_key, opponent_key, mot, voix, voix_type
+                 FROM duel_results WHERE challenge_id = ?`).bind(code).first();
+            if (!d) return;
+            const pour = d.outcome === 'opponent' ? d.challenger_key
+                       : d.outcome === 'challenger' ? d.opponent_key : null;
+            if (!pour) return;
+            // Ce que le perdant a bloque ne lui arrive pas, ici comme au
+            // guichet des resultats (`motLisible`).
+            if ((await listeBloques(env.DB, pour)).includes(cle)) return;
+            const salle = direct[1];
+            const cible = new URL('https://salle/mot-duel');
+            cible.searchParams.set('code', salle);
+            if (canal.test) cible.searchParams.set('canal', 'test');
+            const objet = env.SALLES.idFromName(canal.test ? 'T-' + salle : salle);
+            await env.SALLES.get(objet).fetch(new Request(cible, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                pour,
+                mot: {
+                  duel: code, nom: cleanName(name),
+                  texte: d.mot || null, voix: d.voix || null, voix_type: d.voix_type || null,
+                },
+              }),
+            }));
+          } catch (e) { console.log('mot du direct KO', String(e && e.message || e)); }
+        })());
+      }
+
       // La sonnette chez le perdant : c'est lui qui recoit le mot, et lui seul.
       //
       // Son appareil n'est pas dans la rencontre — elle ne garde que des noms.
       // On le retrouve du cote ou il se trouve : celui qui a lance le defi est
       // inscrit sur le defi, celui qui l'a releve sur sa tentative.
-      if (!r.erreur) ctx.waitUntil((async () => {
+      if (!r.erreur && !direct) ctx.waitUntil((async () => {
         try {
           const d = await env.DB.prepare(
             `SELECT r.outcome, c.owner_device FROM duel_results r
@@ -3554,6 +3607,9 @@ async function servir(request, env, ctx, porteur) {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { duel, device_id, name, motif } = body || {};
+        // La rencontre se lit avec son defi, en jointure : la table doit
+        // exister meme sur une base qui n'a encore vu que des duels en direct.
+        await ensureChallengeTables(env.DB);
         const r = await signalerMot(env.DB, {
           duel, deviceId: device_id, cle: name, motif,
         });

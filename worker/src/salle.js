@@ -483,6 +483,29 @@ export class SalleDirecte {
     // ecrit son resultat dans la base de test, et nulle part ailleurs.
     if (url.searchParams.get('canal') === 'test') this.test = true;
 
+    // LE MOT DU VAINQUEUR D'UN DUEL, remis au perdant.
+    //
+    // Seul le worker frappe ici, apres avoir verifie et range le mot (route
+    // /duel/mot) : la route publique /live/ ne mene qu'a /etat et /ws. La
+    // salle ne juge rien, elle remet — a celui que la rencontre designe, et a
+    // personne d'autre, pas meme a un spectateur des tribunes.
+    if (url.pathname === '/mot-duel' && request.method === 'POST') {
+      let corps = null;
+      try { corps = await request.json(); } catch (e) { /* vide */ }
+      const pour = String(corps?.pour || '').trim().toLowerCase();
+      if (!pour || !corps?.mot) {
+        return new Response(JSON.stringify({ ok: false }), { status: 400 });
+      }
+      const texte = JSON.stringify({ t: 'mot_duel', mot: corps.mot });
+      let n = 0;
+      for (const [ws, j] of this.joueurs) {
+        if (String(j.nom || '').trim().toLowerCase() !== pour) continue;
+        try { ws.send(texte); n++; } catch (e) { /* socket morte */ }
+      }
+      return new Response(JSON.stringify({ ok: true, n }),
+        { headers: { 'Content-Type': 'application/json' } });
+    }
+
     // Consultation sans WebSocket : sert au client a savoir si un code existe
     // avant d'ouvrir quoi que ce soit.
     if (url.pathname.endsWith('/etat')) {

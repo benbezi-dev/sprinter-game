@@ -295,6 +295,42 @@ export function cleDuVainqueur(rencontre) {
 }
 
 /**
+ * Les deux formes d'une rencontre qui recoit un mot.
+ *
+ * Le code d'un defi differe, et celui d'un DUEL EN DIRECT A DEUX :
+ * `LIVE-<salle>-<pistolet>`, tel que la salle l'ecrit dans duel_results (voir
+ * rencontresDeLaCourse, salle.js). Au-dela de deux partants, l'identifiant
+ * porte en plus le lanceur et chaque course fait plusieurs rencontres : ce
+ * n'est plus un duel, et il n'y a pas UN perdant a qui parler. Ces formes-la
+ * sont refusees.
+ */
+export const DUEL_DIRECT = /^LIVE-([A-Z0-9]{4,10})-(\d{1,15})$/;
+export function idDeDuel(brut) {
+  const id = String(brut || '').toUpperCase();
+  return /^[A-Z0-9]{4,10}$/.test(id) || DUEL_DIRECT.test(id) ? id : null;
+}
+
+/**
+ * Combien de temps la voix d'un duel en direct reste en base.
+ *
+ * Celle d'un defi differe s'efface quand le perdant referme sa fenetre (voir
+ * /duel/results/seen). En direct, elle ne passe pas par cette fenetre : la
+ * salle la porte au perdant dans la seconde, et ce qui reste en base ne sert
+ * plus qu'a un signalement — qui en copie le contenu au moment ou il part. Un
+ * quart d'heure couvre l'ecran de fin et sa video ; la tache des cinq minutes
+ * fait le reste.
+ */
+export const VOIX_DIRECT_MS = 15 * 60 * 1000;
+
+/** Efface la voix des duels en direct passe ce delai. Le texte reste. */
+export async function purgerVoixDuDirect(db, quand) {
+  return db.prepare(
+    `UPDATE duel_results SET voix = NULL, voix_type = NULL
+      WHERE challenge_id LIKE 'LIVE-%' AND voix IS NOT NULL AND created_at < ?`
+  ).bind(quand - VOIX_DIRECT_MS).run();
+}
+
+/**
  * Depose le mot du vainqueur sur une rencontre.
  *
  * Renvoie `{ erreur }` plutot que de lever : l'appelant est une route HTTP, et
