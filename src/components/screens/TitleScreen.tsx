@@ -528,7 +528,12 @@ export function TitleScreen() {
                 l'ecran vers le bas pour voir s'il se passe quelque chose. Ces
                 trois reperes sont la pour etre remarques une fois, et oublies
                 ensuite — c'est pourquoi ils sont discrets et ne prennent pas
-                de place. */}
+                de place.
+
+                Sur Sprinter, celui de Hurdlers fait exception : c'est le monde
+                qu'on visite le moins, alors il porte la couleur du sien (le
+                cyan) et une pastille franche, sans bouger. Les deux autres
+                restent discrets. */}
             {MONDES_OUVERTS && haies && (
               <div className="flex items-center justify-center gap-2 px-1 pt-1 pb-0.5">
                 <button onClick={() => allerAu('sprinter')}
@@ -546,9 +551,12 @@ export function TitleScreen() {
                   <FlecheG className="w-3 h-3" /> THROWER
                 </button>
                 <button onClick={() => allerAu('hurdlers')}
-                        className="flex items-center gap-1 text-[9px] tracking-widest
-                                   text-white/40 hover:text-white/80 transition-colors">
-                  HURDLERS <ChevronDown className="w-3 h-3" />
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full
+                                   border border-cyan-400/70 bg-cyan-400/15
+                                   text-[10px] font-bold tracking-widest text-cyan-300
+                                   shadow-[0_0_14px_rgba(34,211,238,0.35)]
+                                   hover:bg-cyan-400/25 hover:text-cyan-200 transition-colors">
+                  HURDLERS <ChevronDown className="w-3.5 h-3.5" />
                 </button>
                 <button onClick={() => allerAu('jumper')}
                         className="flex items-center gap-1 text-[9px] tracking-widest
