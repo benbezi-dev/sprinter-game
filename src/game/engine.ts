@@ -195,6 +195,8 @@ export type GameState = {
   liveResultat: any;
   /** Les points du duel du direct, tels que la salle les a annonces. */
   liveDuel: any;
+  /** Le mot que le vainqueur du duel en direct m'a laisse (MotDuelDirect). */
+  liveMot: any;
   /**
    * Le photo-finish d'une arrivee serree en direct, voir suivrePhoto dans
    * sprinter-app.js. `lui` est nul tant que son chrono n'est pas arrive.
@@ -1345,6 +1347,7 @@ export function updateLogic(dt: number) {
     liveNom: G.liveNom,
     liveResultat: G.liveResultat,
     liveDuel: G.liveDuel,
+    liveMot: G.liveMot,
     photo: SprinterApp.photoPourHud(),
   });
 }

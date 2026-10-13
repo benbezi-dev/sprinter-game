@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Mic, Square, Play, Send, Loader2, Check, Trash2, Flag, Ban } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import {
-  Enregistreur, poserMot, urlDeLaVoix, MAX_TEXTE, MAX_VOIX_MS,
+  Enregistreur, poserMot, blobDeLaVoix, ecouterLaVoix, MAX_TEXTE, MAX_VOIX_MS,
   REPONSES, repondreAuMot, maReponse, estReponse,
   type EtatVoix, type MotPose, type Reponse,
 } from '@/game/mot';
@@ -51,6 +51,8 @@ export function LaisserUnMot({ duel, adversaire, onPose, poser, titre, confirme 
   const [envoi, setEnvoi] = useState(false);
   const [pose, setPose] = useState(false);
   const [erreur, setErreur] = useState('');
+  // L'ecoute de controle n'a rien rendu : on le dit, plutot qu'un bouton mort.
+  const [muet, setMuet] = useState(false);
   const enr = useRef<Enregistreur | null>(null);
 
   useEffect(() => {
@@ -128,7 +130,10 @@ export function LaisserUnMot({ duel, adversaire, onPose, poser, titre, confirme 
             <button
               onClick={() => {
                 const b = enr.current?.blob;
-                if (b) new Audio(URL.createObjectURL(b)).play().catch(() => {});
+                setMuet(false);
+                // Par le graphe du jeu, voir `ecouterLaVoix` : c'est la que
+                // l'ecoute avant l'envoi se perdait.
+                if (b) ecouterLaVoix(b, () => setMuet(true));
               }}
               className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl
                          bg-white/10 text-foreground font-bold tracking-widest text-[10px] md:text-xs"
@@ -136,7 +141,7 @@ export function LaisserUnMot({ duel, adversaire, onPose, poser, titre, confirme 
               <Play className="w-3.5 h-3.5" /> {N.t('mot_ecouter')}
             </button>
             <button
-              onClick={() => enr.current?.jeter()}
+              onClick={() => { setMuet(false); enr.current?.jeter(); }}
               aria-label={N.t('mot_refaire')}
               className="shrink-0 p-2 rounded-xl bg-white/5 text-muted-foreground hover:text-foreground"
             >
@@ -157,6 +162,9 @@ export function LaisserUnMot({ duel, adversaire, onPose, poser, titre, confirme 
         </button>
       </div>
 
+      {prete && muet && (
+        <p className="text-center text-[10px] text-destructive">{N.t('mot_ecoute_ratee')}</p>
+      )}
       {etat === 'refuse' && (
         <p className="text-center text-[10px] text-muted-foreground">{N.t('mot_micro_refuse')}</p>
       )}
@@ -175,12 +183,20 @@ export function LaisserUnMot({ duel, adversaire, onPose, poser, titre, confirme 
  * de vous battre. Une fois cette fenetre fermee, l'enregistrement est efface du
  * serveur et ne se rejoue plus.
  */
-export function LireLeMot({ duel, texte, voix, voixType, auteur }: {
+export function LireLeMot({ duel, texte, voix, voixType, auteur, repondre = true, ephemere }: {
   duel?: string;
   texte?: string | null; voix?: string | null; voixType?: string | null; auteur: string;
+  /**
+   * Proposer la reponse du perdant. Pas en direct : la reponse s'adresse au
+   * vainqueur par le guichet des defis, qu'une course en direct n'a pas — et
+   * les deux sont encore en ligne, la voix de la salle suffit.
+   */
+  repondre?: boolean;
+  /** Ce que devient la voix, quand ce n'est pas « effacee a la fermeture ». */
+  ephemere?: string;
 }) {
   const { N } = SprinterApp;
-  const [url, setUrl] = useState<string | null>(null);
+  const [enreg, setEnreg] = useState<Blob | null>(null);
   const [muet, setMuet] = useState(false);
   // Le recours du destinataire. `repos` est l'etat ordinaire : deux liens
   // discrets, parce que c'est un ecran de defaite et pas un formulaire.
@@ -189,11 +205,9 @@ export function LireLeMot({ duel, texte, voix, voixType, auteur }: {
         : estBloque(auteur) ? 'bloque' : 'repos');
 
   useEffect(() => {
-    if (!voix) return;
-    let u = '';
-    try { u = urlDeLaVoix(voix, voixType || 'audio/webm'); setUrl(u); }
-    catch { setUrl(null); }
-    return () => { if (u) URL.revokeObjectURL(u); };
+    if (!voix) { setEnreg(null); return; }
+    try { setEnreg(blobDeLaVoix(voix, voixType || 'audio/webm')); }
+    catch { setEnreg(null); }
   }, [voix, voixType]);
 
   /**
@@ -205,14 +219,12 @@ export function LireLeMot({ duel, texte, voix, voixType, auteur }: {
    * en WAV, ce cas ne devrait plus concerner que de vieux enregistrements.
    */
   const jouer = () => {
-    if (!url) return;
+    if (!enreg) return;
     setMuet(false);
-    const a = new Audio(url);
-    a.onerror = () => setMuet(true);
-    a.play().catch(() => setMuet(true));
+    ecouterLaVoix(enreg, () => setMuet(true));
   };
 
-  if (!texte && !url) return null;
+  if (!texte && !enreg) return null;
 
   return (
     <div className="w-full rounded-xl border border-destructive/30 bg-destructive/[0.07]
@@ -222,7 +234,7 @@ export function LireLeMot({ duel, texte, voix, voixType, auteur }: {
           « {texte} »
         </p>
       )}
-      {url && (
+      {enreg && (
         <button
           onClick={jouer}
           className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white/10
@@ -241,16 +253,16 @@ export function LireLeMot({ duel, texte, voix, voixType, auteur }: {
                        truncate max-w-full">
         {auteur}
       </span>
-      {url && (
+      {enreg && (
         <span className="text-[9px] text-muted-foreground text-center leading-snug">
-          {N.t('mot_ephemere')}
+          {ephemere || N.t('mot_ephemere')}
         </span>
       )}
 
       {/* LA REPONSE, avant le recours : c'est le geste ordinaire, signaler
           est l'exception. Elle disparait si le mot est signale ou son auteur
           bloque — on ne repond pas poliment a ce qu'on vient de refuser. */}
-      {REPONSE_PERDANT_OUVERTE && duel && recours === 'repos' && (
+      {REPONSE_PERDANT_OUVERTE && repondre && duel && recours === 'repos' && (
         <RepondreAuMot duel={duel} auteur={auteur} />
       )}
 

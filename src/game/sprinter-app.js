@@ -1855,6 +1855,7 @@
     // Les points du duel, quand la salle les annonce : ils arrivent apres le
     // resultat et se lisent sur l'ecran de fin.
     liveDuel: null,
+    liveMot: null,
     // Un adversaire par identifiant de joueur. Vide en duel a deux ancienne
     // maniere, remplie des qu'on court a plusieurs.
     lives: null,
@@ -2417,7 +2418,7 @@
     G.defiDemie = null;
     G.falseOut = false;
     G.liveOn = false; G.liveNom = ''; G.liveFin = null; G.liveResultat = null;
-    G.liveDuel = null;
+    G.liveDuel = null; G.liveMot = null;
     G.lives = null;
     G.photo = null; G.photoFinish = false;
     G.challengeTarget = null;
@@ -2511,7 +2512,7 @@
    */
   function recommencer() {
     if (G.mode !== 'oneshot' || !G.shotRaces || !G.shotRaces.length) return false;
-    G.liveOn = false; G.liveResultat = null; G.liveNom = null; G.liveDuel = null;
+    G.liveOn = false; G.liveResultat = null; G.liveNom = null; G.liveDuel = null; G.liveMot = null;
     G.photo = null; G.photoFinish = false;
     // La revanche est consommee ici comme partout ailleurs sur ce chemin :
     // RECOMMENCER part sur une course neuve, pas sur une nouvelle tentative
@@ -2576,8 +2577,8 @@
     G.photoFinish = !!opts.photoFinish;
     // Par defaut, l'horloge de la course. Le relais pose la sienne apres ceci.
     G.horlogeLive = null;
-    // Une revanche ne rejoue pas les points de la course d'avant.
-    G.liveDuel = null;
+    // Une revanche ne rejoue pas les points de la course d'avant, ni son mot.
+    G.liveDuel = null; G.liveMot = null;
     G.shotRaces = races.slice();
     G.shotIdx = 0;
     G.shotLevel = opts.levelIdx == null ? 4 : opts.levelIdx;

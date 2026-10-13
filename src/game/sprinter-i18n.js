@@ -1343,6 +1343,15 @@
                       'this recording vanishes when you close this window'],
     mot_illisible:   ['ce message ne se lit pas sur cet appareil',
                       'this message will not play on this device'],
+    // L'ecoute de controle, avant l'envoi, qui n'a rien rendu.
+    mot_ecoute_ratee: ['rien ne sort — monte le volume ou réenregistre',
+                       'nothing plays — turn the volume up or record again'],
+    // Le mot d'un duel EN DIRECT : l'autre est encore la, il ne « le lira pas
+    // en revenant » ; et la voix s'efface au quart d'heure, pas a la fermeture
+    // d'une fenetre qu'il n'ouvre pas (voir VOIX_DIRECT_MS, worker/src/mot.js).
+    mot_envoye_direct:   ['envoyé à {n}', 'sent to {n}'],
+    mot_ephemere_direct: ['ce vocal s’efface du serveur dans le quart d’heure',
+                          'this recording is wiped from the server within fifteen minutes'],
     // La reponse du perdant au mot du vainqueur. Une liste fermee, et seul
     // l'identifiant voyage — voir game/mot.ts (REPONSES) et worker/src/mot.js,
     // qui doivent garder les memes cles. La voix du coureur battu : beau
