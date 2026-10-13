@@ -33,7 +33,10 @@ import {
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
          noterCourse as noterCourseMarques, changerEpreuve as changerEpreuveMarques,
-         fantome as fantomeMarques } from './marques.js';
+         fantome as fantomeMarques, EPREUVES as EPREUVES_MARQUES } from './marques.js';
+import { poster as posterTchat, lire as lireTchat, participants as participantsTchat,
+         invitables as invitablesTchat, inviter as inviterTchat, mesInvitations,
+         signalerMessage as signalerTchat } from './tchat-marques.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
@@ -815,6 +818,38 @@ async function appareilsDe(db, cles) {
     ).bind(...liste).all();
     return [...new Set((results || []).map(r => r.device_id).filter(Boolean))];
   } catch { return []; }
+}
+
+/**
+ * Ce nom est-il RESERVE par cet appareil ? Plus strict que `peutUtiliser`,
+ * qui laisse passer un nom libre : le tchat du duel des marques ecrit du
+ * texte libre et sert des messages prives, et un nom libre peut etre porte
+ * par n'importe qui — ses messages prives avec.
+ */
+async function nomReserveIci(db, nameKey, deviceId) {
+  if (!nameKey || !isValidDeviceId(deviceId)) return false;
+  await ensurePlayerTables(db);
+  const d = await db.prepare(
+    `SELECT 1 AS ok FROM player_devices WHERE name_key = ? AND device_id = ?`
+  ).bind(nameKey, deviceId).first();
+  return !!d;
+}
+
+/**
+ * Le top 500 des trois epreuves du duel des marques, noms dedoublonnes : qui
+ * l'on peut y inviter. Trois classements entiers a regrouper : on les garde
+ * cinq minutes dans l'isolat, par base (le canal de test a la sienne).
+ */
+const TOP_MARQUES = new WeakMap();
+async function topMarques(db) {
+  const c = TOP_MARQUES.get(db);
+  if (c && Date.now() - c.quand < 5 * 60_000) return c.noms;
+  const noms = [];
+  for (const e of EPREUVES_MARQUES) {
+    for (const r of await getLeaderboard(db, e)) noms.push(r.name);
+  }
+  TOP_MARQUES.set(db, { quand: Date.now(), noms });
+  return noms;
 }
 
 /**
@@ -2976,6 +3011,58 @@ async function servir(request, env, ctx, porteur) {
           cibleKey: typeof body.cible === 'string' ? body.cible.trim().toLowerCase().slice(0, 40) || null : null,
         });
         return json(r.corps, r.status);
+      }
+
+      /* Le tchat du duel : voir tchat-marques.js. Lire comme ecrire demande
+         un nom reserve par cet appareil — on sert des messages prives. */
+      if (url.pathname.startsWith('/marques/tchat') || url.pathname.startsWith('/marques/invit')) {
+        let body = {};
+        if (request.method === 'POST') {
+          try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        }
+        const prendre = (k) => (request.method === 'POST' ? body[k] : url.searchParams.get(k));
+        const name = cleanName(prendre('name'));
+        const key = name.trim().toLowerCase();
+        const deviceId = prendre('device_id');
+        if (!(await nomReserveIci(env.DB, key, deviceId))) {
+          return json({ error: 'nom non reserve' }, 403);
+        }
+        // Le joueur et ses appareils : a qui faire vibrer le telephone.
+        const vibrer = (cle, genre) => ctx.waitUntil((async () => {
+          for (const appareil of await appareilsDe(env.DB, [cle])) {
+            await sonnerEtPush(env, appareil, genre, canal.test);
+          }
+        })());
+
+        if (url.pathname === '/marques/tchat' && request.method === 'GET') {
+          const r = await lireTchat(env.DB, { cleLecteur: key, depuis: Number(url.searchParams.get('depuis') || 0) });
+          if (url.searchParams.get('avec') === 'tout') {
+            r.participants = await participantsTchat(env.DB);
+            r.invitations = await mesInvitations(env.DB, { cleLecteur: key });
+          }
+          return json(r);
+        }
+        if (url.pathname === '/marques/tchat' && request.method === 'POST') {
+          const r = await posterTchat(env.DB, {
+            auteurKey: key, auteurName: name, texte: body.texte,
+            pour: typeof body.pour === 'string' ? body.pour : null, prive: body.prive === true,
+          });
+          if (r.sonner) vibrer(r.sonner, 'marques_tchat');
+          return json(r.corps, r.status);
+        }
+        if (url.pathname === '/marques/tchat/signaler' && request.method === 'POST') {
+          const r = await signalerTchat(env.DB, { id: body.id, cleLecteur: key, motif: body.motif });
+          return json(r.corps, r.status);
+        }
+        if (url.pathname === '/marques/invitables' && request.method === 'GET') {
+          return json({ joueurs: await invitablesTchat(env.DB, { deKey: key, top: await topMarques(env.DB) }) });
+        }
+        if (url.pathname === '/marques/inviter' && request.method === 'POST') {
+          const topCles = new Set((await topMarques(env.DB)).map(n => String(n).trim().toLowerCase()));
+          const r = await inviterTchat(env.DB, { deKey: key, deName: name, cible: body.cible, topCles });
+          if (r.sonner) vibrer(r.sonner, 'marques_invit');
+          return json(r.corps, r.status);
+        }
       }
       return json({ error: 'route inconnue' }, 404);
     }

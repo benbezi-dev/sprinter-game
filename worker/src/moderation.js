@@ -245,7 +245,12 @@ export async function trancher(db, { id, verdict, bannir, raison }) {
   if (!s) return { erreur: 'signalement introuvable' };
   if (s.tranche_le) return { erreur: 'deja tranche', deja: true };
 
-  if (v === 'retire') {
+  if (v === 'retire' && String(s.duel).startsWith('tchat-marques:')) {
+    // un message du tchat du duel des marques (tchat-marques.js) : il
+    // disparait du tchat, la copie reste ici
+    await db.prepare(`UPDATE marques_tchat SET retire = 1 WHERE id = ?`)
+      .bind(Number(String(s.duel).slice('tchat-marques:'.length))).run();
+  } else if (v === 'retire') {
     await db.prepare(
       `UPDATE duel_results SET mot = NULL, voix = NULL, voix_type = NULL
         WHERE challenge_id = ?`).bind(s.duel).run();
