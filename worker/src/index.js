@@ -32,7 +32,8 @@ import {
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
-         noterCourse as noterCourseMarques } from './marques.js';
+         noterCourse as noterCourseMarques, changerEpreuve as changerEpreuveMarques,
+         fantome as fantomeMarques } from './marques.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
@@ -2921,7 +2922,7 @@ async function servir(request, env, ctx, porteur) {
        publiees appellent ce chemin-ci : on ne le renomme pas, on y ajoute la
        liste. Elle ne depend pas de la base, et nommer les pays n'engage rien. */
     /* ---------------------------------------------- le duel des marques
-       Team adidas contre Team Nike : voir marques.js. Trois routes, toutes
+       Team adidas contre Team Nike : voir marques.js. Cinq routes, toutes
        muettes (404) tant que le duel n'est pas ouvert sur ce canal. */
     if (url.pathname.startsWith('/marques')) {
       const f = fenetreMarques(canal.test);
@@ -2933,7 +2934,16 @@ async function servir(request, env, ctx, porteur) {
         return json({ ...t, debut: f.debut, fin: f.fin });
       }
 
-      if ((url.pathname === '/marques/camp' || url.pathname === '/marques/course')
+      // le fantome d'un coureur du duel, pour le defier
+      if (url.pathname === '/marques/fantome' && request.method === 'GET') {
+        const cible = (url.searchParams.get('cible') || '').trim().toLowerCase();
+        if (!cible) return json({ error: 'cible manquante' }, 400);
+        const r = await fantomeMarques(env.DB, { cibleKey: cible });
+        return json(r.corps, r.status);
+      }
+
+      if ((url.pathname === '/marques/camp' || url.pathname === '/marques/course'
+           || url.pathname === '/marques/epreuve')
           && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
@@ -2948,8 +2958,12 @@ async function servir(request, env, ctx, porteur) {
         }
         if (url.pathname === '/marques/camp') {
           const r = await choisirCamp(env.DB, {
-            nameKey: key, deviceId: device_id, camp: String(body.camp || ''), epreuve: String(body.epreuve || ''),
+            nameKey: key, name, deviceId: device_id, camp: String(body.camp || ''), epreuve: String(body.epreuve || ''),
           });
+          return json(r.corps, r.status);
+        }
+        if (url.pathname === '/marques/epreuve') {
+          const r = await changerEpreuveMarques(env.DB, { nameKey: key, name, epreuve: String(body.epreuve || '') });
           return json(r.corps, r.status);
         }
         const timeMs = Math.round(Number(body.time_ms));
@@ -2959,6 +2973,7 @@ async function servir(request, env, ctx, porteur) {
         const r = await noterCourseMarques(env.DB, {
           nameKey: key, name, epreuve: String(body.race_key || ''), timeMs, trace: body.trace,
           contexte: typeof body.contexte === 'string' ? body.contexte : null,
+          cibleKey: typeof body.cible === 'string' ? body.cible.trim().toLowerCase().slice(0, 40) || null : null,
         });
         return json(r.corps, r.status);
       }

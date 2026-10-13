@@ -1,14 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, animate, useInView } from 'motion/react';
-import { Loader2, Swords, Check } from 'lucide-react';
+import { Loader2, Swords, Check, Skull, RotateCcw, ArrowLeftRight, UserPlus, Ghost, Crosshair } from 'lucide-react';
 import { MONTEE, VOILE, PANNEAU, RESSORT, COURBE, useAnimationsReduites } from '@/lib/mouvement';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
   CAMPS, EPREUVES, NOM_CAMP, fetchMarques, choisirCamp, monInscription, ecouterMarques, manque,
+  changerEpreuve, fetchFantome, ecouterDuels,
   secondes, somme, type Camp, type Epreuve, type TableauMarques, type ChoixRefuse, type Inscription,
+  type LigneFil, type VerdictDuel,
 } from '@/game/marques';
+import { KO, jouer } from '@/game/marques-son';
 import { useRetour } from '@/hooks/use-retour';
+import FaceAFace from './DuelMarquesIntro';
 
 /* ---------------------------------------------------------------------------
    LE DUEL DES MARQUES — Team adidas contre Team Nike (09/10/2026).
@@ -28,6 +32,14 @@ import { useRetour } from '@/hooks/use-retour';
    totaux defilent jusqu'a leur valeur, une corde tiree montre qui mene. Que
    transform et opacite ; rien pour qui a demande moins d'animations ; les
    boucles s'arretent hors de l'ecran.
+
+   LA BATAILLE (13/10) : l'ecran s'ouvre sur un face-a-face plein ecran
+   (DuelMarquesIntro.tsx) ; chaque coureur de son epreuve se defie en fantome,
+   adversaire ou coequipier ; « tes cibles » propose les plus proches ; un
+   fantome adverse battu elimine son coureur (K.O.), la victime peut se
+   venger ; le fil de la bataille raconte tout ; on peut changer d'epreuve en
+   perdant ce qu'on avait fait sur l'ancienne. Les regles : worker/src/
+   marques.js.
 
    AUCUN LOGO ET AUCUNE COULEUR DE MARQUE : un camp en blanc, l'autre dans le
    jaune du jeu. Et la mention de non-affiliation, sur l'ecran de choix puis
@@ -207,11 +219,42 @@ function Titre({ reduit }: { reduit: boolean }) {
   );
 }
 
+/**
+ * Defier le fantome d'un coureur du duel : sa trace, son chrono, son nom, et
+ * la cible dans les options du depart — engine.ts la relit a l'arrivee pour
+ * que le serveur juge le duel. Rend faux si le fantome n'a pas pu venir.
+ */
+async function defierFantome(nom: string): Promise<boolean> {
+  const f = await fetchFantome(nom);
+  if (!f) return false;
+  (SprinterApp as any).startOneShot([f.epreuve], {
+    levelIdx: 4,
+    ghosts: [f.trace],
+    ghostSplits: [f.best_ms / 1000],
+    ghostName: f.name,
+    ghostTime: f.best_ms / 1000,
+    etiquette: 'fantome',
+    duelMarques: { cible: f.name, camp: f.camp },
+  });
+  return true;
+}
+
 export function EcranMarques({ onClose }: { onClose: () => void }) {
   useRetour(onClose);
   const fr = useFr();
   const reduit = useAnimationsReduites();
+  // le face-a-face d'abord ; l'ecran entre ensuite, avec ses propres animations
+  const [intro, setIntro] = useState(!reduit);
   const { t, erreur } = useTableau();
+  const [enRoute, setEnRoute] = useState<string | null>(null);
+  const [changer, setChanger] = useState(false);
+  const defier = async (nom: string) => {
+    if (enRoute) return;
+    setEnRoute(nom);
+    const ok = await defierFantome(nom);
+    setEnRoute(null);
+    if (ok) onClose();
+  };
   const moi = t?.moi || null;
   const [vueCamp, setVueCamp] = useState<Camp | null>(null);
   const [vueEpreuve, setVueEpreuve] = useState<Epreuve | null>(null);
@@ -225,6 +268,10 @@ export function EcranMarques({ onClose }: { onClose: () => void }) {
 
   return (
     <motion.div {...MONTEE} className="fixed inset-0 z-50 bg-background/95 backdrop-blur-xl overflow-y-auto">
+      <AnimatePresence>
+        {intro && <FaceAFace fr={fr} onDone={() => setIntro(false)} />}
+      </AnimatePresence>
+      {!intro && (
       <div className="max-w-xl mx-auto px-4 pt-10 pb-6 flex flex-col items-center gap-4">
 
         <div className="w-full flex items-start justify-between gap-3">
@@ -260,11 +307,19 @@ export function EcranMarques({ onClose }: { onClose: () => void }) {
           {fr
             ? 'Tu choisis ton camp et ton épreuve. Ton meilleur chrono de la semaine compte. Sur chaque épreuve, les deux camps comptent autant de coureurs : s’il y a 14 Nike au 400 m, les 14 meilleurs adidas du 400 m comptent aussi. La plus petite somme gagne.'
             : 'Pick your side and your event. Your best time of the week counts. On each event both sides count the same number of runners: 14 Nike at 400 m means the 14 best adidas at 400 m count too. The lowest sum wins.'}
+          {t?.bonus_ko && (fr
+            ? ` Bats le fantôme d’un adversaire de ton épreuve : il est éliminé, et ton camp gagne ${secondes(t.bonus_ko['100'])} s au 100 m, ${secondes(t.bonus_ko['200'])} s au 200 m, ${secondes(t.bonus_ko['400'])} s au 400 m, tant qu’il ne s’est pas vengé.`
+            : ` Beat a rival’s ghost on your event: they are knocked out and your side gains ${secondes(t.bonus_ko['100'])} s at 100 m, ${secondes(t.bonus_ko['200'])} s at 200 m, ${secondes(t.bonus_ko['400'])} s at 400 m, until they take revenge.`)}
         </p>
 
         {t && !moi && <ChoixDuCamp t={t} fr={fr} reduit={reduit} />}
 
-        {t && moi && <MaLigne t={t} fr={fr} courir={courir} reduit={reduit} />}
+        {t && moi && <MaLigne t={t} fr={fr} courir={courir} reduit={reduit}
+                               defier={defier} enRoute={enRoute} changer={() => setChanger(true)} />}
+
+        {t && moi && <Cibles t={t} fr={fr} reduit={reduit} defier={defier} enRoute={enRoute} />}
+
+        {t && t.fil && t.fil.length > 0 && <FilBataille fil={t.fil} fr={fr} reduit={reduit} />}
 
         {t && (
           <>
@@ -295,12 +350,17 @@ export function EcranMarques({ onClose }: { onClose: () => void }) {
                 </button>
               ))}
             </div>
-            <Coureurs key={camp + epreuve} t={t} camp={camp} epreuve={epreuve} fr={fr} reduit={reduit} />
+            <Coureurs key={camp + epreuve} t={t} camp={camp} epreuve={epreuve} fr={fr} reduit={reduit}
+                      defier={defier} enRoute={enRoute} />
           </>
         )}
 
         {t && moi && <Mention fr={fr} />}
       </div>
+      )}
+      <AnimatePresence>
+        {changer && t && moi && <ChangerEpreuve t={t} fr={fr} reduit={reduit} onClose={() => setChanger(false)} />}
+      </AnimatePresence>
     </motion.div>
   );
 }
@@ -346,6 +406,15 @@ function Score({ t, fr, reduit }: { t: TableauMarques; fr: boolean; reduit: bool
               <span className="relative text-[10px] text-muted-foreground/80">
                 {fr ? `${t.inscrits[c]} inscrit${t.inscrits[c] > 1 ? 's' : ''}` : `${t.inscrits[c]} signed up`}
               </span>
+              {t.ko && (
+                <motion.span className="relative flex items-center gap-1 text-[10px] font-black tracking-widest"
+                  style={{ color: TEINTE[c] }}
+                  initial={reduit ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                  transition={reduit ? { duration: 0 } : { delay: 0.7 + 0.1 * i }}>
+                  <Swords className="w-3 h-3" aria-hidden />
+                  {t.ko[c]} K.O.{t.bonus && t.bonus[c] ? ` · −${secondes(t.bonus[c])} s` : ''}
+                </motion.span>
+              )}
               {devant && ecart > 0 && (
                 <motion.span className="relative mt-1 text-[10px] font-black tracking-widest text-primary"
                   initial={reduit ? false : { scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
@@ -416,7 +485,10 @@ function Score({ t, fr, reduit }: { t: TableauMarques; fr: boolean; reduit: bool
 }
 
 /** Ma ligne : mon camp, mon epreuve, ma place, et le bouton pour courir. */
-function MaLigne({ t, fr, courir, reduit }: { t: TableauMarques; fr: boolean; courir: (e: Epreuve) => void; reduit: boolean }) {
+function MaLigne({ t, fr, courir, reduit, defier, enRoute, changer }: {
+  t: TableauMarques; fr: boolean; courir: (e: Epreuve) => void; reduit: boolean;
+  defier: (nom: string) => void; enRoute: string | null; changer: () => void;
+}) {
   const moi = t.moi!;
   const ep = NOM_EPREUVE[moi.epreuve];
   const { ref, vivant } = useVivant<HTMLDivElement>();
@@ -429,7 +501,9 @@ function MaLigne({ t, fr, courir, reduit }: { t: TableauMarques; fr: boolean; co
               : `#${moi.rang} · you count as soon as one more rival runs the ${ep}`)
         : (fr ? `${moi.rang}ᵉ · il faut ${secondes(moi.seuil_ms ?? 0)} pour compter`
               : `#${moi.rang} · ${secondes(moi.seuil_ms ?? 0)} to count`);
+  const bourreaux = moi.elimine_par || [];
   return (
+    <div className="w-full flex flex-col gap-1.5">
     <motion.div ref={ref}
       initial={reduit ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
       transition={reduit ? { duration: 0 } : { ...RESSORT.trophee, delay: 0.2 }}
@@ -444,6 +518,17 @@ function MaLigne({ t, fr, courir, reduit }: { t: TableauMarques; fr: boolean; co
           TEAM {NOM_CAMP[moi.camp].toUpperCase()}
         </span>
         <span className="text-[11px] text-muted-foreground">{etat}</span>
+        {!!moi.ko && (
+          <span className="flex items-center gap-1 text-[11px] font-black text-primary">
+            <Swords className="w-3 h-3" aria-hidden />
+            {fr ? `Tu tiens ${moi.ko} duel${moi.ko > 1 ? 's' : ''}` : `You hold ${moi.ko} duel${moi.ko > 1 ? 's' : ''}`}
+          </span>
+        )}
+        <button onClick={changer}
+                className="mt-1 self-start flex items-center gap-1 text-[10px] font-bold tracking-wider text-foreground/60 underline underline-offset-2 hover:text-foreground">
+          <ArrowLeftRight className="w-3 h-3" aria-hidden />
+          {fr ? 'Changer d’épreuve' : 'Switch event'}
+        </button>
       </div>
       <div className="relative flex flex-col items-end gap-1.5 shrink-0">
         {moi.best_ms != null && (
@@ -459,12 +544,256 @@ function MaLigne({ t, fr, courir, reduit }: { t: TableauMarques; fr: boolean; co
         </motion.button>
       </div>
     </motion.div>
+
+    {/* eliminé : qui me tient, et la revanche a portee de doigt */}
+    {bourreaux.map((b, i) => (
+      <motion.div key={b}
+        initial={reduit ? false : { opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
+        transition={reduit ? { duration: 0 } : { ...RESSORT.glissement, delay: 0.35 + 0.08 * i }}
+        className="relative overflow-hidden w-full rounded-xl border border-red-500/50 bg-red-500/10 px-3 py-2 flex items-center gap-2">
+        <motion.span aria-hidden animate={vivant ? { rotate: [0, -12, 12, 0] } : {}}
+          transition={vivant ? { duration: 0.6, repeat: Infinity, repeatDelay: 1.8 } : { duration: 0 }}>
+          <Skull className="w-4 h-4 text-red-300" />
+        </motion.span>
+        <span className="flex-1 min-w-0 text-[11px] leading-snug text-red-100">
+          {fr ? <>Éliminé par <b>{b}</b> : il a battu ton fantôme.</> : <>Knocked out by <b>{b}</b>: they beat your ghost.</>}
+        </span>
+        <motion.button onClick={() => defier(b)} disabled={!!enRoute} whileTap={{ scale: 0.95 }}
+          animate={vivant && !enRoute ? BATTEMENT : { scale: 1 }}
+          transition={vivant && !enRoute ? BATTEMENT_T : { duration: 0 }}
+          className="shrink-0 px-2.5 py-1.5 rounded-lg bg-red-500 text-white text-[10px] font-black tracking-widest flex items-center gap-1 disabled:opacity-50">
+          {enRoute === b ? <Loader2 className="w-3 h-3 animate-spin" /> : <RotateCcw className="w-3 h-3" />}
+          {fr ? 'VENGE-TOI' : 'REVENGE'}
+        </motion.button>
+      </motion.div>
+    ))}
+    </div>
+  );
+}
+
+/**
+ * TES CIBLES : les adversaires de ton epreuve les plus proches de ton chrono
+ * (ceux que tu peux battre, et ceux qui te devancent de peu), puis le
+ * coequipier juste devant toi. Ceux dont tu tiens deja le duel n'y sont pas :
+ * on ne gagne rien a les rebattre.
+ */
+function Cibles({ t, fr, reduit, defier, enRoute }: {
+  t: TableauMarques; fr: boolean; reduit: boolean; defier: (nom: string) => void; enRoute: string | null;
+}) {
+  const moi = t.moi!;
+  const autre = CAMPS.find(c => c !== moi.camp)!;
+  const moiNom = getSavedName().trim().toLowerCase();
+  const tenus = new Set((moi.tenus || []).map(n => n.toLowerCase()));
+  const ref = moi.best_ms ?? Infinity;
+  const proche = (ms: number) => (ref === Infinity ? -ms : -Math.abs(ms - ref));
+  const adversaires = t.epreuves[moi.epreuve].camps[autre].coureurs
+    .filter(c => !tenus.has(c.name.toLowerCase()))
+    .sort((a, b) => proche(b.ms) - proche(a.ms))
+    .slice(0, 3);
+  const miens = t.epreuves[moi.epreuve].camps[moi.camp].coureurs
+    .filter(c => c.name.trim().toLowerCase() !== moiNom);
+  const devant = miens.filter(c => c.ms < ref).pop() || (moi.best_ms == null ? miens[miens.length - 1] : undefined);
+  const lignes = [...adversaires.map(c => ({ ...c, camp: autre })), ...(devant ? [{ ...devant, camp: moi.camp }] : [])];
+  const { ref: vue, vivant } = useVivant<HTMLDivElement>();
+  if (!lignes.length) {
+    return (
+      <p className="w-full text-center text-[11px] text-muted-foreground px-4">
+        {(moi.tenus || []).length
+          ? (fr ? 'Tu tiens le duel contre chaque adversaire de ton épreuve. Garde ta place.' : 'You hold the duel against every rival on your event. Keep your seat.')
+          : (fr ? 'Aucun fantôme à défier encore sur ton épreuve.' : 'No ghost to challenge on your event yet.')}
+      </p>
+    );
+  }
+  return (
+    <div ref={vue} className="w-full flex flex-col gap-1">
+      <span className="flex items-center justify-center gap-1.5 text-[10px] font-black tracking-[0.2em] text-foreground/80">
+        <Crosshair className="w-3 h-3 text-primary" aria-hidden />
+        {fr ? 'TES CIBLES' : 'YOUR TARGETS'}
+      </span>
+      {lignes.map((c, i) => {
+        const adverse = c.camp !== moi.camp;
+        const battable = moi.best_ms != null && moi.best_ms < c.ms;
+        return (
+          <motion.div key={c.name}
+            initial={reduit ? false : { opacity: 0, x: adverse ? 24 : -24 }} animate={{ opacity: 1, x: 0 }}
+            transition={reduit ? { duration: 0 } : { ...RESSORT.glissement, delay: 0.3 + 0.07 * i }}
+            className="relative overflow-hidden flex items-center gap-2 px-3 py-2 rounded-xl border"
+            style={{ borderColor: `${TEINTE[c.camp]}40`, background: `${TEINTE[c.camp]}0D` }}>
+            <Ghost className="w-4 h-4 shrink-0" style={{ color: TEINTE[c.camp] }} aria-hidden />
+            <span className="flex-1 min-w-0 flex flex-col leading-tight">
+              <span className="truncate text-sm font-bold">{c.name}</span>
+              <span className="text-[10px] text-muted-foreground truncate">
+                {adverse
+                  ? (c.elimine_par
+                      ? (fr ? `Team ${NOM_CAMP[c.camp]} · déjà K.O. par ${c.elimine_par}` : `Team ${NOM_CAMP[c.camp]} · already KO’d by ${c.elimine_par}`)
+                      : battable
+                        ? (fr ? `Team ${NOM_CAMP[c.camp]} · ton record le bat` : `Team ${NOM_CAMP[c.camp]} · your best beats it`)
+                        : (fr ? `Team ${NOM_CAMP[c.camp]} · K.O. = −${secondes(t.bonus_ko?.[moi.epreuve] ?? 0)} s` : `Team ${NOM_CAMP[c.camp]} · KO = −${secondes(t.bonus_ko?.[moi.epreuve] ?? 0)} s`))
+                  : (fr ? 'Ton camp · juste devant toi' : 'Your side · just ahead of you')}
+              </span>
+            </span>
+            <span className="font-black tabular-nums text-sm" style={{ color: TEINTE[c.camp] }}>{secondes(c.ms)}</span>
+            <motion.button onClick={() => defier(c.name)} disabled={!!enRoute} whileTap={{ scale: 0.94 }}
+              animate={vivant && adverse && i === 0 && !enRoute ? BATTEMENT : { scale: 1 }}
+              transition={vivant && adverse && i === 0 && !enRoute ? BATTEMENT_T : { duration: 0 }}
+              className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10px] font-black tracking-widest flex items-center gap-1 disabled:opacity-50
+                          ${adverse ? 'bg-primary text-black' : 'bg-white/10 text-foreground border border-white/15'}`}>
+              {enRoute === c.name ? <Loader2 className="w-3 h-3 animate-spin" /> : <Swords className="w-3 h-3" />}
+              {fr ? 'DÉFIER' : 'FIGHT'}
+            </motion.button>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Il y a combien de temps, en mots courts. */
+function ilYA(quand: number, fr: boolean): string {
+  const s = Math.max(0, (Date.now() - quand) / 1000);
+  if (s < 60) return fr ? 'à l’instant' : 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return fr ? `il y a ${m} min` : `${m} min ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return fr ? `il y a ${h} h` : `${h} h ago`;
+  const j = Math.floor(h / 24);
+  return fr ? `il y a ${j} j` : `${j} d ago`;
+}
+
+/** LE FIL DE LA BATAILLE : qui entre, qui change, qui elimine qui, qui se venge. */
+function FilBataille({ fil, fr, reduit }: { fil: LigneFil[]; fr: boolean; reduit: boolean }) {
+  const [tout, setTout] = useState(false);
+  const lignes = tout ? fil : fil.slice(0, 6);
+  const texte = (l: LigneFil): React.ReactNode => {
+    const ep = l.epreuve ? NOM_EPREUVE[l.epreuve] : '';
+    const a = <b style={{ color: TEINTE[l.camp] }}>{l.a}</b>;
+    const b = <b>{l.b}</b>;
+    switch (l.genre) {
+      case 'ko': return fr ? <>{a} élimine {b} au {ep}{l.ms ? ` · ${secondes(l.ms)}` : ''}</> : <>{a} knocks out {b} at {ep}{l.ms ? ` · ${secondes(l.ms)}` : ''}</>;
+      case 'revanche': return fr ? <>{a} se venge de {b} au {ep}</> : <>{a} takes revenge on {b} at {ep}</>;
+      case 'coequipier': return fr ? <>{a} passe devant le fantôme de {b}, son coéquipier</> : <>{a} beats teammate {b}’s ghost</>;
+      case 'change': return fr ? <>{a} quitte le {l.b ? NOM_EPREUVE[l.b as Epreuve] : '?'} pour le {ep}</> : <>{a} leaves the {l.b ? NOM_EPREUVE[l.b as Epreuve] : '?'} for the {ep}</>;
+      default: return fr ? <>{a} rejoint Team {NOM_CAMP[l.camp]} au {ep}</> : <>{a} joins Team {NOM_CAMP[l.camp]} at {ep}</>;
+    }
+  };
+  const icone = (l: LigneFil) => {
+    const c = { className: 'w-3.5 h-3.5 shrink-0', style: { color: TEINTE[l.camp] } };
+    switch (l.genre) {
+      case 'ko': return <Swords {...c} />;
+      case 'revanche': return <RotateCcw {...c} />;
+      case 'coequipier': return <Ghost {...c} />;
+      case 'change': return <ArrowLeftRight {...c} />;
+      default: return <UserPlus {...c} />;
+    }
+  };
+  return (
+    <div className="w-full flex flex-col gap-1">
+      <span className="flex items-center justify-center gap-1.5 text-[10px] font-black tracking-[0.2em] text-foreground/80">
+        <motion.span aria-hidden className="w-1.5 h-1.5 rounded-full bg-red-500"
+          animate={reduit ? {} : { opacity: [1, 0.2, 1] }} transition={{ duration: 1.2, repeat: Infinity }} />
+        {fr ? 'LE FIL DE LA BATAILLE' : 'BATTLE FEED'}
+      </span>
+      <div className="rounded-xl border border-white/10 bg-card/40 divide-y divide-white/5 overflow-hidden">
+        <AnimatePresence initial={!reduit}>
+          {lignes.map((l, i) => (
+            <motion.div key={`${l.quand}-${l.genre}-${l.a}`} layout={!reduit}
+              initial={reduit ? false : { opacity: 0, x: l.camp === 'adidas' ? -16 : 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={reduit ? { duration: 0 } : { duration: 0.3, delay: Math.min(i, 8) * 0.04 }}
+              className={`flex items-center gap-2 px-3 py-1.5 ${l.genre === 'ko' || l.genre === 'revanche' ? 'bg-white/[0.03]' : ''}`}>
+              {icone(l)}
+              <span className="flex-1 min-w-0 text-[11px] leading-snug truncate">{texte(l)}</span>
+              <span className="shrink-0 text-[9px] text-muted-foreground">{ilYA(l.quand, fr)}</span>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+      {fil.length > 6 && (
+        <button onClick={() => setTout(x => !x)} className="self-center text-[10px] text-foreground/60 underline underline-offset-2">
+          {tout ? (fr ? 'Moins' : 'Less') : (fr ? `Tout le fil (${fil.length})` : `Whole feed (${fil.length})`)}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * CHANGER D'EPREUVE. Le camp reste ; le chrono et les duels de l'epreuve
+ * quittee disparaissent — l'ecran le dit, chiffres a l'appui, avant de
+ * confirmer.
+ */
+function ChangerEpreuve({ t, fr, reduit, onClose }: { t: TableauMarques; fr: boolean; reduit: boolean; onClose: () => void }) {
+  const moi = t.moi!;
+  const [e, setE] = useState<Epreuve | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+  const [refus, setRefus] = useState(false);
+  const perte: string[] = [];
+  if (moi.best_ms != null) perte.push(fr ? `ton ${secondes(moi.best_ms)} s au ${NOM_EPREUVE[moi.epreuve]}` : `your ${secondes(moi.best_ms)} s at ${NOM_EPREUVE[moi.epreuve]}`);
+  if (moi.ko) perte.push(fr ? `tes ${moi.ko} duel${moi.ko > 1 ? 's' : ''} tenu${moi.ko > 1 ? 's' : ''}` : `your ${moi.ko} held duel${moi.ko > 1 ? 's' : ''}`);
+  const confirmer = async () => {
+    if (!e) return;
+    setEnvoi(true); setRefus(false);
+    const r = await changerEpreuve(e);
+    setEnvoi(false);
+    if ('refus' in r) setRefus(true); else onClose();
+  };
+  return (
+    <motion.div {...VOILE} className="fixed inset-0 z-[59] bg-black/85 flex items-center justify-center px-5" onClick={() => !envoi && onClose()}>
+      <motion.div {...PANNEAU} onClick={ev => ev.stopPropagation()}
+        className="relative w-full max-w-md rounded-2xl border-2 p-5 flex flex-col items-center gap-3 bg-card"
+        style={{ borderColor: `${TEINTE[moi.camp]}B0` }}>
+        <span className="text-[10px] tracking-[0.2em] text-foreground/70">
+          {fr ? `TEAM ${NOM_CAMP[moi.camp].toUpperCase()} · CHANGER D’ÉPREUVE` : `TEAM ${NOM_CAMP[moi.camp].toUpperCase()} · SWITCH EVENT`}
+        </span>
+        <div className="w-full flex flex-col gap-1.5">
+          {EPREUVES.map((x, i) => {
+            const actuelle = x === moi.epreuve;
+            const m = manque(t, moi.camp, x);
+            return (
+              <motion.button key={x} disabled={actuelle} onClick={() => setE(x)}
+                initial={reduit ? false : { opacity: 0, x: -24 }} animate={{ opacity: 1, x: 0 }}
+                transition={reduit ? { duration: 0 } : { duration: 0.3, delay: 0.1 + 0.07 * i }}
+                className={`w-full rounded-xl border px-3 py-2 flex items-center gap-3 text-left transition-colors disabled:opacity-40
+                            ${e === x ? 'border-primary bg-primary/15' : 'border-white/10 hover:bg-white/5'}`}>
+                <span className="font-black text-lg w-16 shrink-0">{NOM_EPREUVE[x]}</span>
+                <span className={`text-[11px] leading-snug ${m > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+                  {actuelle ? (fr ? 'ton épreuve actuelle' : 'your current event')
+                    : m > 0 ? (fr ? `${m} place${m > 1 ? 's' : ''} libre${m > 1 ? 's' : ''} pour ton camp` : `${m} open seat${m > 1 ? 's' : ''} for your side`)
+                    : (fr ? `${t.epreuves[x].camps[moi.camp].coureurs.length} coureur(s) de ton camp` : `${t.epreuves[x].camps[moi.camp].coureurs.length} runner(s) on your side`)}
+                </span>
+              </motion.button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-center leading-snug text-red-200">
+          {perte.length
+            ? (fr ? `Tu perds ${perte.join(' et ')}. Ils disparaissent du tableau.` : `You lose ${perte.join(' and ')}. They leave the board.`)
+            : (fr ? 'Tu n’as encore rien couru sur ton épreuve : tu ne perds rien.' : 'You have not run your event yet: you lose nothing.')}
+        </p>
+        {refus && <p className="text-[12px] text-center text-red-300">{fr ? 'Pas de réseau. Réessaie.' : 'No network. Try again.'}</p>}
+        <div className="w-full grid grid-cols-2 gap-2 pt-1">
+          <button onClick={onClose} disabled={envoi} className="py-2 rounded-lg border border-white/15 text-[11px] font-black tracking-widest">
+            {fr ? 'ANNULER' : 'CANCEL'}
+          </button>
+          <button onClick={confirmer} disabled={envoi || !e}
+            className="py-2 rounded-lg bg-primary text-black text-[11px] font-black tracking-widest flex items-center justify-center gap-1.5 disabled:opacity-40">
+            {envoi ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowLeftRight className="w-3.5 h-3.5" />}
+            {fr ? 'CHANGER' : 'SWITCH'}
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
 /** Les coureurs d'un camp sur une epreuve : ceux qui comptent, puis les autres. */
-function Coureurs({ t, camp, epreuve, fr, reduit }: { t: TableauMarques; camp: Camp; epreuve: Epreuve; fr: boolean; reduit: boolean }) {
+function Coureurs({ t, camp, epreuve, fr, reduit, defier, enRoute }: {
+  t: TableauMarques; camp: Camp; epreuve: Epreuve; fr: boolean; reduit: boolean;
+  defier: (nom: string) => void; enRoute: string | null;
+}) {
   const k = t.epreuves[epreuve];
+  // on ne defie que sur son epreuve : c'est la que la bataille compte
+  const peutDefier = !!t.moi && t.moi.epreuve === epreuve;
   const liste = k.camps[camp].coureurs;
   const moiNom = getSavedName().trim().toLowerCase();
   if (!liste.length) {
@@ -495,8 +824,28 @@ function Coureurs({ t, camp, epreuve, fr, reduit }: { t: TableauMarques; camp: C
               className={`flex items-center gap-3 px-3 py-1.5 rounded-lg
                           ${moi ? 'bg-primary/15 border border-primary/40' : 'bg-card/40'}`}>
               <span className="w-6 text-right text-[11px] font-black tabular-nums text-foreground/60">{i + 1}</span>
-              <span className="flex-1 min-w-0 truncate text-sm font-bold">{r.name}</span>
+              <span className="flex-1 min-w-0 flex flex-col leading-tight">
+                <span className="truncate text-sm font-bold">{r.name}</span>
+                {r.elimine_par && (
+                  <span className="flex items-center gap-1 text-[9px] text-red-300 truncate">
+                    <Skull className="w-2.5 h-2.5 shrink-0" aria-hidden />
+                    {fr ? `K.O. par ${r.elimine_par}` : `KO’d by ${r.elimine_par}`}
+                  </span>
+                )}
+              </span>
+              {!!r.ko && (
+                <span className="flex items-center gap-0.5 text-[10px] font-black text-primary" title={fr ? 'duels tenus' : 'duels held'}>
+                  <Swords className="w-3 h-3" aria-hidden />{r.ko}
+                </span>
+              )}
               <span className="font-black tabular-nums text-sm" style={{ color: TEINTE[camp] }}>{secondes(r.ms)}</span>
+              {peutDefier && !moi && (
+                <button onClick={() => defier(r.name)} disabled={!!enRoute}
+                  aria-label={fr ? `Défier le fantôme de ${r.name}` : `Challenge ${r.name}’s ghost`}
+                  className={`shrink-0 p-1.5 rounded-lg disabled:opacity-50 ${camp === t.moi!.camp ? 'bg-white/10' : 'bg-primary text-black'}`}>
+                  {enRoute === r.name ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Swords className="w-3.5 h-3.5" />}
+                </button>
+              )}
             </motion.div>
           </React.Fragment>
         );
@@ -645,3 +994,59 @@ function ChoixDuCamp({ t, fr, reduit }: { t: TableauMarques; fr: boolean; reduit
     </div>
   );
 }
+
+/* --------------------------------------------------- l'annonce du verdict
+
+   Apres un duel contre un fantome, l'ecran de fin dit deja si le fantome est
+   battu. Ce qui manque, c'est ce que ca change a la BATAILLE — et seul le
+   serveur le sait : K.O., revanche, ou coequipier depasse. Monte une fois
+   pour toutes (App.tsx), muet tant que rien n'arrive. */
+export function AnnonceDuelMarques() {
+  const fr = useFr();
+  const reduit = useAnimationsReduites();
+  const [v, setV] = useState<VerdictDuel | null>(null);
+  useEffect(() => ecouterDuels(x => {
+    if (!x.gagne) return;
+    setV(x);
+    if (x.ko) jouer(KO, 0, 0.8);
+  }), []);
+  useEffect(() => {
+    if (!v) return;
+    const t = setTimeout(() => setV(null), v.ko ? 3600 : 2600);
+    return () => clearTimeout(t);
+  }, [v]);
+  const titre = !v ? '' : v.revanche ? (fr ? 'REVANCHE !' : 'REVENGE!') : v.ko ? 'K.O. !' : (fr ? 'DEVANT !' : 'AHEAD!');
+  const camp: Camp = v ? (v.adverse ? (CAMPS.find(c => c !== v.cible_camp) as Camp) : v.cible_camp) : 'adidas';
+  return (
+    <AnimatePresence>
+      {v && (
+        <motion.div key={v.cible + v.ms} onClick={() => setV(null)}
+          className="fixed inset-x-0 top-[12%] z-[80] flex justify-center px-6 pointer-events-auto"
+          initial={reduit ? { opacity: 0 } : { opacity: 0, scale: 2.2, rotate: -6 }}
+          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+          exit={{ opacity: 0, y: -20, transition: { duration: 0.25 } }}
+          transition={reduit ? { duration: 0.2 } : RESSORT.trophee}>
+          {/* aux couleurs du jeu (remarque de l'auteur, 13/10) : la carte, le
+              jaune primaire et la police des titres de fin de course */}
+          <div className="relative overflow-hidden rounded-2xl border-2 border-primary/70 px-6 py-3 flex flex-col items-center gap-1 bg-card/95 backdrop-blur-md"
+               style={{ boxShadow: '0 0 40px rgb(var(--primaire-rgb) / 0.45)' }}>
+            {!reduit && <Reflet vivant periode={0.8} delai={0.2} />}
+            <span className="relative font-black font-display tracking-tight uppercase text-4xl leading-none text-primary drop-shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.35)]">
+              {titre}
+            </span>
+            <span className="relative text-[12px] text-foreground/90 text-center leading-snug">
+              {v.ko
+                ? (fr ? <><b>{v.cible}</b> est éliminé · Team {NOM_CAMP[camp]} −{secondes(v.epreuve in BONUS ? BONUS[v.epreuve] : 0)} s</>
+                      : <><b>{v.cible}</b> is knocked out · Team {NOM_CAMP[camp]} −{secondes(v.epreuve in BONUS ? BONUS[v.epreuve] : 0)} s</>)
+                : v.adverse
+                  ? (fr ? <>Tu tiens déjà le duel contre <b>{v.cible}</b></> : <>You already hold the duel against <b>{v.cible}</b></>)
+                  : (fr ? <>Tu passes devant le fantôme de <b>{v.cible}</b></> : <>You beat <b>{v.cible}</b>’s ghost</>)}
+            </span>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+/** Le bonus d'un duel tenu, comme le serveur (worker/src/marques.js, BONUS_KO_MS). */
+const BONUS: Record<Epreuve, number> = { '100': 100, '200': 200, '400': 400 };

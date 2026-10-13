@@ -33,6 +33,27 @@
    AUCUN LOGO, AUCUNE COULEUR DE MARQUE, ET LA MENTION DE NON-AFFILIATION A
    L'ECRAN : Sprinter n'est lie ni a adidas ni a Nike.
 
+   LA BATAILLE (demandee par l'auteur le 13/10, duel deja ouvert) — pour que
+   le duel vive comme un battle royale, mais toujours par equipe :
+
+   - ON PEUT CHANGER D'EPREUVE. Le camp reste ; l'epreuve change, et tout ce
+     qu'on avait fait sur l'ancienne disparait — chrono ET duels gagnes. On ne
+     garde pas une place au 100 m en allant chasser au 400 m.
+   - ON DEFIE UN FANTOME, adverse ou de son camp, sur son epreuve. Le fantome
+     est la trace du meilleur chrono de l'autre ; le battre, c'est finir sous
+     son meilleur chrono, trace a l'appui comme toute course du duel.
+   - BATTRE UN FANTOME ADVERSE ELIMINE SON COUREUR. Entre deux adversaires,
+     un seul « tient » le duel : le dernier qui a battu le fantome de l'autre.
+     La victime se venge en battant le fantome de son bourreau, et le duel
+     change de main. Chaque duel tenu retire `BONUS_KO_MS` de son epreuve au
+     total de son camp (0,10 s par 100 m couru) : petit devant la somme, mais
+     decisif quand les camps se tiennent. Un duel par paire, jamais deux : on
+     ne gonfle pas son compte en battant dix fois le meme fantome.
+   - Battre le fantome d'un coequipier ne rapporte rien au camp ; ca se voit
+     dans le fil, et le chrono, lui, compte comme toute course.
+   - LE FIL DE LA BATAILLE dit tout, dans l'ordre : qui entre, qui change
+     d'epreuve, qui elimine qui, qui se venge.
+
    Les dates : ouvert en permanence sur le canal de test ; sur la production,
    seulement de `DEBUT_PROD` a `DEBUT_PROD + DUREE_MS`. Tant que `DEBUT_PROD`
    est nul, la production refuse tout. La meme date est posee cote jeu
@@ -45,6 +66,10 @@ export const CAMPS = ['adidas', 'nike'];
 export const EPREUVES = ['100', '200', '400'];
 export const TAILLE_EQUIPE = 32;
 export const PLAFOND_MS = { '100': 15_000, '200': 30_000, '400': 70_000 };
+/** Ce que vaut un duel tenu contre un adversaire, retire au total de son camp. */
+export const BONUS_KO_MS = { '100': 100, '200': 200, '400': 400 };
+/** Les dernieres lignes du fil rendues avec le tableau. */
+const FIL_N = 24;
 /** Ouverture publique, en ms UTC ; null = ferme en production.
  *  Provisoire (09/10) : dimanche 11 octobre 2026, 21 h 30 a Paris, pour six
  *  jours. La meme valeur est dans vite.config.ts (et la duree aussi). */
@@ -94,6 +119,30 @@ export async function ensureMarquesTables(db) {
       maj INTEGER NOT NULL,
       PRIMARY KEY (evenement, name_key)
     )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS marques_duels (
+      evenement TEXT NOT NULL,
+      paire TEXT NOT NULL,
+      epreuve TEXT NOT NULL,
+      tenant_key TEXT NOT NULL,
+      tenant_name TEXT NOT NULL,
+      tenant_camp TEXT NOT NULL,
+      vaincu_key TEXT NOT NULL,
+      vaincu_name TEXT NOT NULL,
+      tenant_ms INTEGER NOT NULL,
+      maj INTEGER NOT NULL,
+      PRIMARY KEY (evenement, paire)
+    )`),
+    db.prepare(`CREATE TABLE IF NOT EXISTS marques_fil (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      evenement TEXT NOT NULL,
+      quand INTEGER NOT NULL,
+      genre TEXT NOT NULL,
+      camp TEXT NOT NULL,
+      a_name TEXT NOT NULL,
+      b_name TEXT,
+      epreuve TEXT,
+      ms INTEGER
+    )`),
   ]);
   // La premiere version (une seule epreuve) a cree ces tables sans `epreuve`
   // sur la base de test : la colonne s'ajoute, ses lignes valent le 100 m.
@@ -103,6 +152,8 @@ export async function ensureMarquesTables(db) {
   }
   await db.prepare(`CREATE INDEX IF NOT EXISTS idx_marques_chronos_epreuve
     ON marques_chronos(evenement, epreuve, camp, best_ms)`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_marques_fil
+    ON marques_fil(evenement, id)`).run();
   pret.add(db);
 }
 
@@ -113,14 +164,25 @@ export async function inscriptionDe(db, nameKey) {
   ).bind(EVENEMENT, nameKey).first();
 }
 
+/** Une ligne de plus au fil de la bataille. Jamais bloquant. */
+async function auFil(db, { genre, camp, a, b = null, epreuve = null, ms = null, maintenant = Date.now() }) {
+  try {
+    await db.prepare(
+      `INSERT INTO marques_fil (evenement, quand, genre, camp, a_name, b_name, epreuve, ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(EVENEMENT, maintenant, genre, camp, a, b, epreuve, ms).run();
+  } catch (e) { /* le fil se tait, la course compte quand meme */ }
+}
+
 /**
  * Choisir son camp et son epreuve. Definitif : un second choix, s'il differe,
  * est refuse (409) ; le meme choix repete rend simplement l'inscription.
  */
-export async function choisirCamp(db, { nameKey, deviceId, camp, epreuve, maintenant = Date.now() }) {
+export async function choisirCamp(db, { nameKey, name = nameKey, deviceId, camp, epreuve, maintenant = Date.now() }) {
   if (!CAMPS.includes(camp)) return { status: 400, corps: { error: 'camp inconnu' } };
   if (!EPREUVES.includes(epreuve)) return { status: 400, corps: { error: 'epreuve inconnue' } };
   await ensureMarquesTables(db);
+  const avant = await inscriptionDe(db, nameKey);
   await db.prepare(
     `INSERT INTO marques_camps (evenement, name_key, camp, epreuve, device_id, choisi_le)
      VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(evenement, name_key) DO NOTHING`
@@ -129,14 +191,93 @@ export async function choisirCamp(db, { nameKey, deviceId, camp, epreuve, mainte
   if (!pose || pose.camp !== camp || pose.epreuve !== epreuve) {
     return { status: 409, corps: { error: 'camp deja choisi', camp: pose?.camp, epreuve: pose?.epreuve } };
   }
+  if (!avant) await auFil(db, { genre: 'entree', camp, a: name, epreuve, maintenant });
   return { status: 200, corps: { ok: true, camp, epreuve } };
+}
+
+/**
+ * Changer d'epreuve. Le camp ne change pas. Le chrono de l'ancienne epreuve
+ * et les duels qu'on y tenait — ou qu'on y avait perdus — disparaissent :
+ * c'est le prix du changement, et ce qui empeche de garder une place sur une
+ * epreuve pendant qu'on se bat sur une autre.
+ */
+export async function changerEpreuve(db, { nameKey, name, epreuve, maintenant = Date.now() }) {
+  if (!EPREUVES.includes(epreuve)) return { status: 400, corps: { error: 'epreuve inconnue' } };
+  await ensureMarquesTables(db);
+  const ins = await inscriptionDe(db, nameKey);
+  if (!ins) return { status: 409, corps: { error: 'aucun camp choisi' } };
+  if (ins.epreuve === epreuve) return { status: 200, corps: { ok: true, camp: ins.camp, epreuve, perdu_ms: null } };
+  const ancien = await db.prepare(
+    `SELECT best_ms FROM marques_chronos WHERE evenement = ? AND name_key = ?`
+  ).bind(EVENEMENT, nameKey).first();
+  await db.batch([
+    db.prepare(`UPDATE marques_camps SET epreuve = ? WHERE evenement = ? AND name_key = ?`)
+      .bind(epreuve, EVENEMENT, nameKey),
+    db.prepare(`DELETE FROM marques_chronos WHERE evenement = ? AND name_key = ?`).bind(EVENEMENT, nameKey),
+    db.prepare(`DELETE FROM marques_duels WHERE evenement = ? AND (tenant_key = ? OR vaincu_key = ?)`)
+      .bind(EVENEMENT, nameKey, nameKey),
+  ]);
+  await auFil(db, { genre: 'change', camp: ins.camp, a: name, b: ins.epreuve, epreuve, maintenant });
+  return { status: 200, corps: { ok: true, camp: ins.camp, epreuve, perdu_ms: ancien ? ancien.best_ms : null } };
+}
+
+/** Le fantome d'un coureur du duel : la trace de son meilleur chrono. */
+export async function fantome(db, { cibleKey }) {
+  await ensureMarquesTables(db);
+  const r = await db.prepare(
+    `SELECT name, camp, epreuve, best_ms, trace FROM marques_chronos WHERE evenement = ? AND name_key = ?`
+  ).bind(EVENEMENT, cibleKey).first();
+  if (!r) return { status: 404, corps: { error: 'pas de fantome' } };
+  let trace = [];
+  try { trace = JSON.parse(r.trace || '[]'); } catch (e) { trace = []; }
+  if (!Array.isArray(trace) || trace.length < 2) return { status: 404, corps: { error: 'pas de fantome' } };
+  return { status: 200, corps: { name: r.name, camp: r.camp, epreuve: r.epreuve, best_ms: r.best_ms, trace } };
+}
+
+/**
+ * Le duel contre un fantome, juge apres que la course a ete notee. Gagner,
+ * c'est finir sous le meilleur chrono de la cible tel que le serveur le
+ * connait maintenant.
+ */
+async function jugerDuel(db, { nameKey, name, camp, epreuve, timeMs, cibleKey, maintenant }) {
+  if (!cibleKey || cibleKey === nameKey) return null;
+  const c = await db.prepare(
+    `SELECT name, camp, epreuve, best_ms FROM marques_chronos WHERE evenement = ? AND name_key = ?`
+  ).bind(EVENEMENT, cibleKey).first();
+  if (!c || c.epreuve !== epreuve) return null;
+  const gagne = timeMs < c.best_ms;
+  const adverse = c.camp !== camp;
+  const duel = { cible: c.name, cible_camp: c.camp, cible_ms: c.best_ms, gagne, adverse, ko: false, revanche: false };
+  if (!gagne) return duel;
+  if (!adverse) {
+    await auFil(db, { genre: 'coequipier', camp, a: name, b: c.name, epreuve, ms: timeMs, maintenant });
+    return duel;
+  }
+  const paire = [nameKey, cibleKey].sort().join('|');
+  const avant = await db.prepare(
+    `SELECT tenant_key FROM marques_duels WHERE evenement = ? AND paire = ?`
+  ).bind(EVENEMENT, paire).first();
+  if (avant && avant.tenant_key === nameKey) return duel;   // deja tenu : un duel par paire
+  await db.prepare(
+    `INSERT INTO marques_duels (evenement, paire, epreuve, tenant_key, tenant_name, tenant_camp,
+                                vaincu_key, vaincu_name, tenant_ms, maj)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(evenement, paire) DO UPDATE SET
+       epreuve = excluded.epreuve, tenant_key = excluded.tenant_key, tenant_name = excluded.tenant_name,
+       tenant_camp = excluded.tenant_camp, vaincu_key = excluded.vaincu_key,
+       vaincu_name = excluded.vaincu_name, tenant_ms = excluded.tenant_ms, maj = excluded.maj`
+  ).bind(EVENEMENT, paire, epreuve, nameKey, name, camp, cibleKey, c.name, timeMs, maintenant).run();
+  duel.ko = true;
+  duel.revanche = !!avant;
+  await auFil(db, { genre: avant ? 'revanche' : 'ko', camp, a: name, b: c.name, epreuve, ms: timeMs, maintenant });
+  return duel;
 }
 
 /**
  * Une course terminee. Ne compte que sur l'epreuve choisie ; garde le meilleur
  * chrono de la semaine, s'il est prouve par sa trace.
  */
-export async function noterCourse(db, { nameKey, name, epreuve, timeMs, trace, contexte, maintenant = Date.now() }) {
+export async function noterCourse(db, { nameKey, name, epreuve, timeMs, trace, contexte, cibleKey = null, maintenant = Date.now() }) {
   if (contexte && !CONTEXTES_ADMIS.has(contexte)) {
     return { status: 200, corps: { ok: false, raison: 'mode hors duel' } };
   }
@@ -161,7 +302,8 @@ export async function noterCourse(db, { nameKey, name, epreuve, timeMs, trace, c
   const r = await db.prepare(
     `SELECT best_ms FROM marques_chronos WHERE evenement = ? AND name_key = ?`
   ).bind(EVENEMENT, nameKey).first();
-  return { status: 200, corps: { ok: true, camp: ins.camp, epreuve, best_ms: r ? r.best_ms : timeMs, record: !!r && r.best_ms === timeMs } };
+  const duel = await jugerDuel(db, { nameKey, name, camp: ins.camp, epreuve, timeMs, cibleKey, maintenant });
+  return { status: 200, corps: { ok: true, camp: ins.camp, epreuve, best_ms: r ? r.best_ms : timeMs, record: !!r && r.best_ms === timeMs, duel } };
 }
 
 /**
@@ -206,6 +348,26 @@ export async function tableau(db, { nameKey }) {
   }
   for (const r of insc) if (inscrits[r.camp] && r.epreuve in inscrits[r.camp]) inscrits[r.camp][r.epreuve] = r.n;
 
+  const { results: duels } = await db.prepare(
+    `SELECT epreuve, tenant_key, tenant_name, tenant_camp, vaincu_key, vaincu_name, maj
+     FROM marques_duels WHERE evenement = ? ORDER BY maj DESC`
+  ).bind(EVENEMENT).all();
+  const { results: fil } = await db.prepare(
+    `SELECT quand, genre, camp, a_name, b_name, epreuve, ms FROM marques_fil
+     WHERE evenement = ? ORDER BY id DESC LIMIT ${FIL_N}`
+  ).bind(EVENEMENT).all();
+  // par coureur : combien de duels il tient, et qui le tient (le plus recent)
+  const tient = new Map(), tenuPar = new Map();
+  const ko = Object.fromEntries(CAMPS.map(c => [c, 0]));
+  const bonus = Object.fromEntries(CAMPS.map(c => [c, 0]));
+  for (const d of duels) {
+    if (!(d.tenant_camp in ko)) continue;
+    ko[d.tenant_camp]++;
+    bonus[d.tenant_camp] += BONUS_KO_MS[d.epreuve] || 0;
+    tient.set(d.tenant_key, (tient.get(d.tenant_key) || 0) + 1);
+    if (!tenuPar.has(d.vaincu_key)) tenuPar.set(d.vaincu_key, d.tenant_name);
+  }
+
   const n = places(effectifs);
   const epreuves = {};
   const totaux = Object.fromEntries(CAMPS.map(c => [c, 0]));
@@ -217,12 +379,19 @@ export async function tableau(db, { nameKey }) {
       totaux[c] += somme;
       parCamp[c] = {
         inscrits: inscrits[c][e],
-        coureurs: listes[c][e].map(r => ({ name: r.name, ms: r.best_ms })).slice(0, TAILLE_EQUIPE),
+        coureurs: listes[c][e].slice(0, TAILLE_EQUIPE).map(r => ({
+          name: r.name, ms: r.best_ms,
+          ko: tient.get(r.name_key) || 0,
+          elimine_par: tenuPar.get(r.name_key) || null,
+        })),
         somme_ms: somme,
       };
     }
     epreuves[e] = { places: n[e], camps: parCamp };
   }
+  // les sommes des chronos, puis le total qui juge : la somme moins les duels tenus
+  const sommes = { ...totaux };
+  for (const c of CAMPS) totaux[c] = Math.max(0, sommes[c] - bonus[c]);
 
   let moi = null;
   if (nameKey) {
@@ -241,6 +410,9 @@ export async function tableau(db, { nameKey }) {
         seuil_ms: n[ins.epreuve] > 0 ? liste[n[ins.epreuve] - 1].best_ms : null,
         // ...ou attendre qu'un adversaire de plus coure cette epreuve
         attend_adversaire: rang >= n[ins.epreuve] && effectifs[autre][ins.epreuve] <= rang,
+        ko: tient.get(nameKey) || 0,
+        elimine_par: duels.filter(d => d.vaincu_key === nameKey).map(d => d.tenant_name),
+        tenus: duels.filter(d => d.tenant_key === nameKey).map(d => d.vaincu_name),
       };
     }
   }
@@ -250,7 +422,9 @@ export async function tableau(db, { nameKey }) {
   return {
     evenement: EVENEMENT, epreuves_admises: EPREUVES, taille: TAILLE_EQUIPE, plafonds: PLAFOND_MS,
     places_total: EPREUVES.reduce((s, e) => s + n[e], 0),
-    epreuves, totaux, tete, moi,
+    bonus_ko: BONUS_KO_MS,
+    epreuves, totaux, sommes, bonus, ko, tete, moi,
+    fil: fil.map(f => ({ quand: f.quand, genre: f.genre, camp: f.camp, a: f.a_name, b: f.b_name, epreuve: f.epreuve, ms: f.ms })),
     inscrits: Object.fromEntries(CAMPS.map(c => [c, EPREUVES.reduce((s, e) => s + inscrits[c][e], 0)])),
   };
 }

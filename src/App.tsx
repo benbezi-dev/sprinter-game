@@ -64,7 +64,7 @@ import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
 import { Regarder } from '@/components/screens/Regarder';
 import { demandeDeLUrl } from '@/game/regarder';
-import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE } from '@/game/canal';
+import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT } from '@/game/canal';
 
 /* LA NUIT DU MOLOSSE SE CHARGE A LA DEMANDE, ET C'EST UNE CONDITION POUR
    QU'ELLE SORTE DU BUILD PUBLIC.
@@ -112,6 +112,10 @@ const FinDEtapeLegende = /* @__PURE__ */ lazy(() => import('@/components/screens
   .then(m => ({ default: m.FinDEtapeLegende })));
 const PresentationBoss = /* @__PURE__ */ lazy(() => import('@/components/screens/Legende')
   .then(m => ({ default: m.PresentationBoss })));
+// Le duel des marques : ce qu'un duel contre un fantome change a la bataille
+// (K.O., revanche), annonce par-dessus l'ecran de fin. Charge a la demande.
+const AnnonceDuelMarques = /* @__PURE__ */ lazy(() => import('@/components/screens/DuelMarques')
+  .then(m => ({ default: m.AnnonceDuelMarques })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { demarrerTunnel } from '@/game/tunnel';
 import { ouvrirBoite } from '@/game/boite';
@@ -472,6 +476,7 @@ function MainGame() {
           l'accueil, pas dedans. Il decide seul de s'afficher. */}
       {HALLOWEEN_OUVERT && <Suspense fallback={null}><PanneauMolosse /></Suspense>}
       </>)}
+      {DUEL_MARQUES_OUVERT && <Suspense fallback={null}><AnnonceDuelMarques /></Suspense>}
     </div>
   );
 }

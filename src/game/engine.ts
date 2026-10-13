@@ -108,7 +108,12 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
       && t != null && !SprinterApp.G.rejeu) {
     const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
     const ctx = contexteDeLaCourse(SprinterApp.G);
-    import('./marques').then(m => m.envoyerCourse(race, t, trace, ctx)).catch(() => { /* hors ligne */ });
+    // Un duel contre le fantome d'un coureur du duel (DuelMarques.tsx) porte
+    // sa cible dans les options du depart : « retenter » les reprend, et
+    // « recommencer » repart sans, donc hors duel.
+    const dm = (SprinterApp.G.shotOpts || {}).duelMarques;
+    const cible = dm && SprinterApp.G.ghostSet ? String(dm.cible || '') || null : null;
+    import('./marques').then(m => m.envoyerCourse(race, t, trace, ctx, cible)).catch(() => { /* hors ligne */ });
   }
 };
 

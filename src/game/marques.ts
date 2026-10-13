@@ -23,11 +23,33 @@ export const NOM_CAMP: Record<Camp, string> = { adidas: 'adidas', nike: 'Nike' }
 export const EPREUVES = ['100', '200', '400'] as const;
 export type Epreuve = typeof EPREUVES[number];
 
+export type Coureur = {
+  name: string; ms: number;
+  /** Les duels qu'il tient contre des adversaires (la bataille, 13/10). */
+  ko?: number;
+  /** Le dernier adversaire qui a battu son fantome et tient encore le duel. */
+  elimine_par?: string | null;
+};
+
 export type CampEpreuve = {
   inscrits: number;
   /** Ses coureurs, du plus rapide au plus lent ; les `places` premiers comptent. */
-  coureurs: { name: string; ms: number }[];
+  coureurs: Coureur[];
   somme_ms: number;
+};
+
+/** Une ligne du fil de la bataille. */
+export type LigneFil = {
+  quand: number;
+  genre: 'entree' | 'change' | 'ko' | 'revanche' | 'coequipier';
+  camp: Camp; a: string; b: string | null; epreuve: Epreuve | null; ms: number | null;
+};
+
+/** Ce que le serveur dit d'un duel contre un fantome, a l'arrivee. */
+export type VerdictDuel = {
+  cible: string; cible_camp: Camp; cible_ms: number;
+  gagne: boolean; adverse: boolean; ko: boolean; revanche: boolean;
+  epreuve: Epreuve; ms: number;
 };
 
 export type TableauMarques = {
@@ -35,12 +57,20 @@ export type TableauMarques = {
   plafonds: Record<Epreuve, number>;
   places_total: number;
   epreuves: Record<Epreuve, { places: number; camps: Record<Camp, CampEpreuve> }>;
+  /** Le total qui juge : la somme des chronos moins les duels tenus. */
   totaux: Record<Camp, number>;
+  /** Absents tant que le serveur n'a pas la bataille (avant le 13/10). */
+  sommes?: Record<Camp, number>;
+  bonus?: Record<Camp, number>;
+  ko?: Record<Camp, number>;
+  bonus_ko?: Record<Epreuve, number>;
+  fil?: LigneFil[];
   inscrits: Record<Camp, number>;
   tete: Camp | null;
   moi: {
     camp: Camp; epreuve: Epreuve; best_ms: number | null; rang: number | null;
     selectionne: boolean; seuil_ms: number | null; attend_adversaire: boolean;
+    ko?: number; elimine_par?: string[]; tenus?: string[];
   } | null;
   debut: number | null;
   fin: number | null;
@@ -150,11 +180,52 @@ export async function choisirCamp(camp: Camp, epreuve: Epreuve): Promise<Inscrip
 }
 
 /**
+ * Changer d'epreuve, en gardant son camp. Le chrono de l'ancienne epreuve et
+ * les duels qu'on y tenait disparaissent (worker/src/marques.js).
+ */
+export async function changerEpreuve(epreuve: Epreuve): Promise<{ ok: true; perdu_ms: number | null } | { refus: ChoixRefuse }> {
+  const name = getSavedName();
+  if (!name) return { refus: 'nom' };
+  let r: Response;
+  try {
+    r = await fetch(`${API_BASE}/marques/epreuve`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ device_id: getDeviceId(), name, epreuve }),
+    });
+  } catch { return { refus: 'reseau' }; }
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 403) return { refus: 'nom-reserve' };
+  if (!r.ok || !d.camp) return { refus: 'reseau' };
+  poserInscriptionLocale(name, { camp: d.camp, epreuve: d.epreuve });
+  prevenir();
+  return { ok: true, perdu_ms: d.perdu_ms ?? null };
+}
+
+export type Fantome = { name: string; camp: Camp; epreuve: Epreuve; best_ms: number; trace: number[] };
+
+/** Le fantome d'un coureur du duel : la trace de son meilleur chrono. */
+export async function fetchFantome(nom: string): Promise<Fantome | null> {
+  try {
+    const r = await fetch(`${API_BASE}/marques/fantome?cible=${encodeURIComponent(nom)}`);
+    if (!r.ok) return null;
+    const f = await r.json();
+    return Array.isArray(f.trace) && f.trace.length > 1 ? f : null;
+  } catch { return null; }
+}
+
+/* ------------------------------------------------- le verdict d'un duel
+   L'ecran de fin parle du fantome battu ou non ; l'annonce de la bataille
+   (K.O., revanche) attend le serveur, qui seul sait si le duel change de main. */
+const ecouteursDuel = new Set<(v: VerdictDuel) => void>();
+export function ecouterDuels(f: (v: VerdictDuel) => void) { ecouteursDuel.add(f); return () => { ecouteursDuel.delete(f); }; }
+
+/**
  * Une course vient de finir (engine.ts, onRaceRecorded). Elle part si c'est
  * l'epreuve choisie ; sinon rien — s'inscrire ne se fait pas dans le dos du
- * joueur. Jamais bloquant, jamais une erreur a l'ecran.
+ * joueur. Jamais bloquant, jamais une erreur a l'ecran. `cible` : le coureur
+ * dont on vient d'affronter le fantome, si c'etait un duel du duel.
  */
-export async function envoyerCourse(race: string, tempsS: number, trace: number[], contexte: string) {
+export async function envoyerCourse(race: string, tempsS: number, trace: number[], contexte: string, cible: string | null = null) {
   const name = getSavedName();
   const ins = name ? inscriptionLocale(name) : null;
   if (!ins || ins.epreuve !== race || !trace.length) return;
@@ -163,9 +234,16 @@ export async function envoyerCourse(race: string, tempsS: number, trace: number[
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         device_id: getDeviceId(), name, race_key: race, time_ms: Math.round(tempsS * 1000), trace, contexte,
+        ...(cible ? { cible } : {}),
       }),
     });
-    if (r.ok) prevenir();
+    if (!r.ok) return;
+    const d = await r.json().catch(() => ({}));
+    prevenir();
+    if (d && d.duel) {
+      const v: VerdictDuel = { ...d.duel, epreuve: race as Epreuve, ms: Math.round(tempsS * 1000) };
+      for (const f of [...ecouteursDuel]) { try { f(v); } catch { /* annonce partie */ } }
+    }
   } catch { /* hors ligne : la course compte pour le joueur, pas pour le camp */ }
 }
 
