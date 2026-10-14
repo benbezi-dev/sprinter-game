@@ -47,6 +47,29 @@ export async function poserMot(
   }
 }
 
+/**
+ * Le mot qu'on m'a laisse sur un duel EN DIRECT, s'il y en a un.
+ *
+ * La salle le pousse au perdant des qu'il est pose ; ceci est le second
+ * chemin, que l'ecran de fin releve tant qu'il est affiche, pour le cas ou la
+ * socket ne l'a pas porte. Le serveur ne le rend qu'au perdant. Null sinon, ou
+ * en cas de panne : on retentera.
+ */
+export async function motDuDirect(id: string): Promise<{
+  duel: string; nom: string | null;
+  texte: string | null; voix: string | null; voix_type: string | null;
+} | null> {
+  try {
+    const q = `id=${encodeURIComponent(id)}&name=${encodeURIComponent(getSavedName() || '')}`;
+    const r = await fetch(`${API_BASE}/duel/mot?${q}`);
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d && d.mot && d.mot.duel === id ? d.mot : null;
+  } catch {
+    return null;
+  }
+}
+
 /* ------------------------------------------------- la reponse du perdant
    Le perdant ne repond pas par du texte : il choisit une phrase dans une
    liste ecrite par le jeu, et seul son identifiant voyage. Le serveur tient la

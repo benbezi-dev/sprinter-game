@@ -23,6 +23,7 @@ import { nomDuRang, Flamme, Approche, ComboBreak } from '@/components/Insignes';
 import { cleDiscipline, nomDiscipline } from '@/game/duels';
 import { pique, boost, relance } from '@/game/piques';
 import { LaisserUnMot, LireLeMot } from './MotDuel';
+import { motDuDirect } from '@/game/mot';
 import type { DuelIssue } from '@/game/duels';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { RECOMMENCER_OUVERT, SERIE_OUVERTE } from '@/game/canal';
@@ -645,6 +646,41 @@ export function OneShotEndScreen() {
     ? `LIVE-${String(liveResultat.code).toUpperCase()}-${liveResultat.course}` : null;
   /** Le mot que le vainqueur m'a laisse, s'il parle bien de cette course. */
   const motRecu = duelDirect && liveMot && liveMot.duel === duelDirect ? liveMot : null;
+
+  /**
+   * LE PERDANT VA CHERCHER LE MOT LUI-MEME.
+   *
+   * La salle le pousse dans la seconde — quand elle le peut. Le 14/10, en
+   * production, des mots bien poses n'ont jamais ete vus du perdant : on ne
+   * depend donc plus de ce seul chemin. Tant que cet ecran de defaite est
+   * affiche, il releve le serveur toutes les quatre secondes, et s'arrete des
+   * que le mot est la. Deux minutes au plus : le vainqueur ecrit dans la
+   * foulee ou pas du tout, et la salle se referme a quatre-vingt-dix secondes.
+   */
+  const perdantDirect = !!duelDirect && !liveGagne;
+  const aDejaLeMot = !!motRecu;
+  useEffect(() => {
+    if (!perdantDirect || aDejaLeMot || !duelDirect) return;
+    let fini = false;
+    const debut = Date.now();
+    const relever = async () => {
+      if (fini) return;
+      const m = await motDuDirect(duelDirect);
+      if (fini) return;
+      if (m) {
+        // Meme garde que la salle : un verdict plus recent a pu remplacer
+        // celui-ci entre-temps.
+        const r = SprinterApp.G.liveResultat;
+        if (r && `LIVE-${String(r.code || '').toUpperCase()}-${r.course}` === m.duel) {
+          SprinterApp.G.liveMot = m;
+        }
+        return;
+      }
+      if (Date.now() - debut < 120_000) minuteur = setTimeout(relever, 4000);
+    };
+    let minuteur: ReturnType<typeof setTimeout> = setTimeout(relever, 1500);
+    return () => { fini = true; clearTimeout(minuteur); };
+  }, [perdantDirect, aDejaLeMot, duelDirect]);
 
   /**
    * UNE MANCHE DE TOURNOI A ELIMINATION.
