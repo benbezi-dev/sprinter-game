@@ -148,9 +148,21 @@ function Reflet({ vivant, periode = 4.5, delai = 1 }: { vivant: boolean; periode
 
 /* ---------------------------------------------------------------- l'accueil */
 
+/**
+ * UNE COURSE PARTIE DE CET ECRAN Y RAMENE (14/10, « retour me ramene au menu
+ * principal du jeu et pas dans le menu de l'evenement »). Toute fin de course
+ * passe par l'accueil (goHome, sprinter-app.js), qui remonte la banniere
+ * fermee : on retient donc au depart qu'il faudra rouvrir l'ecran, et la
+ * banniere le rouvre en revenant — duel gagne, perdu ou abandonne.
+ */
+let rouvrirAuRetour = false;
+
 export function BanderoleMarques() {
   const fr = useFr();
-  const [ouvert, setOuvert] = useState(false);
+  const [ouvert, setOuvert] = useState(rouvrirAuRetour);
+  // rouvert en revenant d'une course : pas de face-a-face, on l'a deja vu
+  const [retour, setRetour] = useState(rouvrirAuRetour);
+  useEffect(() => { rouvrirAuRetour = false; }, []);
   // une notification du tchat touchee : l'ecran s'ouvre directement sur le tchat
   const [tchat, setTchat] = useState<'tous' | 'prives' | null>(null);
   const [ins, setIns] = useState<Inscription | null>(monInscription());
@@ -233,7 +245,8 @@ export function BanderoleMarques() {
         </motion.span>
       </motion.button>
       <AnimatePresence>
-        {ouvert && <EcranMarques tchatAuDepart={tchat} onClose={() => { setOuvert(false); setTchat(null); }} />}
+        {ouvert && <EcranMarques tchatAuDepart={tchat} sansIntro={retour}
+                                 onClose={() => { setOuvert(false); setTchat(null); setRetour(false); }} />}
       </AnimatePresence>
     </motion.div>
   );
@@ -285,13 +298,16 @@ async function defierFantome(nom: string): Promise<boolean> {
   return true;
 }
 
-export function EcranMarques({ onClose, tchatAuDepart = null }: { onClose: () => void; tchatAuDepart?: 'tous' | 'prives' | null }) {
+export function EcranMarques({ onClose, tchatAuDepart = null, sansIntro = false }: {
+  onClose: () => void; tchatAuDepart?: 'tous' | 'prives' | null; sansIntro?: boolean;
+}) {
   useRetour(onClose);
   const fr = useFr();
   const reduit = useAnimationsReduites();
   // le face-a-face d'abord ; l'ecran entre ensuite, avec ses propres animations.
-  // Pas de face-a-face quand on arrive par une notification du tchat.
-  const [intro, setIntro] = useState(!reduit && !tchatAuDepart);
+  // Pas de face-a-face quand on arrive par une notification du tchat, ni en
+  // revenant d'une course partie d'ici.
+  const [intro, setIntro] = useState(!reduit && !tchatAuDepart && !sansIntro);
   // le tchat, un tiroir en bas de l'ecran : deplie d'emblee quand on arrive par sa notification
   const [tchatDeplie, setTchatDeplie] = useState(!!tchatAuDepart);
   const { t, erreur, essai, relire } = useTableau();
@@ -302,7 +318,7 @@ export function EcranMarques({ onClose, tchatAuDepart = null }: { onClose: () =>
     setEnRoute(nom);
     const ok = await defierFantome(nom);
     setEnRoute(null);
-    if (ok) onClose();
+    if (ok) { rouvrirAuRetour = true; onClose(); }
   };
   const moi = t?.moi || null;
   const [vueCamp, setVueCamp] = useState<Camp | null>(null);
@@ -311,6 +327,7 @@ export function EcranMarques({ onClose, tchatAuDepart = null }: { onClose: () =>
   const epreuve: Epreuve = vueEpreuve || moi?.epreuve || '100';
 
   const courir = (e: Epreuve) => {
+    rouvrirAuRetour = true;
     onClose();
     (SprinterApp as any).startOneShot([e], { levelIdx: 4 });
   };
