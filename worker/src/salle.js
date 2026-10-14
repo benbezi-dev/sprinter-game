@@ -24,6 +24,7 @@
 import { appliquerDuel } from './duels.js';
 import { crediter as crediterPieces, BAREME } from './pieces.js';
 import { EPREUVES } from './epreuves.js';
+import { sousLePlancherTotal } from './plancher.js';
 
 /**
  * Les epreuves qu'une salle va courir, a partir de ce que l'hote a demande.
@@ -726,6 +727,9 @@ export class SalleDirecte {
         if (this.tournoi && !this.court(j)) return;
         const ms = Math.round(Number(m.ms));
         if (!Number.isFinite(ms) || ms < MIN_MS || ms > MAX_MS) return;
+        // Le cumul des epreuves de la salle ne descend pas sous la somme de
+        // leurs planchers (plancher.js) : ce chrono-la n'a pas ete couru.
+        if (sousLePlancherTotal(this.epreuves, ms)) return;
         j.fin = ms;
         this.diffuser({ t: 'fini', id: j.id, nom: j.nom, ms });
         // Le premier arrive d'une manche ouvre le delai des retardataires.

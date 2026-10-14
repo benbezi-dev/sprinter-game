@@ -60,6 +60,7 @@
    (vite.config.ts, LANCEMENT_DUEL_MARQUES) : les deux bougent ensemble.
 --------------------------------------------------------------------------- */
 import { verifierTrace } from './preuve.js';
+import { MESSAGE_PLANCHER, sousLePlancher } from './plancher.js';
 
 export const EVENEMENT = 'adidas-nike-2026';
 export const CAMPS = ['adidas', 'nike'];
@@ -287,6 +288,11 @@ export async function noterCourse(db, { nameKey, name, epreuve, timeMs, trace, c
   if (ins.epreuve !== epreuve) return { status: 200, corps: { ok: false, raison: 'autre epreuve', epreuve: ins.epreuve } };
   const griefs = verifierTrace(trace, timeMs, epreuve);
   if (griefs.length) return { status: 422, corps: { error: 'trace refusee', griefs } };
+  // Apres la preuve : une trace qui ne tient pas debout garde sa reponse (422).
+  // Sous le plancher du 100/200/400 m (plancher.js), un chrono que la physique
+  // du jeu interdit ne devient pas le record d'un camp, trace fabriquee a sa
+  // mesure ou non.
+  if (sousLePlancher(epreuve, timeMs)) return { status: 400, corps: { error: MESSAGE_PLANCHER } };
 
   await db.prepare(
     `INSERT INTO marques_chronos (evenement, name_key, name, camp, epreuve, best_ms, trace, courses, maj)

@@ -41,6 +41,7 @@ import { contexteCourse, enregistrerCourse, bullesDe } from './championnats.js';
 import { jugerSignalement, jugerPosition, classerLaCourse } from './faux-depart.js';
 import { rapideRecevable, DebitRapide } from './tchat-rapide.js';
 import { PHASES_A_BULLE } from './championnats-config.js';
+import { sousLePlancher } from './plancher.js';
 
 /** La salle ouvre un quart d'heure avant le pistolet. */
 const OUVERTURE_AVANT_MS = 15 * 60 * 1000;
@@ -754,6 +755,9 @@ export class SalleChampionnat {
         if (m.n != null && Number(m.n) !== this.departN) return;
         const ms = Math.round(Number(m.ms));
         if (!Number.isFinite(ms) || ms < MIN_MS || ms > MAX_MS) return;
+        // Sous le plancher de l'epreuve de l'edition (plancher.js) : pas une
+        // course jouee.
+        if (this.ctx && sousLePlancher(this.ctx.epreuve, ms)) return;
         c.fin = ms;
         this.diffuser({ t: 'fini', id: c.cle, nom: c.nom, ms });
         this.peutTrancher();

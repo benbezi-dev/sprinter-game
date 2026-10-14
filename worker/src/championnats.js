@@ -20,6 +20,7 @@ import {
   TENANT, lieuDeLEdition, PHASES_A_BULLE,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
+import { sousLePlancher } from './plancher.js';
 // Les championnats lisent le classement des duels : sur une base neuve, cette
 // table doit exister avant qu'on la joigne, sans quoi la requete echoue.
 //
@@ -2342,12 +2343,20 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
   const attendus = new Set((inscrits || []).map(r => r.name_key));
   if (!attendus.size) return { erreur: 'course inconnue' };
 
+  // L'epreuve de l'edition : un chrono sous le plancher du 100/200/400 m
+  // (plancher.js) n'est pas une course jouee, et il est ecarte comme tout
+  // chrono hors bornes — le coureur est alors sans chrono, pas premier.
+  const edEpreuve = await db.prepare(
+    `SELECT epreuve FROM champ_editions WHERE id = ?`).bind(edition).first();
+  const epreuveDeLEdition = edEpreuve ? edEpreuve.epreuve : EPREUVE_DEFAUT;
+
   const lignes = [];
   for (const c of chronos || []) {
     const k = String(c.cle || '').toLowerCase();
     if (!attendus.has(k)) continue;                 // un intrus ne court pas
     const ms = c.ms == null ? null : Math.round(Number(c.ms));
     if (ms != null && (!Number.isFinite(ms) || ms < 1000 || ms > 600000)) continue;
+    if (ms != null && sousLePlancher(epreuveDeLEdition, ms)) continue;
     // Un motif n'accompagne qu'un chrono absent : un coureur arrive n'a pas
     // d'excuse a porter. Hors de la liste, il est tu plutot que range tel quel.
     const motif = ms == null && MOTIFS.has(c.motif) ? c.motif : null;
