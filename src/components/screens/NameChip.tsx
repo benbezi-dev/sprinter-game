@@ -189,8 +189,14 @@ export function NameChip() {
  * choisir au hasard.
  */
 export function PanneauIdentite({
-  onFermer, bienvenue = false, motif,
+  onFermer, bienvenue = false, motif, chrono,
 }: {
+  /**
+   * Le chrono de la premiere course, quand la bienvenue s'ouvre sur son ecran
+   * de fin (game/premiers-pas.ts) : le premier pas demande alors de mettre son
+   * nom DESSUS, et le chrono s'affiche en grand.
+   */
+  chrono?: string;
   /**
    * Pourquoi la fenetre s'ouvre, quand ce n'est pas le joueur qui l'a
    * demandee — une course en direct qui attend un nom valide. Remplace la
@@ -490,7 +496,13 @@ export function PanneauIdentite({
         {/* ------------------------------------------------------- LE NOM */}
         {montre(0) && (
           <div className="flex flex-col gap-2">
-            {bienvenue && titrePas(<User className="w-4 h-4" />, 'bv_nom_t', 'bv_nom_s')}
+            {bienvenue && chrono && (
+              <div className="font-black font-display tabular-nums text-4xl md:text-5xl text-foreground leading-none">
+                {chrono}
+              </div>
+            )}
+            {bienvenue && titrePas(<User className="w-4 h-4" />,
+              chrono ? 'bv_chrono_t' : 'bv_nom_t', chrono ? 'bv_chrono_s' : 'bv_nom_s')}
 
             <input
               value={saisie}

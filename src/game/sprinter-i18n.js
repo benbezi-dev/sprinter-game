@@ -328,6 +328,11 @@
     bv_suite:        ['CONTINUER', 'CONTINUE'],
     bv_passer:       ['PASSER', 'SKIP'],
     bv_nom_t:        ['TON NOM', 'YOUR NAME'],
+    // Apres la premiere course (game/premiers-pas.ts) : le nom se demande sur
+    // un chrono qui existe deja, pas sur une promesse.
+    bv_chrono_t:     ['METS TON NOM SUR CE CHRONO', 'PUT YOUR NAME ON THIS TIME'],
+    bv_chrono_s:     ['sans nom, il ne compte nulle part : ni au TOP 500, ni dans les duels',
+                      'without a name it counts nowhere: not on the TOP 500, not in duels'],
     bv_nom_s:        ['il apparaît au TOP 500, sur tes défis et dans les duels',
                       'it shows on the TOP 500, on your challenges and in duels'],
     bv_pays_t:       ['TON PAYS', 'YOUR COUNTRY'],
@@ -387,6 +392,14 @@
     tuto_v_perfect:  ['PARFAIT', 'PERFECT'],
     tuto_v_good:     ['BIEN', 'GOOD'],
     tuto_v_slow:     ['PAS ASSEZ RAPIDE', 'NOT FAST ENOUGH'],
+    // Le coach de la toute premiere course (CoachPremiereCourse.tsx).
+    coach_attends:   ['ATTENDS LE PISTOLET…', 'WAIT FOR THE GUN…'],
+    coach_alterne:   ['puis tape gauche, droite, gauche… sans t’arrêter',
+                      'then tap left, right, left… and don’t stop'],
+    coach_gauche:    ['GAUCHE', 'LEFT'],
+    coach_droite:    ['DROITE', 'RIGHT'],
+    coach_faute:     ['ALTERNE !', 'ALTERNATE!'],
+    coach_vite:      ['PLUS VITE !', 'FASTER!'],
     tuto_v_flat:     ['RYTHME PLAT', 'FLAT RHYTHM'],
     tuto_replay_demo:['revoir', 'watch again'],
     tuto_again:      ['ENCORE', 'AGAIN'],

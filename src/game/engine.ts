@@ -54,6 +54,7 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
+import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
 import { DUEL_MARQUES_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
@@ -95,6 +96,12 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
   // retour a l'accueil peuvent les avoir effaces entre-temps.
   pushFinishedRace(race, t, mode, level, contexteDeLaCourse(SprinterApp.G));
   if (!SprinterApp.G.rejeu) etapeTunnel('arrivee');
+  // Les premiers pas (game/premiers-pas.ts) : la premiere course est finie, le
+  // coach se tait, et l'ecran de fin demandera de signer ce chrono.
+  if (SprinterApp.G.premiereCourse && !SprinterApp.G.rejeu) {
+    SprinterApp.G.premiereCourse = false;
+    premiereArrivee(t);
+  }
   // Le chrono se juge ici et nulle part ailleurs : c'est le seul endroit ou
   // l'on voit passer TOUTES les courses terminees, carriere comme one shot,
   // et ou l'historique de la distance est encore sous la main. L'ecran de fin
@@ -433,6 +440,24 @@ export function setTouchInput(on: boolean) {
   C.STUMBLE_INPUT_SCALE = on
     ? (IS_IOS ? C.STUMBLE_IOS_SCALE : C.STUMBLE_TOUCH_SCALE)
     : 1;
+}
+
+/** La duree ecrite de l'animation d'ouverture, et sa vitesse de lecture. */
+const OUVERTURE_FIN = 6.4;
+const OUVERTURE_VITESSE = 2;
+
+/**
+ * « Tap to start » fait enfin ce qu'il dit : toucher l'ecran d'ouverture saute
+ * l'animation. Le passage a l'accueil attend encore les images de la premiere
+ * course (chargement.ts) — c'est la barre qui le montre.
+ */
+export function passerLOuverture() {
+  if (G.state === 'open') G.openT = Math.max(G.openT, OUVERTURE_FIN);
+}
+
+/** Le dernier pave touche et quand (performance.now()), pour le coach. */
+export function dernierAppui(): { cote: 'left' | 'right' | null; a: number } {
+  return { cote: lastSide, a: lastAt };
 }
 
 export function padPress(side: 'left' | 'right') {
@@ -1009,9 +1034,12 @@ export function updateLogic(dt: number) {
   }
 
   if (G.state === 'open') {
-    G.openT += dt;
-    // L'ouverture attend que les images soient la (chargement.ts).
-    if (G.openT > 6.4 && chargementFini()) G.state = 'title';
+    // L'animation est ecrite sur 6,4 s, et jouee deux fois plus vite : 3,2 s
+    // au plus avant l'accueil (14/10/2026 — la moitie des appareils neufs
+    // partaient pendant l'ouverture). Toucher l'ecran la termine
+    // (passerLOuverture). Elle attend toujours les images (chargement.ts).
+    G.openT += dt * OUVERTURE_VITESSE;
+    if (G.openT > OUVERTURE_FIN && chargementFini()) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
     G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11

@@ -25,6 +25,7 @@
 /** Le chemin, dans l'ordre ou un nouveau joueur le parcourt. */
 export const ETAPES_TUNNEL = [
   'ouverture',      // le jeu est charge (pas le tableau de bord)
+  'ecran',          // la page est visible ET une image est peinte : quelqu'un a pu voir le jeu
   'accueil',        // l'intro est passee, l'ecran-titre s'affiche
   'depart',         // une course est lancee : le decompte commence
   'premier_appui',  // le joueur a appuye pendant la course : il est parti des blocs
@@ -44,6 +45,30 @@ export const ETAPES_A_COTE = [
   'oneshot',        // un one shot est lance
 ];
 
+// L'OUVERTURE PART AU MONTAGE, AVANT QUE QUOI QUE CE SOIT NE S'AFFICHE. Sur 418
+// appareils neufs en 30 jours, 225 n'avaient rien envoye d'autre et 211 avaient
+// charge la page une seule fois : on ne savait pas distinguer un joueur qui
+// part pendant le chargement d'un apercu de lien, d'un onglet ouvert en
+// arriere-plan ou du navigateur integre d'Instagram ou de TikTok. D'ou
+// « ecran » (la page est visible et peinte) et la fiche d'appareil ci-dessous.
+
+/**
+ * Les classes de navigateur que le jeu sait nommer (game/navigateur.ts). Toute
+ * autre valeur est ignoree : la table ne doit contenir que des classes, jamais
+ * une chaine saisie ou fabriquee par le client.
+ */
+export const NAVIGATEURS = [
+  'instagram', 'tiktok', 'facebook', 'snapchat', 'autre-integre',
+  'safari-ios', 'chrome-android', 'chrome', 'firefox', 'samsung', 'edge',
+  'appli', 'robot', 'autre',
+];
+const NAVIGATEURS_OK = new Set(NAVIGATEURS);
+export const navigateurValide = n => typeof n === 'string' && NAVIGATEURS_OK.has(n);
+
+/** Du premier octet reçu a l'accueil : au-dela de deux minutes, ce n'est plus un chargement. */
+export const CHARGEMENT_MAX_MS = 120000;
+export const chargementValide = ms => Number.isInteger(ms) && ms >= 0 && ms <= CHARGEMENT_MAX_MS;
+
 const CONNUES = new Set([...ETAPES_TUNNEL, ...ETAPES_A_COTE]);
 export const etapeConnue = e => typeof e === 'string' && CONNUES.has(e);
 
@@ -58,6 +83,14 @@ export async function ensureTunnel(db) {
   )`).run();
   await db.prepare(
     `CREATE INDEX IF NOT EXISTS tunnel_etape ON tunnel (etape, premier_at)`).run();
+  // La fiche d'appareil : une ligne par appareil, la classe de navigateur et
+  // le temps de chargement jusqu'a l'accueil. Aucune chaine d'agent brute.
+  await db.prepare(`CREATE TABLE IF NOT EXISTS tunnel_appareil (
+    device_id TEXT PRIMARY KEY,
+    navigateur TEXT,
+    chargement_ms INTEGER,
+    at INTEGER
+  )`).run();
   pret.add(db);
 }
 
@@ -69,6 +102,30 @@ export async function noterEtape(db, deviceId, etape, now = Date.now()) {
   ).bind(deviceId, etape, now).run();
 }
 
+/**
+ * La fiche d'appareil, quand le jeu en envoie une avec une etape.
+ *
+ * Les deux champs sont facultatifs et arrivent a des moments differents : la
+ * classe avec l'ouverture, la duree avec l'accueil. Chacun ne s'ecrit donc que
+ * s'il est valide, et jamais par-dessus une valeur deja posee — la premiere
+ * mesure d'un appareil est celle qui compte, comme pour les etapes.
+ */
+export async function noterAppareil(db, deviceId, fiche, now = Date.now()) {
+  const navigateur = navigateurValide(fiche?.navigateur) ? fiche.navigateur : null;
+  const chargement = chargementValide(fiche?.chargement_ms) ? fiche.chargement_ms : null;
+  if (navigateur === null && chargement === null) return;
+  await ensureTunnel(db);
+  await db.prepare(
+    `INSERT OR IGNORE INTO tunnel_appareil (device_id, navigateur, chargement_ms, at)
+     VALUES (?, ?, ?, ?)`).bind(deviceId, navigateur, chargement, now).run();
+  // La ligne existait peut-etre deja, avec l'autre moitie seulement.
+  await db.prepare(
+    `UPDATE tunnel_appareil
+        SET navigateur = COALESCE(navigateur, ?1),
+            chargement_ms = COALESCE(chargement_ms, ?2)
+      WHERE device_id = ?3`).bind(navigateur, chargement, deviceId).run();
+}
+
 const JOUR = 86400000;
 const debutDuJour = ms => Math.floor(ms / JOUR) * JOUR;
 
@@ -78,6 +135,13 @@ function mediane(xs) {
   const s = [...xs].sort((a, b) => a - b);
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2);
+}
+
+/** Percentile (rang le plus proche) d'une liste de nombres, ou null. */
+function centile(xs, p) {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.max(0, Math.ceil(p * s.length) - 1))];
 }
 
 /**
@@ -140,11 +204,43 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
        FROM c WHERE c.o_at < ?2`).bind(depuis, aujourdhui).first()
     .catch(() => null);
 
+  // LA FICHE D'APPAREIL, sur la meme cohorte. Un appareil sans fiche est un
+  // ancien client (ou une ouverture dont la fiche n'est pas arrivee) : il est
+  // compte a part, jamais range dans « autre ».
+  const { results: fiches } = await db.prepare(
+    `WITH c AS (${cohorte})
+     SELECT a.navigateur, a.chargement_ms,
+            EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape = 'ecran')   AS ecran,
+            EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape = 'accueil') AS accueil,
+            EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape = 'depart')  AS depart,
+            EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape = 'arrivee') AS arrivee
+       FROM c LEFT JOIN tunnel_appareil a ON a.device_id = c.device_id
+      LIMIT 200000`).bind(depuis).all();
+
+  const parNav = new Map();
+  const chargements = [];
+  let sansFiche = 0;
+  for (const r of fiches || []) {
+    if (chargementValide(r.chargement_ms)) chargements.push(r.chargement_ms);
+    if (!navigateurValide(r.navigateur)) { sansFiche++; continue; }
+    let l = parNav.get(r.navigateur);
+    if (!l) parNav.set(r.navigateur, l = { navigateur: r.navigateur, n: 0, ecran: 0, accueil: 0, depart: 0, arrivee: 0 });
+    l.n++;
+    l.ecran += r.ecran ? 1 : 0;
+    l.accueil += r.accueil ? 1 : 0;
+    l.depart += r.depart ? 1 : 0;
+    l.arrivee += r.arrivee ? 1 : 0;
+  }
+
   return {
     jours, depuis, mesure_depuis: premier,
     cohorte: base,
     etapes: ETAPES_TUNNEL.map(ligne),
     a_cote: ETAPES_A_COTE.map(ligne),
     rejoue: { base: rejoue?.base || 0, n: rejoue?.n || 0 },
+    // Ajouts : un tableau plus ancien ignore ces trois champs.
+    par_navigateur: [...parNav.values()].sort((a, b) => b.n - a.n || a.navigateur.localeCompare(b.navigateur)),
+    chargement: { n: chargements.length, mediane_ms: mediane(chargements), p90_ms: centile(chargements, 0.9) },
+    sans_fiche: sansFiche,
   };
 }

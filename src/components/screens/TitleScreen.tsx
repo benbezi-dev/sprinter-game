@@ -20,7 +20,8 @@ import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
 import { Coins } from 'lucide-react';
 import { rafraichirPieces, usePieces } from '@/game/pieces';
-import { NOM_CHANGE } from '@/game/leaderboard';
+import { NOM_CHANGE, getSavedName } from '@/game/leaderboard';
+import { bienvenueVue, BIENVENUE_CLOSE } from './Bienvenue';
 import { BanderoleSelection } from './Selection';
 import { ID_PASTILLES, poserLaRangee } from '@/hooks/use-pastilles';
 import { BanderoleEdition } from './BanderoleEdition';
@@ -48,6 +49,7 @@ const ChoixDeCarriere = /* @__PURE__ */ lazy(() => import('./Legende')
 const RetourAuChoix = /* @__PURE__ */ lazy(() => import('./Legende')
   .then(m => ({ default: m.RetourAuChoix })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
+import { premierLancement, phasePremiersPas, premiereCourseLancee, apresLaPremiereArrivee, premiersPasFaits, nomDejaDemande } from '@/game/premiers-pas';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
@@ -177,7 +179,17 @@ export function TitleScreen() {
   // Le lien des cartes du championnat (`?championnat`) tombe lui aussi sur
   // l'onglet du defi, ou la carte du defi de la demi attend.
   const venuPourUnDuel = !!(codeFromUrl() || codeDirectUrl()) || venuPourLeDefi();
-  const [tour, setTour] = useState(() => !tourVu() && !venuPourUnDuel);
+  // LES PREMIERS PAS (game/premiers-pas.ts) : au tout premier lancement, pas
+  // de visite ici — l'accueil passe la main a la course, plus bas. La visite
+  // revient APRES la premiere arrivee, en version courte, une fois le nom
+  // demande sur l'ecran de fin (Bienvenue.tsx).
+  const premiersPas = premierLancement() && !venuPourUnDuel
+    && !(APPEL_JOUEUR && estUneCourseDeHaies(SprinterApp.G.raceKey));
+  const visiteCourte = apresLaPremiereArrivee() && !tourVu();
+  // Entre en premiers pas (phase posee), on n'impose plus la visite longue :
+  // elle reviendra en court apres la premiere arrivee.
+  const [tour, setTour] = useState(() => !premiersPas && phasePremiersPas() === null
+    && !tourVu() && !venuPourUnDuel);
   /**
    * Ma MEILLEURE division, affichee a l'entree du classement.
    *
@@ -229,6 +241,19 @@ export function TitleScreen() {
   // Il ne se propose que la ou ce geste existe (canal.ts, APPEL_JOUEUR) : le
   // proposer ailleurs enseignerait une commande que le jeu n'a pas.
   const tutoDesHaies = APPEL_JOUEUR && estUneCourseDeHaies(raceKey);
+
+  // Le premier lancement court tout de suite : l'etape 1 de la carriere, au
+  // 100 m, sans cinematique d'intro (sprinter-app.js, G.premiereCourse). Le
+  // geste s'apprend pendant la course (CoachPremiereCourse.tsx) : le tutoriel
+  // n'est donc pas propose, il reste a portee depuis l'accueil.
+  useEffect(() => {
+    if (!premiersPas || phasePremiersPas() !== null) return;
+    premiereCourseLancee();
+    marquerTutoVu();
+    SprinterApp.G.premiereCourse = true;
+    SprinterApp.startRun();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleStart = () => {
     if (tutoDesHaies) {
@@ -725,6 +750,7 @@ export function TitleScreen() {
           la premiere course — deux tutoriels d'affilee avant de courir, ce
           serait un de trop. */}
       {tour && <GameTour onClose={(jouer) => { marquerTourVu(); setTour(false); if (jouer) handleStart(); }} />}
+      {!tour && visiteCourte && <VisiteApresLaCourse onFinie={(jouer) => { marquerTourVu(); premiersPasFaits(); if (jouer) handleStart(); }} />}
 
       {propose && (
         <TutoPropose
@@ -767,4 +793,24 @@ function PucePieces() {
       <span className="font-bold text-xs md:text-sm tabular-nums">{pieces.solde}</span>
     </div>
   );
+}
+
+/**
+ * LA VISITE COURTE, APRES LA PREMIERE ARRIVEE (game/premiers-pas.ts). Le
+ * joueur a couru : on ne lui montre plus le geste ni les etapes, seulement ce
+ * qu'il ne pouvait pas deviner — le classement, le fantome, le direct.
+ * Elle attend que la question du nom soit close (Bienvenue.tsx), pour ne pas
+ * empiler deux fenetres.
+ */
+function VisiteApresLaCourse({ onFinie }: { onFinie: (jouer: boolean) => void }) {
+  const [ouverte, setOuverte] = useState(true);
+  const [nomClos, setNomClos] = useState(() => nomDejaDemande() || bienvenueVue() || !!getSavedName().trim());
+  useEffect(() => {
+    if (nomClos) return;
+    const clos = () => setNomClos(true);
+    window.addEventListener(BIENVENUE_CLOSE, clos);
+    return () => window.removeEventListener(BIENVENUE_CLOSE, clos);
+  }, [nomClos]);
+  if (!ouverte || !nomClos) return null;
+  return <GameTour court onClose={(jouer) => { setOuverte(false); onFinie(jouer); }} />;
 }

@@ -22,6 +22,23 @@
       la couche de finition y monte a l'accueil (apporterUltra, dans
       rendu-premium.js) — jamais en course.
 
+   1 BIS. PAS TOUT, SEULEMENT LA PREMIERE COURSE (14/10/2026). L'ouverture
+      attendait les 1 225 images du palier ordinaire, 41 Mo — dont 605
+      images et 30 Mo des nuits d'Halloween, un mode ferme en production. La
+      moitie des appareils neufs partaient pendant cette attente (le tunnel du
+      tableau de bord). Elle n'attend donc plus que l'ESSENTIEL : le public,
+      le stade de la carriere (`day`) et celui des Jeux mondiaux (`mondiaux`,
+      ou partent le one shot, les defis et les duels), le materiel, la nuit
+      et les affiches — environ 5 Mo. Les autres stades se telechargent
+      ENSUITE, sans rien bloquer, a l'accueil ; une course dans un stade pas
+      encore arrive attend ses images avant le decompte, comme elle le
+      faisait deja (stadeEnPreparation, plus bas).
+
+      LES DECORS D'UN MODE FERME NE SE TELECHARGENT PAS DU TOUT : les nuits
+      d'Halloween (et leur materiel) ne partent que si `HALLOWEEN_OUVERT`
+      (canal.ts), en tache de fond comme les autres. Elles restent servies par
+      le site : rien a deplacer le jour de l'ouverture.
+
    L'ouverture n'attend jamais plus d'ATTENTE_MAX_MS : un reseau qui traine ne
    doit pas enfermer le joueur devant une barre de progression. Le reste se
    charge alors comme avant, au fil des courses.
@@ -71,6 +88,15 @@
       et l'accueil installe.
 --------------------------------------------------------------------------- */
 import liste from 'virtual:precharge';
+import { HALLOWEEN_OUVERT } from './canal';
+
+/** Ce que l'ouverture attend : la premiere course, ou qu'elle parte. */
+const ESSENTIEL = ['/decors/tribune/', '/decors/day/', '/decors/mondiaux/',
+                   '/decors/materiel/', '/decors/nuit/', '/pubs/'];
+const essentiel = (u: string) => ESSENTIEL.some(d => u.startsWith(d));
+/** Les nuits d'Halloween et leur materiel, au palier ordinaire comme a l'ultra. */
+const halloween = (u: string) => /^\/decors(-ultra)?\/(halloween-|materiel-a\d)/.test(u);
+const servi = (u: string) => HALLOWEEN_OUVERT || !halloween(u);
 
 const BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const ATTENTE_MAX_MS = 25000;
@@ -88,6 +114,7 @@ let t0 = 0;
 // (globalThis.SprinterChargement) : on ne voit pas autrement si les images de
 // l'ultra sont arrivees.
 const etat = { phase: 'attente', faits: 0, total: 0, ultraFaits: 0, ultraTotal: 0, ultraApporte: false,
+                ensuiteFaits: 0, ensuiteTotal: 0,
                 // le stade dont le public est compose d'avance, ou null
                 publicAvance: null as string | null,
                 // les maillages demandes d'avance, a l'accueil
@@ -136,10 +163,12 @@ export function lancerChargement() {
     // Le dernier, il ajoutait cinq secondes et demie a l'ouverture (mesure le
     // 3/10/2026 sur le serveur de dev).
     const dAbord = liste.ordinaire.filter(u => u.startsWith('/decors/tribune/'));
-    const urls = liste.ordinaire.filter(u => !u.startsWith('/decors/tribune/'));
+    const urls = liste.ordinaire.filter(u => essentiel(u) && !u.startsWith('/decors/tribune/'));
+    const ensuite = liste.ordinaire.filter(u => !essentiel(u) && servi(u));
+    const bloquants = dAbord.length + urls.length;
     // le decodage du public compte pour un dixieme de la barre
-    const total = liste.ordinaire.length / 0.9;
-    etat.phase = 'ordinaire'; etat.total = liste.ordinaire.length;
+    const total = bloquants / 0.9;
+    etat.phase = 'ordinaire'; etat.total = bloquants;
     const compter = () => { etat.faits++; part = Math.min(0.9, etat.faits / total); };
     await telecharger(dAbord, compter);
     etat.phase = 'public';
@@ -151,11 +180,17 @@ export function lancerChargement() {
     fini = true;
     etat.phase = 'fini';
 
+    // Les autres stades, sans rien bloquer : l'accueil est deja la.
+    etat.phase = 'ensuite'; etat.ensuiteTotal = ensuite.length;
+    await telecharger(ensuite, () => { etat.ensuiteFaits++; });
+    etat.phase = 'fini';
+
     const P = (globalThis as any).RenduPremium;
     // un appareil qui a deja perdu l'ultra n'en telecharge plus les images
-    if (P && P.DENSE && P.ultraAttendu && liste.ultra.length) {
-      etat.phase = 'ultra'; etat.ultraTotal = liste.ultra.length;
-      await telecharger(liste.ultra, () => { etat.ultraFaits++; });
+    const ultra = liste.ultra.filter(servi);
+    if (P && P.DENSE && P.ultraAttendu && ultra.length) {
+      etat.phase = 'ultra'; etat.ultraTotal = ultra.length;
+      await telecharger(ultra, () => { etat.ultraFaits++; });
       P.apporterUltra();
       etat.ultraApporte = true;
       etat.phase = 'fini';
