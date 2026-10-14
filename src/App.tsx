@@ -16,6 +16,7 @@ import { useBackGuard } from '@/hooks/use-back-guard';
 import { useGesteRetour } from '@/hooks/use-geste-retour';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
+import { CoachPremiereCourse } from '@/components/screens/CoachPremiereCourse';
 import { EST_TEST, RELAIS_OUVERT, TCHAT_RAPIDE_OUVERT } from '@/game/canal';
 import { MONDES_OUVERTS } from '@/game/mondes';
 import { PorteTest } from '@/components/screens/PorteTest';
@@ -405,6 +406,10 @@ function MainGame() {
       
       {/* Invisible overlay for receiving touches during the race */}
       <TouchControls />
+
+      {/* Le geste de la toute premiere course, dit pendant qu'on la court
+          (game/premiers-pas.ts). Il ne prend aucun toucher. */}
+      <CoachPremiereCourse />
 
       {/* LE TUTORIEL DES HAIES SE JOUE SUR LA PISTE, donc il vit ici et non
           dans l'accueil : il met le jeu en etat `race`, et l'accueil —

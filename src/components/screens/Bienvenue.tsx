@@ -4,6 +4,13 @@ import { getSavedName } from '@/game/leaderboard';
 import { paysDe } from '@/game/identity';
 import { PanneauIdentite } from './NameChip';
 import { tourVu, TOUR_VU } from './GameTour';
+import { apresLaPremiereArrivee, premierChrono, nomDemandeApresCourse, nomDejaDemande } from '@/game/premiers-pas';
+
+/** La question du nom vient de se fermer, d'une facon ou d'une autre. */
+export const BIENVENUE_CLOSE = 'sprinter:bienvenue-close';
+
+/** Les ecrans de fin, ou la question se pose apres la premiere course. */
+const FINS = new Set(['result', 'over', 'winall']);
 
 /** Le joueur est alle au bout des trois questions, une fois. */
 const VUE = 'sprinter_bienvenue_vue';
@@ -40,6 +47,12 @@ export function marquerBienvenueVue() {
  * « PLUS TARD », elle se tait jusqu'au prochain lancement — reproposer la
  * meme fenetre a chaque retour a l'accueil serait la transformer en peage.
  *
+ * DEPUIS LES PREMIERS PAS (14/10/2026, game/premiers-pas.ts), UN NOUVEAU
+ * JOUEUR NE LA VOIT PLUS AVANT DE COURIR : elle s'ouvre sur l'ecran de fin de
+ * sa premiere course, sans attendre la visite, et demande de mettre son nom
+ * SUR LE CHRONO qu'il vient de faire. Le joueur deja la avant cette version
+ * garde le chemin decrit plus haut.
+ *
  * ET UNE FOIS LES TROIS QUESTIONS VUES, PLUS JAMAIS. C'est ce que retient
  * `bienvenueVue`, sur l'appareil. On ne s'en remet pas au serveur pour le
  * savoir : la nationalite est FACULTATIVE, quelqu'un a parfaitement le droit
@@ -65,8 +78,16 @@ export function Bienvenue() {
     return () => window.removeEventListener(TOUR_VU, finie);
   }, [visiteFinie]);
 
+  // Apres la premiere arrivee : sur l'ecran de fin, sans attendre la visite —
+  // ou a l'accueil, si le jeu a ete ferme sur l'ecran de fin sans repondre.
+  // Une fois posee la, elle ne revient plus d'elle-meme (la puce du nom reste).
+  const premiere = apresLaPremiereArrivee();
+  const ouLaPoser = premiere
+    ? (FINS.has(etat) || etat === 'title') && !nomDejaDemande()
+    : etat === 'title' && visiteFinie;
+
   useEffect(() => {
-    if (etat !== 'title' || !visiteFinie || repoussee || ouvert || demande.current) return;
+    if (!ouLaPoser || repoussee || ouvert || demande.current) return;
     if (bienvenueVue()) return;
     demande.current = true;
     const nom = getSavedName().trim();
@@ -80,7 +101,7 @@ export function Bienvenue() {
       // n'a pas su lire. Elle reste a portee depuis la puce du nom.
       .catch(() => { /* on se tait */ });
     return () => { vivant = false; };
-  }, [etat, visiteFinie, repoussee, ouvert]);
+  }, [ouLaPoser, repoussee, ouvert]);
 
   /**
    * `alBout` dit ce qui vient de se passer, et les deux cas ne se valent pas.
@@ -92,11 +113,13 @@ export function Bienvenue() {
    */
   const fermer = useCallback((alBout?: boolean) => {
     if (alBout) marquerBienvenueVue();
+    if (apresLaPremiereArrivee()) nomDemandeApresCourse();
     setOuvert(false);
     setRepoussee(true);
+    try { window.dispatchEvent(new Event(BIENVENUE_CLOSE)); } catch { /* hors navigateur */ }
   }, []);
 
-  if (!ouvert || etat !== 'title') return null;
+  if (!ouvert || !(premiere ? FINS.has(etat) || etat === 'title' : etat === 'title')) return null;
 
-  return <PanneauIdentite bienvenue onFermer={fermer} />;
+  return <PanneauIdentite bienvenue chrono={premiere ? premierChrono() ?? undefined : undefined} onFermer={fermer} />;
 }

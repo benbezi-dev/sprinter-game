@@ -84,7 +84,7 @@ import {
 } from './identite.js';
 import { alerterRecuperation } from './courriel.js';
 import { empreinteIp, sousLimite, purgerLimites } from './limites.js';
-import { etapeConnue, noterEtape, lireTunnel } from './tunnel.js';
+import { etapeConnue, noterEtape, noterAppareil, lireTunnel } from './tunnel.js';
 import {
   ensureComptage, compterCourse, sourceDeLaVisite, compterArrivee,
   lireComptage, lireSessions, lireArrivees,
@@ -4161,7 +4161,10 @@ async function servir(request, env, ctx, porteur) {
 
     // Une etape du tunnel des premiers pas, la premiere fois qu'un appareil la
     // franchit. Meme geste que /visit : rien de nominatif, et une etape deja
-    // notee est ignoree en silence. Voir tunnel.js.
+    // notee est ignoree en silence. Voir tunnel.js. Le jeu peut y joindre, hors
+    // du chemin, `navigateur` (une classe de la liste blanche) et `chargement_ms`
+    // (entier de 0 a 120000) : valeur absente ou invalide, elle est ignoree et
+    // l'etape est notee quand meme.
     if (url.pathname === '/etape' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
@@ -4169,6 +4172,8 @@ async function servir(request, env, ctx, porteur) {
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!etapeConnue(etape)) return json({ error: 'etape inconnue' }, 400);
       await noterEtape(env.DB, device_id, etape);
+      // La fiche est un plus : si elle echoue, l'etape, elle, est notee.
+      await noterAppareil(env.DB, device_id, body).catch(() => {});
       return json({ ok: true });
     }
 

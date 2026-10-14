@@ -18,6 +18,19 @@ const VU = 'sprinter_tour_vu';
  */
 export const TOUR_VU = 'sprinter:tour-vu';
 
+/**
+ * La visite est-elle a l'ecran ? La carte « Installer le jeu »
+ * (InstallPrompt.tsx) vit au-dessus de l'accueil et recouvrait le bas de la
+ * visite, ses boutons compris : elle attend donc que la visite se ferme.
+ */
+export const VISITE_OUVERTE = 'sprinter:visite-ouverte';
+let visiteALEcran = false;
+export function visiteOuverte() { return visiteALEcran; }
+function annoncerVisite(v: boolean) {
+  visiteALEcran = v;
+  try { window.dispatchEvent(new Event(VISITE_OUVERTE)); } catch { /* hors navigateur */ }
+}
+
 export function tourVu(): boolean {
   try { return localStorage.getItem(VU) === '1'; } catch { return true; }
 }
@@ -48,7 +61,12 @@ type Plan = {
 
 const DUREE = 3400;
 
-export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
+/**
+ * `court` : la visite d'APRES la premiere course (game/premiers-pas.ts). Le
+ * joueur vient de courir : le geste et les etapes, il les connait. Restent ce
+ * qu'il ne pouvait pas deviner — le classement, le fantome, le direct.
+ */
+export function GameTour({ onClose, court = false }: { onClose: (jouer: boolean) => void; court?: boolean }) {
   // Le glissement depuis le bord gauche fait ce que fait le bouton passer :
   // on sort de la visite sans lancer de course.
   useRetour(() => onClose(false));
@@ -57,7 +75,7 @@ export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
   const minuteur = useRef<any>(null);
   const [auto, setAuto] = useState(true);
 
-  const plans: Plan[] = [
+  const tous: Plan[] = [
     {
       titre: 'tour_1_t', sous: 'tour_1_s', Icone: Flag, couleur: 'text-primary',
       scene: <Foulee />,
@@ -79,6 +97,8 @@ export function GameTour({ onClose }: { onClose: (jouer: boolean) => void }) {
       scene: <Direct />,
     },
   ];
+  const plans = court ? tous.slice(2) : tous;
+  useEffect(() => { annoncerVisite(true); return () => annoncerVisite(false); }, []);
 
   useEffect(() => {
     clearTimeout(minuteur.current);

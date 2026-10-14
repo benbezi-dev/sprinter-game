@@ -2382,7 +2382,11 @@
     G.runId = nouveauParcours(); G.runContinues = 0;
     startLevel(0);
   }
-  function startLevel(i) { buildLevel(i); queueCuts(['intro'], 'count'); }
+  // LA TOUTE PREMIERE COURSE PART SANS CINEMATIQUE (game/premiers-pas.ts) : un
+  // joueur qui ouvre le jeu pour la premiere fois n'a encore rien touche, et
+  // quinze secondes de presentation avant sa premiere foulee etaient quinze
+  // secondes de plus pour fermer l'onglet. Les etapes suivantes la gardent.
+  function startLevel(i) { buildLevel(i); queueCuts(G.premiereCourse && i === 0 ? [] : ['intro'], 'count'); }
 
   // Un identifiant par carriere, que le serveur accepte (lettres, chiffres,
   // tirets, 8 a 64). Il ne sert qu'a compter les Continue de CETTE carriere.

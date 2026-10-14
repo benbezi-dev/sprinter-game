@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion } from 'motion/react';
 import { MONTEE, FONDU } from '@/lib/mouvement';
-import { useGameStore } from '@/game/engine';
+import { useGameStore, passerLOuverture } from '@/game/engine';
 
 export function OpenScreen() {
   const openT = useGameStore(s => s.openT);
@@ -12,7 +12,10 @@ export function OpenScreen() {
   const word = "SPRINTER".split("");
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-between pointer-events-auto relative pt-[max(env(safe-area-inset-top),2rem)] pb-[max(env(safe-area-inset-bottom),2rem)]">
+    // Toucher l'ecran saute l'animation : « Tap to start » ne promettait rien
+    // jusqu'au 14/10/2026, et un joueur qui touche sans effet croit le jeu fige.
+    <div onPointerDown={passerLOuverture}
+      className="w-full h-full flex flex-col items-center justify-between pointer-events-auto relative pt-[max(env(safe-area-inset-top),2rem)] pb-[max(env(safe-area-inset-bottom),2rem)]">
       <div className="flex-1 flex flex-col justify-end pb-[10vh] md:pb-12 z-10 w-full overflow-hidden">
         <div className="flex gap-1 sm:gap-2 justify-center px-4">
           {word.map((letter, i) => {

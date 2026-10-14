@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { FEUILLE } from '@/lib/mouvement';
 import { Download, Share, Plus, X } from 'lucide-react';
 import { EST_NATIF } from '@/game/canal';
+import { visiteOuverte, VISITE_OUVERTE } from './GameTour';
 
 const REFUS = 'sprinter_install_refuse';
 
@@ -108,8 +109,16 @@ export function InstallPrompt() {
     try { localStorage.setItem(REFUS, '1'); } catch { /* sans memoire */ }
   };
 
+  // La visite du jeu passe devant : la carte recouvrait ses boutons.
+  const [visite, setVisite] = useState(visiteOuverte);
+  useEffect(() => {
+    const suivre = () => setVisite(visiteOuverte());
+    window.addEventListener(VISITE_OUVERTE, suivre);
+    return () => window.removeEventListener(VISITE_OUVERTE, suivre);
+  }, []);
+
   // Jamais pendant une course : on n'interrompt pas un chrono.
-  const montre = state === 'title' && ouvert;
+  const montre = state === 'title' && ouvert && !visite;
 
   // Le drapeau se pose dans un effet, pas dans le rendu : un rendu qui laisse
   // une trace derriere lui est un rendu qu'on ne peut plus rejouer.

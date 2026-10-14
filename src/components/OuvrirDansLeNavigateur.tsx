@@ -1,4 +1,5 @@
 import { SprinterApp } from '@/game/engine';
+import { UA_INTEGRE } from '@/game/navigateur';
 
 /**
  * LE NAVIGATEUR INTEGRE D'UNE APPLI (Instagram, Facebook, TikTok, Snapchat…).
@@ -10,9 +11,12 @@ import { SprinterApp } from '@/game/engine';
  * Ce bandeau le dit, et ouvre la meme page dans le vrai navigateur — Chrome
  * sur Android (lien `intent:`), Safari sur iPhone (`x-safari-https:`, iOS 17
  * et suivants ; sinon, la consigne du menu suffit).
+ *
+ * La liste des applis vit dans game/navigateur.ts, que le tunnel des premiers
+ * pas lit aussi : une seule detection pour les deux.
  */
 export const DANS_UNE_APPLI = typeof navigator !== 'undefined'
-  && /Instagram|FBAN|FBAV|FB_IAB|FBIOS|Snapchat|musical_ly|TikTok|BytedanceWebview|Line\//i.test(navigator.userAgent || '');
+  && UA_INTEGRE.test(navigator.userAgent || '');
 
 function lienVersLeNavigateur(): string {
   const { host, pathname, search, hash } = window.location;
