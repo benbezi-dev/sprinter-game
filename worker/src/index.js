@@ -3203,7 +3203,7 @@ async function servir(request, env, ctx, porteur) {
             cible.searchParams.set('code', salle);
             if (canal.test) cible.searchParams.set('canal', 'test');
             const objet = env.SALLES.idFromName(canal.test ? 'T-' + salle : salle);
-            await env.SALLES.get(objet).fetch(new Request(cible, {
+            const remis = await env.SALLES.get(objet).fetch(new Request(cible, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -3214,6 +3214,12 @@ async function servir(request, env, ctx, porteur) {
                 },
               }),
             }));
+            // Combien de sockets du perdant la salle a touchees : zero veut
+            // dire qu'il etait deja parti, ou que la salle s'etait refermee.
+            // Le perdant va de toute facon chercher le mot lui-meme (GET
+            // ci-dessous) ; cette ligne dit seulement par ou il est passe.
+            const n = (await remis.json().catch(() => ({}))).n;
+            console.log('mot du direct remis', code, 'sockets', n ?? '?');
           } catch (e) { console.log('mot du direct KO', String(e && e.message || e)); }
         })());
       }
@@ -3242,6 +3248,43 @@ async function servir(request, env, ctx, porteur) {
         } catch (e) { /* le sondage reste derriere */ }
       })());
       return r.erreur ? json({ error: r.erreur, ...r }, r.deja ? 409 : 403) : json(r);
+    }
+
+    // LE MOT D'UN DUEL EN DIRECT, LU PAR LE PERDANT LUI-MEME.
+    //
+    // La salle le lui remet dans la seconde (voir plus haut), mais seulement
+    // s'il y est encore branche. Le 14/10, en production, des mots poses par
+    // le vainqueur n'ont jamais ete vus de l'autre cote. L'ecran de fin du
+    // perdant vient donc aussi le chercher ici, tant qu'il est affiche : ce
+    // chemin-la ne depend ni de la salle, ni de la socket.
+    //
+    // Le duel differe a son guichet (/duel/results) ; celui-ci ne sert que
+    // les rencontres en direct, et seulement au perdant, qui n'a pas bloque
+    // l'auteur — les memes deux conditions que `motLisible`.
+    if (url.pathname === '/duel/mot' && request.method === 'GET') {
+      const code = idDeDuel(url.searchParams.get('id'));
+      if (!code || !DUEL_DIRECT.test(code)) return json({ error: 'code invalide' }, 400);
+      const cle = String(url.searchParams.get('name') || '').trim().toLowerCase();
+      if (!cle) return json({ mot: null });
+      await ensureDuelTables(env.DB);
+      const d = await env.DB.prepare(
+        `SELECT outcome, challenger_key, opponent_key, opponent_name, mot, voix, voix_type
+           FROM duel_results WHERE challenge_id = ?`).bind(code).first();
+      if (!d || (!d.mot && !d.voix)) return json({ mot: null });
+      const perdantCle = d.outcome === 'opponent' ? d.challenger_key
+                       : d.outcome === 'challenger' ? d.opponent_key : null;
+      if (!perdantCle || perdantCle !== cle) return json({ mot: null });
+      const auteur = d.outcome === 'opponent' ? d.opponent_key : d.challenger_key;
+      if ((await listeBloques(env.DB, cle)).includes(auteur)) return json({ mot: null });
+      return json({
+        mot: {
+          duel: code,
+          // Le nom affiche du vainqueur n'est garde que du cote du releveur ;
+          // l'ecran retombe sinon sur celui qu'il connait deja.
+          nom: d.outcome === 'opponent' ? (d.opponent_name || null) : null,
+          texte: d.mot || null, voix: d.voix || null, voix_type: d.voix_type || null,
+        },
+      });
     }
 
     // La reponse du perdant au mot du vainqueur.

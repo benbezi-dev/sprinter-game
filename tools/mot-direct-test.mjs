@@ -10,6 +10,7 @@
 //   - seul le VAINQUEUR parle, et une seule fois ;
 //   - le mot ne va qu'au PERDANT : ni au vainqueur, ni a un spectateur ;
 //   - ce que le perdant a bloque ne lui arrive pas ;
+//   - le perdant peut aussi le relever lui-meme (GET), et lui seul ;
 //   - le perdant peut le signaler, et ce signalement en garde la copie ;
 //   - une course a plus de deux n'a pas UN perdant : sa forme est refusee.
 //
@@ -96,6 +97,17 @@ ok('le vainqueur ne le recoit pas', g.mots.length === 0, `${g.mots.length} mot(s
 const encore = await post('/duel/mot', { id: duel, name: GAGNANT, texte: 'et encore' });
 ok('une seule fois', encore.statut === 409, JSON.stringify(encore));
 
+// Le second chemin : l'ecran du perdant va chercher le mot lui-meme.
+const lire = (id, nom) => fetch(`${B}/duel/mot?id=${encodeURIComponent(id)}&name=${encodeURIComponent(nom)}`)
+  .then(async r => ({ statut: r.status, corps: await r.json().catch(() => ({})) }));
+const luParPerdant = await lire(duel, PERDANT);
+ok('le perdant le releve aussi par le serveur',
+   luParPerdant.corps.mot?.texte === 'trop court ce 100' && luParPerdant.corps.mot?.voix === VOIX,
+   JSON.stringify(luParPerdant).slice(0, 160));
+ok('pas le vainqueur', (await lire(duel, GAGNANT)).corps.mot === null);
+ok('pas un tiers', (await lire(duel, `MD${m}TIERS`)).corps.mot === null);
+ok('et pas un defi differe par ce chemin', (await lire('ABCD12', PERDANT)).statut === 400);
+
 const sig = await post('/moderation/signaler', {
   duel, motif: 'insulte', name: PERDANT, device_id: `md-${m}-perdant-appareil`,
 });
@@ -120,6 +132,7 @@ const pose2 = await post('/duel/mot', { id: `LIVE-${code2}-${r2.course}`, name: 
 ok('le mot est accepte (le vainqueur n a pas a savoir)', pose2.statut === 200, JSON.stringify(pose2));
 await attendre(1500);
 ok('mais il n arrive pas', p2.mots.length === 0, `${p2.mots.length} mot(s)`);
+ok('ni par le serveur', (await fetch(`${B}/duel/mot?id=LIVE-${code2}-${r2.course}&name=${PERDANT}B`).then(r => r.json())).mot === null);
 g2.ws.close(); p2.ws.close();
 
 titre('a trois, pas de mot');
