@@ -17,7 +17,7 @@ licence. **À reprendre dans les crédits du jeu avant toute ouverture publique.
 | Menolé | `menole.webp` | [Senegalese colourful canoes](https://commons.wikimedia.org/wiki/File:Senegalese_colourful_canoes.jpg) | Ruth Zurielly Jennings | CC BY-SA 4.0 |
 | Casablanca | `casablanca.webp` | image générée (Tripo, Nano Banana), minaret Hassan II | — | — |
 | Kingston | `kingston.webp` | image générée (Tripo, Nano Banana), sound system | — | — |
-| Apothéose | `apotheose.webp` | image générée (Tripo, Nano Banana), couronne de cristal | — | — |
+| Apothéose | `apotheose.webp` (refait le 15/10/2026) | image générée (Tripo, Nano Banana), couronne de cristal sur anneau d'or gravé | — | — |
 | Barcelone | `drac.webp` (09/10/2026) | [Barcelona Parc Güell el drac](https://commons.wikimedia.org/wiki/File:Barcelona_Parc_G%C3%BCell_el_drac.jpg), redessinée isolée par Nano Banana (Tripo) avant le modèle | Isiwal | CC BY-SA 3.0 |
 | New York | `taxi.webp` (09/10/2026) | image générée (Tripo, Nano Banana), yellow cab, rendu de profil (l’ovale de marque de la calandre n’y paraît pas) | — | — |
 | Londres | `bus.webp` (09/10/2026) | image générée (Tripo, Nano Banana), impériale Routemaster sans publicité | — | — |
@@ -35,4 +35,5 @@ Hassan II (1993), Sagrada Família (en construction), Kinkaku-ji (reconstruit en
 |---|---|---|---|
 | Terre du globe | `src/assets/legende/carte/terre.jpg` | NASA Visible Earth, « Blue Marble: Land Surface, Shallow Water, and Shaded Topography » (Reto Stöckli, NASA Goddard) | domaine public |
 | Banc trencadís | `trencadis.webp` | [Benches at Park Guell by Antonio Gaudi (4209976058)](https://commons.wikimedia.org/wiki/File:Benches_at_Park_Guell_by_Antonio_Gaudi_(4209976058).jpg), redessinée isolée par Nano Banana (Tripo) avant le modèle | CC BY 2.0 |
-| Vélo, avion de ligne, voiture, car d'équipe | `src/assets/legende/vehicules/` | images générées (Tripo, Nano Banana), modèles Tripo HD, sans marque ; logo BENBEZI posé au dessin sur le car | — |
+| Vélo, avion de ligne, voiture, car d'équipe, jet privé, fusée | `src/assets/legende/vehicules/` | images générées (Tripo, Nano Banana), modèles Tripo HD, sans marque ; logo BENBEZI posé au dessin sur le car et le jet | — |
+| Kiosque (Kingston), barbecue jerk, charrette de simit (İzmir) | `kiosque.webp`, `jerk.webp`, `simit.webp` (15/10/2026) | images générées (Tripo, Nano Banana), modèles Tripo HD | — |
