@@ -4118,6 +4118,24 @@ async function servir(request, env, ctx, porteur) {
         });
         if (r.record) record = { ancien_ms: r.ancien, ms: r.valeur };
       } catch (e) { /* le record se rattrapera au recalcul */ }
+
+      // Un record qui entre ici n'entrait pas dans la file des reseaux.
+      //
+      // Le signalement ne vivait que dans `/submit`, et `/submit` ne part
+      // qu'au bout d'une carriere : depuis que le record est ecrit ICI (6
+      // septembre), un podium couru hors carriere entrait au classement sans
+      // que la file le sache. Mesure le 15 octobre 2026 : un 3e au 200 m
+      // (13/10), deux 2es au 110 m haies et au 400 m haies (7/10), un 2e au
+      // 100 m (4/10) — au classement public, absents de la file.
+      //
+      // Meme regard que `/submit`, sur le classement relu apres l'ecriture.
+      // Un nom refuse court sous « Anonyme » et n'a pas de ligne : rien a dire.
+      if (record && !nomRefuse) {
+        ctx.waitUntil((async () => {
+          const entries = await getLeaderboard(env.DB, race_key);
+          await regarderClassement(canal, race_key, nom, record.ms, entries);
+        })().catch(() => { /* signaler n'est jamais bloquant */ }));
+      }
       return json({ ok: true, record, nom_refuse: nomRefuse });
     }
 
