@@ -24,6 +24,31 @@
    "w": 1589
   }
  },
+ "fusee": {
+  "profil": {
+   "ax": 95.5,
+   "ay": 606.4,
+   "f": "fusee-profil.webp",
+   "h": 622,
+   "w": 191
+  }
+ },
+ "jet": {
+  "dessus": {
+   "ax": 317.5,
+   "ay": 320.0,
+   "f": "jet-dessus.webp",
+   "h": 640,
+   "w": 635
+  },
+  "profil": {
+   "ax": 1064.5,
+   "ay": 562.0,
+   "f": "jet-profil.webp",
+   "h": 624,
+   "w": 2129
+  }
+ },
  "velo": {
   "dessus": {
    "ax": 119.0,

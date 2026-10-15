@@ -291,11 +291,12 @@ function Globe({ rang, teinte, boss }: { rang: number; teinte: string; boss: str
     const ombre = new THREE.Sprite(mOmbre); ombre.renderOrder = 9;
     scene.add(ombre); jetable.push(mOmbre);
     // le vrai modele (Tripo, vu de dessus) remplace le pictogramme des qu'il est charge
-    prechargerVehicules([vol, 'velo', 'avion', 'voiture', 'car', 'jet']);
+    prechargerVehicules([vol, 'velo', 'avion', 'voiture', 'car', 'jet', 'fusee']);
     let aspect = 1, vrai = false;
     const essayerLeVrai = () => {
       if (vrai) return;
-      const sp = spriteVehicule(vol, 'dessus');
+      // la fusee se voit debout (son profil) ; les autres d'en haut
+      const sp = spriteVehicule(vol, vol === 'fusee' ? 'profil' : 'dessus');
       if (!sp) return;
       const t = new THREE.Texture(sp.im); t.colorSpace = THREE.SRGBColorSpace; t.needsUpdate = true;
       jetable.push(t);

@@ -13,6 +13,7 @@
 // Toute la scene est calculee depuis le temps : rien ne s'accumule, et la
 // toile se redessine a la taille de l'ecran. Une touche passe.
 
+import { vehicule as spriteVehicule, prechargerVehicules } from '@/game/legende/vehicules';
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { citeCeleste, W as CITE_W, AX as CITE_AX, AY as CITE_AY } from '@/game/legende/cite-celeste';
@@ -67,6 +68,15 @@ export function fusee(ctx: CanvasRenderingContext2D, x: number, y: number, s: nu
     ctx.fillStyle = g;
     ctx.beginPath(); ctx.moveTo(-6, 20); ctx.quadraticCurveTo(0, 20 + f * 1.1, 6, 20); ctx.closePath(); ctx.fill();
   }
+  // la vraie fusee (Tripo, debout, 10/10) des qu'elle est chargee : le corps
+  // de 56 unites, pied au bas de la tuyere
+  const sp = spriteVehicule('fusee', 'profil');
+  if (sp) {
+    const h = 58, w = h * sp.w / sp.h;
+    ctx.drawImage(sp.im, -w / 2, 22 - h, w, h);
+    ctx.restore();
+    return;
+  }
   // les ailerons
   ctx.fillStyle = '#E5302C';
   ctx.beginPath(); ctx.moveTo(-7, 8); ctx.lineTo(-14, 22); ctx.lineTo(-7, 18); ctx.closePath(); ctx.fill();
@@ -102,6 +112,7 @@ export function CinematiqueKarman({ lieu, onFin }: { lieu: string; onFin: () => 
   const surFin = useRef(onFin);
   surFin.current = onFin;
   useEffect(() => {
+    prechargerVehicules(['fusee']);
     const cv = toile.current!;
     const ctx = cv.getContext('2d')!;
     chargerLesCumulus();

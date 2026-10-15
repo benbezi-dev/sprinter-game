@@ -579,7 +579,7 @@ export function CinematiqueVoyage({ rang, onFin }: { rang: number; onFin: () => 
   const duree = DUREES[rang] ?? 8.2;
   return <Cinematique nom={`voyage-${rang}`} duree={duree} onFin={onFin}
                       creer={() => {
-                        prechargerVehicules(['velo', 'avion', 'voiture', 'car', 'jet']);
+                        prechargerVehicules(['velo', 'avion', 'voiture', 'car', 'jet', 'fusee']);
                         const p = rang === 3 ? peintreAvion(rang, { nom: 'jet', mode: mot('vol_jet') })
                           : rang === 0 ? peintreRoute(0) : peintreVolPuisSol(rang);
                         return (ctx, W, H, t) => { p(ctx, W, H, t); habillage(ctx, W, H, t, duree, TEINTES[rang]); };
@@ -962,7 +962,16 @@ function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom
     if (sp) {
       const larg = Math.min(W * 0.66, H * 0.52) * (1 - 0.45 * loin_) * (nomVrai === 'jet' ? 0.8 : 1);
       const hp = larg * sp.h / sp.w;
-      poserVehicule(ctx, nomVrai, xa, ya + hp * 0.5, hp, -0.035 + 0.08 * descente + Math.sin(t * 1.1) * 0.01);
+      const rotA = -0.035 + 0.08 * descente + Math.sin(t * 1.1) * 0.01;
+      poserVehicule(ctx, nomVrai, xa, ya + hp * 0.5, hp, rotA);
+      // le jet prive porte BENBEZI sur son fuselage
+      const lg = nomVrai === 'jet' ? logoBenbezi() : null;
+      if (lg) {
+        const ll = larg * 0.2, lh = ll * lg.height / lg.width;
+        ctx.save(); ctx.translate(xa, ya + hp * 0.5); ctx.rotate(rotA);
+        ctx.drawImage(lg, -larg * 0.06 - ll / 2, -hp * 0.5 - lh / 2, ll, lh);
+        ctx.restore();
+      }
     } else {
       avion(ctx, xa, ya, k, 0.04 * descente, teinte);
     }
