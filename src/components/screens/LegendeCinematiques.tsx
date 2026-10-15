@@ -141,6 +141,54 @@ function poserVehicule(ctx: CanvasRenderingContext2D, nom: NomVehicule, x: numbe
   return true;
 }
 
+/**
+ * LE VELO QUI ROULE (15/10, « le cycliste doit etre en mouvement »). Le
+ * modele Tripo est une image fixe : on pose par-dessus ses roues un flou de
+ * vitesse, des rayons et des reflets de jante qui tournent, et le pedalier.
+ * Les reperes sont en pixels de velo-profil.webp (637 x 622) ; l'angle suit
+ * la distance parcourue (`X`, en pixels d'ecran), comme une roue qui roule
+ * sans glisser — elle s'arrete quand le velo s'arrete.
+ */
+const VELO = { w: 637, roues: [[127, 493], [510, 493]] as const, r: 118, pedalier: [301, 508] as const, manivelle: 34 };
+function animerVelo(ctx: CanvasRenderingContext2D, x: number, yPied: number, hPx: number, X: number) {
+  const s = spriteVehicule('velo', 'profil');
+  if (!s || Math.abs(s.w - VELO.w) > 2) return;
+  const k = hPx / s.h, ox = x - s.w * k / 2, oy = yPied - s.h * k;
+  const R = VELO.r * k, ang = X / R;
+  ctx.save();
+  for (const [hx, hy] of VELO.roues) {
+    const cx = ox + hx * k, cy = oy + hy * k;
+    // le flou des rayons : un voile clair qui efface les rayons immobiles
+    const g = ctx.createRadialGradient(cx, cy, R * 0.1, cx, cy, R * 0.86);
+    g.addColorStop(0, 'rgba(214,218,224,0.62)'); g.addColorStop(1, 'rgba(214,218,224,0.42)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(cx, cy, R * 0.86, 0, Math.PI * 2); ctx.arc(cx, cy, R * 0.1, 0, Math.PI * 2, true); ctx.fill('evenodd');
+    // des rayons qui tournent
+    ctx.strokeStyle = 'rgba(70,72,80,0.6)'; ctx.lineWidth = Math.max(1, R * 0.014);
+    ctx.beginPath();
+    for (let i = 0; i < 12; i++) {
+      const a = ang + (i * Math.PI) / 6;
+      ctx.moveTo(cx + Math.cos(a) * R * 0.1, cy + Math.sin(a) * R * 0.1);
+      ctx.lineTo(cx + Math.cos(a + 0.18) * R * 0.86, cy + Math.sin(a + 0.18) * R * 0.86);
+    }
+    ctx.stroke();
+    // deux reflets sur la jante
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1.5, R * 0.035); ctx.lineCap = 'round';
+    for (const d of [0, Math.PI]) { ctx.beginPath(); ctx.arc(cx, cy, R * 0.9, ang + d, ang + d + 0.32); ctx.stroke(); }
+    // le moyeu
+    ctx.fillStyle = '#2A2C33'; ctx.beginPath(); ctx.arc(cx, cy, R * 0.07, 0, Math.PI * 2); ctx.fill();
+  }
+  // le pedalier : deux manivelles opposees et leurs pedales (un tour de
+  // pedale pour 2,4 m environ, a peu pres deux tours de roue)
+  const px = ox + VELO.pedalier[0] * k, py = oy + VELO.pedalier[1] * k, L = VELO.manivelle * k, a = ang * 0.55;
+  ctx.strokeStyle = '#18181C'; ctx.lineWidth = Math.max(2, 7 * k); ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(px - Math.cos(a) * L, py - Math.sin(a) * L); ctx.lineTo(px + Math.cos(a) * L, py + Math.sin(a) * L); ctx.stroke();
+  ctx.fillStyle = '#2E2F36';
+  for (const sg of [1, -1]) ctx.fillRect(px + sg * Math.cos(a) * L - 9 * k, py + sg * Math.sin(a) * L - 3 * k, 18 * k, 6 * k);
+  ctx.fillStyle = '#9A9EA6'; ctx.beginPath(); ctx.arc(px, py, 9 * k, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
 /** Des traits de vitesse qui filent vers la gauche, entre y0 et y1. */
 function traitsDeVitesse(ctx: CanvasRenderingContext2D, W: number, H: number, y0: number, y1: number, t: number, force: number) {
   if (force <= 0.02) return;
@@ -822,6 +870,8 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
       }
     }
     if (poserVehicule(ctx, nomV, xv, yR1 - H * 0.018 + cahot, hautM * parM)) {
+      // le cycliste roule : ses roues et son pedalier tournent (l'auteur, 15/10)
+      if (nomV === 'velo') animerVelo(ctx, xv, yR1 - H * 0.018 + cahot, hautM * parM, X);
       // le car de l'equipe porte le logo BENBEZI sur son flanc
       const sp = nomV === 'car' ? spriteVehicule('car', 'profil') : null, lg = logoBenbezi();
       if (sp && lg) {
