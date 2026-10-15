@@ -34,7 +34,7 @@
 #   Londres    boite (pillar box), bus (impériale), garde (guerite et garde)
 #
 # Le drac, le taxi, le bus (09/10), le banc trencadis (10/10), le kiosque,
-# le jerk, le simit et le hot-dog (15/10) ne sont plus modelises ici :
+# le jerk, le simit, le hot-dog et la cesme (15/10) ne sont plus modelises ici :
 # ce sont des modeles Tripo, rendus de la meme facon (voir TRIPO plus bas).
 # -----------------------------------------------------------------------
 
@@ -597,6 +597,8 @@ TRIPO = {
     'kiosque': dict(source='kiosque-tripo.glb', rot=270.0, hauteur=2.9),
     'simit': dict(source='simit-tripo.glb', rot=90.0, hauteur=1.9),
     'hotdog': dict(source='hotdog-tripo.glb', rot=90.0, hauteur=2.3),
+    'jerk': dict(source='jerk-tripo.glb', rot=180.0, hauteur=1.5),
+    'cesme': dict(source='cesme-tripo.glb', rot=270.0, hauteur=2.7),
     'taxi': dict(source='taxi-tripo.glb', rot=0.0, hauteur=1.48, sat=1.9),
     'bus': dict(source='bus-tripo.glb', rot=180.0, hauteur=4.38, sat=1.5),
 }
