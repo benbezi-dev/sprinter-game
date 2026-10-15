@@ -601,7 +601,56 @@ TRIPO = {
     'cesme': dict(source='cesme-tripo.glb', rot=270.0, hauteur=2.7),
     'taxi': dict(source='taxi-tripo.glb', rot=0.0, hauteur=1.48, sat=1.9),
     'bus': dict(source='bus-tripo.glb', rot=180.0, hauteur=4.38, sat=1.5),
+    'baobab': dict(source='baobab-tripo.glb', rot=0.0, hauteur=5.2,
+                   socle=dict(h=0.035, touffes=0.10, rayon=0.17)),
+    'zellige': dict(source='zellige-tripo.glb', rot=270.0, hauteur=2.75),
+    'sakura': dict(source='sakura-tripo.glb', rot=270.0, hauteur=5.5, sat=1.4,
+                   socle=dict(h=0.03, touffes=0.06, rayon=0.05)),
 }
+
+
+def couper_disque(o, h, touffes, rayon):
+    """Le disque de terre ou d'herbe que Tripo pose sous un arbre : on retire
+    les faces toutes sous h (le modele a une unite de haut), puis les touffes
+    sous `touffes` plus loin que `rayon` de l'axe du tronc (mesure entre 0,10
+    et 0,25 de haut), et les miettes ; le pied revient a l'origine."""
+    import bmesh
+    co = np.array([v.co[:] for v in o.data.vertices])
+    tronc = (co[:, 2] > 0.10) & (co[:, 2] < 0.25)
+    cx, cy = co[tronc, 0].mean(), co[tronc, 1].mean()
+    bm = bmesh.new()
+    bm.from_mesh(o.data)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=1e-4)
+    def loin(v):
+        return math.hypot(v.co.x - cx, v.co.y - cy) > rayon
+    bas = [f for f in bm.faces if all(v.co.z < h for v in f.verts)
+           or all(v.co.z < touffes and loin(v) for v in f.verts)]
+    bmesh.ops.delete(bm, geom=bas, context='FACES')
+    bm.faces.ensure_lookup_table()
+    bm.faces.index_update()
+    vu, miettes = set(), []
+    for f0 in bm.faces:
+        if f0.index in vu:
+            continue
+        ilot, pile = [], [f0]
+        vu.add(f0.index)
+        while pile:
+            f_ = pile.pop()
+            ilot.append(f_)
+            for e in f_.edges:
+                for g in e.link_faces:
+                    if g.index not in vu:
+                        vu.add(g.index)
+                        pile.append(g)
+        if len(ilot) < 0.01 * len(bm.faces):
+            miettes += ilot
+    bmesh.ops.delete(bm, geom=miettes, context='FACES')
+    seuls = [v for v in bm.verts if not v.link_faces]
+    bmesh.ops.delete(bm, geom=seuls, context='VERTS')
+    bm.to_mesh(o.data)
+    bm.free()
+    LM.normaliser(o, 0)
+    print('SOCLE retire : %d faces, %d en miettes (axe %.3f %.3f)' % (len(bas), len(miettes), cx, cy))
 
 
 def rendre_piece(nom):
@@ -612,6 +661,8 @@ def rendre_piece(nom):
         if image is None:
             raise RuntimeError('pas de texture dans ' + T['source'])
         LM.normaliser(o, T['rot'])
+        if 'socle' in T:
+            couper_disque(o, **T['socle'])
         LM.matiere(o, image, (1, 1, 1, 0))
         xs = [v.co.x for v in o.data.vertices]
         hauteur = T['hauteur']
