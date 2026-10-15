@@ -299,6 +299,9 @@ export function OneShotEndScreen() {
    * ordinaire, le TOP 500, la course en direct le remettent a zero au depart.
    */
   const aFantome = ghostTime > 0;
+  // Un duel contre le fantome d'un coureur du duel des marques (DuelMarques.tsx) :
+  // RECOMMENCER le redefie au lieu de repartir seul.
+  const duelMarquesFantome = aFantome && !!(SprinterApp.G.shotOpts as any)?.duelMarques;
 
   /**
    * Cette course venge un duel perdu, si `revancheId` est pose.
@@ -1644,7 +1647,14 @@ export function OneShotEndScreen() {
                 // demandee : sans quoi les autres, en l'acceptant, feraient
                 // partir une presentation par-dessus notre course.
                 if (live) voterRevanche(false);
-                pushReprise(); SprinterApp.recommencer();
+                pushReprise();
+                // Le duel des marques fait exception : on y recommence CONTRE
+                // le meme fantome, cible comprise — repasser par l'ecran du
+                // duel pour le redefier, c'est trois ecrans pour un essai. Le
+                // serveur ne compte qu'un K.O. par paire, retenter apres une
+                // victoire ne change rien au duel.
+                if (duelMarquesFantome) memeCourseSansLeDefi();
+                else SprinterApp.recommencer();
               }}
               className="w-full py-3 md:py-4 court:py-2 rounded-xl font-black font-display text-base sm:text-lg md:text-xl court:text-sm
                          tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all
@@ -1656,7 +1666,7 @@ export function OneShotEndScreen() {
                 {N.t('os_rejouer')}
               </span>
               <span className="font-sans font-normal text-[10px] md:text-xs court:text-[9px] tracking-normal opacity-80 leading-snug">
-                {N.t('os_rejouer_sub')}
+                {duelMarquesFantome ? N.t('os_rejouer_fantome_sub', { n: ghostName }) : N.t('os_rejouer_sub')}
               </span>
             </button>}
 
