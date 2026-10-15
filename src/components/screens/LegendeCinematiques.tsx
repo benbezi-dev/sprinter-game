@@ -810,7 +810,7 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
     const ang = X / (14 * k);
     const vite = Math.min(1, v / 300);
     traitsDeVitesse(ctx, W, H, yR0 - H * 0.12, yR1, t, vite * (transport === 'velo' ? 0.5 : 1));
-    const parM = parM0 * (transport === 'velo' ? 1.45 : transport === 'voiture' ? 1.35 : 1);
+    const parM = parM0 * (transport === 'velo' ? 2.1 : transport === 'voiture' ? 1.35 : 1);
     const nomV: NomVehicule = transport === 'velo' ? 'velo' : transport === 'voiture' ? 'voiture' : 'car';
     const hautM = transport === 'velo' ? 1.75 : transport === 'voiture' ? 1.48 : 3.7;
     const cahot = Math.sin(t * (transport === 'velo' ? 9 : 19)) * 0.6 * vite;
