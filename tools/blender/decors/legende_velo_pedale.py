@@ -37,7 +37,7 @@ def arguments():
     def val(k, d=None):
         return a[a.index(k) + 1] if k in a else d
     return dict(source=val('--source'), images=int(val('--images', '8')), diag=val('--diag'),
-                haut=int(val('--haut', '640')))
+                haut=int(val('--haut', '640')), manivelle=float(val('--manivelle', '50')))
 
 
 def main():
@@ -58,7 +58,12 @@ def main():
     R = 118.0 / 622.0
     roues = [(px(127), hz), (px(510), hz)]
     pedalier = Vector((px(301), 0, 1.0 - 508.0 / 622.0))
-    manivelle = 34.0 / 622.0
+    # la manivelle du modele mesure 34 px pour une roue de 118 px de rayon
+    # (0,29) ; un vrai velo est pres de 0,45 (17 cm pour une roue de 70 cm) :
+    # a la taille du jeu, 34 px ne faisaient presque pas bouger les jambes.
+    # Le tour est donc rendu a 50 px par defaut (--manivelle), pedalier dessine
+    # par le jeu a la meme longueur (manifeste : `manivelle`).
+    manivelle = A['manivelle'] / 622.0
     # le plan du cadre : la profondeur mediane des points du cadre (sous la selle, hors roues)
     dans_roue = np.zeros(len(co), bool)
     for (cx, cz) in roues:
@@ -143,7 +148,8 @@ def main():
         noms.append(nom)
     print('IMAGES %d : %dx%d' % (len(noms), x1 - x0, y1 - y0))
     entree['pedale'] = {'f': noms, 'w': int(x1 - x0), 'h': int(y1 - y0), 'ax': round(float(pied[0] - x0), 1),
-                        'ay': round(float(pied[1] - y0), 1), 'a0': round(a0_pres, 4)}
+                        'ay': round(float(pied[1] - y0), 1), 'a0': round(a0_pres, 4),
+                        'manivelle': A['manivelle']}
     json.dump(man, open(F_MAN, 'w'), indent=1, sort_keys=True)
 
 
