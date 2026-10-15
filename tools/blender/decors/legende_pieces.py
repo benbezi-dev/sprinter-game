@@ -35,8 +35,8 @@
 #
 # Le drac, le taxi, le bus (09/10), le banc trencadis (10/10), le kiosque,
 # le jerk, le simit, le hot-dog et la cesme, puis le baobab, le zellige, le
-# sakura, la colonne Morris, la fontaine Wallace et la guerite (15/10) ne sont
-# plus modelises ici :
+# sakura, la colonne Morris, la fontaine Wallace, la guerite, le fanous, l'etal
+# et les tambours (15/10) ne sont plus modelises ici :
 # ce sont des modeles Tripo, rendus de la meme facon (voir TRIPO plus bas).
 # -----------------------------------------------------------------------
 
@@ -611,6 +611,9 @@ TRIPO = {
     'morris': dict(source='morris-tripo.glb', rot=0.0, hauteur=3.67),
     'wallace': dict(source='wallace-tripo.glb', rot=90.0, hauteur=2.62),
     'garde': dict(source='garde-tripo.glb', rot=270.0, hauteur=3.12),
+    'fanous': dict(source='fanous-tripo.glb', rot=0.0, hauteur=2.69),
+    'etal': dict(source='etal-tripo.glb', rot=270.0, hauteur=2.55),
+    'tambours': dict(source='tambours-tripo.glb', rot=270.0, hauteur=1.04),
 }
 
 
