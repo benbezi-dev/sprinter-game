@@ -84,6 +84,9 @@ import {
 } from './identite.js';
 import { alerterRecuperation } from './courriel.js';
 import { empreinteIp, sousLimite, purgerLimites } from './limites.js';
+import {
+  MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
+} from './plancher.js';
 import { etapeConnue, noterEtape, noterAppareil, lireTunnel } from './tunnel.js';
 import {
   ensureComptage, compterCourse, sourceDeLaVisite, compterArrivee,
@@ -314,6 +317,9 @@ function courseDuDefi(body) {
   if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
     return { erreur: 'temps invalide' };
   }
+  // Un defi porte plusieurs epreuves d'affilee : son plancher est la somme de
+  // celles qui en ont un (voir plancher.js). Les haies n'en ont pas.
+  if (sousLePlancherTotal(races, t)) return { erreur: MESSAGE_PLANCHER };
   const cleanedTraces = cleanTraces(traces, races.length);
   if (!cleanedTraces) return { erreur: 'traces invalides' };
   return {
@@ -1608,6 +1614,11 @@ async function servir(request, env, ctx, porteur) {
         });
         return json({ error: 'course invalide', griefs }, 422);
       }
+      // Apres la preuve, pas avant : une trace qui ne tient pas debout garde sa
+      // reponse (422, et ses griefs). Ce qui arrive ici a une trace qui soutient
+      // son chrono — et un chrono sous ce que la physique du 100/200/400 m
+      // permet (plancher.js) n'est pas une course, trace fabriquee a sa mesure.
+      if (sousLePlancher(epreuve, ms)) return json({ error: MESSAGE_PLANCHER }, 400);
 
       const res = await enregistrerTentative(env.DB, cle, nom, ms, new Date(), epreuve, { test: canal.test });
       if (!res) return json({ objectif: null });
@@ -1812,6 +1823,14 @@ async function servir(request, env, ctx, porteur) {
       // le meilleur chrono individuel ne peut pas depasser le temps total
       let split = Math.round(Number(best_split_ms));
       if (!Number.isFinite(split) || split <= 0 || split > t) split = t;
+      // Le plancher de l'epreuve (plancher.js), sur le cumul ET sur le meilleur
+      // chrono. C'est LUI qui classe — `getRank` se joue sur `bestSplit` — et
+      // le controle sur le cumul ne le couvrait pas : `best_split_ms: 1`
+      // passait. La sentinelle n'est pas un chrono, et elle est au-dessus du
+      // plancher de toute facon.
+      if ((t !== NO_RUN_MS && sousLePlancher(race_key, t)) || sousLePlancher(race_key, split)) {
+        return json({ error: MESSAGE_PLANCHER }, 400);
+      }
       const cleanedName = cleanName(name);
       // Un nom reserve n'accepte que les appareils de son proprietaire :
       // sans cela la reservation ne protegerait rien.
@@ -1861,7 +1880,11 @@ async function servir(request, env, ctx, porteur) {
       // La trace n'accompagne que le meilleur chrono par course : c'est elle
       // qu'un adversaire affrontera en fantome depuis le tableau.
       const tr = cleanTrace(trace);
-      if (split === bestSplit && tr.length) {
+      // Une trace qui ne raconte pas le chrono annonce n'a pas ete courue avec
+      // lui. On ne la range pas comme fantome, sans refuser le score : voir
+      // `traceIncoherente`. `tr` reste jugee plus bas par `verifierTrace`, qui
+      // signale ce qui cloche — l'ecarter du fantome ne l'efface pas du constat.
+      if (split === bestSplit && tr.length && !traceIncoherente(race_key, split, tr)) {
         await env.DB.prepare(
           `UPDATE scores SET trace = ?, trace_ms = ? WHERE device_id = ? AND race_key = ?`
         ).bind(JSON.stringify(tr), bestSplit, device_id, race_key).run();
@@ -4021,6 +4044,9 @@ async function servir(request, env, ctx, porteur) {
       if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
         return json({ error: 'temps invalide' }, 400);
       }
+      // Sous le plancher du 100/200/400 m (plancher.js) : ce n'est pas une
+      // course jouee, et elle n'entrerait ni a l'historique ni aux records.
+      if (sousLePlancher(race_key, t)) return json({ error: MESSAGE_PLANCHER }, 400);
       /* UNE COURSE NE SE JETTE PAS.
 
          Cette route rendait 403 et n'ecrivait rien quand le nom n'appartenait
@@ -5178,6 +5204,15 @@ async function servir(request, env, ctx, porteur) {
       // ancienne du jeu ne l'envoie pas, et le duel se tranche pareil.
       let epreuvesDuDefi = [];
       try { epreuvesDuDefi = JSON.parse(ch.races || '[]') || []; } catch { /* illisible */ }
+      // Une tentative decide d'un duel et fait bouger le classement : elle
+      // merite le meme plancher que le defi qu'elle releve. Les epreuves
+      // vivent dans la ligne `challenges`, d'ou ce controle apres la lecture.
+      // Illisibles, on ne peut rien en deduire et on s'en tient au controle
+      // deja passe : refuser sur une ligne abimee punirait le joueur pour une
+      // donnee qui n'est pas la sienne.
+      if (Array.isArray(epreuvesDuDefi) && sousLePlancherTotal(epreuvesDuDefi, t)) {
+        return json({ error: MESSAGE_PLANCHER }, 400);
+      }
       const cleanedTraces = cleanTraces(traces, epreuvesDuDefi.length) || [];
       const prev = await env.DB.prepare(
         `SELECT total_ms FROM challenge_attempts WHERE id = ? AND device_id = ?`

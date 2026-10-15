@@ -118,9 +118,11 @@ titre('un chrono sans trace au sommet du classement est note');
   // Sous le meilleur de la base, qui garde les essais precedents : c'est ce
   // qui le met en tete a chaque lancement, et pas seulement sur une base neuve.
   const top = await (await fetch(`${BASE}/leaderboard?race=100`)).json();
-  const meilleur = Math.min(7000, ...(top.entries || []).map(x => x.best_split_ms));
+  // Au-dessus du plancher du 100 m (7,717 s, worker/src/plancher.js) : un
+  // chrono plus rapide serait refuse, et ce test cherche un chrono accepte.
+  const meilleur = Math.min(8000, ...(top.entries || []).map(x => x.best_split_ms));
   const n = nom('d'), dev = appareil();
-  const r = await score(n, dev, Math.max(1000, meilleur - 10), null);
+  const r = await score(n, dev, Math.max(7800, meilleur - 10), null);
   ok('le chrono reste au classement', r.statut === 200 && r.corps.rank <= 10, JSON.stringify(r.corps.rank));
   const s = await suspectes(n);
   ok('signale « trace absente »', s.length === 1 && s[0].detail === 'trace absente', JSON.stringify(s));
@@ -130,7 +132,7 @@ titre('un chrono sans trace loin du sommet ne l\'est pas');
 {
   // Dix chronos plus rapides, prouves, pour qu'il y ait un sommet a quitter.
   for (let i = 0; i < 10; i++) {
-    await score(nom('t' + i), appareil(), 6000 + i * 10, traceDe(6000 + i * 10));
+    await score(nom('t' + i), appareil(), 7800 + i * 10, traceDe(7800 + i * 10));
   }
   const n = nom('e'), dev = appareil();
   const r = await score(n, dev, 14000, null);
