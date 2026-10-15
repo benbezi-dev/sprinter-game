@@ -29,7 +29,7 @@ import { cumulus, chargerLesCumulus, poserCumulus } from '@/game/legende/nuages'
 import { citeCeleste, W as CITE_W, AX as CITE_AX, AY as CITE_AY } from '@/game/legende/cite-celeste';
 import { mot, dans, nombre } from '@/game/legende/mots';
 import { fusee } from './LegendeKarman';
-import { vehicule as spriteVehicule, prechargerVehicules, veloPedale, NB_PEDALE, PEDALE_A0, PEDALE_MANIVELLE, type NomVehicule } from '@/game/legende/vehicules';
+import { vehicule as spriteVehicule, prechargerVehicules, veloPedale, NB_PEDALE, PEDALE_A0, PEDALE_MANIVELLE, PEDALE_PEDALIER, type NomVehicule } from '@/game/legende/vehicules';
 import { PORTRAITS, TEINTES } from './legende-commun';
 
 type Rgb = [number, number, number];
@@ -150,7 +150,8 @@ function poserVehicule(ctx: CanvasRenderingContext2D, nom: NomVehicule, x: numbe
  * sans glisser — elle s'arrete quand le velo s'arrete.
  */
 const VELO = { w: 637, h: 622, roues: [[127, 493], [510, 493]] as const, r: 118, pedalier: [301, 508] as const, manivelle: 34 };
-function animerVelo(ctx: CanvasRenderingContext2D, x: number, yPied: number, hPx: number, X: number, manivelleEcran?: number, manivellePx: number = VELO.manivelle) {
+function animerVelo(ctx: CanvasRenderingContext2D, x: number, yPied: number, hPx: number, X: number, manivelleEcran?: number, manivellePx: number = VELO.manivelle,
+                    pedalier: readonly [number, number] = VELO.pedalier, uneSeule = false) {
   const s = spriteVehicule('velo', 'profil');
   if (!s || Math.abs(s.w - VELO.w) > 2) return;
   const k = hPx / s.h, ox = x - s.w * k / 2, oy = yPied - s.h * k;
@@ -180,12 +181,15 @@ function animerVelo(ctx: CanvasRenderingContext2D, x: number, yPied: number, hPx
   }
   // le pedalier : deux manivelles opposees et leurs pedales (un tour de
   // pedale pour 2,4 m environ, a peu pres deux tours de roue)
-  const px = ox + VELO.pedalier[0] * k, py = oy + VELO.pedalier[1] * k, L = manivellePx * k,
+  const px = ox + pedalier[0] * k, py = oy + pedalier[1] * k, L = manivellePx * k,
         a = manivelleEcran ?? ang * 0.55;
+  // (avec le tour de pedalier rendu, la seule manivelle visible est celle du
+  // cote de la camera : l'autre passe derriere le plateau, avec sa jambe)
   ctx.strokeStyle = '#18181C'; ctx.lineWidth = Math.max(2, 7 * k); ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(px - Math.cos(a) * L, py - Math.sin(a) * L); ctx.lineTo(px + Math.cos(a) * L, py + Math.sin(a) * L); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(uneSeule ? px : px - Math.cos(a) * L, uneSeule ? py : py - Math.sin(a) * L);
+  ctx.lineTo(px + Math.cos(a) * L, py + Math.sin(a) * L); ctx.stroke();
   ctx.fillStyle = '#2E2F36';
-  for (const sg of [1, -1]) ctx.fillRect(px + sg * Math.cos(a) * L - 9 * k, py + sg * Math.sin(a) * L - 3 * k, 18 * k, 6 * k);
+  for (const sg of uneSeule ? [1] : [1, -1]) ctx.fillRect(px + sg * Math.cos(a) * L - 9 * k, py + sg * Math.sin(a) * L - 3 * k, 18 * k, 6 * k);
   ctx.fillStyle = '#9A9EA6'; ctx.beginPath(); ctx.arc(px, py, 9 * k, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
@@ -880,7 +884,8 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
       const fr = veloPedale(i);
       if (fr) {
         ctx.drawImage(fr.im, xv - fr.w * kV / 2, yP - fr.h * kV, fr.w * kV, fr.h * kV);
-        animerVelo(ctx, xv, yP, hP, X, -PEDALE_A0 + (Math.PI * 2 * i) / NB_PEDALE, PEDALE_MANIVELLE);
+        animerVelo(ctx, xv, yP, hP, X, -PEDALE_A0 + (Math.PI * 2 * i) / NB_PEDALE, PEDALE_MANIVELLE,
+                   PEDALE_PEDALIER ?? VELO.pedalier, true);
         pedale = true;
       }
     }

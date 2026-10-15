@@ -58,7 +58,7 @@
    "w": 238
   },
   "pedale": {
-   "a0": -1.7909,
+   "a0": -1.4123,
    "ax": 318.5,
    "ay": 618.6,
    "f": [
@@ -69,10 +69,18 @@
     "velo-pedale-4.webp",
     "velo-pedale-5.webp",
     "velo-pedale-6.webp",
-    "velo-pedale-7.webp"
+    "velo-pedale-7.webp",
+    "velo-pedale-8.webp",
+    "velo-pedale-9.webp",
+    "velo-pedale-10.webp",
+    "velo-pedale-11.webp"
    ],
    "h": 622,
-   "manivelle": 50.0,
+   "manivelle": 48.8,
+   "pedalier": [
+    297.0,
+    513.7
+   ],
    "w": 637
   },
   "profil": {

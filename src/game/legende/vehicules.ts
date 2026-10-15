@@ -43,11 +43,14 @@ export function vehicule(nom: NomVehicule, vue: Vue): Sprite | null {
  * pedale proche dans l'image 0 (radians, z vers le haut) ; l'image i la tourne
  * de 2*pi*i/n dans le sens des aiguilles d'une montre a l'ecran.
  */
-const PEDALE = (MANIFESTE as any).velo?.pedale as { f: string[]; w: number; h: number; ax: number; ay: number; a0: number; manivelle?: number } | undefined;
+const PEDALE = (MANIFESTE as any).velo?.pedale as
+  { f: string[]; w: number; h: number; ax: number; ay: number; a0: number; manivelle?: number; pedalier?: [number, number] } | undefined;
 export const NB_PEDALE = PEDALE?.f.length ?? 0;
 export const PEDALE_A0 = PEDALE?.a0 ?? 0;
-/** La longueur des manivelles du rendu, en px de l'image (34 = celle du modele). */
+/** La longueur des manivelles du rendu, en px de l'image. */
 export const PEDALE_MANIVELLE = PEDALE?.manivelle ?? 34;
+/** Le centre du pedalier dans les images du tour (px de l'image). */
+export const PEDALE_PEDALIER: [number, number] | null = PEDALE?.pedalier ?? null;
 export function veloPedale(i: number): Sprite | null {
   if (!PEDALE || !NB_PEDALE) return null;
   const f = PEDALE.f[((i % NB_PEDALE) + NB_PEDALE) % NB_PEDALE];
