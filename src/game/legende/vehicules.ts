@@ -37,7 +37,29 @@ export function vehicule(nom: NomVehicule, vue: Vue): Sprite | null {
   return im.complete && im.naturalWidth > 0 ? { im, w: p.w, h: p.h, ax: p.ax, ay: p.ay } : null;
 }
 
+/**
+ * Le cycliste qui pedale (15/10) : un tour de pedalier en quelques images
+ * (legende_velo_pedale.py), cadrees comme velo-profil. `a0` est l'angle de la
+ * pedale proche dans l'image 0 (radians, z vers le haut) ; l'image i la tourne
+ * de 2*pi*i/n dans le sens des aiguilles d'une montre a l'ecran.
+ */
+const PEDALE = (MANIFESTE as any).velo?.pedale as { f: string[]; w: number; h: number; ax: number; ay: number; a0: number } | undefined;
+export const NB_PEDALE = PEDALE?.f.length ?? 0;
+export const PEDALE_A0 = PEDALE?.a0 ?? 0;
+export function veloPedale(i: number): Sprite | null {
+  if (!PEDALE || !NB_PEDALE) return null;
+  const f = PEDALE.f[((i % NB_PEDALE) + NB_PEDALE) % NB_PEDALE];
+  let im = cache.get(f);
+  if (!im) {
+    const u = urlDe(f);
+    if (!u) return null;
+    im = new Image(); im.decoding = 'async'; im.src = u; cache.set(f, im);
+  }
+  return im.complete && im.naturalWidth > 0 ? { im, w: PEDALE.w, h: PEDALE.h, ax: PEDALE.ax, ay: PEDALE.ay } : null;
+}
+
 /** Demander les images tot (a l'affiche), pour qu'elles soient la au voyage. */
 export function prechargerVehicules(noms: NomVehicule[]) {
   for (const n of noms) { vehicule(n, 'profil'); vehicule(n, 'dessus'); }
+  if (noms.includes('velo')) for (let i = 0; i < NB_PEDALE; i++) veloPedale(i);
 }

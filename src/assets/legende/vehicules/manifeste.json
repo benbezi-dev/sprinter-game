@@ -57,6 +57,23 @@
    "h": 622,
    "w": 238
   },
+  "pedale": {
+   "a0": -1.7909,
+   "ax": 318.5,
+   "ay": 618.6,
+   "f": [
+    "velo-pedale-0.webp",
+    "velo-pedale-1.webp",
+    "velo-pedale-2.webp",
+    "velo-pedale-3.webp",
+    "velo-pedale-4.webp",
+    "velo-pedale-5.webp",
+    "velo-pedale-6.webp",
+    "velo-pedale-7.webp"
+   ],
+   "h": 622,
+   "w": 637
+  },
   "profil": {
    "ax": 318.5,
    "ay": 618.6,
