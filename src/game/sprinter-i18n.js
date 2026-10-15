@@ -1535,6 +1535,8 @@
     os_rejouer:      ['RECOMMENCER', 'RUN AGAIN'],
     os_rejouer_sub:  ['une course de plus, tout de suite — celle-ci reste ce qu’elle est',
                       'one more race, right now — this one stays as it is'],
+    os_rejouer_fantome_sub: ['contre le fantôme de {n}, tout de suite',
+                             'against {n}’s ghost, right now'],
     // Le classement s'AJOUTE au raccourci, il ne le remplace pas : defier
     // quelqu'un n'est pas relancer une course.
     //
