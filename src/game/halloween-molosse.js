@@ -329,23 +329,43 @@ export function molosseDe(chasse) {
       // direction : on garde la precedente plutot que de coucher la bete.
       if (Math.abs(ex) > 1e-4 || Math.abs(ey) > 1e-4) {
         piece.ex = ex; piece.ey = ey;
-        // LE VIRAGE SE TOURNE EN 3D (09/10, « dans les virages le molosse est
-        // en image plate »). Le maillage est rendu de profil, puis couche sur
-        // l'axe de la piste (voir dessiner) : en ligne droite c'est voulu,
-        // mais en virage la piste monte a l'ecran et l'image de profil n'y
-        // etait qu'INCLINEE — une carte en carton qu'on penche. La bete doit
-        // TOURNER : on mesure de combien la piste s'est relevee a l'ecran par
-        // rapport a une ligne droite, on en tire l'angle de lacet qui, sous la
-        // camera de profil (plongee p), donne ce meme relevement
-        // (tan ecran = p · tan lacet), et le maillage pivote d'autant. En
-        // ligne droite l'ecart est nul : rien n'y change.
-        const C = globalThis.SprinterCore && globalThis.SprinterCore.C;
-        const p = Math.max(0.05, C ? C.ISO_SIN : 0.447);
-        const o = ground(0, 0), x1 = ground(1, 0);
-        const th0 = Math.atan2(-(x1[1] - o[1]), Math.abs(x1[0] - o[0]));
-        const th = Math.atan2(-ey, Math.abs(ex));
-        const lacet = Math.atan(Math.tan(th) / p) - Math.atan(Math.tan(th0) / p);
-        piece.lacet = Math.max(-1.4, Math.min(1.4, lacet));
+      }
+      // LE VIRAGE EN VRAIE 3D (15/10, « il est toujours plat lorsqu'il est
+      // dans le virage »). Le pivot du 09/10 tournait le maillage PUIS
+      // couchait son image sur l'axe de la piste : deux inclinaisons
+      // empilees, et une verticale qui ne bougeait jamais. Au milieu de la
+      // courbe, la piste monte presque droit a l'ecran, les coureurs y sont
+      // vus de dos, et la bete restait un profil cisaille en diagonale — une
+      // carte qu'on penche.
+      //
+      // On donne donc au maillage LA PROJECTION DU JEU A L'ENDROIT OU IL EST :
+      // ce que devient a l'ecran un metre vers l'avant de la bete (`av`), un
+      // metre vers sa gauche (`ga`), la hauteur restant droit vers le haut.
+      // Elle se lit sur `ground` lui-meme, rotation des pistes courbes
+      // comprise. Vue ainsi, la bete qui part dans le virage montre sa
+      // croupe et sa largeur, comme les coureurs.
+      //
+      // LE PROFIL TRICHE DES LIGNES DROITES RESTE (halloween-molosse-3d.ts) :
+      // la camera du jeu y voit la bete de trois quarts arriere, et le profil
+      // montre sa gueule. Il revient a retirer a la gauche de la bete sa part
+      // horizontale. On le garde entier tant que la piste file a moins de
+      // 25° de l'horizontale a l'ecran — toutes les lignes droites, jusqu'a
+      // la camera de 22° —, et on le quitte en douceur jusqu'a 50°.
+      {
+        const qa = T.pos(Math.min(d + 0.5, T.total + 28.5), G.player.lane);
+        let tx = qa[0] - q[0], ty = qa[1] - q[1];
+        const n = Math.hypot(tx, ty);
+        if (n > 1e-6) {
+          tx /= n; ty /= n;
+          const ga0 = ground(q[0] - ty, q[1] + tx), av0 = ground(q[0] + tx, q[1] + ty);
+          const av = [av0[0] - g[0], av0[1] - g[1]];
+          const ga = [ga0[0] - g[0], ga0[1] - g[1]];
+          const pente = Math.atan2(Math.abs(av[1]), Math.abs(av[0])) * 180 / Math.PI;
+          const s = Math.max(0, Math.min(1, (pente - 25) / 25));
+          const triche = 1 - s * s * (3 - 2 * s);
+          piece.av = av;
+          piece.ga = [ga[0] * (1 - triche), ga[1]];
+        }
       }
       return liste;
     },
@@ -451,19 +471,25 @@ export function molosseDe(chasse) {
       const bx = pc.ex !== undefined ? pc.ex : 1;
       const by = pc.ey !== undefined ? pc.ey : 0;
       const norme = Math.hypot(bx, by) || 1;
-      ctx.transform(bx / norme, by / norme, 0, 1, 0, 0);
-
+      // LA PROJECTION DU MAILLAGE (voir pieces) : un metre vers l'avant et un
+      // metre vers la gauche de la bete, en pixels. A defaut, celle du trace.
+      const Cc = globalThis.SprinterCore && globalThis.SprinterCore.C;
+      const av = pc.av || [bx / norme * m, by / norme * m];
+      const ga = pc.ga || [0, -(Cc ? Cc.ISO_SIN : 0.447) * m];
       // LA GUEULE SUR `chasse.d`, PAS LE MILIEU DU CORPS (08/10). La morsure
       // tombe quand `chasse.d` atteint le joueur : la regle compte du museau
       // au dos (halloween.ts). Le maillage, lui, est pose par le sol sous le
       // milieu de son corps — a 1,60 m au garrot, sa tete recouvrait le
       // coureur une bonne demi-seconde avant la morsure. Il recule donc de ce
-      // qui separe ce milieu de sa gueule, mesure sur le maillage lui-meme ;
-      // l'ombre et les braises reculent avec lui. Le trace garde sa place :
-      // il n'est plus qu'une doublure.
-      // (la bete qui pivote en virage avance sa gueule d'autant moins)
-      const lacet = pc.lacet || 0;
-      if (maillage && maillage.pret()) ctx.translate(-maillage.museau() * Math.cos(lacet) * m, 0);
+      // qui separe ce milieu de sa gueule, mesure sur le maillage lui-meme,
+      // le long de la piste telle qu'on la voit ; l'ombre et les braises
+      // reculent avec lui. Le trace garde sa place : il n'est plus qu'une
+      // doublure.
+      if (maillage && maillage.pret()) ctx.translate(-maillage.museau() * av[0], -maillage.museau() * av[1]);
+      // le repere de l'ecran, ou le maillage se peint sans cisaillement
+      const ecran = ctx.getTransform();
+      ctx.transform(bx / norme, by / norme, 0, 1, 0, 0);
+
       const x = 0, y = 0;
 
       // LE GALOP SE LIT SUR LA DISTANCE, PAS SUR L'HORLOGE. Un cycle cale sur
@@ -515,15 +541,23 @@ export function molosseDe(chasse) {
       // le meme axe (la transformation de plus haut) et cale sa foulee sur le
       // meme cycle ; il ne porte ni l'oeil ni les braises, qui doivent vivre
       // avec la distance et restent peints par-dessus.
-      const C = globalThis.SprinterCore && globalThis.SprinterCore.C;
-      const yeux = maillage && maillage.pret()
-        ? maillage.dessiner(ctx, cycle, m, C ? C.ISO_SIN : 0.447, lacet) : null;
-      if (yeux) {
-        // l'oeil du fond, a peine : le crane le cache presque
-        for (let i = yeux.length - 1; i >= 0; i--) {
-          oeil(ctx, yeux[i][0], yeux[i][1], m, t, pres, i === 0 ? 1 : 0.35);
+      // Le maillage et ses yeux se peignent dans le repere de l'ecran : il
+      // porte sa propre projection (av, ga), le cisaillement ne sert qu'au
+      // trace, a l'ombre et aux braises.
+      let yeux = null;
+      if (maillage && maillage.pret()) {
+        ctx.save();
+        ctx.setTransform(ecran);
+        yeux = maillage.dessiner(ctx, cycle, m, av, ga);
+        if (yeux) {
+          // l'oeil du fond, a peine : le crane le cache presque
+          for (let i = yeux.length - 1; i >= 0; i--) {
+            oeil(ctx, yeux[i][0], yeux[i][1], m, t, pres, i === 0 ? 1 : 0.35);
+          }
         }
-      } else {
+        ctx.restore();
+      }
+      if (!yeux) {
         // LES DEUX PATTES DU FOND, sous le corps : peintes avant lui, plus
         // sombres. Sans ce partage, les quatre pattes se confondaient en une
         // seule masse et le galop ne se lisait plus.
