@@ -595,6 +595,8 @@ TRIPO = {
     'drac': dict(source='drac-tripo.glb', rot=0.0, hauteur=1.15),
     'trencadis': dict(source='trencadis-tripo.glb', rot=180.0, hauteur=1.0),
     'kiosque': dict(source='kiosque-tripo.glb', rot=270.0, hauteur=2.9),
+    'simit': dict(source='simit-tripo.glb', rot=90.0, hauteur=1.9),
+    'hotdog': dict(source='hotdog-tripo.glb', rot=90.0, hauteur=2.3),
     'taxi': dict(source='taxi-tripo.glb', rot=0.0, hauteur=1.48, sat=1.9),
     'bus': dict(source='bus-tripo.glb', rot=180.0, hauteur=4.38, sat=1.5),
 }

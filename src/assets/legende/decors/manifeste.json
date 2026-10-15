@@ -166,13 +166,13 @@
    "w": 367
   },
   "hotdog": {
-   "ax": 408.0,
-   "ay": 843.61,
+   "ax": 364.5,
+   "ay": 839.81,
    "f": "hotdog.webp",
    "h": 872,
-   "hauteur_m": 2.33,
-   "largeur_m": 2.2,
-   "w": 816
+   "hauteur_m": 2.3,
+   "largeur_m": 1.94,
+   "w": 729
   },
   "izmir": {
    "ax": 331.0,
@@ -310,13 +310,13 @@
    "w": 744
   },
   "simit": {
-   "ax": 438.5,
-   "ay": 830.06,
+   "ax": 309.5,
+   "ay": 835.81,
    "f": "simit.webp",
    "h": 874,
-   "hauteur_m": 1.61,
-   "largeur_m": 1.74,
-   "w": 877
+   "hauteur_m": 1.9,
+   "largeur_m": 1.41,
+   "w": 618
   },
   "tambours": {
    "ax": 634.5,
