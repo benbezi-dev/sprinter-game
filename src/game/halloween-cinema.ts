@@ -292,6 +292,31 @@ export const MORSURES: readonly Scene[] = [
   },
 ];
 
+/* ---------------------------------------------------------------------------
+   LA DERNIERE NUIT — la fin de l'edition
+   ---------------------------------------------------------------------------
+   AJOUTEE LE 16/10 : la treizieme nuit tenue tirait une scenette au hasard,
+   comme les douze autres, et l'edition se finissait sur « le dernier bus » ou
+   « la porte » — un soir parmi d'autres. Celle-ci n'est servie qu'une fois la
+   treizieme passee, jamais tiree au sort. Meme regle que les autres : aucune
+   blessure, et le froid sur la derniere ligne — qui annonce la quatorzieme
+   promise par la banniere (hw_toutes_sous). */
+export const FINALE: Scene = {
+  cle: 'finale',
+  sur: ['LA TREIZIÈME NUIT', 'THE THIRTEENTH NIGHT'],
+  titre: ['LE JOUR SE LÈVE', 'DAYBREAK'],
+  lignes: [
+    ['Il a passé la ligne une treizième fois.',
+     'He crossed the line a thirteenth time.'],
+    ['Derrière lui, la bête s\'est arrêtée net. Elle n\'a plus bougé.',
+     'Behind him, the beast stopped dead. It did not move again.'],
+    ['Au premier rayon, il ne restait d\'elle qu\'une ombre sur les pavés.',
+     'At first light, all that was left of it was a shadow on the cobbles.'],
+    ['Puis l\'ombre s\'est mise à courir.',
+     'Then the shadow started to run.'],
+  ],
+};
+
 /** Les clefs des scenettes de victoire, pour le tirage. */
 export const CLES_TENUES = TENUES.map(s => s.cle);
 /** Les clefs des scenettes de morsure, pour le tirage. */
@@ -299,6 +324,7 @@ export const CLES_MORSURES = MORSURES.map(s => s.cle);
 
 /** La scenette de cette clef, ou la premiere du lot a defaut. */
 export function sceneDe(cle: string, mordu: boolean): Scene {
+  if (!mordu && cle === FINALE.cle) return FINALE;
   const lot = mordu ? MORSURES : TENUES;
   return lot.find(s => s.cle === cle) || lot[0];
 }

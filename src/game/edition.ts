@@ -80,8 +80,15 @@ export const EDITION_DANUBE: Edition = {
  * L'edition d'Halloween — la nuit du molosse.
  *
  * Elle ne suit pas une competition reelle : elle suit une DATE, celle que tout
- * le monde partage. La fenetre s'ouvre donc une semaine avant le 31 octobre et
- * se referme trois jours apres, le temps que le sujet retombe.
+ * le monde partage. La fenetre s'ouvre avec la PREMIERE NUIT DU CALENDRIER,
+ * le 19 octobre (game/halloween-calendrier.ts, PREMIER_JOUR_UTC), et se
+ * referme trois jours apres Halloween, le temps que le sujet retombe.
+ *
+ * ELLE S'OUVRAIT LE 24, ET C'ETAIT UN BUG DE LANCEMENT (audit du 16/10). La
+ * banniere est la SEULE porte du mode : ouverte le 24, elle laissait les
+ * nuits 1 a 5 du calendrier sans aucune entree pour un nouveau joueur. Les
+ * deux dates doivent donc rester egales — tools/halloween-ouverture-test.mjs
+ * le verifie.
  *
  * Meme regle que le Danube, et c'est la meme phrase qui la porte : la banniere
  * est datee, le stade ne l'est pas. Le cimetiere municipal reste ouvert le
@@ -99,8 +106,8 @@ export const EDITION_DANUBE: Edition = {
 export const EDITION_HALLOWEEN: Edition = {
   cle: 'halloween-2026-10',
   stade: 'cimetiere',
-  // samedi 24 octobre 2026, 00 h 00 a Paris (UTC+2)
-  debut: Date.UTC(2026, 9, 23, 22, 0, 0),
+  // lundi 19 octobre 2026, 00 h 00 a Paris (UTC+2) — la premiere nuit
+  debut: Date.UTC(2026, 9, 18, 22, 0, 0),
   // mardi 3 novembre 2026, 00 h 00 a Paris (UTC+1)
   fin: Date.UTC(2026, 10, 2, 23, 0, 0),
   mode: 'halloween',

@@ -34,10 +34,14 @@
       encore arrive attend ses images avant le decompte, comme elle le
       faisait deja (stadeEnPreparation, plus bas).
 
-      LES DECORS D'UN MODE FERME NE SE TELECHARGENT PAS DU TOUT : les nuits
-      d'Halloween (et leur materiel) ne partent que si `HALLOWEEN_OUVERT`
-      (canal.ts), en tache de fond comme les autres. Elles restent servies par
-      le site : rien a deplacer le jour de l'ouverture.
+      LES NUITS D'HALLOWEEN NE SE TELECHARGENT JAMAIS EN TACHE DE FOND
+      (16/10). Elles partaient avec les autres stades des que le mode etait
+      ouvert : 605 images et 30 Mo pour TOUS les joueurs — 75 Mo de plus a
+      l'ultra sur un ecran dense —, y compris ceux qui n'ouvriront jamais le
+      mode, et sur forfait mobile. Elles se demandent maintenant NUIT PAR
+      NUIT, a l'ouverture du tableau des nuits : la seule serie d'angle de la
+      nuit qu'on va courir, deux megaoctets et demi (prechargerLaNuit, plus
+      bas).
 
    L'ouverture n'attend jamais plus d'ATTENTE_MAX_MS : un reseau qui traine ne
    doit pas enfermer le joueur devant une barre de progression. Le reste se
@@ -88,7 +92,6 @@
       et l'accueil installe.
 --------------------------------------------------------------------------- */
 import liste from 'virtual:precharge';
-import { HALLOWEEN_OUVERT } from './canal';
 
 /** Ce que l'ouverture attend : la premiere course, ou qu'elle parte. */
 const ESSENTIEL = ['/decors/tribune/', '/decors/day/', '/decors/mondiaux/',
@@ -96,7 +99,8 @@ const ESSENTIEL = ['/decors/tribune/', '/decors/day/', '/decors/mondiaux/',
 const essentiel = (u: string) => ESSENTIEL.some(d => u.startsWith(d));
 /** Les nuits d'Halloween et leur materiel, au palier ordinaire comme a l'ultra. */
 const halloween = (u: string) => /^\/decors(-ultra)?\/(halloween-|materiel-a\d)/.test(u);
-const servi = (u: string) => HALLOWEEN_OUVERT || !halloween(u);
+/** Ce qui part en tache de fond : tout, sauf les nuits — elles se demandent a la nuit. */
+const servi = (u: string) => !halloween(u);
 
 const BASE = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 const ATTENTE_MAX_MS = 25000;
@@ -196,6 +200,56 @@ export function lancerChargement() {
       etat.phase = 'fini';
     }
   })();
+}
+
+/* ---------------------------------------------------------------------------
+   UNE NUIT D'HALLOWEEN, A LA DEMANDE
+   ---------------------------------------------------------------------------
+   Chaque nuit se court sous sa camera (halloween-cameras.js), et la ruelle est
+   rendue sous chacune d'elles : `halloween-a<deg>` pour les maisons, `materiel-
+   a<deg>` pour les blocs. Le rendu prend la serie dont l'angle est le plus
+   proche de la vue (serieDeLaVue, decors-stades.js) — on fait le meme choix
+   ici, sur la meme liste, et on ne telecharge que celle-la.
+
+   Appele a l'ouverture du tableau des nuits, pour la prochaine a courir, et au
+   depart de chaque nuit : quand la course part, ses images sont deja la ou
+   arrivent, et le decompte attend le reste comme pour tout stade
+   (stadeEnPreparation). Une serie deja demandee ne se redemande pas.
+--------------------------------------------------------------------------- */
+const seriesDemandees = new Set<string>();
+
+/** La serie de `base` la plus proche de `deg` parmi celles de la liste, ou null. */
+function serieProche(urls: string[], racine: string, base: string, deg: number): string | null {
+  const re = new RegExp('^' + racine + base + '-a([\\d.]+)/');
+  let mieux: string | null = null, ecart = Infinity;
+  const vus = new Set<string>();
+  for (const u of urls) {
+    const m = re.exec(u);
+    if (!m || vus.has(m[1])) continue;
+    vus.add(m[1]);
+    const d = Math.abs(parseFloat(m[1]) - deg);
+    if (d < ecart) { ecart = d; mieux = racine + base + '-a' + m[1] + '/'; }
+  }
+  return mieux;
+}
+
+/** Telecharge d'avance le decor d'une nuit vue sous `deg` degres. Sans effet s'il l'est deja. */
+export function prechargerLaNuit(deg: number) {
+  const P = (globalThis as any).RenduPremium;
+  // l'ultra ne se demande que sur un ecran qui l'attend ou l'a deja
+  const ultra = !!(P && P.DENSE && (P.ultraAttendu || etat.ultraApporte));
+  const lots: string[][] = [liste.ordinaire, ...(ultra ? [liste.ultra] : [])];
+  const urls: string[] = [];
+  for (const l of lots) {
+    const racine = l === liste.ultra ? '/decors-ultra/' : '/decors/';
+    for (const base of ['halloween', 'materiel']) {
+      const serie = serieProche(l, racine, base, deg);
+      if (!serie || seriesDemandees.has(serie)) continue;
+      seriesDemandees.add(serie);
+      for (const u of l) if (u.startsWith(serie)) urls.push(u);
+    }
+  }
+  if (urls.length) void telecharger(urls, () => { /* rien a compter */ });
 }
 
 /**

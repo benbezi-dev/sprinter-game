@@ -1,3 +1,7 @@
+// L'interrupteur d'Halloween vit a part : la configuration du build le lit
+// aussi (vite.config.ts), et elle ne sait pas lire ce fichier-ci.
+import { HALLOWEEN_PUBLIC } from './halloween-ouverture.js';
+
 // Sur quel canal tourne cette copie du jeu.
 //
 // Deux versions sont publiees a la meme adresse : le jeu, et une version de
@@ -342,9 +346,14 @@ export const SAUTS_OUVERTS = LONGUEUR_OUVERTE || TRIPLE_OUVERT || HAUTEUR_OUVERT
  * font le voyage ; le lieu, lui, est inatteignable — aucune banniere ne le
  * propose et aucun ecran ne le lance.
  *
- * Pour ouvrir a tout le monde : `true` en dur, et rien d'autre a toucher.
+ * POUR OUVRIR A TOUT LE MONDE, NE RIEN TOUCHER ICI. L'interrupteur est
+ * `HALLOWEEN_PUBLIC` (game/halloween-ouverture.js), le seul : il ouvre les
+ * deux drapeaux de ce fichier ET les fichiers du mode dans le build
+ * (vite.config.ts). « `true` en dur, et rien d'autre a toucher » etait faux :
+ * il fallait aussi la fenetre de la banniere, la liste des fichiers retires du
+ * build et le deploiement, et l'oubli d'un seul se voyait sans se signaler.
  */
-export const HALLOWEEN_OUVERT = EST_TEST;
+export const HALLOWEEN_OUVERT = EST_TEST || HALLOWEEN_PUBLIC;
 
 /**
  * L'EDITION LIMITEE D'HALLOWEEN 2026 — treize courses, une par jour.
@@ -354,27 +363,26 @@ export const HALLOWEEN_OUVERT = EST_TEST;
  * FORME D'UNE EDITION DATEE — un calendrier de treize cartes, une course par
  * jour du 19 au 31 octobre, l'heure prise au serveur.
  *
- * Les deux peuvent diverger, et c'est utile : on peut ouvrir le mode sans le
- * calendrier (ce qu'il est aujourd'hui sur /test, ou les nuits s'enchainent a
- * la victoire), ou preparer le calendrier sans encore montrer le mode.
+ * Le nom reste separe pour que l'ecran dise ce qu'il teste (le calendrier, pas
+ * le mode) ; la valeur, elle, ne l'est plus — voir plus bas.
  *
- * FERME EN PRODUCTION JUSQU'A L'OUVERTURE. `EST_TEST` se replie a la
- * compilation : le drapeau vaut `false` EN DUR dans le build public, et tout
- * ce qui en depend en sort — le calendrier, les cartes, les compte-a-rebours.
- *
- * ET CE N'EST PAS SEULEMENT UNE QUESTION D'ACCES. Une edition limitee ne vaut
+ * LA SURPRISE, ET CE QU'ELLE A COUTE. Une edition limitee ne vaut
  * que par la surprise : treize noms de courses lisibles dans le paquet public
  * un mois avant, c'est l'edition eventee. On l'a deja paye une fois — le
  * morceau `Halloween-*.js` et sa musique de 708 Ko se telechargeaient depuis
  * le site public le 20 septembre — et les deux remedes sont en place :
  * `@__PURE__` sur les `lazy` (App.tsx) et le greffon de vite.config.ts pour
  * les assets. Ce qui est pose dans `public/`, en revanche, echappe a tout :
- * les decors de l'edition ne doivent donc PAS y aller.
+ * le decor de la ruelle y est, et il ne se telecharge plus qu'a la demande,
+ * nuit par nuit (game/chargement.ts, prechargerLaNuit).
  *
- * Pour ouvrir a tout le monde le 19 octobre : `true` en dur, et rien d'autre
- * a toucher. Les dates, elles, sont dans game/halloween-calendrier.ts.
+ * Il suit le meme interrupteur que le mode (`HALLOWEEN_PUBLIC`) : publier le
+ * mode sans son calendrier servirait les treize nuits d'un coup, le premier
+ * soir. Les dates, elles, sont dans game/halloween-calendrier.ts, et c'est
+ * l'heure du SERVEUR qui les ouvre — publier avant le 19 ne joue rien
+ * d'avance.
  */
-export const HALLOWEEN_2026_OUVERT = EST_TEST;
+export const HALLOWEEN_2026_OUVERT = HALLOWEEN_OUVERT;
 
 /**
  * LA CARRIERE LEGENDE — l'extension de fin de jeu (game/legende/).

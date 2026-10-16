@@ -97,13 +97,23 @@ export function ouvertureDe(n: number): number {
  */
 export function ouverteAt(n: number, maintenant: number, decalageJoueur = 0): boolean {
   if (n < 1 || n > NB_NUITS) return false;
-  const debut = ouvertureDe(n);
-  if (n < NB_NUITS) return maintenant >= debut;
+  return maintenant >= instantDOuverture(n, decalageJoueur);
+}
 
+/**
+ * L'instant exact où la nuit `n` s'ouvre POUR CE JOUEUR.
+ *
+ * Les douze premières : minuit à Paris, pour tout le monde. La treizième :
+ * 18 h chez le joueur, le 31 octobre de SON calendrier — c'est ce qui permet
+ * au Calendrier d'afficher un vrai compte à rebours jusqu'à la finale, au lieu
+ * d'un « ouvre à 18 h » qui ne dit pas dans combien de temps.
+ */
+export function instantDOuverture(n: number, decalageJoueur = 0): number {
+  const debut = ouvertureDe(n);
+  if (n < NB_NUITS) return debut;
   const dec = Math.max(-12 * 60, Math.min(14 * 60, decalageJoueur)) * 60000;
-  // 18 h chez le joueur, le 31 octobre de SON calendrier.
-  const localMinuit = ouvertureDe(NB_NUITS) + (decalageParis(debut) * 3600000) - dec;
-  return maintenant >= localMinuit + HEURE_FINALE * 3600000;
+  const localMinuit = debut + (decalageParis(debut) * 3600000) - dec;
+  return localMinuit + HEURE_FINALE * 3600000;
 }
 
 /**
@@ -266,6 +276,29 @@ function plafondDuJour(ms: number): number {
 let simule: number | null = null;
 let horlogeVraie: Horloge = { ms: 0, source: 'appareil' };
 
+/* L'HORLOGE AVANCE, ET C'EST LA MONTRE MONOTONE QUI LA FAIT AVANCER.
+
+   Elle ne le faisait pas (audit du 16/10) : `maintenant()` rendait l'instant
+   pose a l'ouverture du panneau, tel quel, pour toujours. Le « ouvre dans
+   14 h 20 min » ne bougeait pas, et a minuit — a 18 h pour la finale — la
+   nuit ne s'ouvrait pas tant qu'on n'avait pas ferme et rouvert le panneau.
+
+   On garde donc l'instant retenu ET le moment ou on l'a retenu, lu sur une
+   montre que le joueur ne regle pas : `performance.now()` part de zero au
+   chargement de la page et ne fait qu'avancer, quoi qu'on fasse a l'horloge
+   du telephone. L'instant courant est l'un plus le temps ecoule sur l'autre.
+
+   Ce que cette montre ne sait pas faire : avancer pendant que le telephone
+   dort (iOS la suspend). C'est l'ecran qui s'en charge — il redemande l'heure
+   au serveur quand la page revient au premier plan (voir PanneauMolosse). */
+let poseeA = 0;
+let monotone: () => number = () =>
+  (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now() : Date.now();
+
+/** Remplacer la montre monotone — pour le harnais, qui fait passer le temps. */
+export function poserMonotone(f: () => number) { monotone = f; }
+
 /** Poser un instant simulé. `null` rend la main à l'horloge réelle. */
 export function simuler(ms: number | null) { simule = ms; }
 
@@ -273,12 +306,23 @@ export function simuler(ms: number | null) { simule = ms; }
 export function jourSimule(): number | null { return simule; }
 
 /** Ranger l'horloge réelle, telle que les garde-fous l'ont retenue. */
-export function poserHorloge(h: Horloge) { horlogeVraie = h; }
+export function poserHorloge(h: Horloge) { horlogeVraie = h; poseeA = monotone(); }
 
-/** L'instant que tout le jeu doit lire. */
+/** L'horloge a-t-elle déjà été réglée une fois ? */
+export function horlogeReglee(): boolean { return horlogeVraie.ms > 0; }
+
+/**
+ * L'instant que tout le jeu doit lire : celui qu'on a retenu, plus le temps
+ * réellement écoulé depuis.
+ *
+ * Avant tout réglage — personne n'a encore ouvert le mode — c'est l'horloge de
+ * l'appareil, faute de mieux. Les écrans qui décident d'une ouverture règlent
+ * l'horloge AVANT de lire (voir halloween-horloge.ts, horlogeImmediate).
+ */
 export function maintenant(): number {
   if (simule !== null) return simule;
-  return horlogeVraie.ms || Date.now();
+  if (!horlogeVraie.ms) return Date.now();
+  return horlogeVraie.ms + Math.max(0, monotone() - poseeA);
 }
 
 /** D'où vient l'instant courant. */

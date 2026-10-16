@@ -1,5 +1,8 @@
 # Audit de l'édition Halloween — « La nuit du molosse »
 
+> **Corrections appliquées le 16 octobre** (même branche). Chaque point est
+> repris en fin de document, section « Ce qui a été corrigé ».
+
 16 octobre 2026, J-3 avant la première nuit (lundi 19 octobre, 00 h 00 à Paris).
 Branche auditée : `claude/loving-bell-bfn4s7` (e88eac3).
 
@@ -278,3 +281,35 @@ Par ordre d'impact sur un événement d'une nuit par jour :
 | **semaine 1** | push quotidien · partage · son de proximité · réduction des décors (§2.2) |
 | **semaine 2** | scène de fin de la nuit 13 · récompense 13/13 · décision sur la 14e nuit |
 | **après** | nettoyage §5 et mise à jour du plan |
+
+---
+
+## Ce qui a été corrigé (16 octobre)
+
+| point | correction | vérifié par |
+|---|---|---|
+| 1.1 ouverture en 5 gestes | un seul interrupteur `HALLOWEEN_PUBLIC` (`src/game/halloween-ouverture.js`), lu par `canal.ts` **et** `vite.config.ts` ; bannière ouverte le 19 à 00 h (Paris) ; la ligne `rm -rf` du déploiement retirée. L'interrupteur est **ouvert** : publier avant le 19 ne joue rien d'avance (heure du serveur) | `halloween-ouverture-test.mjs`, `molosse-canal-test.mjs` (deux vrais builds, ouvert et fermé) |
+| 1.2 « NUIT SUIVANTE » | `partir()` refuse toute nuit fermée ; l'écran de fin propose ENCORE et affiche « nuit 2 · ouvre dans … » | harnais + essai Chromium |
+| 1.3 horloge figée | l'heure retenue avance sur `performance.now()`, se pose avant le premier rendu, se redemande au retour au premier plan ; délai de 4 s sur `/now` | `halloween-calendrier-test.mjs` + essai Chromium |
+| 1.4 testeurs → joueurs | `halloween-carnet.ts` branché ; l'ancienne clé n'est reprise que dans l'espace testeur | `halloween-carnet-test.mjs` |
+| 2.1 30 à 105 Mo pour tous | plus aucun téléchargement de fond : la série de la nuit choisie, à l'ouverture du panneau | harnais |
+| 2.2 107 Mo de décor | série à 12° supprimée (elle ne servait qu'à la finale en 3 phases). Les autres séries sont gardées : le passage aux 4 familles change l'image de 1 à 2°, à valider à l'œil avant de supprimer | `halloween-camera-test.mjs` (aucune série morte) |
+| 2.3 difficulté | nuit 1 : 9″10 → 9″40 (9,25 appuis/s) ; nuit 6 : 36″20 → 36″35 (12,25 appuis/s) | `molosse-test.mjs` |
+| 2.4 mesure | marches `hw_entree`, `hw_nuit_n`, `hw_tenue_n` dans le tunnel ; bloc `halloween` dans `/stats` (tableau de bord, sous clé) | `halloween-ouverture-test.mjs` |
+| 2.5 petits bogues | bannière selon le calendrier, durées et dates traduites, noms de tracés traduits, `Date` exposé en CORS, compte à rebours jusqu'à 18 h locale pour la finale | essai Chromium (Paris et Montréal) |
+| 3.1 son | `halloween-traque-sons.ts` (synthèse, sans fichier) + `halloween-traque.ts` (lecture selon l'écart) | `halloween-traque-test.mjs` + essai Chromium |
+| 3.2 confort | secousse et vibration coupées par « réduire les animations » ; réglage « frayeur réduite » ; avertissement avant la première nuit | — |
+| 3.3 narration | écart minimal enregistré et raconté (< 4 m) ; scène de fin propre à la nuit 13 | — |
+| 5 nettoyage | `poserLaPhase` et les phases retirées, lieux fictifs retirés, commentaires faux corrigés, mots du mode test hors du paquet public | harnais |
+
+Trouvé en route, et corrigé : le carnet se scellait avant d'être normalisé — une
+heure à la milliseconde fractionnaire suffisait à le faire passer pour trafiqué
+et à **effacer la progression après la première nuit tenue** (vu dans Chromium,
+cas ajouté au harnais). Le tirage des scènettes notait aussi des scènes jamais
+montrées. Le panneau des nuits passe désormais au-dessus du bouton du tchat.
+
+**Non fait, et pourquoi.** Les points 3.4 (noms des nuits contre décor de
+ruelle) et 4.x (push quotidien, partage, statistiques sociales, récompense,
+14ᵉ nuit) sont des choix de contenu ou des fonctions nouvelles, pas des
+corrections. Le build natif (Android/iOS) doit être refait et soumis pour
+contenir le mode.

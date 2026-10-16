@@ -39,7 +39,9 @@ export type EtapeTunnel =
   | 'ouverture' | 'ecran' | 'accueil' | 'visite' | 'nom'
   | 'depart' | 'premier_appui' | 'arrivee' | 'oneshot'
   | 'carriere_1' | 'carriere_2' | 'carriere_3'
-  | 'carriere_4' | 'carriere_5' | 'carriere_6';
+  | 'carriere_4' | 'carriere_5' | 'carriere_6'
+  // les treize nuits d'Halloween (game/halloween-mesure.ts, worker/src/tunnel.js)
+  | 'hw_entree' | `hw_nuit_${number}` | `hw_tenue_${number}`;
 
 let parties: Set<string> | null = null;
 /** Envoyees pendant ce lancement, reponse ou pas : on ne les redemande pas. */

@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig, loadEnv } from 'vite';
 import { EPREUVES_APERCU, titreLong } from './src/game/epreuve-titre.js';
+import { HALLOWEEN_PUBLIC } from './src/game/halloween-ouverture.js';
 
 // BASE_PATH: pour GitHub Pages, mettez "/<nom-du-repo>/" (ex: "/sprinter/").
 // En local ou sur un domaine racine, laissez "/".
@@ -31,9 +32,9 @@ const apiLocale = process.env.API_LOCALE || '';
 // LA MUSIQUE DU MOLOSSE NE DOIT PAS PARTIR EN PRODUCTION, et il a fallu ce
 // greffon pour qu'elle n'y parte plus.
 //
-// Le mode d'Halloween est ferme au public jusqu'au 24 octobre, et tout son
-// code en sort bien du build : `HALLOWEEN_OUVERT` se replie a faux, les trois
-// `lazy` portent `@__PURE__`, et plus aucun morceau Halloween n'est emis.
+// Tant que le mode d'Halloween est ferme au public, tout son code sort bien du
+// build : `HALLOWEEN_OUVERT` se replie a faux, les trois `lazy` portent
+// `@__PURE__`, et plus aucun morceau Halloween n'est emis.
 // Son MORCEAU DE MUSIQUE, lui, restait — sept cent huit kilo-octets servis
 // depuis sprinter-game.com/assets/molosse-*.mp3, mesures en ligne, sur un
 // site dont le jeu ne propose ce mode a personne.
@@ -69,7 +70,15 @@ const canalDuBuild = (mode: string) => {
 // maillage TRELLIS, demande par game/halloween-molosse-3d.ts. Ce module n'est
 // jamais rendu en production, mais halloween.ts est importe par App.tsx et le
 // lit au passage : le GLB partait a la racine du site sans rien pour le lire.
-const HORS_PRODUCTION = ['assets/molosse.mp3', 'assets/molosse.glb', 'assets/molosse-tete.webp', 'assets/molosse-victoire.webp', 'assets/molosse-cartes/', 'assets/longueur/', 'assets/legende/'];
+//
+// L'OUVERTURE AU PUBLIC LES RAMENE (16/10). Cette liste suivait le CANAL, pas
+// le drapeau du mode : ouvrir Halloween en production sans la toucher aurait
+// servi la nuit sans musique, sans bete en volume, sans tete sur la banniere
+// et sans cartes — chaque fichier remplace par un module vide, sans une
+// erreur. Elle suit donc le meme interrupteur que le mode
+// (src/game/halloween-ouverture.js).
+const FICHIERS_DU_MOLOSSE = ['assets/molosse.mp3', 'assets/molosse.glb', 'assets/molosse-tete.webp', 'assets/molosse-victoire.webp', 'assets/molosse-cartes/'];
+const HORS_PRODUCTION = [...(HALLOWEEN_PUBLIC ? [] : FICHIERS_DU_MOLOSSE), 'assets/longueur/', 'assets/legende/'];
 const musiqueHorsProduction = (canal: string) => canal === 'test' ? [] : [{
   name: 'sprinter-musique-hors-production',
   enforce: 'pre' as const,

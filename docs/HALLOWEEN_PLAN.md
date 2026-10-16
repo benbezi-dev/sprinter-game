@@ -1,5 +1,28 @@
 # Halloween 2026 — plan d'implémentation
 
+> **État au 16 octobre 2026 — ce qui est livré, et ce qui ne le sera pas.**
+> Ce plan date du 20 septembre. L'audit du 16 octobre
+> (`docs/HALLOWEEN_AUDIT_2026-10-16.md`) et ses corrections fixent ce qui sort
+> le 19 :
+>
+> - **Livré** : les 13 nuits et leurs 5 tracés, le molosse (tracé + maillage
+>   3D), le calendrier daté (heure du serveur, cliquet, hors-ligne), le double
+>   verrou date + victoire, la caméra basse par nuit, la ruelle (un seul décor,
+>   rendu sous les angles des nuits), les trois départs, 15 scènettes dont une
+>   fin propre à la nuit 13, le carnet versionné à deux espaces (joueur /
+>   testeur), le voyageur temporel, **le son de la traque** (la bête s'entend
+>   approcher : pattes, gorge, halètement, cœur, signal d'arrivée, rage,
+>   morsure, hurlement), la mesure par nuit, « frayeur réduite » et le respect
+>   de « réduire les animations ».
+> - **Ouverture** : un seul interrupteur, `HALLOWEEN_PUBLIC`
+>   (`src/game/halloween-ouverture.js`), vérifié par
+>   `tools/halloween-ouverture-test.mjs` et `tools/molosse-canal-test.mjs`.
+> - **Abandonné pour 2026** : les 13 décors distincts (§3.3 — tout se court dans
+>   la ruelle), les zombies et les martiens, les modificateurs (brouillard,
+>   stroboscope, torche, double fantôme), la cinématique d'ouverture en 3 temps,
+>   la finale en 3 phases de caméra (retirée : jamais branchée), le magasin
+>   d'assets séparé (les décors restent dans `public/`, chargés nuit par nuit).
+
 Phase 0 du brief « Édition limitée Halloween 2026 ». Exploration du dépôt, points
 d'extension, plan en phases, risques — et ce qui ne tient pas dans le brief.
 

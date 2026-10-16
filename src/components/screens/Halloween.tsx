@@ -5,17 +5,21 @@ import { MONTEE, COURBE, DUREE, useAnimationsReduites } from '@/lib/mouvement';
 import { editionActive, EDITION_HALLOWEEN } from '@/game/edition';
 import { EST_TEST, HALLOWEEN_2026_OUVERT } from '@/game/canal';
 import {
-  NB_NUITS as CAL_NB, ouvertureDe, blocageDe, nuitsJouables,
+  NB_NUITS as CAL_NB, ouvertureDe, instantDOuverture, blocageDe, nuitsJouables,
   maintenant, simuler, jourSimule, sourceDuTemps, decalageDeLAppareil,
 } from '@/game/halloween-calendrier';
 import { reglerLHorloge, horlogeImmediate } from '@/game/halloween-horloge';
 import {
   NUITS, nuitDe, nuitOuverte, carnet, chronoDe, etapeDuCimetiere,
   armerLaNuit, rangerLaNuit, nuitEnCours, nuitCourante, etatDeLaChasse,
-  tenirLaNuit, compterLaMorsure, tirerLaScene, toutesTenues,
+  tenirLaNuit, compterLaMorsure, tirerLaScene, noterLaScene, toutesTenues,
 } from '@/game/halloween';
+import { cameraDe } from '@/game/halloween-cameras.js';
+import { prechargerLaNuit } from '@/game/chargement';
+import { mesurerLaNuit } from '@/game/halloween-mesure';
+import { preparerLaTraque, frayeurReduite, poserFrayeurReduite } from '@/game/halloween-traque';
 import {
-  CLES_TENUES, CLES_MORSURES, sceneDe, dit, peindreLaScene,
+  CLES_TENUES, CLES_MORSURES, FINALE, sceneDe, dit, peindreLaScene,
 } from '@/game/halloween-cinema';
 import { mot, chrono } from '@/game/halloween-mots';
 import { COURSES, distanceDe } from '@/game/halloween-courses.js';
@@ -55,6 +59,19 @@ function poserOuvert(v: boolean) {
   // L'appel ne bloque rien et son echec ne se voit pas : sans lui, la course
   // part sur la musique ordinaire.
   if (v) void chargerLaMusique();
+  // Et les sons de la bete, un par un, pendant qu'on choisit sa nuit.
+  if (v) preparerLaTraque();
+  // L'HEURE AVANT TOUT CALCUL. Le panneau decide ce qui s'ouvre : il doit le
+  // decider sur l'heure retenue (le cliquet, puis le serveur), jamais sur
+  // celle de l'appareil — meme le temps d'une premiere image. Voir
+  // horlogeImmediate (halloween-horloge.ts).
+  if (v) {
+    horlogeImmediate();
+    mesurerLaNuit('entree');
+    // Et le decor de la nuit qu'on va courir, pendant qu'on choisit.
+    const prochaine = Math.max(1, Math.min(CAL_NB, nuitsOuvertes()));
+    prechargerLaNuit(cameraDe(prochaine).deg);
+  }
   for (const f of abonnes) f();
 }
 function usePanneau(): boolean {
@@ -64,8 +81,14 @@ function usePanneau(): boolean {
   );
 }
 
-/** Le nom court d'un trace, pour le tableau des nuits. */
+/**
+ * Le nom court d'un trace, pour le tableau des nuits, dans la langue du joueur.
+ * Le libelle de la table des courses n'existe qu'en francais : l'interface
+ * anglaise affichait « 400 M EN LIGNE ».
+ */
 function trace(cle: string): string {
+  const traduit = mot('hw_trace_' + cle);
+  if (traduit !== 'hw_trace_' + cle) return traduit;
   const c = (COURSES as any)[cle];
   return c ? c.label : cle;
 }
@@ -75,9 +98,41 @@ function distanceDeLaNuit(nuit: { epreuve: string } | null): number {
   return nuit ? distanceDe(nuit.epreuve) : 100;
 }
 
-/** Lancer une nuit : son trace au cimetiere, avec la bete par-dessus. */
-function partir(n: number) {
+/**
+ * LA NUIT LA PLUS HAUTE QU'ON PEUT COURIR, A CET INSTANT — et la seule
+ * fonction a consulter avant d'en lancer une.
+ *
+ * Trois regimes, et c'est ici seulement qu'ils se tranchent :
+ *   — sans edition datee (`HALLOWEEN_2026_OUVERT` faux) : la victoire seule ;
+ *   — sur /test sans jour simule : les treize, dans n'importe quel ordre (le
+ *     §9 bis du brief, voir PanneauMolosse) ;
+ *   — sinon : la date ET la victoire (game/halloween-calendrier.ts).
+ */
+function nuitsOuvertes(): number {
+  if (!HALLOWEEN_2026_OUVERT) return nuitOuverte();
+  if (EST_TEST && jourSimule() === null) return CAL_NB;
+  return nuitsJouables(carnet().tenues, maintenant(), decalageDeLAppareil());
+}
+
+/** Cette nuit se court-elle maintenant ? */
+function jouableMaintenant(n: number): boolean {
+  return n >= 1 && n <= nuitsOuvertes();
+}
+
+/**
+ * Lancer une nuit : son trace au cimetiere, avec la bete par-dessus.
+ *
+ * ELLE REFUSE UNE NUIT FERMEE, quel que soit le bouton qui la demande. Le
+ * bouton « NUIT SUIVANTE » de l'ecran de fin l'appelait sans rien verifier :
+ * le 19 octobre, un joueur qui tenait la nuit 1 enchainait la 2, puis la 3…
+ * et finissait l'edition le premier soir (audit du 16/10). Le verrou vit donc
+ * ici, a la porte, plutot que dans chacun des ecrans qui menent a elle.
+ */
+function partir(n: number): boolean {
+  if (!jouableMaintenant(n)) return false;
   poserOuvert(false);
+  prechargerLaNuit(cameraDe(n).deg);
+  mesurerLaNuit('nuit', n);
   // CHAQUE NUIT A SON TRACE (halloween-loi.js) : cent metres, cent metres en
   // courbe, ou une ligne droite de deux, trois ou quatre cents. C'est ce qui
   // empeche les treize nuits d'etre treize fois la meme course.
@@ -87,6 +142,25 @@ function partir(n: number) {
   // la construction range les obstacles de la precedente — une bete armee
   // avant aurait ete balayee par le menage du 100 m qu'on vient de demander.
   armerLaNuit(n);
+  return true;
+}
+
+/**
+ * Le compte a rebours jusqu'a l'ouverture d'une nuit, ecrit court, dans la
+ * langue du joueur. Vide si elle est deja ouverte par la date.
+ *
+ * La treizieme compte jusqu'a 18 h CHEZ LE JOUEUR (instantDOuverture) : elle
+ * affichait « ouvre a 18 h » sans dire dans combien de temps.
+ */
+function resteAvant(n: number, ms: number): string {
+  const d = instantDOuverture(n, decalageDeLAppareil()) - ms;
+  if (d <= 0) return '';
+  const j = Math.floor(d / 86400000);
+  const h = Math.floor((d % 86400000) / 3600000);
+  const m = Math.max(1, Math.ceil((d % 3600000) / 60000));
+  if (j > 0) return mot('hw_duree_j', { j: String(j), h: String(h) });
+  if (h > 0) return mot('hw_duree_h', { h: String(h), m: String(m === 60 ? 59 : m) });
+  return mot('hw_duree_m', { m: String(m) });
 }
 
 /* ===========================================================================
@@ -117,7 +191,7 @@ export function BanderoleMolosse() {
   // LE MODE A ETE INJOUABLE SUR /test PENDANT TOUT CE TEMPS, et c'est ce
   // qu'aucun des deux verrous ne disait seul. `HALLOWEEN_OUVERT` decide QUI
   // voit le mode — le canal de test, et lui seul ; la fenetre decide QUAND on
-  // l'annonce — a partir du 24 octobre. Chacun etait bien regle. Leur
+  // l'annonce — a partir du 24 octobre a l'epoque, du 19 depuis. Chacun etait bien regle. Leur
   // intersection, elle, etait vide : le code partait bien dans le paquet de
   // /test, et l'accueil n'affichait rien, parce que cette banderole est la
   // SEULE porte du mode et qu'un joueur neuf n'a pas de carnet pour la forcer.
@@ -325,8 +399,22 @@ const GRESILLE = { opacity: [1, 0.3, 1, 0.55, 1, 1] };
 const GRESILLE_T = { duration: 5.5, times: [0, 0.015, 0.035, 0.05, 0.08, 1], repeat: Infinity, delay: 2.5 };
 
 function CarteDuMolosse({ commence }: { commence: boolean }) {
-  const n = nuitOuverte();
+  // LA NUIT QUI ATTEND LE JOUEUR, ET CE QUI LA RETIENT. La carte disait
+  // « NUIT 2 » des la nuit 1 tenue, alors que le calendrier ne l'ouvre que le
+  // lendemain : elle annoncait une course que le tableau refusait. Elle lit
+  // maintenant la meme regle que lui (nuitsOuvertes), et dit quand la nuit
+  // s'ouvre si c'est la date qui manque.
+  //
+  // L'heure retenue se pose au montage, avant le calcul (horlogeImmediate),
+  // et un battement tient le compte a rebours a jour.
+  const [, battre] = useState(() => { horlogeImmediate(); return 0; });
+  useEffect(() => {
+    const id = setInterval(() => battre(x => x + 1), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const n = Math.min(CAL_NB, carnet().tenues + 1);
   const fini = toutesTenues();
+  const attente = !fini && n > nuitsOuvertes() ? resteAvant(n, maintenant()) : '';
   const reduit = useAnimationsReduites();
   const panneau = usePanneau();
   const vivant = !reduit && !panneau;
@@ -388,6 +476,7 @@ function CarteDuMolosse({ commence }: { commence: boolean }) {
               {!fini && (
                 <span className="text-[9px] text-foreground/55 tracking-wide uppercase">
                   {mot('hw_nuit_n', { n: String(n) })}
+                  {attente && <> · {mot('hw_ouvre_dans', { d: attente })}</>}
                 </span>
               )}
             </span>
@@ -442,17 +531,6 @@ function useVoyageur(): [number | null, (n: number | null) => void] {
   return [jour, poser];
 }
 
-/** Le compte a rebours jusqu'a l'ouverture d'une nuit, ecrit court. */
-function resteAvant(n: number, ms: number): string {
-  const d = ouvertureDe(n) - ms;
-  if (d <= 0) return '';
-  const j = Math.floor(d / 86400000);
-  const h = Math.floor((d % 86400000) / 3600000);
-  const m = Math.floor((d % 3600000) / 60000);
-  if (j > 0) return `${j} j ${h} h`;
-  if (h > 0) return `${h} h ${m} min`;
-  return `${m} min`;
-}
 
 /**
  * Le bandeau du mode test, toujours visible pendant qu'on joue.
@@ -474,7 +552,7 @@ function BandeauTest({ jour }: { jour: number | null }) {
       <span className="flex-1 min-w-0 text-[9px] font-mono text-foreground/60 truncate">
         {jour === null
           ? `${mot('hw_test_tout')} · ${mot('hw_test_source', { s: source })}`
-          : mot('hw_test_jour', { d: `${18 + jour} oct` })}
+          : mot('hw_test_jour', { d: mot('hw_date', { d: String(18 + jour) }) })}
       </span>
     </div>
   );
@@ -534,19 +612,32 @@ export function PanneauMolosse() {
      repond. Sans cela, le Calendrier s'afficherait une fraction de seconde
      avec `Date.now()` — et sur la machine d'un joueur qui a avance sa montre,
      cette fraction de seconde montrerait treize cartes ouvertes. */
+  //
+  // (L'horloge immediate, elle, est posee par `poserOuvert`, AVANT le premier
+  // rendu : appelee ici, dans un effet, elle passait apres une premiere image
+  // calculee sur l'horloge de l'appareil.)
+  //
+  // ET ELLE SE REDEMANDE QUAND LA PAGE REVIENT AU PREMIER PLAN. L'heure avance
+  // sur la montre monotone du navigateur (halloween-calendrier.ts), qu'iOS
+  // suspend quand le telephone dort : un panneau laisse ouvert toute la nuit
+  // se reveillerait a l'heure du coucher.
   useEffect(() => {
     if (!affiche || !HALLOWEEN_2026_OUVERT) return;
-    horlogeImmediate();
     let vivant = true;
-    reglerLHorloge().then(() => { if (vivant) rafraichir(x => x + 1); });
-    return () => { vivant = false; };
+    const regler = () => {
+      reglerLHorloge().then(() => { if (vivant) rafraichir(x => x + 1); });
+    };
+    regler();
+    const auRetour = () => { if (document.visibilityState === 'visible') regler(); };
+    document.addEventListener('visibilitychange', auRetour);
+    return () => { vivant = false; document.removeEventListener('visibilitychange', auRetour); };
   }, [affiche]);
-  // Les ouvertures et les « dans X h » se lisent a l'horloge : un battement
-  // les tient a jour tant que le panneau est ouvert (il ne se redessine plus
-  // a chaque image, voir useGameStore).
+  // Les ouvertures et les « dans X min » se lisent a l'horloge, qui avance
+  // maintenant d'elle-meme : un battement les redessine tant que le panneau
+  // est ouvert (il ne se redessine plus a chaque image, voir useGameStore).
   useEffect(() => {
     if (!affiche) return;
-    const id = setInterval(() => rafraichir(x => x + 1), 30_000);
+    const id = setInterval(() => rafraichir(x => x + 1), 15_000);
     return () => clearInterval(id);
   }, [affiche]);
 
@@ -570,9 +661,8 @@ export function PanneauMolosse() {
   const toutOuvert = EST_TEST && jour === null;
   const ms = maintenant();
   const dec = decalageDeLAppareil();
-  const ouverte = !HALLOWEEN_2026_OUVERT ? nuitOuverte()
-    : toutOuvert ? CAL_NB
-    : nuitsJouables(c.tenues, ms, dec);
+  // La meme regle que `partir`, qui la reverifie au moment de lancer.
+  const ouverte = nuitsOuvertes();
 
   /* LE PANNEAU VIT AUSSI (09/10, « celle-la aussi »). La meme bete que sur la
      carte de l'accueil, en plus grand, dans l'en-tete : elle sort du noir a
@@ -594,8 +684,10 @@ export function PanneauMolosse() {
   if (!affiche || (state !== 'title' && state !== 'open')) return null;
 
   return (
+    // Au-dessus du bouton flottant du tchat (z-55, TchatMarques.tsx) : il se
+    // posait sur les dernieres nuits du calendrier, au telephone.
     <motion.div
-      className="absolute inset-0 z-40 flex items-end sm:items-center justify-center
+      className="absolute inset-0 z-[56] flex items-end sm:items-center justify-center
                  bg-black/70 backdrop-blur-sm pointer-events-auto p-0 sm:p-6"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: DUREE.rapide }}
     >
@@ -652,14 +744,24 @@ export function PanneauMolosse() {
                 {mot('hw_regle_titre')}
               </div>
               <p className="text-[11px] leading-snug text-foreground/75">{mot('hw_regle')}</p>
+              {/* L'AVERTISSEMENT, une fois, avant la premiere nuit : la bete
+                  fait maintenant du bruit, et elle est faite pour surprendre. */}
+              <p className="mt-1.5 text-[10px] leading-snug text-foreground/50">{mot('hw_avertissement')}</p>
             </div>
           )}
+
+          <Frayeur />
 
           <BandeauTest jour={jour} />
           <Voyageur jour={jour} poser={n => { poserJour(n); rafraichir(x => x + 1); }} />
 
           <div className="text-[9px] font-bold tracking-[0.2em] uppercase text-foreground/45 mb-2">
             {HALLOWEEN_2026_OUVERT ? mot('hw_cal_titre') : mot('hw_nuits')}
+            {HALLOWEEN_2026_OUVERT && (
+              <span className="ml-2 normal-case tracking-normal font-normal text-foreground/40">
+                {mot('hw_cal_sous')}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-col gap-1.5">
@@ -713,9 +815,7 @@ export function PanneauMolosse() {
                             {' · '}{mot(nuit.depart === 'surpris' ? 'hw_dep_surpris'
                                        : nuit.depart === 'elan' ? 'hw_dep_elan' : 'hw_dep_blocs')}</>
                         : parLaDate
-                          ? (nuit.n === CAL_NB && resteAvant(nuit.n, ms) === ''
-                              ? mot('hw_ce_soir')
-                              : mot('hw_ouvre_dans', { d: resteAvant(nuit.n, ms) || '—' }))
+                          ? mot('hw_ouvre_dans', { d: resteAvant(nuit.n, ms) || '—' })
                           : mot('hw_verrouille')}
                       {best !== null && <> · {mot('hw_meilleur', { s: chrono(best) })}</>}
                     </span>
@@ -755,6 +855,36 @@ export function PanneauMolosse() {
   );
 }
 
+/**
+ * LE REGLAGE « FRAYEUR REDUITE » : pas de signal d'arrivee, pas d'aboiement,
+ * pas de coeur, pas de secousse ni de vibration. La bete reste audible — ses
+ * pattes et sa gorge sont l'information du mode —, elle cesse de faire
+ * sursauter. Range sur l'appareil (halloween-traque.ts).
+ */
+function Frayeur() {
+  const [doux, poser] = useState(frayeurReduite);
+  return (
+    <button
+      onClick={() => { poserFrayeurReduite(!doux); poser(!doux); }}
+      role="switch" aria-checked={doux}
+      className="w-full mb-4 flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02]
+                 px-3 py-2 text-left"
+    >
+      <span className="flex-1 min-w-0 flex flex-col leading-tight">
+        <span className="text-[10px] font-bold tracking-[0.16em] uppercase text-foreground/70">
+          {mot('hw_frayeur')}
+        </span>
+        <span className="text-[10px] text-foreground/45">{mot('hw_frayeur_sous')}</span>
+      </span>
+      <span className={`relative shrink-0 w-9 h-5 rounded-full transition-colors
+                        ${doux ? 'bg-[#7CD04E]' : 'bg-white/15'}`}>
+        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-black transition-[left]
+                          ${doux ? 'left-[18px]' : 'left-0.5'}`} />
+      </span>
+    </button>
+  );
+}
+
 /* ===========================================================================
    CE QU'ON RACONTE APRES
    =========================================================================== */
@@ -783,6 +913,8 @@ export function FinDeLaNuit() {
   const [scene] = useState(() => {
     const c = etatDeLaChasse();
     const mordu = !c || c.verdict !== 'passe';
+    // La treizieme tenue a SA scene, jamais tiree au sort : c'est la fin.
+    if (!mordu && c && c.nuit.n === NUITS.length) return { mordu, cle: FINALE.cle };
     return { mordu, cle: tirerLaScene(mordu ? CLES_MORSURES : CLES_TENUES) };
   });
 
@@ -797,8 +929,12 @@ export function FinDeLaNuit() {
   useEffect(() => {
     const e = etatDeLaChasse();
     if (!e || !nuit) return;
-    if (e.verdict === 'passe') tenirLaNuit(nuit.n, e.chrono);
-    else compterLaMorsure();
+    if (e.verdict === 'passe') {
+      tenirLaNuit(nuit.n, e.chrono, e.ecartMin);
+      mesurerLaNuit('tenue', nuit.n);
+    } else compterLaMorsure();
+    // La scene est montree : on la note maintenant, une fois (voir tirerLaScene).
+    if (scene.cle !== FINALE.cle) noterLaScene(scene.cle);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // L'horloge de la scenette. Elle tourne sur sa propre boucle : le chrono de
@@ -839,9 +975,22 @@ export function FinDeLaNuit() {
 
   const passe = !!c && c.verdict === 'passe';
   const suivante = nuit.n < NUITS.length ? nuit.n + 1 : null;
+  // LA SUIVANTE N'EST PROPOSEE QUE SI ELLE EST OUVERTE. Ce bouton menait a la
+  // nuit d'apres sans rien demander au calendrier — treize nuits le premier
+  // soir. Fermee par la date, on dit quand elle s'ouvre, et on propose de
+  // rejouer celle-ci pour gratter des dixiemes.
+  const suivanteOuverte = suivante !== null && jouableMaintenant(suivante);
+  const attenteSuivante = passe && suivante !== null && !suivanteOuverte
+    ? resteAvant(suivante, maintenant()) : '';
+  // L'ecart le plus court de la course : ce qui se raconte apres une victoire
+  // — quand il vaut d'etre raconte. Huit metres ne sont pas un frisson.
+  const frole = passe && c && c.ecartMin < 4 ? c.ecartMin : null;
 
   const sortir = () => { rangerLaNuit(); (SprinterApp as any).goHome(); };
-  const rejouer = (n: number) => { rangerLaNuit(); partir(n); };
+  // Une nuit que le calendrier refuse ramene a l'accueil plutot que de laisser
+  // le joueur sur un ecran de fin sans nuit (le cas ne devrait pas se
+  // presenter : les boutons ne proposent que des nuits ouvertes).
+  const rejouer = (n: number) => { rangerLaNuit(); if (!partir(n)) (SprinterApp as any).goHome(); };
 
   return (
     <div className="absolute inset-0 z-30 pointer-events-auto bg-[#0B0710]">
@@ -905,6 +1054,23 @@ export function FinDeLaNuit() {
             ))}
           </AnimatePresence>
         </div>
+        {/* LE PIED DE LA CARTE : ce qu'on retient de cette nuit, et quand
+            revient la suivante. Dans la carte plutot qu'a cote : poses en
+            haut ou au-dessus des boutons, ils passaient sous elle, en paysage
+            comme en portrait. */}
+        {(frole !== null || (finie && attenteSuivante && suivante !== null)) && (
+          <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-0.5
+                          font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase">
+            {frole !== null && (
+              <span className="text-[#F8A02E]">{mot('hw_frole', { m: frole.toFixed(1) })}</span>
+            )}
+            {finie && attenteSuivante && suivante !== null && (
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-foreground/60">
+                {mot('hw_prochaine', { n: String(suivante), d: attenteSuivante })}
+              </motion.span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* LES BOUTONS N'ARRIVENT QU'A LA FIN DE L'HISTOIRE. Poses tout de suite,
@@ -920,7 +1086,7 @@ export function FinDeLaNuit() {
                                text-foreground/70 text-[11px] font-black tracking-widest uppercase">
               {mot('hw_sortir')}
             </button>
-            {passe && suivante ? (
+            {passe && suivante && suivanteOuverte ? (
               <button onClick={() => rejouer(suivante)}
                       className="flex-[2] py-3 rounded-xl bg-[#E86826] text-black
                                  text-[11px] font-black tracking-widest uppercase active:scale-95
