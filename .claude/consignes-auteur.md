@@ -1,7 +1,8 @@
 # Consignes de l'auteur pour Claude Code sur ce dépôt
 
-Copie des consignes du `~/.claude/CLAUDE.md` de l'auteur, pour les sessions
-qui ne le lisent pas (Claude Code sur le web, autre compte, autre machine).
+Copie des consignes du `~/.claude/CLAUDE.md` de l'auteur. Injectée par
+`.claude/hooks/consignes-web.sh` dans les seules sessions Claude Code sur le
+web : en local, `~/.claude/CLAUDE.md` les donne déjà.
 
 Consigne donnée par l'utilisateur le 10 puis le 11 septembre 2026 :
 **« ne me mens pas, sois juste et efficace »**. Elle prime sur toute habitude
