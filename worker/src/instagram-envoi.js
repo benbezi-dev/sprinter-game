@@ -74,6 +74,42 @@ export async function ensureEnvoiTables(db) {
   pret.add(db);
 }
 
+/**
+ * L'image telle que Meta la lira, ou une erreur qui dit pourquoi non.
+ *
+ * Le depot rangeait ce qu'on lui donnait, et `/img/` le rendait sous
+ * `image/jpeg` sans regarder. Deux formes passaient ainsi la porte pour
+ * echouer chez Meta, loin d'ici, sous un message qui ne nomme rien :
+ *   - une adresse `data:image/jpeg;base64,...`, ce que rend `toDataURL` :
+ *     le prefixe faisait echouer `atob` a la lecture, et Meta recevait une
+ *     erreur 500 au lieu d'une image ;
+ *   - un PNG, ce que rend `toDataURL()` sans argument : Instagram ne publie
+ *     que du JPEG, et l'en-tete annoncait un JPEG qui n'en etait pas un.
+ * On retire donc le prefixe, et l'on regarde les trois premiers octets : un
+ * JPEG commence toujours par FF D8 FF. C'est ici que l'erreur se dit le mieux,
+ * a celui qui envoie, avant que rien ne parte chez Meta.
+ */
+export function jpegDe(image) {
+  let b64 = String(image || '').trim();
+  const prefixe = /^data:[^,]*,/i.exec(b64);
+  if (prefixe) {
+    if (!/;base64,$/i.test(prefixe[0])) throw new Error('image : adresse data sans base64');
+    b64 = b64.slice(prefixe[0].length);
+  }
+  b64 = b64.replace(/\s+/g, '');
+  if (!b64) throw new Error('image vide');
+  if (b64.length % 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) {
+    throw new Error('image : base64 illisible');
+  }
+  const tete = atob(b64.slice(0, 8));
+  const octet = i => tete.charCodeAt(i);
+  if (octet(0) === 0xFF && octet(1) === 0xD8 && octet(2) === 0xFF) return b64;
+  if (tete.startsWith('\x89PNG')) {
+    throw new Error("image PNG : Instagram ne prend que du JPEG — toDataURL('image/jpeg', 0.92)");
+  }
+  throw new Error("image : ce n'est pas un JPEG");
+}
+
 /** Un identifiant qu'on ne devine pas. */
 function tirerId() {
   const b = new Uint8Array(16);
@@ -89,10 +125,10 @@ function tirerId() {
  * est exactement le genre de chose qu'on decouvre trop tard. Chaque depot
  * paie donc le nettoyage du precedent.
  */
-export async function deposerImage(db, jpegBase64) {
+export async function deposerImage(db, image) {
   await ensureEnvoiTables(db);
-  const taille = Math.floor(String(jpegBase64 || '').length * 0.75);
-  if (!jpegBase64) throw new Error('image vide');
+  const jpegBase64 = jpegDe(image);
+  const taille = Math.floor(jpegBase64.length * 0.75);
   if (taille > MAX_OCTETS) throw new Error('image trop lourde');
 
   try {
@@ -186,6 +222,13 @@ export async function diagnostiquer(env) {
     const m = await r.json().catch(() => ({}));
     d.meta = r.ok ? { ok: true, nom: m.username || m.name || null, id: m.user_id || m.id || null }
                   : { ok: false, http: r.status, erreur: messageMeta(m) };
+    // Quand le jeton cessera-t-il de marcher ? `debug_token` le dit pour un
+    // jeton Facebook Login ; graph.instagram.com n'a pas cette route, et un
+    // jeton Instagram Login se compte donc a la main : soixante jours apres
+    // avoir ete pose. Mieux vaut le lire ici que l'apprendre par un envoi rate.
+    if (r.ok && !estInstagramLogin(j)) {
+      d.expiration = await expirationDe(j);
+    }
     if (r.ok && c) {
       const rc = await fetch(`${hote(env)}/${encodeURIComponent(c)}?fields=id,username`
                            + `&access_token=${encodeURIComponent(j)}`);
@@ -197,6 +240,33 @@ export async function diagnostiquer(env) {
     d.meta = { ok: false, erreur: String(e && e.message || e) };
   }
   return d;
+}
+
+/** L'echeance d'un jeton Facebook Login, ou null si Meta ne la donne pas. */
+async function expirationDe(j) {
+  try {
+    const r = await fetch(`${API}/debug_token?input_token=${encodeURIComponent(j)}`
+                        + `&access_token=${encodeURIComponent(j)}`);
+    const d = await r.json().catch(() => ({}));
+    const info = d && d.data;
+    if (!r.ok || !info) return null;
+    // 0 veut dire « n'expire pas » : c'est le cas d'un jeton de Page tire d'un
+    // jeton utilisateur longue duree.
+    // La plus proche des deux echeances : celle du jeton, et celle de l'acces
+    // aux donnees, qui arrete aussi la publication quand elle tombe.
+    const fins = [info.expires_at, info.data_access_expires_at].map(Number).filter(n => n > 0);
+    if (!fins.length) return { jamais: true, valide: !!info.is_valid };
+    const fin = Math.min(...fins);
+    const jours = Math.floor((fin * 1000 - Date.now()) / 86400000);
+    return {
+      valide: !!info.is_valid,
+      le: new Date(fin * 1000).toISOString().slice(0, 10),
+      jours,
+      alerte: !info.is_valid || jours < 7,
+    };
+  } catch {
+    return null;
+  }
 }
 
 /* ------------------------------------------------------------ les formats
@@ -221,11 +291,30 @@ export const FORMATS = ['fil', 'story', 'reel', 'story-video'];
 export const MAX_VIDEO_OCTETS = 95 * 1024 * 1024;
 
 const echec = (etape, erreur, http) => ({ ok: false, etape, erreur, http });
+
+/** Combien de fois, et tous les combien, on demande a Meta s'il a pris
+    l'image : une minute en tout. Le temps passe a attendre ne compte pas
+    dans le temps de calcul d'un Worker. */
+const ATTENTE_ESSAIS = 20;
+const ATTENTE_PAS_MS = 3000;
 const nonPret = () => echec('configuration',
   'IG_JETON et IG_COMPTE ne sont pas poses sur le Worker');
 
 /** Le message de Meta, s'il en a donne un. */
-const messageMeta = d => (d && d.error && d.error.message) || 'reponse inattendue';
+const messageMeta = d => {
+  const e = d && d.error;
+  if (!e) return 'reponse inattendue';
+  // 190 est le code de Meta pour un jeton refuse : expire, revoque, ou mot de
+  // passe change. Son message (« Session has expired... ») ne dit pas quoi
+  // faire, et c'est la panne la plus probable d'un envoi qui marchait : un
+  // jeton copie de l'explorateur vit une heure, un jeton longue duree soixante
+  // jours, et rien ici ne le renouvelle.
+  if (Number(e.code) === 190) {
+    return `jeton refuse ou expire (code 190) : en poser un neuf avec `
+         + `wrangler secret put IG_JETON — ${e.message || ''}`.trim();
+  }
+  return e.message || 'reponse inattendue';
+};
 
 /** Cree un conteneur. Rend son identifiant, et l'adresse de depot pour une video. */
 async function creerConteneur(env, champs) {
@@ -317,13 +406,27 @@ export async function publierInstagram(env, { adresseImage, legende, format = 'f
   // --- 2. attendre que Meta ait pris l'image -------------------------------
   // Sans cette attente, la publication echoue par intermittence — et une panne
   // intermittente est celle qu'on met le plus longtemps a comprendre.
-  for (let i = 0; i < 10; i++) {
+  //
+  // L'attente ne s'arretait qu'au bout de quinze secondes, et l'on publiait
+  // ALORS QUAND MEME : un conteneur pas pret echoue, et la route effacait
+  // ensuite l'image, si bien qu'aucun nouvel essai n'etait possible. On attend
+  // desormais une minute, et si Meta n'a toujours pas fini, on NE publie PAS :
+  // on rend le conteneur, que `/reseaux/publier` pourra envoyer plus tard,
+  // l'image restant deposee le temps de sa vie normale.
+  let pret = false;
+  for (let i = 0; i < ATTENTE_ESSAIS; i++) {
     const e = await etatConteneur(env, c.creation);
-    if (e.ok && e.etat === 'FINISHED') break;
-    if (e.ok && e.etat === 'ERROR') {
+    if (e.ok && e.etat === 'FINISHED') { pret = true; break; }
+    if (e.ok && (e.etat === 'ERROR' || e.etat === 'EXPIRED')) {
       return echec('preparation', `Meta n a pas pu lire l image deposee${e.detail ? ' — ' + e.detail : ''}`);
     }
-    await new Promise(r => setTimeout(r, 1500));
+    await new Promise(r => setTimeout(r, ATTENTE_PAS_MS));
+  }
+  if (!pret) {
+    return { ...echec('preparation',
+      `Meta n a pas fini de lire l image en ${Math.round(ATTENTE_ESSAIS * ATTENTE_PAS_MS / 1000)} s : `
+      + 'rien n a ete publie, le conteneur peut partir par /reseaux/publier'),
+      enAttente: true, creation: c.creation };
   }
 
   // --- 3. la publication ---------------------------------------------------
