@@ -36,8 +36,10 @@
 # Le drac, le taxi, le bus (09/10), le banc trencadis (10/10), le kiosque,
 # le jerk, le simit, le hot-dog et la cesme, puis le baobab, le zellige, le
 # sakura, la colonne Morris, la fontaine Wallace, la guerite, le fanous, l'etal
-# et les tambours (15/10) ne sont plus modelises ici :
+# et les tambours (15/10), puis le torii, le toro, la terrasse, le reverbere,
+# la borne, la boite et la cabine (16/10) ne sont plus modelises ici :
 # ce sont des modeles Tripo, rendus de la meme facon (voir TRIPO plus bas).
+# Les fonctions ci-dessous restent la doublure si un modele Tripo manque.
 # -----------------------------------------------------------------------
 
 import bpy
@@ -614,6 +616,13 @@ TRIPO = {
     'fanous': dict(source='fanous-tripo.glb', rot=0.0, hauteur=2.69),
     'etal': dict(source='etal-tripo.glb', rot=270.0, hauteur=2.55),
     'tambours': dict(source='tambours-tripo.glb', rot=270.0, hauteur=1.04),
+    'torii': dict(source='torii-tripo.glb', rot=270.0, hauteur=5.0),
+    'toro': dict(source='toro-tripo.glb', rot=270.0, hauteur=2.26),
+    'terrasse': dict(source='terrasse-tripo.glb', rot=270.0, hauteur=0.95),
+    'reverbere': dict(source='reverbere-tripo.glb', rot=270.0, hauteur=4.1),
+    'borne': dict(source='borne-tripo.glb', rot=270.0, hauteur=0.87),
+    'boite': dict(source='boite-tripo.glb', rot=270.0, hauteur=1.61),
+    'cabine': dict(source='cabine-tripo.glb', rot=270.0, hauteur=2.52),
 }
 
 

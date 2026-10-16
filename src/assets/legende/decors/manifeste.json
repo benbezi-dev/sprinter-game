@@ -70,22 +70,22 @@
    "w": 763
   },
   "boite": {
-   "ax": 190.5,
-   "ay": 832.36,
+   "ax": 184.5,
+   "ay": 838.67,
    "f": "boite.webp",
    "h": 872,
    "hauteur_m": 1.61,
-   "largeur_m": 0.72,
-   "w": 381
+   "largeur_m": 0.69,
+   "w": 369
   },
   "borne": {
-   "ax": 224.5,
-   "ay": 833.15,
+   "ax": 308.0,
+   "ay": 810.94,
    "f": "borne.webp",
-   "h": 872,
+   "h": 874,
    "hauteur_m": 0.87,
-   "largeur_m": 0.46,
-   "w": 449
+   "largeur_m": 0.65,
+   "w": 616
   },
   "bus": {
    "ax": 636.0,
@@ -97,13 +97,13 @@
    "w": 1272
   },
   "cabine": {
-   "ax": 176.5,
-   "ay": 834.5,
+   "ax": 156.0,
+   "ay": 838.01,
    "f": "cabine.webp",
    "h": 872,
    "hauteur_m": 2.52,
-   "largeur_m": 1.04,
-   "w": 353
+   "largeur_m": 0.91,
+   "w": 312
   },
   "casablanca": {
    "ax": 217.0,
@@ -292,13 +292,13 @@
    "w": 693
   },
   "reverbere": {
-   "ax": 78.0,
-   "ay": 859.55,
+   "ax": 75.0,
+   "ay": 854.14,
    "f": "reverbere.webp",
-   "h": 871,
-   "hauteur_m": 4.11,
-   "largeur_m": 0.7,
-   "w": 156
+   "h": 872,
+   "hauteur_m": 4.1,
+   "largeur_m": 0.68,
+   "w": 150
   },
   "sakura": {
    "ax": 534.0,
@@ -337,31 +337,31 @@
    "w": 2442
   },
   "terrasse": {
-   "ax": 735.0,
-   "ay": 832.02,
+   "ax": 553.0,
+   "ay": 812.62,
    "f": "terrasse.webp",
-   "h": 872,
+   "h": 876,
    "hauteur_m": 0.95,
-   "largeur_m": 1.64,
-   "w": 1470
+   "largeur_m": 1.35,
+   "w": 1106
   },
   "torii": {
-   "ax": 595.0,
-   "ay": 858.0,
+   "ax": 455.5,
+   "ay": 859.26,
    "f": "torii.webp",
    "h": 872,
-   "hauteur_m": 5.08,
-   "largeur_m": 6.93,
-   "w": 1190
+   "hauteur_m": 5.0,
+   "largeur_m": 5.19,
+   "w": 911
   },
   "toro": {
-   "ax": 185.0,
-   "ay": 833.11,
+   "ax": 215.0,
+   "ay": 836.34,
    "f": "toro.webp",
    "h": 872,
    "hauteur_m": 2.26,
-   "largeur_m": 0.97,
-   "w": 370
+   "largeur_m": 1.12,
+   "w": 430
   },
   "trencadis": {
    "ax": 1562.5,
