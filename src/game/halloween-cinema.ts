@@ -387,7 +387,8 @@ function trameDeGrain(): HTMLCanvasElement {
 
    L'ATTENTE et SON SOMMEIL n'ont plus d'image (16/10, « retire ces deux
    la, garde les autres ») : la bete de face, en gros plan, se lisait comme
-   une figurine. Elles retombent sur la scene dessinee.
+   une figurine. LA TOMBE et LE DERNIER BUS non plus (16/10, « retire la
+   tombe et le dernier bus »). Elles retombent sur la scene dessinee.
 
    Hors production comme le reste du mode (HORS_PRODUCTION, vite.config.ts).
    Une carte dont l'image manque — fichier absent, chargement rate — retombe
@@ -398,11 +399,7 @@ const CARTES = import.meta.glob('/src/assets/molosse-cartes/*.webp', { query: '?
 /** Les yeux de la bete dans chaque carte (fractions de l'image), mesures dans Unity. */
 const YEUX_DES_CARTES: Record<string, Array<[number, number]>> = {
   odeur: [[0.3618, 0.4227], [0.3193, 0.4150]],
-  bus: [[0.1406, 0.5127], [0.2091, 0.5130]],
 };
-
-/** LA TOMBE : ou graver son nom sur la stele (x0, y0, x1, y1, fractions de l'image). */
-const NOM_SUR_LA_TOMBE = [0.47, 0.20, 0.74, 0.27];
 
 type Carte = { im: HTMLImageElement | null; demande: number; ratee: boolean };
 const cartes: Record<string, Carte> = {};
@@ -427,11 +424,6 @@ function carteDe(cle: string): Carte | null {
 
 /** Faire venir l'image d'une carte avant d'en avoir besoin. */
 export function prechargerLaCarte(cle: string) { carteDe(cle); }
-
-/** Le nom du joueur, tel qu'il le porte dans le jeu. */
-function nomDuJoueur(): string {
-  try { return (localStorage.getItem('sprinter_player_name') || '').trim(); } catch { return ''; }
-}
 
 /** La carte en image, couvrant la toile : elle sort du noir, la camera s'avance a peine. */
 function peindreLaCarte(ctx: CanvasRenderingContext2D, cle: string, im: HTMLImageElement,
@@ -476,25 +468,6 @@ function peindreLaCarte(ctx: CanvasRenderingContext2D, cle: string, im: HTMLImag
       ctx.beginPath(); ctx.arc(ox, oy, r, 0, TAU); ctx.fill();
     }
     ctx.globalCompositeOperation = 'source-over';
-  }
-  // LA TOMBE PORTE SON NOM, grave dans le granit : une ombre au fond du
-  // creux, une levre claire en dessous. Il apparait apres l'image.
-  if (cle === 'tombe') {
-    const nom = (nomDuJoueur() || '???').toUpperCase().slice(0, 16);
-    const [a0, b0, a1, b1] = NOM_SUR_LA_TOMBE;
-    const zx = x0 + (a0 + a1) / 2 * w, zy = y0 + (b0 + b1) / 2 * h;
-    const zl = (a1 - a0) * w, zh = (b1 - b0) * h;
-    let taille = zh * 0.42;
-    ctx.font = `600 ${taille}px Georgia, 'Times New Roman', serif`;
-    const mesure = ctx.measureText(nom).width;
-    if (mesure > zl * 0.92) { taille *= zl * 0.92 / mesure; ctx.font = `600 ${taille}px Georgia, 'Times New Roman', serif`; }
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.globalAlpha = entre * Math.min(1, Math.max(0, (t - 1.4) / 1.2));
-    ctx.fillStyle = 'rgba(190,195,205,0.35)';
-    ctx.fillText(nom, zx, zy + taille * 0.05);
-    ctx.fillStyle = 'rgba(8,8,12,0.92)';
-    ctx.fillText(nom, zx, zy);
   }
   ctx.restore();
 }
