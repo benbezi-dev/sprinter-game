@@ -40,6 +40,14 @@
    - par destinataire : une sonnerie de tchat par minute, une d'invitation
      toutes les six heures — quel que soit le nombre de gens qui ecrivent ;
    - par inviteur : quinze invitations par jour, une seule par personne.
+
+   LE COMPTE SPRINTERGAME (demande de l'auteur, 16/10/2026) : la voix du jeu
+   dans le tchat, qui ne roule pour aucun camp. Il n'a ni camp ni inscription :
+   ses messages portent le camp « sprinter », qu'aucun joueur ne peut avoir
+   (marques.js n'accepte qu'adidas ou nike) — c'est ce qui les distingue, et
+   le jeu les signe d'un badge que personne ne peut imiter en prenant le meme
+   nom. Il ecrit dans le tchat commun seulement, sous la cle TCHAT_CLE
+   (acces.js, `estTchatOfficiel`), sans cadence ni filtre : c'est l'auteur.
 --------------------------------------------------------------------------- */
 import { EVENEMENT, inscriptionDe, ensureMarquesTables } from './marques.js';
 import { texteRecevable, TCHAT_MAX } from './mot.js';
@@ -55,6 +63,17 @@ export const SONNERIE_INVIT_MS = 6 * 3600_000;
 export const INVITS_PAR_JOUR = 15;
 /** Le prefixe des signalements de ce tchat dans la file de moderation. */
 export const PREFIXE_SIGNALEMENT = 'tchat-marques:';
+/** Le compte du jeu : son nom, sa cle, et le camp qui n'en est pas un. */
+export const OFFICIEL = { name: 'SprinterGame', key: 'sprintergame', camp: 'sprinter' };
+
+/**
+ * Ce nom se fait-il passer pour le compte du jeu ? « Sprinter Game »,
+ * « sprinter_game », « SPRINTERGAME » : tout ce qui, lettres seules, redonne
+ * son nom.
+ */
+export function imiteOfficiel(nom) {
+  return String(nom || '').toLowerCase().replace(/[^a-z0-9]/g, '') === OFFICIEL.key;
+}
 
 const pret = new WeakSet();
 export async function ensureTchatTables(db) {
@@ -154,6 +173,10 @@ async function nomDe(db, nameKey) {
  */
 export async function poster(db, { auteurKey, auteurName, texte, pour = null, prive = false, maintenant = Date.now() }) {
   await ensureTchatTables(db);
+  // Le nom du jeu ne s'emprunte pas, meme reserve avant que le compte existe.
+  if (imiteOfficiel(auteurName) || imiteOfficiel(auteurKey)) {
+    return { status: 403, corps: { error: 'nom du jeu' }, sonner: null };
+  }
   const ins = await inscriptionDe(db, auteurKey);
   if (!ins) return { status: 409, corps: { error: 'aucun camp choisi' }, sonner: null };
   if (await estBanni(db, auteurKey)) return { status: 403, corps: { error: 'depot refuse' }, sonner: null };
@@ -200,12 +223,35 @@ export async function poster(db, { auteurKey, auteurName, texte, pour = null, pr
   };
 }
 
+/**
+ * Un message du compte SprinterGame, dans le tchat commun. L'appelant a deja
+ * verifie la cle. Le texte n'est que nettoye et borne : pas de filtre, c'est
+ * l'auteur qui ecrit — il peut donner un lien vers le site.
+ */
+export async function posterOfficiel(db, { texte, maintenant = Date.now() }) {
+  await ensureTchatTables(db);
+  const propre = typeof texte === 'string' ? texte.replace(/\s+/g, ' ').trim() : '';
+  if (!propre) return { status: 422, corps: { error: 'texte refuse', raison: 'vide' } };
+  if (propre.length > TCHAT_MAX) return { status: 422, corps: { error: 'texte refuse', raison: 'long' } };
+  const r = await db.prepare(
+    `INSERT INTO marques_tchat (evenement, quand, auteur_key, auteur_name, camp, prive, texte)
+     VALUES (?, ?, ?, ?, ?, 0, ?)`
+  ).bind(EVENEMENT, maintenant, OFFICIEL.key, OFFICIEL.name, OFFICIEL.camp, propre).run();
+  const id = r && r.meta ? r.meta.last_row_id : r && r.lastInsertRowid != null ? Number(r.lastInsertRowid) : null;
+  return {
+    status: 200,
+    corps: { ok: true, message: enLigne({ id, quand: maintenant, auteur_key: OFFICIEL.key, auteur_name: OFFICIEL.name,
+      camp: OFFICIEL.camp, pour_key: null, pour_name: null, prive: 0, texte: propre }, OFFICIEL.key) },
+  };
+}
+
 /** Une ligne de la base, telle que le jeu la recoit. */
 function enLigne(m, moi) {
   return {
     id: m.id, quand: m.quand, de: m.auteur_name, camp: m.camp,
     pour: m.pour_name || null, prive: !!m.prive,
     texte: m.texte,
+    officiel: m.camp === OFFICIEL.camp,
     a_moi: !!moi && m.auteur_key === moi,
     pour_moi: !!moi && m.pour_key === moi,
   };

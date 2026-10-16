@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, MessageCircle, Search, ChevronDown } from 'lucide-react';
+import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, MessageCircle, Search, ChevronDown, BadgeCheck } from 'lucide-react';
 import { FEUILLE, VOILE, RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { useRetour } from '@/hooks/use-retour';
 import { surCourrier } from '@/game/boite';
@@ -11,6 +11,7 @@ import { bloquer, MOTIFS, type Motif } from '@/game/moderation';
 import { NOM_CAMP, type Camp } from '@/game/marques';
 import {
   lireTchat, ecrire, signalerMessage, lireInvitables, inviter, poserVu, dernierVu,
+  ecrireOfficiel, aLaCleOfficielle,
   type Message, type Participant, type Invitation, type Invitable, type Refus,
 } from '@/game/tchat-marques';
 
@@ -25,9 +26,14 @@ import {
 
    Le tchat se relit toutes les quatre secondes tant qu'il est ouvert, et
    tout de suite quand la boite sonne (un prive, une designation).
+
+   Le compte SPRINTERGAME (16/10) : la voix du jeu, d'aucun camp. Ses messages
+   portent un badge et une teinte a eux ; on ne peut ni lui repondre, ni le
+   signaler, ni le bloquer. Le telephone qui porte sa cle (tchat-officiel.ts)
+   ecrit en son nom dans TOUS, ou sous son propre nom d'un geste.
 --------------------------------------------------------------------------- */
 
-const TEINTE: Record<Camp, string> = { adidas: '#FFFFFF', nike: '#FFD426' };
+const TEINTE: Record<Camp | 'sprinter', string> = { adidas: '#FFFFFF', nike: '#FFD426', sprinter: '#5CC8FF' };
 const RELIRE_MS = 4000;
 const RELIRE_REPLIE_MS = 15000;
 const MAX = 140;
@@ -48,6 +54,8 @@ function texteRefus(r: Refus, raison: string | undefined, fr: boolean): string {
   }
   const t: Record<Refus, [string, string]> = {
     nom: ['Ce nom appartient à un autre appareil : récupère-le avec ton code pour écrire.', 'This name belongs to another device: recover it with your code to write.'],
+    imite: ['Ce nom est celui du jeu : choisis-en un autre pour écrire.', 'This is the game’s name: pick another one to write.'],
+    cle: ['La clé SprinterGame est refusée : elle a été oubliée sur ce téléphone.', 'The SprinterGame key was refused and has been removed from this phone.'],
     camp: ['Choisis ton camp pour écrire dans le tchat.', 'Pick your side to write in the chat.'],
     filtre: ['', ''],
     vite: ['Doucement : quelques secondes entre deux messages.', 'Easy: a few seconds between two messages.'],
@@ -116,16 +124,24 @@ function useTchat(deplie: boolean) {
 /** Une ligne du tchat. */
 function Ligne({ m, fr, onMenu }: { m: Message; fr: boolean; onMenu: (m: Message) => void }) {
   const vise = m.pour_moi;
+  // SprinterGame : on ne lui repond pas, on ne le signale ni ne le bloque
+  const touchable = !m.a_moi && !m.officiel;
   return (
     <motion.li initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
       className={`group flex flex-col px-2.5 py-1.5 rounded-xl text-sm leading-snug
-                  ${vise ? 'bg-primary/15 border border-primary/40' : m.a_moi ? 'bg-white/5' : ''}`}>
+                  ${m.officiel ? 'bg-[#5CC8FF]/10 border border-[#5CC8FF]/35'
+                    : vise ? 'bg-primary/15 border border-primary/40' : m.a_moi ? 'bg-white/5' : ''}`}>
       <span className="flex items-baseline gap-1.5 text-[11px] min-w-0">
-        <button onClick={() => !m.a_moi && onMenu(m)} disabled={m.a_moi}
+        <button onClick={() => touchable && onMenu(m)} disabled={!touchable}
                 className="font-black truncate max-w-[45%] hover:underline disabled:hover:no-underline"
-                style={{ color: TEINTE[m.camp] }}>
+                style={{ color: TEINTE[m.camp] ?? TEINTE.sprinter }}>
           {m.de}
         </button>
+        {m.officiel && (
+          <span className="self-center flex items-center gap-0.5 px-1.5 py-px rounded-full bg-[#5CC8FF] text-black text-[9px] font-black tracking-wider shrink-0">
+            <BadgeCheck className="w-2.5 h-2.5" aria-hidden />{fr ? 'OFFICIEL' : 'OFFICIAL'}
+          </span>
+        )}
         {m.prive && <Lock className="w-3 h-3 text-muted-foreground shrink-0" aria-label={fr ? 'privé' : 'private'} />}
         {m.pour && (
           <span className="text-muted-foreground truncate">
@@ -320,6 +336,9 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   const [erreur, setErreur] = useState<string | null>(null);
   const [menu, setMenu] = useState<Message | null>(null);
   const [choix, setChoix] = useState<'designer' | 'prive' | null>(null);
+  // Ce telephone porte la cle SprinterGame ; `voixDuJeu` : il ecrit en son nom
+  const [cleJeu, setCleJeu] = useState(() => aLaCleOfficielle());
+  const [voixDuJeu, setVoixDuJeu] = useState(true);
   const fin = useRef<HTMLDivElement>(null);
   const cleMoi = moi.name.trim().toLowerCase();
 
@@ -366,15 +385,20 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
     const prive = onglet === 'prives';
     if (prive && !avec) return;
     setEnvoi(true); setErreur(null);
-    const r = await ecrire(x, prive ? avec : pour, prive);
+    const r = enJeu ? await ecrireOfficiel(x) : await ecrire(x, prive ? avec : pour, prive);
     setEnvoi(false);
-    if ('refus' in r) { setErreur(texteRefus(r.refus, r.raison, fr)); return; }
+    if ('refus' in r) {
+      if (r.refus === 'cle') setCleJeu(false);
+      setErreur(texteRefus(r.refus, r.raison, fr)); return;
+    }
     t.ajouter(r.message);
     setTexte('');
     setPour(null);
   };
 
-  const peutEcrire = moi.inscrit && !t.refus && (onglet === 'tous' || !!avec);
+  // SprinterGame n'ecrit que dans TOUS, et n'a pas besoin d'un camp pour cela
+  const enJeu = cleJeu && voixDuJeu && onglet === 'tous';
+  const peutEcrire = (moi.inscrit || enJeu) && !t.refus && (onglet === 'tous' || !!avec);
   const nonLusPrives = conversations.filter(c => !c.dernier.a_moi).length;
 
   const ressort = reduit ? { duration: 0 } : RESSORT.panneau;
@@ -519,20 +543,29 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
             </div>
 
             {erreur && <p className="text-xs text-red-400 text-center">{erreur}</p>}
-            {!moi.inscrit && !t.refus && (
+            {!moi.inscrit && !enJeu && !t.refus && (
               <p className="text-xs text-muted-foreground text-center">{texteRefus('camp', undefined, fr)}</p>
             )}
 
             {peutEcrire && (
               <div className="flex flex-col gap-1.5">
-                {onglet === 'tous' && pour && (
+                {cleJeu && onglet === 'tous' && (
+                  <button onClick={() => { setVoixDuJeu(v => !v); setErreur(null); }} disabled={!moi.inscrit}
+                          className={`self-start flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black border
+                                      ${voixDuJeu ? 'bg-[#5CC8FF] text-black border-[#5CC8FF]' : 'border-white/20 text-foreground/70'}`}>
+                    <BadgeCheck className="w-3 h-3" aria-hidden />
+                    {voixDuJeu ? (fr ? 'TU ÉCRIS EN SPRINTERGAME' : 'WRITING AS SPRINTERGAME')
+                               : (fr ? 'TU ÉCRIS SOUS TON NOM' : 'WRITING AS YOURSELF')}
+                  </button>
+                )}
+                {onglet === 'tous' && pour && !enJeu && (
                   <span className="self-start flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full bg-primary/20 border border-primary/50 text-[11px]">
                     {fr ? 'pour' : 'to'} <b>{pour}</b>
                     <button onClick={() => setPour(null)} className="p-0.5 rounded-full hover:bg-white/10"><X className="w-3 h-3" /></button>
                   </span>
                 )}
                 <div className="flex items-end gap-1.5">
-                  {onglet === 'tous' && (
+                  {onglet === 'tous' && !enJeu && (
                     <button onClick={() => setChoix('designer')} title={fr ? 'Désigner quelqu’un' : 'Mention someone'}
                             className="p-2.5 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 shrink-0">
                       <AtSign className="w-4 h-4" />
@@ -544,6 +577,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
                               placeholder={onglet === 'prives'
                                 ? (fr ? `Message privé à ${avec}` : `Private message to ${avec}`)
+                                : enJeu ? (fr ? 'Message officiel…' : 'Official message…')
                                 : (fr ? 'Écris aux deux camps…' : 'Write to both sides…')}
                               className="w-full resize-none px-3 py-2.5 pr-12 rounded-xl bg-background/70 border border-white/10 outline-none text-sm focus:border-primary/60" />
                     <span className="absolute right-2.5 bottom-2.5 text-[10px] text-muted-foreground/70">{MAX - texte.length}</span>

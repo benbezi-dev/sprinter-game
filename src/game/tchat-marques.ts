@@ -12,12 +12,16 @@
 
 import { getDeviceId, getSavedName } from './leaderboard';
 import { nomPourLeDirect } from './identity';
+import { cleOfficielle, oublierCleOfficielle } from './tchat-officiel';
 import type { Camp, Epreuve } from './marques';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
 export type Message = {
-  id: number; quand: number; de: string; camp: Camp;
+  /** 'sprinter' : le compte SprinterGame, qui n'est d'aucun camp. */
+  id: number; quand: number; de: string; camp: Camp | 'sprinter';
+  /** Un message du compte SprinterGame : seul le serveur le pose. */
+  officiel?: boolean;
   /** Celui qu'on designe (commun) ou a qui l'on ecrit (prive). */
   pour: string | null;
   prive: boolean; texte: string;
@@ -28,12 +32,13 @@ export type Invitation = { de: string; camp: Camp | null; quand: number };
 export type Invitable = { name: string; invite: boolean };
 
 /** Ce que le serveur refuse, dit au joueur. */
-export type Refus = 'nom' | 'camp' | 'filtre' | 'vite' | 'jour' | 'absent' | 'banni' | 'top' | 'reseau';
+export type Refus = 'nom' | 'imite' | 'camp' | 'filtre' | 'vite' | 'jour' | 'absent' | 'banni' | 'top' | 'cle' | 'reseau';
 /** Le filtre dit pourquoi : 'lien', 'contact', 'grossier', 'long', 'vide'. */
 export type RaisonFiltre = string;
 
 function refusDe(status: number, d: any): Refus {
   if (status === 403 && d?.error === 'nom non reserve') return 'nom';
+  if (status === 403 && d?.error === 'nom du jeu') return 'imite';
   if (status === 403) return 'banni';
   if (status === 409 && d?.error === 'aucun camp choisi') return 'camp';
   if (status === 422) return 'filtre';
@@ -88,6 +93,27 @@ export async function lireTchat(depuis: number, tout = false, reserver = true): 
 export async function ecrire(texte: string, pour: string | null, prive: boolean): Promise<{ message: Message } | { refus: Refus; raison?: RaisonFiltre }> {
   const { status, d } = await appel('/marques/tchat', { texte, ...(pour ? { pour } : {}), prive });
   if (status !== 200) return { refus: refusDe(status, d), raison: d?.raison };
+  return { message: d.message };
+}
+
+/* ------------------------------------------------ le compte SprinterGame
+   Ce telephone porte-t-il la cle ? (tchat-officiel.ts) */
+export const aLaCleOfficielle = () => !!cleOfficielle();
+
+/** Ecrire au nom de SprinterGame, dans le tchat commun. */
+export async function ecrireOfficiel(texte: string): Promise<{ message: Message } | { refus: Refus; raison?: RaisonFiltre }> {
+  const cle = cleOfficielle();
+  if (!cle) return { refus: 'cle' };
+  let r: Response;
+  try {
+    r = await fetch(`${API_BASE}/marques/tchat/officiel`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Sprinter-Tchat': cle },
+      body: JSON.stringify({ texte }),
+    });
+  } catch { return { refus: 'reseau' }; }
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 403) { oublierCleOfficielle(); return { refus: 'cle' }; }
+  if (r.status !== 200) return { refus: refusDe(r.status, d), raison: d?.raison };
   return { message: d.message };
 }
 

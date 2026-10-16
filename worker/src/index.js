@@ -38,7 +38,7 @@ import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
          fantome as fantomeMarques, EPREUVES as EPREUVES_MARQUES } from './marques.js';
 import { poster as posterTchat, lire as lireTchat, participants as participantsTchat,
          invitables as invitablesTchat, inviter as inviterTchat, mesInvitations,
-         signalerMessage as signalerTchat } from './tchat-marques.js';
+         signalerMessage as signalerTchat, posterOfficiel, imiteOfficiel } from './tchat-marques.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
@@ -65,7 +65,7 @@ import { directionDe, CLES } from './epreuves.js';
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
-  estTableau,
+  estTableau, estTchatOfficiel,
 } from './acces.js';
 import {
   ensureReseauxTables, regarderClassement, regarderDuel, regarderSacre,
@@ -235,7 +235,7 @@ function cors(resp) {
   // cote client un pre-vol refuse se presente comme un `fetch` qui echoue,
   // sans statut ni message. Qui ajoute un en-tete ajoute une ligne ici.
   resp.headers.set('Access-Control-Allow-Headers',
-                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin, X-Sprinter-Tableau, X-D1-Bookmark');
+                   'Content-Type, X-Sprinter-Test, X-Sprinter-Admin, X-Sprinter-Tableau, X-Sprinter-Tchat, X-D1-Bookmark');
 
   // Annoncer un en-tete en REPONSE est une deuxieme porte, distincte de celle
   // du dessus, et c'est celle qu'on oublie : sans cette ligne le navigateur
@@ -3046,6 +3046,14 @@ async function servir(request, env, ctx, porteur) {
 
       /* Le tchat du duel : voir tchat-marques.js. Lire comme ecrire demande
          un nom reserve par cet appareil — on sert des messages prives. */
+      // La voix du jeu (compte SprinterGame) : une cle, pas un nom reserve.
+      if (url.pathname === '/marques/tchat/officiel' && request.method === 'POST') {
+        if (!estTchatOfficiel(request, env)) return json({ error: 'refuse' }, 403);
+        let body = {};
+        try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        const r = await posterOfficiel(env.DB, { texte: body.texte });
+        return json(r.corps, r.status);
+      }
       if (url.pathname.startsWith('/marques/tchat') || url.pathname.startsWith('/marques/invit')) {
         let body = {};
         if (request.method === 'POST') {
@@ -3747,6 +3755,9 @@ async function servir(request, env, ctx, porteur) {
       // une identite qu'il n'avait pas demandee — pendant que la sienne
       // restait fermee. On l'arrete ici, et on renvoie le nom qui va avec pour
       // que l'ecran puisse proposer la liaison au lieu d'un refus sec.
+      // Le nom du jeu dans le tchat (tchat-marques.js) : personne ne le prend.
+      if (!existe && imiteOfficiel(propre)) return json({ ok: false, pris: true });
+
       if (!existe) {
         const proprietaire = await estUnCode(env.DB, propre);
         if (proprietaire) {

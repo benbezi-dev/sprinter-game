@@ -206,6 +206,20 @@ export function estTableau(request, env) {
 }
 
 /**
+ * L'appelant peut-il ecrire au nom de SprinterGame dans le tchat du duel ?
+ *
+ * Une cle a part encore (`TCHAT_CLE`), pour la meme raison que `TABLEAU_CLE` :
+ * elle vit dans le telephone de l'auteur, et un telephone se perd. Perdue,
+ * elle ne donne que la voix du jeu dans le tchat — et se change d'un
+ * `npx wrangler secret put TCHAT_CLE` —, pas les cles de la maison.
+ * L'administrateur passe aussi.
+ */
+export function estTchatOfficiel(request, env) {
+  return memeCle(request.headers.get('X-Sprinter-Tchat'), env.TCHAT_CLE)
+      || estAdmin(request, env);
+}
+
+/**
  * Deux chaines sont-elles la meme cle ?
  *
  * Sans cle attendue, personne ne passe. La comparaison se fait a temps

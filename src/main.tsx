@@ -4,6 +4,7 @@ import { MotionConfig } from 'motion/react';
 import App from './App';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { brancherAcces, brancherSignet } from '@/game/canal';
+import { prendreCleOfficielleDepuisUrl } from '@/game/tchat-officiel';
 
 import './index.css';
 
@@ -16,6 +17,10 @@ brancherSignet();
 // sans son code d'acces — sinon elle atterrirait dans la base de production.
 // Sans effet en production, ou la fonction se reduit a un retour immediat.
 brancherAcces();
+
+// La cle du compte SprinterGame dans le tchat du duel, si l'adresse la porte
+// (tchat-officiel.ts) : lue et retiree de l'adresse avant tout le reste.
+prendreCleOfficielleDepuisUrl();
 
 // Service worker : rend le jeu installable sur le telephone, et jouable hors
 // ligne. Enregistre apres le chargement pour ne pas disputer la bande passante

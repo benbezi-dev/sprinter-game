@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {
   poster, lire, participants, invitables, inviter, mesInvitations, signalerMessage,
   reserverSonnerie, ECART_MS, PAR_MINUTE, INVITS_PAR_JOUR, SONNERIE_TCHAT_MS,
+  posterOfficiel, imiteOfficiel,
 } from '../worker/src/tchat-marques.js';
 import { choisirCamp } from '../worker/src/marques.js';
 import { bloquer, trancher, listeSignalements } from '../worker/src/moderation.js';
@@ -134,6 +135,24 @@ for (let i = 0; i < 20; i++) {
   if (x.status === 200) n++;
 }
 ok(`au plus ${INVITS_PAR_JOUR} invitations par jour`, n === INVITS_PAR_JOUR, n);
+
+titre('le compte SprinterGame');
+r = await posterOfficiel(db, { texte: '  Derniere ligne droite :   le duel ferme samedi 21h30 !  ', maintenant: pas() });
+ok('poste sans camp ni inscription', r.status === 200 && r.corps.message.officiel === true && r.corps.message.camp === 'sprinter', r.corps);
+ok('texte nettoye', r.corps.message.texte === 'Derniere ligne droite : le duel ferme samedi 21h30 !', r.corps.message.texte);
+r = await posterOfficiel(db, { texte: 'Tout sur sprinter-game.com', maintenant: pas(1) });
+ok('pas de filtre ni de cadence : un lien, une seconde apres', r.status === 200, r.corps);
+ok('vide refuse', (await posterOfficiel(db, { texte: '   ' })).status === 422);
+ok('141 caracteres refuses', (await posterOfficiel(db, { texte: 'x'.repeat(141) })).corps.raison === 'long');
+a = await lu('alice'); b = await lu('bob');
+const off = m => m.officiel && m.de === 'SprinterGame' && m.camp === 'sprinter' && !m.a_moi && !m.prive;
+ok('Alice (adidas) et Bob (nike) le lisent, marque officiel', a.messages.filter(off).length === 2 && b.messages.filter(off).length === 2);
+ok('les messages des joueurs ne sont pas officiels', a.messages.filter(m => m.de !== 'SprinterGame').every(m => m.officiel === false));
+for (const x of ['SprinterGame', 'Sprinter Game', 'sprinter_game', 'SPRINTER-GAME']) ok(`« ${x} » imite le compte`, imiteOfficiel(x));
+for (const x of ['Sprinter', 'SprinterGame2', 'Alice']) ok(`« ${x} » ne l imite pas`, !imiteOfficiel(x));
+await choisirCamp(db, { nameKey: 'sprinter game', name: 'Sprinter Game', deviceId: 'd-imite', camp: 'nike', epreuve: '100', maintenant: t });
+r = await poster(db, { auteurKey: 'sprinter game', auteurName: 'Sprinter Game', texte: 'Nike a gagne', maintenant: pas() });
+ok('un joueur inscrit sous « Sprinter Game » ne peut pas ecrire', r.status === 403 && r.corps.error === 'nom du jeu', r);
 
 console.log(e ? `\n   ${e} ECHEC(S)\n` : '\n   tout passe\n');
 process.exit(e ? 1 : 0);
