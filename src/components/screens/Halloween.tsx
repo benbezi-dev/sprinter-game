@@ -828,8 +828,8 @@ export function FinDeLaNuit() {
       el.height = Math.max(1, Math.round(H * r));
     }
     ctx.setTransform(r, 0, 0, r, 0, 0);
-    peindreLaScene(ctx, L, H, t, scene.mordu);
-  }, [t, scene.mordu]);
+    peindreLaScene(ctx, L, H, t, scene.mordu, scene.cle);
+  }, [t, scene.mordu, scene.cle]);
 
   if (state !== 'winall' || !nuitEnCours() || !nuit) return null;
 

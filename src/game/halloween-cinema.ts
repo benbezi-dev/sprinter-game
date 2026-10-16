@@ -377,15 +377,147 @@ function trameDeGrain(): HTMLCanvasElement {
   return grain;
 }
 
+/* LES QUATORZE CARTES EN IMAGE (16/10, « fais de vrais decors »).
+
+   Une image par scenette, rendue dans Unity (projets/Sprinter-Unity-Halloween,
+   Assets/Editor/CarteMolosse.cs) : la ruelle, la chambre, le cimetiere, la
+   salle de bain, la vitrine, montes avec les modeles Tripo et le molosse
+   TRELLIS. Sources et reperes : assets-sources/molosse-cartes/. 1080 x 1920 ;
+   le haut porte le sujet, le bas reste sombre pour le texte.
+
+   Hors production comme le reste du mode (HORS_PRODUCTION, vite.config.ts).
+   Une carte dont l'image manque — fichier absent, chargement rate — retombe
+   sur la scene dessinee d'avant. */
+const CARTES = import.meta.glob('/src/assets/molosse-cartes/*.webp', { query: '?url', import: 'default' }) as
+  Record<string, () => Promise<string>>;
+
+/** Les yeux de la bete dans chaque carte (fractions de l'image), mesures dans Unity. */
+const YEUX_DES_CARTES: Record<string, Array<[number, number]>> = {
+  odeur: [[0.3618, 0.4227], [0.3193, 0.4150]],
+  sommeil: [[0.4840, 0.4274], [0.5892, 0.4275]],
+  attente: [[0.5428, 0.5234], [0.6566, 0.5240]],
+  bus: [[0.1406, 0.5127], [0.2091, 0.5130]],
+};
+
+/** LA TOMBE : ou graver son nom sur la stele (x0, y0, x1, y1, fractions de l'image). */
+const NOM_SUR_LA_TOMBE = [0.47, 0.20, 0.74, 0.27];
+
+type Carte = { im: HTMLImageElement | null; demande: number; ratee: boolean };
+const cartes: Record<string, Carte> = {};
+
+/** L'image de la carte `cle`, demandee au premier appel ; null tant qu'elle n'est pas la. */
+function carteDe(cle: string): Carte | null {
+  const deja = cartes[cle];
+  if (deja) return deja;
+  const charger = CARTES[`/src/assets/molosse-cartes/${cle}.webp`];
+  if (!charger) return null;
+  const c: Carte = { im: null, demande: performance.now(), ratee: false };
+  cartes[cle] = c;
+  charger().then((url) => {
+    if (!url) { c.ratee = true; return; }
+    const im = new Image();
+    im.onload = () => { c.im = im; };
+    im.onerror = () => { c.ratee = true; };
+    im.src = url;
+  }).catch(() => { c.ratee = true; });
+  return c;
+}
+
+/** Faire venir l'image d'une carte avant d'en avoir besoin. */
+export function prechargerLaCarte(cle: string) { carteDe(cle); }
+
+/** Le nom du joueur, tel qu'il le porte dans le jeu. */
+function nomDuJoueur(): string {
+  try { return (localStorage.getItem('sprinter_player_name') || '').trim(); } catch { return ''; }
+}
+
+/** La carte en image, couvrant la toile : elle sort du noir, la camera s'avance a peine. */
+function peindreLaCarte(ctx: CanvasRenderingContext2D, cle: string, im: HTMLImageElement,
+                        L: number, H: number, t: number, eclair: number) {
+  const iw = im.naturalWidth, ih = im.naturalHeight;
+  const k = Math.max(L / iw, H / ih);
+  const u = Math.min(1, t / 14);
+  const zoom = 1 + 0.06 * (1 - Math.pow(1 - u, 2));
+  const yeux = YEUX_DES_CARTES[cle];
+  // la camera s'avance vers les yeux s'il y en a, vers le haut de l'image sinon
+  const foyer = yeux ? [(yeux[0][0] + yeux[1][0]) / 2, (yeux[0][1] + yeux[1][1]) / 2] : [0.5, 0.35];
+  const w0 = iw * k, h0 = ih * k;
+  // en portrait plus etroit que 9:16, on rogne les cotes ; plus large, on garde le haut
+  const bx = (L - w0) * 0.5, by = Math.min(0, (H - h0) * 0.25);
+  const fx = bx + foyer[0] * w0, fy = by + foyer[1] * h0;
+  const w = w0 * zoom, h = h0 * zoom;
+  const x0 = fx - foyer[0] * w, y0 = fy - foyer[1] * h;
+  const entre = Math.min(1, t / 1.2);
+  ctx.save();
+  ctx.fillStyle = 'rgb(3,2,5)';
+  ctx.fillRect(-L, -H, 3 * L, 3 * H);
+  ctx.globalAlpha = entre;
+  ctx.drawImage(im, x0, y0, w, h);
+  if (eclair > 0.02) {
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.25 * eclair;
+    ctx.drawImage(im, x0, y0, w, h);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // LES YEUX BATTENT et clignent : c'est eux qui font vivre l'image fixe
+  if (yeux) {
+    const pulse = 0.75 + 0.25 * Math.sin(t * 5.5);
+    const cligne = ((t % 4.3) < 0.12) ? 0.1 : 1;
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = entre * cligne;
+    for (const [ux, uy] of yeux) {
+      const ox = x0 + ux * w, oy = y0 + uy * h, r = w * 0.028 * pulse;
+      const g = ctx.createRadialGradient(ox, oy, 0, ox, oy, r);
+      g.addColorStop(0, 'rgba(255,70,35,0.75)');
+      g.addColorStop(1, 'rgba(255,20,10,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(ox, oy, r, 0, TAU); ctx.fill();
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  // LA TOMBE PORTE SON NOM, grave dans le granit : une ombre au fond du
+  // creux, une levre claire en dessous. Il apparait apres l'image.
+  if (cle === 'tombe') {
+    const nom = (nomDuJoueur() || '???').toUpperCase().slice(0, 16);
+    const [a0, b0, a1, b1] = NOM_SUR_LA_TOMBE;
+    const zx = x0 + (a0 + a1) / 2 * w, zy = y0 + (b0 + b1) / 2 * h;
+    const zl = (a1 - a0) * w, zh = (b1 - b0) * h;
+    let taille = zh * 0.42;
+    ctx.font = `600 ${taille}px Georgia, 'Times New Roman', serif`;
+    const mesure = ctx.measureText(nom).width;
+    if (mesure > zl * 0.92) { taille *= zl * 0.92 / mesure; ctx.font = `600 ${taille}px Georgia, 'Times New Roman', serif`; }
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha = entre * Math.min(1, Math.max(0, (t - 1.4) / 1.2));
+    ctx.fillStyle = 'rgba(190,195,205,0.35)';
+    ctx.fillText(nom, zx, zy + taille * 0.05);
+    ctx.fillStyle = 'rgba(8,8,12,0.92)';
+    ctx.fillText(nom, zx, zy);
+  }
+  ctx.restore();
+}
+
 /**
  * Peindre la scene, a l'instant `t` (en secondes depuis son debut).
  *
  * `mordu` decide de ce qu'on regarde : la bete court derriere l'homme, ou
  * l'homme est a terre et la bete est sur nous. Le reste est la meme nuit.
+ *
+ * `cle` : la scenette tiree. Si sa carte en image est la, elle remplace le
+ * decor dessine ; la brume, le noir des bords et le grain passent par-dessus.
+ * Pendant son chargement (une seconde et demie au plus), on ne peint que du
+ * noir, plutot que la scene dessinee qui sauterait ensuite.
  */
 export function peindreLaScene(
-  ctx: CanvasRenderingContext2D, L: number, H: number, t: number, mordu: boolean,
+  ctx: CanvasRenderingContext2D, L: number, H: number, t: number, mordu: boolean, cle?: string,
 ) {
+  const carte = cle ? carteDe(cle) : null;
+  if (carte && !carte.im && !carte.ratee && performance.now() - carte.demande < 1500) {
+    ctx.fillStyle = 'rgb(3,2,5)';
+    ctx.fillRect(0, 0, L, H);
+    return;
+  }
+  const image = carte && carte.im ? carte.im : null;
   // La ligne de sol remonte en portrait : la carte de texte se pose en bas,
   // sur toute la largeur, et les silhouettes doivent rester au-dessus d'elle.
   const portrait = H > L * 1.1;
@@ -524,8 +656,9 @@ export function peindreLaScene(
   // tout ce qui precede (ciel, lune, tombes) ; la brume, l'eclair, le noir des
   // bords et le grain passent par-dessus comme sur le reste. Voir
   // imageDeVictoire.
-  const fond = mordu ? null : victoire;
-  if (fond) peindreLaVictoire(ctx, fond, L, H, t, eclair);
+  const fond = image || mordu ? null : victoire;
+  if (image && cle) peindreLaCarte(ctx, cle, image, L, H, t, eclair);
+  else if (fond) peindreLaVictoire(ctx, fond, L, H, t, eclair);
 
   // LA BRUME, qui monte du sol par nappes et noie les pieds de tout le monde.
   for (let k = 0; k < 5; k++) {
@@ -534,7 +667,7 @@ export function peindreLaScene(
     const by = sol + m * (0.1 - 0.35 * hasard(k + 90));
     const br = m * (2.4 + 1.5 * hasard(k + 100));
     const nappe = ctx.createRadialGradient(bx, by, 0, bx, by, br);
-    nappe.addColorStop(0, `rgba(150,120,140,${0.16 + 0.10 * eclair})`);
+    nappe.addColorStop(0, `rgba(150,120,140,${(image ? 0.06 : 0.16) + 0.10 * eclair})`);   // la carte a deja sa brume
     nappe.addColorStop(1, 'rgba(150,120,140,0)');
     ctx.fillStyle = nappe;
     ctx.beginPath(); ctx.ellipse(bx, by, br, br * 0.35, 0, 0, TAU); ctx.fill();
@@ -548,7 +681,9 @@ export function peindreLaScene(
   // le chien en silhouette et l'homme couche a terre se lisaient comme des
   // figurines de dessin anime. Il ne reste que la bete en image, et un homme
   // minuscule en contre-jour quand il s'en sort.
-  if (mordu) {
+  if (image) {
+    // la carte porte deja sa scene
+  } else if (mordu) {
     // La bete sur nous, et rien d'autre.
     teteDeFace(ctx, L, H, sol, m, t, eclair, portrait);
   } else if (!fond) {
