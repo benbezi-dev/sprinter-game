@@ -2992,6 +2992,71 @@ async function servir(request, env, ctx, porteur) {
        muettes (404) tant que le duel n'est pas ouvert sur ce canal. */
     if (url.pathname.startsWith('/marques')) {
       const f = fenetreMarques(canal.test);
+
+      /* Le tchat du duel : voir tchat-marques.js. Lire comme ecrire demande
+         un nom reserve par cet appareil — on sert des messages prives.
+         Il survit au duel (16/10) : il devient le tchat du jeu, et ses routes
+         passent avant la fermeture. Les invitations se ferment avec le duel. */
+      // La voix du jeu (compte SprinterGame) : une cle, pas un nom reserve.
+      if (url.pathname === '/marques/tchat/officiel' && request.method === 'POST') {
+        if (!estTchatOfficiel(request, env)) return json({ error: 'refuse' }, 403);
+        let body = {};
+        try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        const r = await posterOfficiel(env.DB, { texte: body.texte });
+        return json(r.corps, r.status);
+      }
+      if (url.pathname.startsWith('/marques/tchat')
+          || (f.ouvert && url.pathname.startsWith('/marques/invit'))) {
+        let body = {};
+        if (request.method === 'POST') {
+          try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        }
+        const prendre = (k) => (request.method === 'POST' ? body[k] : url.searchParams.get(k));
+        const name = cleanName(prendre('name'));
+        const key = name.trim().toLowerCase();
+        const deviceId = prendre('device_id');
+        if (!(await nomReserveIci(env.DB, key, deviceId))) {
+          return json({ error: 'nom non reserve' }, 403);
+        }
+        // Le joueur et ses appareils : a qui faire vibrer le telephone.
+        const vibrer = (cle, genre) => ctx.waitUntil((async () => {
+          for (const appareil of await appareilsDe(env.DB, [cle])) {
+            await sonnerEtPush(env, appareil, genre, canal.test);
+          }
+        })());
+
+        if (url.pathname === '/marques/tchat' && request.method === 'GET') {
+          const r = await lireTchat(env.DB, { cleLecteur: key, depuis: Number(url.searchParams.get('depuis') || 0) });
+          if (url.searchParams.get('avec') === 'tout') {
+            r.participants = await participantsTchat(env.DB, { duelOuvert: f.ouvert });
+            r.invitations = await mesInvitations(env.DB, { cleLecteur: key });
+          }
+          return json(r);
+        }
+        if (url.pathname === '/marques/tchat' && request.method === 'POST') {
+          const r = await posterTchat(env.DB, {
+            auteurKey: key, auteurName: name, texte: body.texte,
+            pour: typeof body.pour === 'string' ? body.pour : null, prive: body.prive === true,
+            duelOuvert: f.ouvert,
+          });
+          if (r.sonner) vibrer(r.sonner, 'marques_tchat');
+          return json(r.corps, r.status);
+        }
+        if (url.pathname === '/marques/tchat/signaler' && request.method === 'POST') {
+          const r = await signalerTchat(env.DB, { id: body.id, cleLecteur: key, motif: body.motif });
+          return json(r.corps, r.status);
+        }
+        if (url.pathname === '/marques/invitables' && request.method === 'GET') {
+          return json({ joueurs: await invitablesTchat(env.DB, { deKey: key, top: await topMarques(env.DB) }) });
+        }
+        if (url.pathname === '/marques/inviter' && request.method === 'POST') {
+          const topCles = new Set((await topMarques(env.DB)).map(n => String(n).trim().toLowerCase()));
+          const r = await inviterTchat(env.DB, { deKey: key, deName: name, cible: body.cible, topCles });
+          if (r.sonner) vibrer(r.sonner, 'marques_invit');
+          return json(r.corps, r.status);
+        }
+      }
+
       if (!f.ouvert) return json({ error: 'duel ferme' }, 404);
 
       if (url.pathname === '/marques' && request.method === 'GET') {
@@ -3044,65 +3109,6 @@ async function servir(request, env, ctx, porteur) {
         return json(r.corps, r.status);
       }
 
-      /* Le tchat du duel : voir tchat-marques.js. Lire comme ecrire demande
-         un nom reserve par cet appareil — on sert des messages prives. */
-      // La voix du jeu (compte SprinterGame) : une cle, pas un nom reserve.
-      if (url.pathname === '/marques/tchat/officiel' && request.method === 'POST') {
-        if (!estTchatOfficiel(request, env)) return json({ error: 'refuse' }, 403);
-        let body = {};
-        try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
-        const r = await posterOfficiel(env.DB, { texte: body.texte });
-        return json(r.corps, r.status);
-      }
-      if (url.pathname.startsWith('/marques/tchat') || url.pathname.startsWith('/marques/invit')) {
-        let body = {};
-        if (request.method === 'POST') {
-          try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
-        }
-        const prendre = (k) => (request.method === 'POST' ? body[k] : url.searchParams.get(k));
-        const name = cleanName(prendre('name'));
-        const key = name.trim().toLowerCase();
-        const deviceId = prendre('device_id');
-        if (!(await nomReserveIci(env.DB, key, deviceId))) {
-          return json({ error: 'nom non reserve' }, 403);
-        }
-        // Le joueur et ses appareils : a qui faire vibrer le telephone.
-        const vibrer = (cle, genre) => ctx.waitUntil((async () => {
-          for (const appareil of await appareilsDe(env.DB, [cle])) {
-            await sonnerEtPush(env, appareil, genre, canal.test);
-          }
-        })());
-
-        if (url.pathname === '/marques/tchat' && request.method === 'GET') {
-          const r = await lireTchat(env.DB, { cleLecteur: key, depuis: Number(url.searchParams.get('depuis') || 0) });
-          if (url.searchParams.get('avec') === 'tout') {
-            r.participants = await participantsTchat(env.DB);
-            r.invitations = await mesInvitations(env.DB, { cleLecteur: key });
-          }
-          return json(r);
-        }
-        if (url.pathname === '/marques/tchat' && request.method === 'POST') {
-          const r = await posterTchat(env.DB, {
-            auteurKey: key, auteurName: name, texte: body.texte,
-            pour: typeof body.pour === 'string' ? body.pour : null, prive: body.prive === true,
-          });
-          if (r.sonner) vibrer(r.sonner, 'marques_tchat');
-          return json(r.corps, r.status);
-        }
-        if (url.pathname === '/marques/tchat/signaler' && request.method === 'POST') {
-          const r = await signalerTchat(env.DB, { id: body.id, cleLecteur: key, motif: body.motif });
-          return json(r.corps, r.status);
-        }
-        if (url.pathname === '/marques/invitables' && request.method === 'GET') {
-          return json({ joueurs: await invitablesTchat(env.DB, { deKey: key, top: await topMarques(env.DB) }) });
-        }
-        if (url.pathname === '/marques/inviter' && request.method === 'POST') {
-          const topCles = new Set((await topMarques(env.DB)).map(n => String(n).trim().toLowerCase()));
-          const r = await inviterTchat(env.DB, { deKey: key, deName: name, cible: body.cible, topCles });
-          if (r.sonner) vibrer(r.sonner, 'marques_invit');
-          return json(r.corps, r.status);
-        }
-      }
       return json({ error: 'route inconnue' }, 404);
     }
 

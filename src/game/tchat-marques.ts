@@ -18,8 +18,9 @@ import type { Camp, Epreuve } from './marques';
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
 export type Message = {
-  /** 'sprinter' : le compte SprinterGame, qui n'est d'aucun camp. */
-  id: number; quand: number; de: string; camp: Camp | 'sprinter';
+  /** 'sprinter' : le compte SprinterGame, qui n'est d'aucun camp ; 'joueur' :
+   *  un message ecrit apres le duel, quand il n'y a plus de camps. */
+  id: number; quand: number; de: string; camp: Camp | 'sprinter' | 'joueur';
   /** Un message du compte SprinterGame : seul le serveur le pose. */
   officiel?: boolean;
   /** Celui qu'on designe (commun) ou a qui l'on ecrit (prive). */
@@ -27,7 +28,7 @@ export type Message = {
   prive: boolean; texte: string;
   a_moi: boolean; pour_moi: boolean;
 };
-export type Participant = { name: string; camp: Camp; epreuve: Epreuve };
+export type Participant = { name: string; camp: Camp | 'joueur'; epreuve: Epreuve | null };
 export type Invitation = { de: string; camp: Camp | null; quand: number };
 export type Invitable = { name: string; invite: boolean };
 

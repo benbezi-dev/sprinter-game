@@ -40,6 +40,9 @@ const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
 // pour la meme raison — DUEL_MARQUES_OUVERT est ferme au public (canal.ts).
 const BanderoleMarques = /* @__PURE__ */ lazy(() => import('./DuelMarques')
   .then(m => ({ default: m.BanderoleMarques })));
+// Le tchat du duel lui survit (16/10) : apres la fermeture, il vit sur l'accueil.
+const TchatDuJeu = /* @__PURE__ */ lazy(() => import('./TchatMarques')
+  .then(m => ({ default: m.TchatDuJeu })));
 // La carriere Legende : canal de test seulement (LEGENDE_OUVERTE, canal.ts),
 // chargee a la demande pour la meme raison que les deux autres.
 const PanneauLegende = /* @__PURE__ */ lazy(() => import('./Legende')
@@ -453,6 +456,8 @@ export function TitleScreen() {
 
             {/* LE DUEL DES MARQUES, un 100 m : Sprinter seulement. */}
             {!haies && DUEL_MARQUES_OUVERT && <Suspense fallback={null}><BanderoleMarques /></Suspense>}
+            {/* ...et quand il ferme, son tchat reste : le tchat du jeu. */}
+            {!DUEL_MARQUES_OUVERT && <Suspense fallback={null}><TchatDuJeu /></Suspense>}
 
 
             {!haies && HALLOWEEN_OUVERT && <Suspense fallback={null}><BanderoleMolosse /></Suspense>}

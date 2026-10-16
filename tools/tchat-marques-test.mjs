@@ -154,5 +154,25 @@ await choisirCamp(db, { nameKey: 'sprinter game', name: 'Sprinter Game', deviceI
 r = await poster(db, { auteurKey: 'sprinter game', auteurName: 'Sprinter Game', texte: 'Nike a gagne', maintenant: pas() });
 ok('un joueur inscrit sous « Sprinter Game » ne peut pas ecrire', r.status === 403 && r.corps.error === 'nom du jeu', r);
 
+titre('apres le duel : le tchat du jeu');
+// Dan a un nom reserve mais n'a jamais choisi de camp.
+base.exec(`INSERT INTO players VALUES ('dan','Dan','x',0)`);
+r = await poster(db, { auteurKey: 'dan', auteurName: 'Dan', texte: 'je suis la', maintenant: pas() });
+ok('pendant le duel : sans camp, refuse', r.status === 409);
+r = await poster(db, { auteurKey: 'dan', auteurName: 'Dan', texte: 'je suis la', duelOuvert: false, maintenant: pas() });
+ok('apres : sans camp, accepte, camp « joueur »', r.status === 200 && r.corps.message.camp === 'joueur', r.corps);
+r = await poster(db, { auteurKey: 'dan', auteurName: 'Dan', texte: 'texte avec www.site.com', duelOuvert: false, maintenant: pas() });
+ok('apres : le filtre tient toujours', r.status === 422 && r.corps.raison === 'lien');
+r = await poster(db, { auteurKey: 'alice', auteurName: 'Alice', texte: 'Dan, bienvenue', pour: 'dan', duelOuvert: false, maintenant: pas(SONNERIE_TCHAT_MS + 1) });
+ok('apres : designer un nom reserve hors duel, sonne', r.status === 200 && r.sonner === 'dan' && r.corps.message.camp === 'joueur', r);
+r = await poster(db, { auteurKey: 'alice', auteurName: 'Alice', texte: 'tu es la ?', pour: 'fantome', duelOuvert: false, maintenant: pas() });
+ok('apres : designer un nom inconnu, refuse', r.status === 404);
+r = await poster(db, { auteurKey: 'sprinter game', auteurName: 'Sprinter Game', texte: 'coucou', duelOuvert: false, maintenant: pas() });
+ok('apres : l imitation reste refusee', r.status === 403);
+const apres = await participants(db, { duelOuvert: false, maintenant: t });
+ok('apres : participants = qui a ecrit (dont Dan), sans SprinterGame', apres.some(p => p.name === 'Dan') && !apres.some(p => p.name === 'SprinterGame') && apres.every(p => p.camp === 'joueur'), apres);
+a = await lu('bob');
+ok('les messages du duel restent lisibles apres', a.messages.some(m => m.camp === 'nike') && a.messages.some(m => m.camp === 'joueur'));
+
 console.log(e ? `\n   ${e} ECHEC(S)\n` : '\n   tout passe\n');
 process.exit(e ? 1 : 0);

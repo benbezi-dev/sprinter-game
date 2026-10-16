@@ -4,7 +4,9 @@ import { motion, AnimatePresence, useDragControls } from 'motion/react';
 import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, MessageCircle, Search, ChevronDown, BadgeCheck } from 'lucide-react';
 import { FEUILLE, VOILE, RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { useRetour } from '@/hooks/use-retour';
-import { surCourrier } from '@/game/boite';
+import { surCourrier, reprendreTouchee } from '@/game/boite';
+import { getSavedName } from '@/game/leaderboard';
+import { SprinterApp } from '@/game/engine';
 import { ecouterInstall, installVisible } from './InstallPrompt';
 import { etatPush, activerPush } from '@/game/push';
 import { bloquer, MOTIFS, type Motif } from '@/game/moderation';
@@ -31,11 +33,17 @@ import {
    portent un badge et une teinte a eux ; on ne peut ni lui repondre, ni le
    signaler, ni le bloquer. Le telephone qui porte sa cle (tchat-officiel.ts)
    ecrit en son nom dans TOUS, ou sous son propre nom d'un geste.
+
+   APRES LE DUEL (16/10), le tchat reste : il devient le TCHAT du jeu, ouvert
+   a tout nom reserve, depuis l'accueil (`TchatDuJeu`, plus bas). Plus de
+   camps ni d'invitations ; les messages du duel restent dans le fil.
 --------------------------------------------------------------------------- */
 
-const TEINTE: Record<Camp | 'sprinter', string> = { adidas: '#FFFFFF', nike: '#FFD426', sprinter: '#5CC8FF' };
+const TEINTE: Record<Camp | 'sprinter' | 'joueur', string> = { adidas: '#FFFFFF', nike: '#FFD426', sprinter: '#5CC8FF', joueur: '#C8CDD6' };
 const RELIRE_MS = 4000;
 const RELIRE_REPLIE_MS = 15000;
+/** Replie sur l'accueil, chez tous les joueurs : une relecture par minute suffit a la pastille. */
+const RELIRE_REPLIE_ACCUEIL_MS = 60000;
 const MAX = 140;
 
 type Onglet = 'tous' | 'prives' | 'inviter';
@@ -78,7 +86,7 @@ function heure(quand: number, fr: boolean) {
  * Replie, il se relit plus lentement (la barre n'annonce que les non-lus) et
  * ne reserve pas le nom : seul le geste de deplier le tchat le fait.
  */
-function useTchat(deplie: boolean) {
+function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
@@ -111,10 +119,10 @@ function useTchat(deplie: boolean) {
   useEffect(() => {
     relire(true);
     const minuterie = setInterval(() => { if (document.visibilityState === 'visible') relire(); },
-      deplie ? RELIRE_MS : RELIRE_REPLIE_MS);
+      deplie ? RELIRE_MS : replieMs);
     const quitter = surCourrier(q => { if (q === 'marques_tchat') relire(); });
     return () => { clearInterval(minuterie); quitter(); };
-  }, [relire, deplie]);
+  }, [relire, deplie, replieMs]);
 
   const ajouter = (m: Message) => setMessages(x => (x.some(y => y.id === m.id) ? x : [...x, m]));
   const oter = (de: string) => setMessages(x => x.filter(m => m.de.toLowerCase() !== de.toLowerCase()));
@@ -185,9 +193,11 @@ function ChoixPersonne({ participants, moi, fr, titre, onChoix, onClose }: {
               <button onClick={() => onChoix(p)}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-left">
                 <span className="font-bold truncate" style={{ color: TEINTE[p.camp] }}>{p.name}</span>
-                <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
-                  {NOM_CAMP[p.camp]} · {p.epreuve} m
-                </span>
+                {p.camp !== 'joueur' && (
+                  <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
+                    {NOM_CAMP[p.camp]} · {p.epreuve} m
+                  </span>
+                )}
               </button>
             </li>
           ))}
@@ -318,15 +328,18 @@ function Inviter({ fr }: { fr: boolean }) {
  * visible au-dessus. On le redescend en tirant sa poignee, par sa fleche, ou
  * par le retour du systeme. Une notification touchee l'ouvre deplie.
  */
-export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', viserLeDernier = false }: {
+export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', viserLeDernier = false, duel = true }: {
   fr: boolean; moi: { name: string; inscrit: boolean };
   deplie: boolean; onDeplier: (v: boolean) => void; ouvrirSur?: Onglet;
   /** Arrive par une notification : s'ouvrir sur le dernier message qui vise ce joueur. */
   viserLeDernier?: boolean;
+  /** Faux : le tchat du jeu, apres le duel — ni camps ni invitations. */
+  duel?: boolean;
 }) {
   useRetour(() => onDeplier(false), deplie);
   const reduit = useAnimationsReduites();
-  const t = useTchat(deplie);
+  const t = useTchat(deplie, duel ? RELIRE_REPLIE_MS : RELIRE_REPLIE_ACCUEIL_MS);
+  const onglets: Onglet[] = duel ? ['tous', 'prives', 'inviter'] : ['tous', 'prives'];
   const [onglet, setOnglet] = useState<Onglet>(ouvrirSur);
   useEffect(() => { setOnglet(ouvrirSur); }, [ouvrirSur]);
   const [texte, setTexte] = useState('');
@@ -463,7 +476,9 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
           <span className="self-center w-10 h-1 rounded-full bg-white/25" aria-hidden />
           <span className="flex items-center gap-2 min-w-0">
             <MessageCircle className="w-4 h-4 text-primary shrink-0" aria-hidden />
-            <span className="font-black font-display text-xs tracking-widest">{fr ? 'TCHAT DU DUEL' : 'DUEL CHAT'}</span>
+            <span className="font-black font-display text-xs tracking-widest">
+              {duel ? (fr ? 'TCHAT DU DUEL' : 'DUEL CHAT') : (fr ? 'TCHAT' : 'CHAT')}
+            </span>
             <button onClick={() => onDeplier(false)} onPointerDown={e => e.stopPropagation()}
                     aria-label={fr ? 'Replier le tchat' : 'Collapse the chat'}
                     className="ml-auto p-1.5 rounded-lg hover:bg-white/10 text-foreground/70">
@@ -474,8 +489,8 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
 
       <div className="flex-1 min-h-0 flex flex-col px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] gap-2">
 
-        <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-card/60 border border-white/5">
-          {(['tous', 'prives', 'inviter'] as Onglet[]).map(o => (
+        <div className={`grid ${duel ? 'grid-cols-3' : 'grid-cols-2'} gap-1 p-1 rounded-xl bg-card/60 border border-white/5`}>
+          {onglets.map(o => (
             <button key={o} onClick={() => { setOnglet(o); setErreur(null); }}
                     className={`relative py-1.5 rounded-lg text-[11px] font-black tracking-widest transition-colors
                                 ${onglet === o ? 'bg-white/10 text-foreground' : 'text-foreground/60 hover:bg-white/5'}`}>
@@ -489,7 +504,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
 
         <CarteNotifications fr={fr} />
 
-        {t.invitations.length > 0 && !moi.inscrit && (
+        {duel && t.invitations.length > 0 && !moi.inscrit && (
           <p className="text-xs px-3 py-2 rounded-xl bg-primary/15 border border-primary/40">
             {fr ? 'On t’invite : ' : 'Invited by: '}
             {t.invitations.slice(0, 5).map((i, k) => (
@@ -531,7 +546,8 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
               {t.charge && !t.refus && !fil.length && (
                 <p className="text-xs text-muted-foreground text-center py-8 px-4">
                   {onglet === 'tous'
-                    ? (fr ? 'Personne n’a encore parlé. Lance la bataille !' : 'Nobody has spoken yet. Start the battle!')
+                    ? (duel ? (fr ? 'Personne n’a encore parlé. Lance la bataille !' : 'Nobody has spoken yet. Start the battle!')
+                            : (fr ? 'Personne n’a encore parlé. Lance la discussion !' : 'Nobody has spoken yet. Get it started!'))
                     : avec ? (fr ? `Écris à ${avec}. Seuls vous deux lirez.` : `Write to ${avec}. Only the two of you will read it.`)
                     : (fr ? 'Choisis une conversation, ou écris à un coureur du duel.' : 'Pick a conversation, or write to a runner of the duel.')}
                 </p>
@@ -578,7 +594,8 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                               placeholder={onglet === 'prives'
                                 ? (fr ? `Message privé à ${avec}` : `Private message to ${avec}`)
                                 : enJeu ? (fr ? 'Message officiel…' : 'Official message…')
-                                : (fr ? 'Écris aux deux camps…' : 'Write to both sides…')}
+                                : duel ? (fr ? 'Écris aux deux camps…' : 'Write to both sides…')
+                                : (fr ? 'Écris à tout le monde…' : 'Write to everyone…')}
                               className="w-full resize-none px-3 py-2.5 pr-12 rounded-xl bg-background/70 border border-white/10 outline-none text-sm focus:border-primary/60" />
                     <span className="absolute right-2.5 bottom-2.5 text-[10px] text-muted-foreground/70">{MAX - texte.length}</span>
                   </div>
@@ -619,5 +636,28 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
       </AnimatePresence>
     </>,
     document.body,
+  );
+}
+
+/**
+ * LE TCHAT DU JEU, sur l'accueil, une fois le duel ferme (16/10). Le meme
+ * tiroir, sans camps ni invitations, ouvert a tout nom reserve. Une
+ * notification du tchat touchee l'ouvre deplie, sur le dernier message qui
+ * vise ce joueur. Sans nom, pas de tchat : il n'y aurait rien a lire.
+ */
+export function TchatDuJeu() {
+  const fr = SprinterApp.N.getLang() === 'fr';
+  const [deplie, setDeplie] = useState(false);
+  const [vise, setVise] = useState(false);
+  useEffect(() => {
+    const ouvrir = (q: string | null) => { if (q) { setVise(true); setDeplie(true); } };
+    ouvrir(reprendreTouchee(['marques_tchat']));
+    return surCourrier(() => ouvrir(reprendreTouchee(['marques_tchat'])));
+  }, []);
+  const name = getSavedName() || '';
+  if (!name) return null;
+  return (
+    <TchatMarques fr={fr} duel={false} moi={{ name, inscrit: true }}
+      deplie={deplie} onDeplier={setDeplie} viserLeDernier={vise} />
   );
 }

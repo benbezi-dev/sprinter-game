@@ -48,6 +48,13 @@
    le jeu les signe d'un badge que personne ne peut imiter en prenant le meme
    nom. Il ecrit dans le tchat commun seulement, sous la cle TCHAT_CLE
    (acces.js, `estTchatOfficiel`), sans cadence ni filtre : c'est l'auteur.
+
+   APRES LE DUEL, LE TCHAT RESTE (demande de l'auteur, 16/10/2026) : il devient
+   le tchat du jeu. Memes regles, memes tables, meme `evenement` — les
+   messages du duel restent lisibles —, mais on n'a plus besoin d'un camp :
+   tout nom reserve ecrit, et ses messages portent le camp « joueur ».
+   L'appelant dit si le duel est ouvert (`duelOuvert`) ; tant qu'il l'est,
+   rien ne change. Les invitations, elles, n'ont de sens que pendant le duel.
 --------------------------------------------------------------------------- */
 import { EVENEMENT, inscriptionDe, ensureMarquesTables } from './marques.js';
 import { texteRecevable, TCHAT_MAX } from './mot.js';
@@ -63,6 +70,8 @@ export const SONNERIE_INVIT_MS = 6 * 3600_000;
 export const INVITS_PAR_JOUR = 15;
 /** Le prefixe des signalements de ce tchat dans la file de moderation. */
 export const PREFIXE_SIGNALEMENT = 'tchat-marques:';
+/** Le camp de qui ecrit hors du duel : aucun. */
+export const SANS_CAMP = 'joueur';
 /** Le compte du jeu : son nom, sa cle, et le camp qui n'en est pas un. */
 export const OFFICIEL = { name: 'SprinterGame', key: 'sprintergame', camp: 'sprinter' };
 
@@ -171,13 +180,14 @@ async function nomDe(db, nameKey) {
  * Rend `{ status, corps, sonner }` ; `sonner` est la cle a faire vibrer, ou
  * null — c'est l'appelant qui connait les appareils et les transports.
  */
-export async function poster(db, { auteurKey, auteurName, texte, pour = null, prive = false, maintenant = Date.now() }) {
+export async function poster(db, { auteurKey, auteurName, texte, pour = null, prive = false, duelOuvert = true, maintenant = Date.now() }) {
   await ensureTchatTables(db);
   // Le nom du jeu ne s'emprunte pas, meme reserve avant que le compte existe.
   if (imiteOfficiel(auteurName) || imiteOfficiel(auteurKey)) {
     return { status: 403, corps: { error: 'nom du jeu' }, sonner: null };
   }
-  const ins = await inscriptionDe(db, auteurKey);
+  // Pendant le duel, on ecrit sous les couleurs de son camp ; apres, sans camp.
+  const ins = duelOuvert ? await inscriptionDe(db, auteurKey) : { camp: SANS_CAMP };
   if (!ins) return { status: 409, corps: { error: 'aucun camp choisi' }, sonner: null };
   if (await estBanni(db, auteurKey)) return { status: 403, corps: { error: 'depot refuse' }, sonner: null };
 
@@ -194,7 +204,8 @@ export async function poster(db, { auteurKey, auteurName, texte, pour = null, pr
   let pourName = null;
   if (pourKey) {
     // on ne designe, on n'ecrit en prive, qu'a quelqu'un qui est dans le duel
-    if (!(await inscriptionDe(db, pourKey))) {
+    // — apres le duel, qu'a un nom reserve
+    if (!(duelOuvert ? await inscriptionDe(db, pourKey) : await nomReserve(db, pourKey))) {
       return { status: 404, corps: { error: 'pas dans le duel' }, sonner: null };
     }
     pourName = await nomDe(db, pourKey);
@@ -288,9 +299,31 @@ export async function lire(db, { cleLecteur, depuis = 0 }) {
   return { messages, dernier: messages.length ? messages[messages.length - 1].id : d };
 }
 
-/** Les inscrits : ceux qu'on peut designer ou a qui l'on peut ecrire. */
-export async function participants(db) {
+/** Ce nom est-il reserve (une ligne dans `players`) ? */
+async function nomReserve(db, nameKey) {
+  const r = await db.prepare(`SELECT 1 AS ok FROM players WHERE name_key = ?`).bind(nameKey).first().catch(() => null);
+  return !!r;
+}
+
+/**
+ * Ceux qu'on peut designer ou a qui l'on peut ecrire : les inscrits pendant
+ * le duel ; apres, ceux qui ont ecrit dans le tchat ces trente derniers jours.
+ */
+export async function participants(db, { duelOuvert = true, maintenant = Date.now() } = {}) {
   await ensureTchatTables(db);
+  if (!duelOuvert) {
+    const { results } = await db.prepare(
+      `SELECT t.auteur_key, MAX(t.id) AS dernier,
+              COALESCE(p.name, t.auteur_name) AS name
+         FROM marques_tchat t
+         JOIN players p ON p.name_key = t.auteur_key
+        WHERE t.evenement = ? AND t.quand > ? AND t.camp != ?
+        GROUP BY t.auteur_key
+        ORDER BY name COLLATE NOCASE
+        LIMIT 500`
+    ).bind(EVENEMENT, maintenant - 30 * 86_400_000, OFFICIEL.camp).all();
+    return (results || []).map(r => ({ name: r.name, camp: SANS_CAMP, epreuve: null }));
+  }
   const { results } = await db.prepare(
     `SELECT c.name_key, c.camp, c.epreuve,
             COALESCE(p.name, k.name, c.name_key) AS name
