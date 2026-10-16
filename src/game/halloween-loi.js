@@ -55,13 +55,28 @@
  * et ce qu'ils demandent au pouce se lit sur la courbe mesuree (harnais,
  * automate parfaitement alterne — un vrai doigt fait moins bien) :
  *
- *     1 -> 10,5/s  100 m         8  -> 12,0/s  100 m en courbe
+ *     1 -> 9,25/s  100 m         8  -> 12,0/s  100 m en courbe
  *     2 ->  9,0/s  200 m ligne   9  -> 12,5/s  300 m ligne
  *     3 -> 11,0/s  100 m courbe  10 -> 13,0/s  200 m ligne
  *     4 -> 11,5/s  300 m ligne   11 -> 13,0/s  100 m
  *     5 -> 11,5/s  100 m         12 -> 14,25/s 400 m ligne
- *     6 -> 13,25/s 400 m ligne   13 -> 14,5/s  100 m en courbe
+ *     6 -> 12,25/s 400 m ligne   13 -> 14,5/s  100 m en courbe
  *     7 -> 10,25/s 200 m ligne
+ *
+ * DEUX RETOUCHES LE 16/10, APRES AUDIT, ET ELLES SONT FACILES A DEFAIRE :
+ *
+ *   — LA NUIT 1 PASSE DE 9"10 A 9"40 (10,5 -> 9,25 appuis/s). C'est la porte
+ *     de toute l'edition : avec le calendrier, une nuit 1 manquee ferme les
+ *     douze autres. A 10,5 appuis parfaitement alternes — un vrai doigt fait
+ *     moins bien —, « tout le monde y arrive » n'etait plus vrai.
+ *   — LA NUIT 6 PASSE DE 36"20 A 36"35 (13,25 -> 12,25 appuis/s). Elle sautait
+ *     d'un appui trois quarts au-dessus de la 5, pendant trente-six secondes,
+ *     avant de redescendre a 10,25 sur la 7 : un mur au milieu du calendrier,
+ *     qui aurait arrete la plupart des joueurs le 24 octobre.
+ *
+ *   Le reste de l'echelle est celle de l'auteur, intacte. Le tableau de bord
+ *   compte maintenant les nuits tentees et tenues (game/halloween-mesure.ts) :
+ *   c'est lui qui dira s'il faut aller plus loin.
  *
  * LES DEUX TROIS CENTS METRES ONT ETE DES MURS, UNE HEURE. L'auteur les
  * voulait en 18"10 et 17"75 — des temps de deux cents metres, que le moteur
@@ -88,12 +103,12 @@
 // sprinteurs). Un cycle blocs / surpris / elan, la premiere nuit en blocs —
 // on decouvre le mode avec un depart connu — et la derniere surprise.
 export const NUITS = [
-  { n: 1,  epreuve: 'nuit-100',  imparti: 9.10,  retard: 9, depart: 'blocs',  nom: ['La ruelle', 'The alley'] },
+  { n: 1,  epreuve: 'nuit-100',  imparti: 9.40,  retard: 9, depart: 'blocs',  nom: ['La ruelle', 'The alley'] },
   { n: 2,  epreuve: 'nuit-200',  imparti: 18.30, retard: 10, depart: 'surpris', nom: ['Le portail', 'The gate'] },
   { n: 3,  epreuve: 'nuit-100v', imparti: 9.00,  retard: 8, depart: 'elan',  nom: ['Les cyprès', 'The cypresses'] },
   { n: 4,  epreuve: 'nuit-300',  imparti: 26.85, retard: 11, depart: 'blocs', nom: ['La lune rousse', 'The blood moon'] },
   { n: 5,  epreuve: 'nuit-100',  imparti: 8.95,  retard: 7, depart: 'surpris',  nom: ['Le caveau', 'The vault'] },
-  { n: 6,  epreuve: 'nuit-400',  imparti: 36.20, retard: 12, depart: 'elan', nom: ['Les corbeaux', 'The crows'] },
+  { n: 6,  epreuve: 'nuit-400',  imparti: 36.35, retard: 12, depart: 'elan', nom: ['Les corbeaux', 'The crows'] },
   { n: 7,  epreuve: 'nuit-200',  imparti: 17.90, retard: 8, depart: 'blocs',  nom: ['La terre remuée', 'Turned earth'] },
   { n: 8,  epreuve: 'nuit-100v', imparti: 8.90,  retard: 6, depart: 'surpris',  nom: ['Le glas', 'The knell'] },
   { n: 9,  epreuve: 'nuit-300',  imparti: 26.70, retard: 9, depart: 'elan',  nom: ['Les cendres', 'The ashes'] },

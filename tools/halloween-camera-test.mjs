@@ -13,6 +13,7 @@
 import { CAMERAS, FAMILLES, CAMERA_DU_JEU, cameraDe, isoDe, famillesUtilisees }
   from '../src/game/halloween-cameras.js';
 import { NUITS } from '../src/game/halloween-loi.js';
+import { readFileSync, existsSync } from 'fs';
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -26,10 +27,14 @@ ok('treize entrees', Object.keys(CAMERAS).length === 13, String(Object.keys(CAME
 ok('une par nuit declaree, sans trou',
    NUITS.every(n => !!CAMERAS[n.n]),
    NUITS.filter(n => !CAMERAS[n.n]).map(n => n.n).join(', ') || 'aucun trou');
-ok('chacune porte un angle, un zoom, une famille et un lieu',
+ok('chacune porte un angle, un zoom et une famille',
    Object.values(CAMERAS).every(c =>
-     typeof c.deg === 'number' && typeof c.zoom === 'number' &&
-     typeof c.famille === 'string' && typeof c.lieu === 'string'));
+     typeof c.deg === 'number' && typeof c.zoom === 'number' && typeof c.famille === 'string'));
+// LES TREIZE LIEUX ONT ETE RETIRES (16/10) : aucune nuit ne les montrait, les
+// treize se courent dans la ruelle. Un nom de lieu qui revient dans la table
+// sans son decor referait le meme mensonge.
+ok('aucune ne pretend un lieu qu elle ne montre pas',
+   Object.values(CAMERAS).every(c => !('lieu' in c)));
 
 /* ------------------------------------------------------------ les bornes */
 
@@ -94,7 +99,7 @@ ok('aucune famille declaree et jamais servie',
 for (const [n, c] of Object.entries(CAMERAS)) {
   const centre = FAMILLES[c.famille].deg;
   const d = Math.abs(c.deg - centre);
-  if (d > 4) ok(`nuit ${n} (${c.lieu}) reste dans sa famille`, false, `${d}° de ${c.famille}`);
+  if (d > 4) ok(`nuit ${n} reste dans sa famille`, false, `${d}° de ${c.famille}`);
 }
 ok('aucune nuit ne derive de plus de 4° de sa famille',
    Object.values(CAMERAS).every(c => Math.abs(c.deg - FAMILLES[c.famille].deg) <= 4));
@@ -123,43 +128,31 @@ ok('et la camera du jeu se retrouve bien a 2:1',
    })(),
    `${isoDe(CAMERA_DU_JEU.deg).cos.toFixed(6)} / ${(2 / Math.sqrt(5)).toFixed(6)}`);
 
-/* ------------------------------------------------------------- la finale */
+/* --------------------------------------------- aucune serie de decor morte */
 
-titre('LA FINALE DESCEND');
+titre('CHAQUE SERIE DE DECOR SERT UNE NUIT');
 
-const f13 = CAMERAS[13];
-ok('la treizieme a trois phases', Array.isArray(f13.phases) && f13.phases.length === 3);
-ok('et elle est la SEULE a en avoir',
-   Object.entries(CAMERAS).filter(([, c]) => c.phases).length === 1);
-ok('chaque phase descend plus bas que la precedente',
-   f13.phases.every((p, i) => i === 0 || f13.phases[i - 1].deg > p.deg),
-   f13.phases.map(p => p.deg + '°').join(' → '));
-ok('et se rapproche a chaque fois',
-   f13.phases.every((p, i) => i === 0 || f13.phases[i - 1].zoom < p.zoom),
-   f13.phases.map(p => '×' + p.zoom).join(' → '));
-// J'AVAIS AUSSI EXIGE QUE LA FINALE SOIT LE CADRAGE LE PLUS BAS DE L'EDITION.
-// Le harnais a dit non : le tunnel inonde est a 5°, la finale finit a 6°.
+// LA FINALE EN TROIS PHASES A ETE RETIREE (16/10) : `poserLaPhase` n'etait
+// appelee par personne, et la serie rendue a 12° pour sa deuxieme phase partait
+// dans chaque build — dix megaoctets que personne ne regardait.
 //
-// Et le harnais a raison de le dire, parce qu'a y regarder la regle etait
-// fausse. Un degre ne se voit pas — c'est la premiere chose que la planche des
-// angles a montree. Descendre la finale a 4° pour gagner ce test serait de la
-// fausse precision : personne ne verrait la difference avec le tunnel, et on
-// aurait grave dans la table un chiffre choisi pour plaire a une assertion.
-//
-// CE QUI FAIT LA FINALE, C'EST LA DESCENTE, PAS LE PLANCHER. Vingt degres puis
-// douze puis six : le monde se referme pendant qu'on court, et c'est la seule
-// nuit ou cela arrive. Que le tunnel soit plus confine qu'elle est juste — un
-// egout EST plus etroit qu'un cimetiere.
-ok('sa derniere phase descend jusqu au plus confine des cadrages',
-   f13.phases[2].deg <= FAMILLES.confine.deg,
-   `${f13.phases[2].deg}° contre ${FAMILLES.confine.deg}° pour la famille confinee`);
-ok('et la descente couvre les trois quarts de l amplitude de l edition',
-   (f13.phases[0].deg - f13.phases[2].deg) >=
-     0.75 * (Math.max(...Object.values(CAMERAS).map(c => c.deg))
-             - Math.min(...Object.values(CAMERAS).map(c => c.deg))),
-   `${f13.phases[0].deg - f13.phases[2].deg}° de descente`);
-ok('sa premiere phase est bien celle que la table annonce',
-   f13.phases[0].deg === f13.deg && f13.phases[0].zoom === f13.zoom);
+// L'invariant qui reste : le rendu prend la serie dont l'angle est le plus
+// proche de la camera (serieDeLaVue, decors-stades.js). Une serie qu'aucune
+// nuit ne choisit est un poids mort dans public/, et il faut le voir ici.
+ok('aucune nuit n a de phases sans code pour les jouer',
+   Object.values(CAMERAS).every(c => !('phases' in c)));
+{
+  const man = JSON.parse(readFileSync(new URL('../src/game/decors-manifeste.json', import.meta.url), 'utf8'));
+  const series = Object.keys(man.stades).filter(k => /^halloween-a[\d.]+$/.test(k))
+    .map(k => parseFloat(k.slice('halloween-a'.length)));
+  const choisie = deg => series.reduce((m, a) => Math.abs(a - deg) < Math.abs(m - deg) ? a : m, series[0]);
+  const servies = new Set(Object.values(CAMERAS).map(c => choisie(c.deg)));
+  const mortes = series.filter(a => !servies.has(a));
+  ok('chaque serie halloween-a* du manifeste est choisie par au moins une nuit',
+     mortes.length === 0, mortes.map(a => `halloween-a${a}`).join(', '));
+  ok('et chaque serie du manifeste a son dossier dans public/',
+     series.every(a => existsSync(new URL(`../public/decors/halloween-a${a}`, import.meta.url))));
+}
 
 /* ------------------------------------------------------------- le repli */
 
@@ -175,7 +168,7 @@ ok('zero, quatorze, quatre-vingt-dix-neuf et null replient sur le sprint',
 console.log('\n── LE TABLEAU, POUR LE COUP D OEIL ' + '─'.repeat(25));
 for (const n of NUITS) {
   const c = CAMERAS[n.n];
-  console.log(`   ${String(n.n).padStart(2)}  ${String(c.deg).padStart(4)}°  ×${c.zoom}  ${c.famille.padEnd(9)} ${c.lieu}`);
+  console.log(`   ${String(n.n).padStart(2)}  ${String(c.deg).padStart(4)}°  ×${c.zoom}  ${c.famille}`);
 }
 
 console.log(e ? `\n${e} echec(s)` : '\nTout passe.');

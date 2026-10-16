@@ -36,6 +36,7 @@ import {
   NB_NUITS, PREMIER_JOUR_UTC, HEURE_FINALE,
   ouvertureDe, ouverteAt, nuitsParLaDate, nuitsJouables, nuitJouable, blocageDe,
   horlogeRetenue, MEMOIRE_MUETTE,
+  poserHorloge, poserMonotone, maintenant, simuler,
 } from '../src/game/halloween-calendrier.ts';
 
 let e = 0;
@@ -217,6 +218,36 @@ const memoireDePoche = () => { let v = null; return { lire: () => v, ecrire: x =
   ok('première visite hors ligne : on lit l appareil, faute de mieux',
      h.source === 'appareil');
   ok('un stockage refusé ne fait pas tomber le calcul', typeof h.ms === 'number');
+}
+
+/* ------------------------------------------------- l'horloge qui avance */
+
+titre('L HORLOGE AVANCE — LA NUIT S OUVRE A MINUIT SANS ROUVRIR LE PANNEAU');
+
+// LE BOGUE DU 16/10 : `maintenant()` rendait l'instant pose a l'ouverture du
+// panneau, fige. A 23 h 59 le soir du 19, la nuit 2 restait scellee pour qui
+// gardait le panneau ouvert, et le compte a rebours ne bougeait pas.
+{
+  let montre = 1000;
+  poserMonotone(() => montre);
+  const veille = ouvertureDe(2) - 60000;           // 23 h 59 a Paris, le 19
+  poserHorloge({ ms: veille, source: 'serveur' });
+  ok('a 23 h 59, la nuit 2 est encore scellee',
+     !nuitJouable(2, 1, maintenant()), new Date(maintenant()).toISOString());
+  montre += 90000;                                  // une minute et demie plus tard
+  ok('quatre-vingt-dix secondes plus tard, elle est ouverte',
+     nuitJouable(2, 1, maintenant()), new Date(maintenant()).toISOString());
+  ok('l heure a avance exactement du temps ecoule', maintenant() === veille + 90000);
+
+  // La montre monotone ne recule pas ; si elle le faisait, on ne recule pas.
+  montre -= 500000;
+  ok('une montre qui recule ne passe jamais sous l heure retenue', maintenant() === veille);
+
+  // Le voyageur temporel passe devant, et rend la main.
+  simuler(ouvertureDe(9));
+  ok('le jour simule remplace l horloge', maintenant() === ouvertureDe(9));
+  simuler(null);
+  ok('et la rend en partant', maintenant() === veille);
 }
 
 /* ------------------------------------------------------------- le fuseau */

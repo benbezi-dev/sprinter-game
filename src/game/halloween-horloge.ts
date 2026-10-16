@@ -10,7 +10,8 @@
 // peut changer une date.
 
 import {
-  horlogeRetenue, poserHorloge, type Horloge, type Memoire, MEMOIRE_MUETTE,
+  horlogeRetenue, poserHorloge, horlogeReglee, maintenant, sourceDuTemps,
+  type Horloge, type Memoire, MEMOIRE_MUETTE,
 } from './halloween-calendrier';
 
 /* L'ADRESSE EST ÉCRITE EN DUR, COMME DANS LES QUINZE AUTRES FICHIERS DE
@@ -21,6 +22,9 @@ import {
 const API = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
 const CLE_CLIQUET = 'halloween2026.cliquet';
+
+/** Combien de temps on attend le serveur avant de passer hors ligne. */
+const DELAI_MS = 4000;
 
 /** Le cliquet, rangé dans le navigateur. Muet si le stockage refuse. */
 function memoire(): Memoire {
@@ -48,8 +52,15 @@ function memoire(): Memoire {
  * `horlogeRetenue` qui décide alors quoi faire.
  */
 export async function tempsDuServeur(): Promise<number | null> {
+  // UN DELAI, SANS QUOI LE HORS-LIGNE N'ARRIVE JAMAIS. Sur un reseau qui ne
+  // repond pas — portail captif, paquets jetes — une requete peut pendre des
+  // minutes, et pendant ce temps l'ecran ne savait que l'horloge de
+  // l'appareil. Passe quatre secondes, on tranche : c'est le hors-ligne, et
+  // le cliquet decide.
+  const arret = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const minuterie = arret ? setTimeout(() => arret.abort(), DELAI_MS) : 0;
   try {
-    const r = await fetch(`${API}/now`, { cache: 'no-store' });
+    const r = await fetch(`${API}/now`, { cache: 'no-store', signal: arret?.signal });
     if (r.ok) {
       const d = await r.json();
       if (typeof d.ms === 'number' && isFinite(d.ms) && d.ms > 0) return d.ms;
@@ -57,7 +68,8 @@ export async function tempsDuServeur(): Promise<number | null> {
     // La route a répondu autre chose que ce qu'on attendait : l'en-tête reste.
     const entete = r.headers.get('Date');
     if (entete) { const t = Date.parse(entete); if (!isNaN(t)) return t; }
-  } catch { /* hors ligne, ou route injoignable */ }
+  } catch { /* hors ligne, route injoignable, ou delai depasse */ }
+  finally { if (minuterie) clearTimeout(minuterie); }
   return null;
 }
 
@@ -83,11 +95,22 @@ export async function reglerLHorloge(): Promise<Horloge> {
  *
  * Sert au tout premier rendu : on pose immédiatement ce que le cliquet sait,
  * puis `reglerLHorloge` corrige quand le serveur répond. Sans cela, le
- * Calendrier s'afficherait une fraction de seconde avec `Date.now()` — et sur
- * la machine d'un joueur qui a avancé sa montre, cette fraction de seconde
- * montrerait treize cartes ouvertes.
+ * Calendrier s'afficherait avec `Date.now()` — et sur la machine d'un joueur
+ * qui a avancé sa montre, il montrerait treize cartes ouvertes, assez
+ * longtemps pour en lancer une.
+ *
+ * IL DOIT PASSER AVANT LE RENDU, PAS APRÈS. Il était appelé dans un
+ * `useEffect`, donc une fois le panneau déjà dessiné sur l'horloge de
+ * l'appareil — et rien ne redessinait avant la réponse du serveur. Il est
+ * maintenant appelé à l'ouverture du panneau, avant tout calcul.
+ *
+ * Une horloge déjà réglée par le serveur n'est pas remplacée : elle vaut
+ * mieux que le cliquet, et elle avance d'elle-même.
  */
 export function horlogeImmediate(): Horloge {
+  if (horlogeReglee() && sourceDuTemps() === 'serveur') {
+    return { ms: maintenant(), source: 'serveur' };
+  }
   const h = horlogeRetenue(null, Date.now(), memoire());
   poserHorloge(h);
   return h;

@@ -3,10 +3,12 @@
 // Trois choses a prouver, et la troisieme est celle qui se casse en silence :
 //
 //   — LA MIGRATION ne perd pas ce qui a deja ete couru. Le mode a vecu sur
-//     /test avant l'edition datee ; des testeurs y ont des nuits tenues.
+//     /test avant l'edition datee ; des testeurs y ont des nuits tenues. Elles
+//     se reprennent dans l'espace TESTEUR : /test est le seul a avoir ecrit
+//     l'ancienne clef, et il partage son stockage avec le jeu (meme origine).
 //   — LES DEUX ESPACES ne se contaminent pas. Un testeur qui finit les treize
 //     nuits par le voyageur temporel ne doit pas revenir le 19 octobre avec
-//     une edition deja finie.
+//     une edition deja finie — ni par l'espace testeur, ni par l'ancienne clef.
 //   — LE SCEAU distingue une sauvegarde editee a la main d'une sauvegarde
 //     intacte. Ce n'est pas une serrure — tout est a portee du joueur — c'est
 //     un sceau : il ne resiste pas, il se voit.
@@ -34,8 +36,8 @@ titre('LA MIGRATION NE PERD PAS CE QUI A ETE COURU');
 
 const ancien = { tenues: 5, chronos: { '1': 12.4, '3': 10.8 }, morsures: 7, vues: ['a', 'b'] };
 const r1 = poche({ [CLE_ANCIENNE]: JSON.stringify(ancien) });
-const l1 = lire(r1, false);
-ok('un ancien carnet est repris', l1.etat === 'repris', l1.etat);
+const l1 = lire(r1, true);
+ok('un ancien carnet est repris dans l espace testeur', l1.etat === 'repris', l1.etat);
 ok('les cinq nuits tenues survivent', l1.carnet.tenues === 5);
 ok('les chronos survivent', l1.carnet.chronos['1'] === 12.4 && l1.carnet.chronos['3'] === 10.8);
 ok('les morsures survivent', l1.carnet.morsures === 7);
@@ -52,10 +54,14 @@ ok('une version inconnue repart a zero', migrer({ v: 42, tenues: 9 }).tenues ===
 
 titre('LES DEUX ESPACES NE SE CONTAMINENT PAS');
 
+// L'ANCIENNE CLEF A ETE ECRITE PAR /test, QUI PARTAGE L'ORIGINE DU JEU. Le
+// joueur qui ouvre l'edition le 19 octobre sur le meme navigateur qu'un testeur
+// ne doit RIEN en heriter.
 const r2 = poche({ [CLE_ANCIENNE]: JSON.stringify(ancien) });
-const testeurNeuf = lire(r2, true);
-ok('l espace testeur NAIT VIDE, meme quand un ancien carnet existe',
-   testeurNeuf.carnet.tenues === 0 && testeurNeuf.etat === 'neuf');
+const joueurNeuf = lire(r2, false);
+ok('l espace joueur NAIT VIDE, meme quand l ancienne clef existe',
+   joueurNeuf.carnet.tenues === 0 && joueurNeuf.etat === 'neuf',
+   `${joueurNeuf.etat} ${joueurNeuf.carnet.tenues}`);
 
 // Le testeur finit les treize nuits.
 let ct = carnetVide();
@@ -64,10 +70,15 @@ ecrire(r2, true, ct);
 ok('le testeur a bien ses treize nuits', lire(r2, true).carnet.tenues === 13);
 
 const joueur = lire(r2, false);
-ok('et le joueur garde ses cinq — rien n a debordé',
-   joueur.carnet.tenues === 5, String(joueur.carnet.tenues));
+ok('et le joueur n en voit aucune — rien n a debordé',
+   joueur.carnet.tenues === 0, String(joueur.carnet.tenues));
+
+// Le joueur tient sa premiere nuit ; le testeur garde les siennes.
+ecrire(r2, false, tenir(joueur.carnet, 1, 9.0, 2.0, 0));
+ok('le joueur avance de son cote', lire(r2, false).carnet.tenues === 1);
+ok('sans toucher au testeur', lire(r2, true).carnet.tenues === 13);
 ok('les deux clefs coexistent en base',
-   CLE_JOUEUR in r2.tout() === false && CLE_TESTEUR in r2.tout() === true,
+   CLE_JOUEUR in r2.tout() && CLE_TESTEUR in r2.tout(),
    Object.keys(r2.tout()).join(', '));
 
 /* --------------------------------------------------------------- le sceau */
@@ -86,6 +97,24 @@ r3.ecrire(CLE_JOUEUR, JSON.stringify(trafique));
 const l3 = lire(r3, false);
 ok('une sauvegarde editee a la main est vue', l3.etat === 'edite');
 ok('et elle ne sert pas une edition finie', l3.carnet.tenues === 0, String(l3.carnet.tenues));
+
+// CE QUE L'ON ECRIT DOIT SE RELIRE INTACT, QUELS QUE SOIENT LES CHAMPS. Le
+// jour retenu est une heure qui avance a la milliseconde fractionnaire
+// (halloween-calendrier.ts) ; la lecture l'arrondit. Scelle avant
+// l'arrondi, le carnet se relisait « edite » — et se videait. Trouve par
+// l'essai en navigateur du 16/10, apres la premiere nuit tenue.
+{
+  const r4 = poche();
+  ecrire(r4, false, tenir(carnetVide(), 1, 8.57, 2.4, 1792362628405.8));
+  const l4 = lire(r4, false);
+  ok('un jour a la milliseconde fractionnaire se relit intact', l4.etat === 'intact', l4.etat);
+  ok('et la nuit tenue est toujours la', l4.carnet.tenues === 1 && l4.carnet.chronos['1'] === 8.57);
+  const r5 = poche();
+  ecrire(r5, false, tenir(carnetVide(), 1, NaN, Infinity, 0));
+  const l5 = lire(r5, false);
+  ok('un chrono illisible ne fait pas passer le carnet pour trafique', l5.etat === 'intact', l5.etat);
+  ok('il est simplement oublie, la nuit reste tenue', l5.carnet.tenues === 1 && !('1' in l5.carnet.chronos));
+}
 
 // La somme ne doit pas dependre de l'ordre des champs.
 const a = { ...carnetVide(), tenues: 3, morsures: 2 };

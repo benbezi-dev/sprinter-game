@@ -39,9 +39,18 @@
 // seule, pour qu'un harnais puisse la verifier sans lancer une course.
 
 import { SprinterApp } from './engine';
-import { HALLOWEEN_OUVERT } from './canal';
+import { HALLOWEEN_OUVERT, EST_TEST } from './canal';
+import {
+  lire as lireLeCarnet, ecrire as ecrireLeCarnet, tenir, mordre,
+  CLE_JOUEUR, CLE_TESTEUR, type Carnet as CarnetRange, type Rangement,
+} from './halloween-carnet';
+import { maintenant } from './halloween-calendrier';
 import { molosseDe, FOULEE, proximite } from './halloween-molosse.js';
 import { preparerLeGrognement, GROGNEMENT, DUREE_GROGNEMENT } from './halloween-son';
+import {
+  armerLaTraque, appuiDeLaBete, suivreLaTraque, laBeteMord, laBeteRenonce, rangerLaTraque,
+  frayeurReduite,
+} from './halloween-traque';
 // Les treize nuits et la loi de la bete vivent a part, dans un module sans le
 // moindre import : c'est ce qui permet au harnais de les charger seuls, sans
 // navigateur ni piste (voir tools/molosse-test.mjs).
@@ -121,6 +130,11 @@ type Chasse = {
   v: number;
   /** L'ecart entre sa gueule et le dos du joueur, en metres. */
   ecart: number;
+  /**
+   * L'ecart le plus court de la course, en metres. C'est lui qu'on raconte
+   * apres : « elle etait a quarante centimetres de toi ».
+   */
+  ecartMin: number;
   verdict: Verdict;
   /** Le chrono de l'arrivee, quand la ligne est passee. */
   chrono: number;
@@ -140,7 +154,22 @@ type Chasse = {
    * surpris, avant que la bete n'entre dans l'image (halloween-molosse.js).
    */
   yeux?: number;
+  /** L'ecran peut-il trembler ? Non pour qui a demande moins d'animations. */
+  secousses: boolean;
 };
+
+/**
+ * L'ECRAN PEUT-IL TREMBLER ?
+ *
+ * La secousse au galop et celle du depart surpris passaient outre le reglage
+ * « reduire les animations » du systeme, que les cartes animees du mode
+ * respectaient deja (audit du 16/10). Elles le respectent maintenant, ainsi
+ * que le reglage « frayeur reduite » du tableau des nuits. La vibration suit.
+ */
+function secoussesPermises(): boolean {
+  if (frayeurReduite()) return false;
+  try { return !window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return true; }
+}
 
 /** La nuit en cours. Nulle en dehors d'une nuit. */
 let chasse: Chasse | null = null;
@@ -199,8 +228,9 @@ export function armerLaNuit(n: number) {
   chasse = {
     nuit, T, tau, vmax,
     d: -nuit.retard, v: 0,
-    ecart: nuit.retard,
+    ecart: nuit.retard, ecartMin: nuit.retard,
     verdict: 'court', chrono: 0, morsure: 0,
+    secousses: secoussesPermises(),
   };
 
   if (G) {
@@ -213,6 +243,9 @@ export function armerLaNuit(n: number) {
     G.obstacles = molosseDe(chasse);
     poserLaCamera(n);
     poserLeDepart(nuit);
+    // Le corps sonore de la bete (halloween-traque.ts) : muet jusqu'au
+    // premier pas de la course, puis il suit l'ecart.
+    armerLaTraque();
     // Et le retour a l'accueil remballe la bete, par quelque chemin qu'il
     // arrive : le bouton de l'ecran de fin, l'abandon, le retour arriere du
     // telephone (voir goHome dans sprinter-app.js).
@@ -244,8 +277,9 @@ function poserLeDepart(nuit: Nuit) {
     reste: attente + DUREE_GROGNEMENT, t: 0, dit: false, a: attente,
     cri: GROGNEMENT, gain: 1, attitudes: true,
     auCri() {
-      G.shake = 0.9;
       if (chasse) chasse.yeux = 1;
+      if (!secoussesPermises()) return;
+      G.shake = 0.9;
       try { navigator.vibrate?.([60, 40, 120]); } catch { /* sans vibreur */ }
     },
   };
@@ -308,27 +342,6 @@ function rendreLaCamera() {
   cameraGardee = null;
 }
 
-/**
- * Le cadrage d'une phase, pour la finale qui descend.
- *
- * Les douze premieres nuits gardent leur camera du depart a l'arrivee. La
- * treizieme en a trois, et elles se posent pendant qu'on court : a chaque
- * vague, la camera descend et se rapproche. Rien d'autre dans le mode
- * n'appelle ceci — c'est la finale, et elle est seule.
- */
-export function poserLaPhase(i: number) {
-  const G = SprinterApp.G;
-  const C = (SprinterApp as any).C;
-  if (!G || !C || !chasse) return;
-  const cam = cameraDe(chasse.nuit.n);
-  const p = cam.phases && cam.phases[i];
-  if (!p) return;
-  const iso = isoDe(p.deg);
-  C.ISO_COS = iso.cos;
-  C.ISO_SIN = iso.sin;
-  G.zoomMode = p.zoom;
-}
-
 /** Ou en est la camera, pour les harnais et le bandeau du mode test. */
 export function cameraCourante(): { deg: number; zoom: number } {
   const C = (SprinterApp as any).C;
@@ -342,6 +355,7 @@ export function cameraCourante(): { deg: number; zoom: number } {
 
 export function rangerLaNuit() {
   chasse = null;
+  rangerLaTraque();
   const G = SprinterApp.G;
   if (G) {
     G.pasMolosse = null;
@@ -379,6 +393,7 @@ export function pasDuMolosse(joueur: any) {
   // et elle vaut zero a la premiere image sans cas particulier.
   c.v = Math.max(0, (c.d - avant) * 240);
   c.ecart = joueur.d - c.d;
+  if (c.ecart < c.ecartMin) c.ecartMin = Math.max(0, c.ecart);
 
   // LE SOL TREMBLE SOUS SES FOULEES, ET SEULEMENT QUAND ELLE EST PRES.
   //
@@ -405,13 +420,17 @@ export function pasDuMolosse(joueur: any) {
   if (c.demiFoulee === undefined) c.demiFoulee = demi;
   if (demi !== c.demiFoulee) {
     c.demiFoulee = demi;
-    if (pres > 0) {
+    // On l'ENTEND avant de la sentir : ses pattes portent jusqu'a vingt
+    // metres (halloween-traque.ts), la secousse ne commence qu'a douze.
+    appuiDeLaBete(demi % 2 === 0, c.ecart);
+    if (pres > 0 && c.secousses) {
       // Le posterieur frappe plus fort que l'anterieur : c'est lui qui porte
       // la poussee. Un battement egal aurait fait un moteur, pas un galop.
       const lourd = demi % 2 === 0 ? 1 : 0.62;
       G.shake = Math.max(G.shake || 0, 0.16 * pres * pres * lourd);
     }
   }
+  suivreLaTraque(c.ecart, t);
 
   // LE JOUEUR EST PASSE. On le juge sur `finished` et non sur sa distance :
   // c'est le moteur qui decide qu'une ligne est franchie, et le faire une
@@ -419,6 +438,7 @@ export function pasDuMolosse(joueur: any) {
   if (joueur.finished) {
     c.verdict = 'passe';
     c.chrono = joueur.finishTime != null ? joueur.finishTime : t;
+    laBeteRenonce();
     return;
   }
 
@@ -431,6 +451,7 @@ export function pasDuMolosse(joueur: any) {
   if (c.ecart <= 0) {
     c.verdict = 'mordu';
     c.morsure = t;
+    laBeteMord();
     // Le coureur s'arrete net. On ne le fait pas tomber : le moteur reserve sa
     // chute au faux pas, et une chute ici aurait relance sa foulee au
     // relevement — le joueur aurait vu son athlete repartir apres s'etre fait
@@ -449,44 +470,28 @@ export function pasDuMolosse(joueur: any) {
    Sur l'appareil, et nulle part ailleurs. Aucun serveur ne connait ce mode :
    il n'a ni classement ni duel, et une progression de treize cases n'a rien a
    faire dans une base.
+
+   LE CARNET VIT DANS game/halloween-carnet.ts (16/10) : schema versionne,
+   sceau, et DEUX ESPACES — celui du joueur et celui du testeur. Il etait
+   ecrit, eprouve par son harnais, et inutilise : ce fichier rangeait encore
+   tout sous `sprinter_halloween`, une clef que /test et le jeu partagent
+   (meme origine, meme stockage). Les testeurs, qui courent les treize nuits
+   dans le desordre sur /test, seraient arrives le 19 octobre avec une
+   edition finie. Ici, on ne fait plus que brancher ce module sur
+   localStorage et choisir l'espace selon le canal.
 --------------------------------------------------------------------------- */
 
-const CLE = 'sprinter_halloween';
+export type Carnet = CarnetRange;
 
-export type Carnet = {
-  /** La derniere nuit tenue. 0 tant qu'aucune ne l'est. */
-  tenues: number;
-  /** Le meilleur chrono de chaque nuit tenue, par rang. */
-  chronos: Record<string, number>;
-  /** Combien de fois la bete a mordu, toutes nuits confondues. */
-  morsures: number;
-  /** Les cinematiques deja vues, pour ne pas servir deux fois la meme. */
-  vues: string[];
+/** Le stockage du navigateur, sous la forme que le carnet attend. */
+const RANGEMENT: Rangement = {
+  lire: (cle) => { try { return localStorage.getItem(cle); } catch { return null; } },
+  ecrire: (cle, v) => { try { localStorage.setItem(cle, v); } catch { /* refuse */ } },
 };
 
-const VIERGE: Carnet = { tenues: 0, chronos: {}, morsures: 0, vues: [] };
+function lire(): Carnet { return lireLeCarnet(RANGEMENT, EST_TEST).carnet; }
 
-function lire(): Carnet {
-  try {
-    const brut = localStorage.getItem(CLE);
-    if (!brut) return { ...VIERGE, chronos: {}, vues: [] };
-    const d = JSON.parse(brut);
-    return {
-      tenues: Number(d.tenues) || 0,
-      chronos: d.chronos && typeof d.chronos === 'object' ? d.chronos : {},
-      morsures: Number(d.morsures) || 0,
-      vues: Array.isArray(d.vues) ? d.vues.map(String) : [],
-    };
-  } catch {
-    // Un carnet illisible vaut un carnet vierge : on ne perd qu'une
-    // progression de treize cases, et le mode s'ouvre quand meme.
-    return { ...VIERGE, chronos: {}, vues: [] };
-  }
-}
-
-function ecrire(c: Carnet) {
-  try { localStorage.setItem(CLE, JSON.stringify(c)); } catch { /* refuse */ }
-}
+function ecrire(c: Carnet) { ecrireLeCarnet(RANGEMENT, EST_TEST, c); }
 
 /** Le carnet de la nuit, tel qu'il est range sur cet appareil. */
 export function carnet(): Carnet { return lire(); }
@@ -502,27 +507,33 @@ export function toutesTenues(): boolean { return lire().tenues >= NUITS.length; 
 /**
  * Ranger une nuit tenue.
  *
- * Le rang ne recule jamais : rejouer la nuit 3 quand on en est a la 7 ne
- * ramene pas la progression a 3. Seul le chrono de cette nuit-la s'ameliore.
+ * Le rang ne recule jamais, et il n'avance que d'un cran : rejouer la nuit 3
+ * quand on en est a la 7 n'y change rien, et tenir la 9 sans la 8 non plus
+ * (voir `tenir`, game/halloween-carnet.ts). Seuls le chrono et l'ecart de
+ * cette nuit-la s'ameliorent.
+ *
+ * `ecartMin` est l'ecart le plus court de la course — ce qui se raconte apres.
  */
-export function tenirLaNuit(n: number, chrono: number) {
-  const c = lire();
-  c.tenues = Math.max(c.tenues, n);
+export function tenirLaNuit(n: number, chrono: number, ecartMin = Infinity) {
   // AU CENTIEME, comme le jeu l'affiche. Le moteur rend un chrono issu d'une
   // integration au 1/240 de seconde, donc quinze decimales dont treize ne
   // veulent rien dire : les ranger telles quelles gonfle le carnet et rend
-  // deux chronos « egaux » comparables a l'insu du lecteur.
+  // deux chronos « egaux » comparables a l'insu du lecteur. L'ecart, lui, au
+  // centimetre.
   const pose = Math.round(chrono * 100) / 100;
-  const av = c.chronos[String(n)];
-  if (av == null || pose < av) c.chronos[String(n)] = pose;
-  ecrire(c);
+  const ecart = Number.isFinite(ecartMin) ? Math.max(0, Math.round(ecartMin * 100) / 100) : 99;
+  ecrire(tenir(lire(), n, pose, ecart, Math.floor(maintenant())));
 }
 
 /** Ranger une morsure. */
 export function compterLaMorsure() {
-  const c = lire();
-  c.morsures += 1;
-  ecrire(c);
+  ecrire(mordre(lire()));
+}
+
+/** L'ecart le plus court jamais tenu sur cette nuit, en metres, ou null. */
+export function ecartDe(n: number): number | null {
+  const v = lire().ecarts[String(n)];
+  return typeof v === 'number' && v < 99 ? v : null;
 }
 
 /** Le meilleur chrono pose sur cette nuit, ou null. */
@@ -538,6 +549,12 @@ export function chronoDe(n: number): number | null {
  * toutes ont ete vues on repart du debut en evitant seulement la derniere. Un
  * tirage purement aleatoire aurait servi deux fois la meme histoire en deux
  * courses, ce qui est la facon la plus sure de tuer une histoire.
+ *
+ * TIRER NE NOTE RIEN (16/10). Le tirage se fait au premier rendu de l'ecran de
+ * fin, et React peut rendre un composant plusieurs fois avant de l'afficher
+ * (le chargement differe de l'ecran en est un cas) : chaque rendu notait sa
+ * scene comme vue, et l'essai en navigateur en a compte deux, puis quatre,
+ * pour une seule montree. La scene se note une fois affichee (noterLaScene).
  */
 export function tirerLaScene(cles: readonly string[]): string {
   if (!cles.length) return '';
@@ -546,18 +563,26 @@ export function tirerLaScene(cles: readonly string[]): string {
   const inedites = cles.filter(k => !vues.has(k));
   const pool = inedites.length ? inedites
     : cles.filter(k => k !== c.vues[c.vues.length - 1]);
-  const choix = (pool.length ? pool : cles.slice())[
+  return (pool.length ? pool : cles.slice())[
     Math.floor(Math.random() * (pool.length ? pool.length : cles.length))];
-  // On ne garde que le fil des dernieres vues : la liste sert a ne pas se
-  // repeter, pas a tenir un journal. Le choix remonte en queue meme s'il y
-  // etait deja, sinon une scene revue resterait en tete de liste et serait
-  // reservie la fois suivante comme la plus ancienne.
-  c.vues = [...c.vues.filter(k => k !== choix), choix].slice(-24);
+}
+
+/**
+ * Noter une scene comme vue — une fois qu'elle l'est.
+ *
+ * On ne garde que le fil des dernieres vues : la liste sert a ne pas se
+ * repeter, pas a tenir un journal. La scene remonte en queue meme si elle y
+ * etait deja, sinon une scene revue resterait en tete de liste et serait
+ * reservie la fois suivante comme la plus ancienne.
+ */
+export function noterLaScene(cle: string) {
+  if (!cle) return;
+  const c = lire();
+  c.vues = [...c.vues.filter(k => k !== cle), cle].slice(-24);
   ecrire(c);
-  return choix;
 }
 
 /** Tout oublier de ce mode — la progression comme les scenes vues. */
 export function oublierLaNuit() {
-  try { localStorage.removeItem(CLE); } catch { /* refuse */ }
+  try { localStorage.removeItem(EST_TEST ? CLE_TESTEUR : CLE_JOUEUR); } catch { /* refuse */ }
 }

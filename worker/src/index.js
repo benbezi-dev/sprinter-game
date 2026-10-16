@@ -88,7 +88,7 @@ import { empreinteIp, sousLimite, purgerLimites } from './limites.js';
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
-import { etapeConnue, noterEtape, noterAppareil, lireTunnel } from './tunnel.js';
+import { etapeConnue, noterEtape, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
 import {
   ensureComptage, compterCourse, sourceDeLaVisite, compterArrivee,
   lireComptage, lireSessions, lireArrivees,
@@ -245,7 +245,10 @@ function cors(resp) {
   // coherence non — et l'onglet reseau ne montrerait rien d'anormal, puisque
   // l'en-tete est bel et bien sur le fil. Qui ajoute un en-tete de reponse
   // ajoute une ligne ici.
-  resp.headers.set('Access-Control-Expose-Headers', 'X-D1-Bookmark');
+  // `Date` aussi : c'est le repli de l'heure de l'edition Halloween quand
+  // /now ne repond pas (src/game/halloween-horloge.ts). Sans cette ligne le
+  // navigateur la cachait, et le repli lisait `null` — hors ligne, toujours.
+  resp.headers.set('Access-Control-Expose-Headers', 'X-D1-Bookmark, Date');
   return resp;
 }
 
@@ -4775,6 +4778,8 @@ async function servir(request, env, ctx, porteur) {
 
       // --- le tunnel des premiers pas (table `tunnel`) --------------
       const tunnel = await bloc(() => lireTunnel(DB, 30, now), null);
+      // --- les treize nuits d'Halloween, tentees et tenues (tunnel.js) ---
+      const halloween = await bloc(() => lireHalloween(DB), null);
       // --- ce qui manquait : vrai mode, compte complet, retention sur le
       // jeu, sessions, provenance des visites (voir comptage.js) ---------
       const comptage = await bloc(() => lireComptage(DB, now), null);
@@ -4799,7 +4804,7 @@ async function servir(request, env, ctx, porteur) {
         defis: { ...(c || {}), ...defisPlus },
         // --- ajouts ---
         parties, reprises, retention, duels, joueurs, geo, relais, championnats, tunnel,
-        comptage, sessions, arrivees,
+        comptage, sessions, arrivees, halloween,
         signalements,
         releve_a: now,
       });

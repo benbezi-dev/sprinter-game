@@ -13,6 +13,7 @@
 // anglais], dans cet ordre, comme UI dans sprinter-i18n.js.
 
 import { SprinterI18N } from './engine';
+import { EST_TEST } from './canal';
 
 type Paire = [string, string];
 
@@ -29,6 +30,12 @@ const MOTS: Record<string, Paire> = {
   hw_nuits:      ['LES TREIZE NUITS', 'THE THIRTEEN NIGHTS'],
   hw_nuit_n:     ['NUIT {n}', 'NIGHT {n}'],
   hw_imparti:    ['{s} s pour passer', '{s}s to get through'],
+  // les cinq traces (halloween-courses.js), dont le libelle n'existe qu'en francais
+  'hw_trace_nuit-100':  ['100 M', '100 M'],
+  'hw_trace_nuit-100v': ['100 M EN COURBE', '100 M ON THE BEND'],
+  'hw_trace_nuit-200':  ['200 M EN LIGNE', '200 M STRAIGHT'],
+  'hw_trace_nuit-300':  ['300 M EN LIGNE', '300 M STRAIGHT'],
+  'hw_trace_nuit-400':  ['400 M EN LIGNE', '400 M STRAIGHT'],
   // le depart de la nuit (voir `depart` dans halloween-loi.js)
   hw_dep_blocs:   ['dans les blocs', 'from the blocks'],
   hw_dep_surpris: ['départ surpris', 'caught off guard'],
@@ -40,19 +47,13 @@ const MOTS: Record<string, Paire> = {
   hw_cal_titre:  ['LE CALENDRIER', 'THE CALENDAR'],
   hw_cal_sous:   ['une nuit par jour, du 19 au 31 octobre',
                   'one night a day, 19 to 31 October'],
-  hw_scelle:     ['scellée', 'sealed'],
   hw_ouvre_dans: ['ouvre dans {d}', 'opens in {d}'],
-  hw_ouvre_le:   ['ouvre le {d}', 'opens {d}'],
-  hw_ce_soir:    ['ouvre à 18 h', 'opens at 6 pm'],
-  hw_aujourdhui: ["CE SOIR", 'TONIGHT'],
+  // les durees du compte a rebours — elles etaient ecrites en dur, en francais
+  hw_duree_j:    ['{j} j {h} h', '{j}d {h}h'],
+  hw_duree_h:    ['{h} h {m} min', '{h}h {m}m'],
+  hw_duree_m:    ['{m} min', '{m} min'],
+  hw_date:       ['{d} oct.', 'Oct {d}'],
 
-  // --- le mode test
-  hw_test_bandeau: ['MODE TEST', 'TEST MODE'],
-  hw_test_jour:    ['jour simulé : {d}', 'simulated day: {d}'],
-  hw_test_reel:    ['heure réelle', 'real time'],
-  hw_test_tout:    ['tout ouvert', 'all unlocked'],
-  hw_test_source:  ['heure : {s}', 'time: {s}'],
-  hw_test_voyage:  ['VOYAGEUR TEMPOREL', 'TIME TRAVELLER'],
   hw_tenue:      ['TENUE', 'HELD'],
   hw_partir:     ['PARTIR', 'GO'],
   hw_fermer:     ['PLUS TARD', 'LATER'],
@@ -68,8 +69,16 @@ const MOTS: Record<string, Paire> = {
     + 'it counts what you have left.',
   ],
 
+  // --- l'avertissement et le confort (16/10 : la bete fait du bruit)
+  hw_avertissement: [
+    'Sons inquiétants, sursauts, flashs rouges et vibrations. Joue avec le son — au casque, c\'est pire.',
+    'Unsettling sounds, jump scares, red flashes and vibration. Play with sound on — headphones make it worse.',
+  ],
+  hw_frayeur:      ['Frayeur réduite', 'Reduced scares'],
+  hw_frayeur_sous: ['moins de sursauts, pas de secousse — la bête reste audible',
+                    'fewer jump scares, no shaking — you can still hear the beast'],
+
   // --- pendant la course
-  hw_reste:      ['RESTE', 'LEFT'],
   hw_derriere:   ['{m} m', '{m}m'],
   hw_dans_lecou: ['DANS TON COU', 'ON YOUR HEELS'],
 
@@ -78,6 +87,8 @@ const MOTS: Record<string, Paire> = {
   hw_mordu:      ['IL T\'A EU', 'IT GOT YOU'],
   hw_chrono:     ['{s} s', '{s}s'],
   hw_marge:      ['{s} s d\'avance sur lui', '{s}s ahead of it'],
+  hw_frole:      ['il est passé à {m} m de toi', 'it came within {m}m of you'],
+  hw_prochaine:  ['nuit {n} · ouvre dans {d}', 'night {n} · opens in {d}'],
   hw_manque:     ['il te manquait {m} m', 'you were {m}m short'],
   hw_suivante:   ['NUIT SUIVANTE', 'NEXT NIGHT'],
   hw_encore:     ['ENCORE', 'AGAIN'],
@@ -85,12 +96,29 @@ const MOTS: Record<string, Paire> = {
   hw_toutes:     ['LES TREIZE NUITS SONT TOMBÉES', 'ALL THIRTEEN NIGHTS ARE DOWN'],
   hw_toutes_sous: ['La quatorzième n\'est pas sur le calendrier. Elle viendra quand même.',
                    'The fourteenth is not on the calendar. It will come anyway.'],
-  hw_suite:      ['toucher pour continuer', 'tap to continue'],
 };
+
+/**
+ * LES MOTS DU MODE TEST, A PART ET DERRIERE `EST_TEST`.
+ *
+ * Le mode s'ouvre au public (game/halloween-ouverture.js) et ses mots partent
+ * avec lui ; ceux des outils du testeur — le bandeau, le voyageur temporel —
+ * ne doivent pas suivre. `EST_TEST` se replie a la compilation : en
+ * production, cette table est un objet vide et le bundler retire le reste
+ * (verifie par tools/molosse-canal-test.mjs).
+ */
+const MOTS_TEST: Record<string, Paire> = EST_TEST ? {
+  hw_test_bandeau: ['MODE TEST', 'TEST MODE'],
+  hw_test_jour:    ['jour simulé : {d}', 'simulated day: {d}'],
+  hw_test_reel:    ['heure réelle', 'real time'],
+  hw_test_tout:    ['tout ouvert', 'all unlocked'],
+  hw_test_source:  ['heure : {s}', 'time: {s}'],
+  hw_test_voyage:  ['VOYAGEUR TEMPOREL', 'TIME TRAVELLER'],
+} : {};
 
 /** Un mot du mode, dans la langue courante, avec ses variables. */
 export function mot(cle: string, vars?: Record<string, string>): string {
-  const paire = MOTS[cle];
+  const paire = MOTS[cle] || MOTS_TEST[cle];
   let s = paire ? paire[SprinterI18N.index()] : cle;
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
   return s;
