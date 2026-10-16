@@ -4367,6 +4367,14 @@ async function servir(request, env, ctx, porteur) {
         const adresseImage = `${url.origin}/img/${depot}.jpg`;
         const r = await publierInstagram(env, { adresseImage, legende, format: format || 'fil' });
 
+        // Meta n'a pas fini de lire l'image : rien n'est parti. On garde le
+        // depot — c'est lui que Meta est en train de lire — et l'on rend le
+        // conteneur, que `/reseaux/publier` enverra une fois FINISHED. Le
+        // menage d'une heure reprendra l'image.
+        if (r.enAttente) {
+          return json({ error: r.erreur, etape: r.etape, creation: r.creation }, 502);
+        }
+
         // Le depot a fait son office, dans un sens comme dans l'autre : ce qui
         // doit durer est la publication chez Instagram, pas la copie.
         ctx.waitUntil(oublierImage(env.DB, depot));
