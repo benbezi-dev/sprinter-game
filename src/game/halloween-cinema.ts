@@ -385,6 +385,10 @@ function trameDeGrain(): HTMLCanvasElement {
    TRELLIS. Sources et reperes : assets-sources/molosse-cartes/. 1080 x 1920 ;
    le haut porte le sujet, le bas reste sombre pour le texte.
 
+   L'ATTENTE et SON SOMMEIL n'ont plus d'image (16/10, « retire ces deux
+   la, garde les autres ») : la bete de face, en gros plan, se lisait comme
+   une figurine. Elles retombent sur la scene dessinee.
+
    Hors production comme le reste du mode (HORS_PRODUCTION, vite.config.ts).
    Une carte dont l'image manque — fichier absent, chargement rate — retombe
    sur la scene dessinee d'avant. */
@@ -394,8 +398,6 @@ const CARTES = import.meta.glob('/src/assets/molosse-cartes/*.webp', { query: '?
 /** Les yeux de la bete dans chaque carte (fractions de l'image), mesures dans Unity. */
 const YEUX_DES_CARTES: Record<string, Array<[number, number]>> = {
   odeur: [[0.3618, 0.4227], [0.3193, 0.4150]],
-  sommeil: [[0.4840, 0.4274], [0.5892, 0.4275]],
-  attente: [[0.5428, 0.5234], [0.6566, 0.5240]],
   bus: [[0.1406, 0.5127], [0.2091, 0.5130]],
 };
 
