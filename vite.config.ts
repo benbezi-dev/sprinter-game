@@ -31,7 +31,7 @@ const apiLocale = process.env.API_LOCALE || '';
 // LA MUSIQUE DU MOLOSSE NE DOIT PAS PARTIR EN PRODUCTION, et il a fallu ce
 // greffon pour qu'elle n'y parte plus.
 //
-// Le mode d'Halloween est ferme au public jusqu'au 24 octobre, et tout son
+// Le mode d'Halloween est ferme au public jusqu'au 19 octobre, et tout son
 // code en sort bien du build : `HALLOWEEN_OUVERT` se replie a faux, les trois
 // `lazy` portent `@__PURE__`, et plus aucun morceau Halloween n'est emis.
 // Son MORCEAU DE MUSIQUE, lui, restait — sept cent huit kilo-octets servis

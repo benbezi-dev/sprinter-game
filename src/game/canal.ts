@@ -344,7 +344,8 @@ export const SAUTS_OUVERTS = LONGUEUR_OUVERTE || TRIPLE_OUVERT || HAUTEUR_OUVERT
  *
  * Pour ouvrir a tout le monde : `true` en dur, et rien d'autre a toucher.
  */
-export const HALLOWEEN_OUVERT = EST_TEST;
+// Ouvert a tous le 19 octobre 2026 (decision du 15/10, PR d'ouverture).
+export const HALLOWEEN_OUVERT = true;
 
 /**
  * L'EDITION LIMITEE D'HALLOWEEN 2026 — treize courses, une par jour.
@@ -374,7 +375,7 @@ export const HALLOWEEN_OUVERT = EST_TEST;
  * Pour ouvrir a tout le monde le 19 octobre : `true` en dur, et rien d'autre
  * a toucher. Les dates, elles, sont dans game/halloween-calendrier.ts.
  */
-export const HALLOWEEN_2026_OUVERT = EST_TEST;
+export const HALLOWEEN_2026_OUVERT = true;
 
 /**
  * LA CARRIERE LEGENDE — l'extension de fin de jeu (game/legende/).
