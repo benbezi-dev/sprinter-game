@@ -74,6 +74,13 @@ export const PREFIXE_SIGNALEMENT = 'tchat-marques:';
 export const SANS_CAMP = 'joueur';
 /** Le compte du jeu : son nom, sa cle, et le camp qui n'en est pas un. */
 export const OFFICIEL = { name: 'SprinterGame', key: 'sprintergame', camp: 'sprinter' };
+/**
+ * Les comptes de joueurs qui peuvent aussi parler en SprinterGame, sans cle :
+ * celui de l'auteur (16/10). Leur nom RESERVE sur l'appareil suffit — un nom
+ * libre se porte par n'importe qui, l'appelant le verifie (`nomReserveIci`).
+ * La meme liste vit cote jeu (src/game/tchat-officiel.ts) : les deux ensemble.
+ */
+export const AUTEURS_OFFICIELS = new Set(['\u2022benbezi\u2022']);   // « •BENBEZI• »
 
 /**
  * Ce nom se fait-il passer pour le compte du jeu ? « Sprinter Game »,

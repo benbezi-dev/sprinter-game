@@ -12,7 +12,7 @@
 
 import { getDeviceId, getSavedName } from './leaderboard';
 import { nomPourLeDirect } from './identity';
-import { cleOfficielle, oublierCleOfficielle } from './tchat-officiel';
+import { cleOfficielle, oublierCleOfficielle, estAuteurOfficiel } from './tchat-officiel';
 import type { Camp, Epreuve } from './marques';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
@@ -99,21 +99,25 @@ export async function ecrire(texte: string, pour: string | null, prive: boolean)
 
 /* ------------------------------------------------ le compte SprinterGame
    Ce telephone porte-t-il la cle ? (tchat-officiel.ts) */
-export const aLaCleOfficielle = () => !!cleOfficielle();
+export const aLaCleOfficielle = () => !!cleOfficielle() || estAuteurOfficiel(getSavedName() || '');
 
 /** Ecrire au nom de SprinterGame, dans le tchat commun. */
 export async function ecrireOfficiel(texte: string): Promise<{ message: Message } | { refus: Refus; raison?: RaisonFiltre }> {
+  // La cle si ce telephone la porte ; sinon le compte de l'auteur, par son nom
+  // reserve sur cet appareil.
   const cle = cleOfficielle();
-  if (!cle) return { refus: 'cle' };
+  const name = getSavedName() || '';
+  if (!cle && !estAuteurOfficiel(name)) return { refus: 'cle' };
   let r: Response;
   try {
     r = await fetch(`${API_BASE}/marques/tchat/officiel`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Sprinter-Tchat': cle },
-      body: JSON.stringify({ texte }),
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(cle ? { 'X-Sprinter-Tchat': cle } : {}) },
+      body: JSON.stringify({ texte, name, device_id: getDeviceId() }),
     });
   } catch { return { refus: 'reseau' }; }
   const d = await r.json().catch(() => ({}));
-  if (r.status === 403) { oublierCleOfficielle(); return { refus: 'cle' }; }
+  if (r.status === 403) { if (cle) oublierCleOfficielle(); return { refus: cle ? 'cle' : 'nom' }; }
   if (r.status !== 200) return { refus: refusDe(r.status, d), raison: d?.raison };
   return { message: d.message };
 }

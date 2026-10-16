@@ -16,6 +16,16 @@
 
 const CLE_STOCKAGE = 'sprinter_tchat_officiel';
 
+/**
+ * Les comptes qui parlent aussi en SprinterGame sans cle (16/10) : celui de
+ * l'auteur, « •BENBEZI• ». Le serveur decide (worker/src/tchat-marques.js,
+ * AUTEURS_OFFICIELS, meme liste) : ici, on ne fait qu'afficher la bascule.
+ */
+export const AUTEURS_OFFICIELS = ['\u2022benbezi\u2022'];
+export function estAuteurOfficiel(nom: string): boolean {
+  return AUTEURS_OFFICIELS.includes(nom.trim().toLowerCase());
+}
+
 /** La cle posee sur ce telephone, ou ''. */
 export function cleOfficielle(): string {
   try { return localStorage.getItem(CLE_STOCKAGE) || ''; } catch { return ''; }

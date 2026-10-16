@@ -38,7 +38,8 @@ import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
          fantome as fantomeMarques, EPREUVES as EPREUVES_MARQUES } from './marques.js';
 import { poster as posterTchat, lire as lireTchat, participants as participantsTchat,
          invitables as invitablesTchat, inviter as inviterTchat, mesInvitations,
-         signalerMessage as signalerTchat, posterOfficiel, imiteOfficiel } from './tchat-marques.js';
+         signalerMessage as signalerTchat, posterOfficiel, imiteOfficiel,
+         AUTEURS_OFFICIELS } from './tchat-marques.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
   classementRelais, enregistrerRelais, equipe as equipeRelais,
@@ -2997,11 +2998,15 @@ async function servir(request, env, ctx, porteur) {
          un nom reserve par cet appareil — on sert des messages prives.
          Il survit au duel (16/10) : il devient le tchat du jeu, et ses routes
          passent avant la fermeture. Les invitations se ferment avec le duel. */
-      // La voix du jeu (compte SprinterGame) : une cle, pas un nom reserve.
+      // La voix du jeu (compte SprinterGame) : la cle TCHAT_CLE, ou le nom
+      // reserve d'un compte de la liste (AUTEURS_OFFICIELS, l'auteur).
       if (url.pathname === '/marques/tchat/officiel' && request.method === 'POST') {
-        if (!estTchatOfficiel(request, env)) return json({ error: 'refuse' }, 403);
         let body = {};
         try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        const cleAuteur = cleanName(body.name).trim().toLowerCase();
+        const parSonCompte = AUTEURS_OFFICIELS.has(cleAuteur)
+          && await nomReserveIci(env.DB, cleAuteur, body.device_id);
+        if (!parSonCompte && !estTchatOfficiel(request, env)) return json({ error: 'refuse' }, 403);
         const r = await posterOfficiel(env.DB, { texte: body.texte });
         return json(r.corps, r.status);
       }
