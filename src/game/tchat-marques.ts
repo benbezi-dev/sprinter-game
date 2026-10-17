@@ -27,7 +27,11 @@ export type Message = {
   pour: string | null;
   prive: boolean; texte: string;
   a_moi: boolean; pour_moi: boolean;
+  /** Les j'aime (17/10) : combien, et si j'en suis. */
+  aimes?: number; aime?: boolean;
 };
+/** Le compteur de j'aime d'un message, rendu a chaque lecture. */
+export type Aimes = { id: number; n: number; moi: boolean };
 export type Participant = { name: string; camp: Camp | 'joueur'; epreuve: Epreuve | null };
 export type Invitation = { de: string; camp: Camp | null; quand: number };
 export type Invitable = { name: string; invite: boolean };
@@ -76,6 +80,8 @@ async function appel(chemin: string, corps?: Record<string, unknown>, query: Rec
 export type Lecture = {
   messages: Message[]; dernier: number;
   participants?: Participant[]; invitations?: Invitation[];
+  /** Les j'aime des derniers messages, deja recus ou non. */
+  aimes?: Aimes[];
 };
 
 /**
@@ -125,6 +131,12 @@ export async function ecrireOfficiel(texte: string): Promise<{ message: Message 
 export async function signalerMessage(id: number, motif: string): Promise<boolean> {
   const { status } = await appel('/marques/tchat/signaler', { id, motif });
   return status === 200;
+}
+
+/** Aimer un message, ou ne plus l'aimer. Rend le compteur a jour, ou null. */
+export async function aimerMessage(id: number, aime: boolean): Promise<{ aimes: number; aime: boolean } | null> {
+  const { status, d } = await appel('/marques/tchat/aimer', { id, aime });
+  return status === 200 ? { aimes: d.aimes, aime: d.aime } : null;
 }
 
 /** Le top 500 des trois epreuves, moins les inscrits. */
