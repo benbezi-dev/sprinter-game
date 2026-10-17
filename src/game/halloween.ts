@@ -366,6 +366,15 @@ export function rangerLaNuit() {
     if (G.obstacles && G.obstacles.molosse) G.obstacles = null;
     if (G.surRetourAccueil === rangerLaNuit) G.surRetourAccueil = null;
     G.departDebout = null;
+    // LE TRACE DE LA NUIT NE SURVIT PAS A LA NUIT (18/10). Le retour a
+    // l'accueil reconstruit l'etape 0 avec `G.race`, et lit ses plages de
+    // chronos (`R.ranges`) — qu'un trace `nuit-*` n'a pas : SORTIR jetait une
+    // erreur dans buildLevel, l'accueil restait monte sur un niveau a moitie
+    // construit. On rend le 100 m, que la prochaine course remplacera.
+    if (typeof G.raceKey === 'string' && G.raceKey.startsWith('nuit-')) {
+      const RACES = (globalThis as any).SprinterCore.RACES;
+      if (RACES && RACES['100']) { G.raceKey = '100'; G.race = RACES['100']; }
+    }
     rendreLaCamera();
   }
 }

@@ -84,18 +84,34 @@ export function dit(paire: [string, string]): string { return paire[i()]; }
    qu'on gagne se lit mieux a la deuxieme personne. Lignes de 57 signes au
    plus (au-dela, un mot reste seul a 375 px).
 
+   ALLONGES LE 18/10 (« les histoires sont trop courtes ») : trois pages par
+   chapitre, qu'on tourne au doigt, puis une page DEMAIN qui montre le
+   chapitre suivant de loin (peindreLApercu) avec le temps qu'il reste.
+
    LES IMAGES. Les dix cartes rendues dans Unity (assets/molosse-cartes) sont
    distribuees sur les chapitres dont elles montrent la scene ; `cle` est le
    nom du fichier. Les chapitres 3, 7 et 13 n'ont pas d'image et retombent
    sur la scene dessinee.
 --------------------------------------------------------------------------- */
-export type Chapitre = Scene & {
+/** Une ligne du recit : [francais, anglais]. */
+export type Ligne = [string, string];
+
+export type Chapitre = {
   n: number;
+  /** Le nom de l'image (assets/molosse-cartes), ou une clef sans image. */
+  cle: string;
+  sur: Ligne;
+  titre: Ligne;
   /** Ce qu'on sait du chapitre AVANT de l'avoir gagne : la promesse. */
-  accroche: [string, string];
+  accroche: Ligne;
+  /** TROIS PAGES DE TROIS OU QUATRE LIGNES (18/10, « les histoires sont trop
+      courtes »). Une page tient dans la carte de texte sans couvrir l'image ;
+      le chapitre entier n'y tiendrait pas. Chaque page finit sur un pas de
+      plus, et la derniere ligne de la derniere page reste la plus froide. */
+  pages: Ligne[][];
 };
 
-const CH = (n: number): [string, string] => [`CHAPITRE ${n}`, `CHAPTER ${n}`];
+const CH = (n: number): Ligne => [`CHAPITRE ${n}`, `CHAPTER ${n}`];
 
 export const CHAPITRES: readonly Chapitre[] = [
   {
@@ -103,208 +119,426 @@ export const CHAPITRES: readonly Chapitre[] = [
     titre: ['LA RUELLE', 'THE ALLEY'],
     accroche: ['Quelque chose court dans la ruelle, la nuit.',
                'Something runs in the alley at night.'],
-    lignes: [
+    pages: [[
       ['Chaque soir, tu coupes par la ruelle des Tanneurs.',
        'Every evening you cut through Tanners\' Alley.'],
-      ['Ce soir, quelque chose t\'a couru après. Tu l\'as semé.',
-       'Tonight something ran after you. You lost it.'],
-      ['Ses empreintes repartaient vers une porte murée.',
-       'Its prints led back to a bricked-up door.'],
-      ['Sur la plaque, une date : 31 octobre 1913.',
-       'On the plaque, a date: 31 October 1913.'],
-    ],
+      ['Deux cents mètres de pavés, trois réverbères, un mur.',
+       'Two hundred metres of cobbles, three lamps, a wall.'],
+      ['Personne n\'y passe. Toi, si : c\'est plus court.',
+       'Nobody goes that way. You do: it\'s shorter.'],
+      ['Ce soir, au deuxième réverbère, quelque chose a soufflé.',
+       'Tonight, at the second lamp, something breathed.'],
+    ], [
+      ['Tu n\'as pas regardé. Tu as couru.',
+       'You didn\'t look. You ran.'],
+      ['Derrière toi, des griffes sur les pavés. Lourdes.',
+       'Behind you, claws on the cobbles. Heavy. Fast.'],
+      ['Tu as passé le bout de la ruelle sans te retourner.',
+       'You reached the end of the alley without turning round.'],
+      ['Le bruit s\'est arrêté net. Comme coupé au couteau.',
+       'The sound stopped dead. As if cut with a knife.'],
+    ], [
+      ['Au matin, tu es revenu voir. En plein jour.',
+       'In the morning you went back. In broad daylight.'],
+      ['Des empreintes larges comme ta main, dans la boue.',
+       'Prints as wide as your hand, in the mud.'],
+      ['Elles repartaient toutes vers une porte murée.',
+       'They all led back to a bricked-up door.'],
+      ['Sur la plaque rouillée, une date : 31 octobre 1913.',
+       'On the rusty plaque, a date: 31 October 1913.'],
+    ]],
   },
   {
     n: 2, cle: 'chrono', sur: CH(2),
     titre: ['LE CHRONO', 'THE WATCH'],
     accroche: ['Ta montre a vu quelque chose que tu n\'as pas vu.',
                'Your watch saw something you didn\'t.'],
-    lignes: [
-      ['Ce soir, ta montre a enregistré deux temps.',
-       'Tonight your watch logged two times.'],
+    pages: [[
+      ['Ce soir, tu as mis ta montre. Pour savoir.',
+       'Tonight you wore your watch. To find out.'],
+      ['La chose est revenue au deuxième réverbère. Pile.',
+       'The thing came back at the second lamp. Exactly.'],
+      ['Tu as couru plus vite qu\'hier. Elle aussi.',
+       'You ran faster than yesterday. So did it.'],
+      ['Au bout de la ruelle, elle s\'est arrêtée. Comme hier.',
+       'At the end of the alley it stopped. Like yesterday.'],
+    ], [
+      ['Chez toi, tu as regardé ta montre.',
+       'At home, you looked at your watch.'],
+      ['Elle avait enregistré deux temps.',
+       'It had logged two times.'],
       ['Le tien. Et un second, un dixième derrière.',
        'Yours. And another, a tenth behind.'],
+      ['Personne n\'a touché la montre. Tu courais seul.',
+       'Nobody touched the watch. You were running alone.'],
+    ], [
+      ['Un dixième. Ni plus, ni moins. Comme une règle.',
+       'A tenth. No more, no less. Like a rule.'],
       ['La bête ne court pas au hasard. Elle court un temps.',
        'The beast doesn\'t run at random. It runs a time.'],
+      ['Un temps précis, qu\'elle connaît par cœur.',
+       'An exact time, one it knows by heart.'],
       ['Le temps de quelqu\'un qui courait ici avant toi.',
        'The time of someone who ran here before you.'],
-    ],
+    ]],
   },
   {
     n: 3, cle: 'registre', sur: CH(3),
     titre: ['LE REGISTRE', 'THE LEDGER'],
     accroche: ['Un nom, dans le vieux registre du club.',
                'A name, in the club\'s old ledger.'],
-    lignes: [
-      ['Au club, tu as ouvert le registre des courses de 1913.',
-       'At the club, you opened the 1913 race ledger.'],
-      ['Une seule page tenait encore. Un seul nom :',
-       'Only one page was left. Only one name:'],
-      ['« Lucien Marchal. 100 m en 9″00. Et son chien. »',
-       '“Lucien Marchal. 100 m in 9.00. And his dog.”'],
-      ['En marge, d\'une autre encre : « Il court encore. »',
-       'In the margin, in other ink: “He is still running.”'],
-    ],
+    pages: [[
+      ['Ton club a cent vingt ans. Ses archives aussi.',
+       'Your athletics club is 120 years old. So are its files.'],
+      ['Au grenier, une malle. Dedans, le registre de 1913.',
+       'In the attic, a trunk. Inside, the 1913 ledger.'],
+      ['Les pages collaient. L\'encre avait pâli.',
+       'The pages stuck together. The ink had faded.'],
+      ['Toutes avaient été arrachées. Toutes sauf une.',
+       'Every page had been torn out. Every page but one.'],
+    ], [
+      ['Sur la seule qui restait, un seul nom :',
+       'On the only one left, a single name:'],
+      ['« Lucien Marchal, dit le Lièvre des Tanneurs. »',
+       '“Lucien Marchal, known as the Tanners\' Hare.”'],
+      ['« 100 m en 9″00. Invaincu. Court avec son chien. »',
+       '“100 m in 9.00. Unbeaten. Runs with his dog.”'],
+    ], [
+      ['En marge, une écriture plus récente. Tremblée.',
+       'In the margin, newer handwriting. Shaky.'],
+      ['« Il court encore. Ne passez pas par la ruelle. »',
+       '“He is still running. Don\'t go down the alley.”'],
+      ['Sous la malle, des griffures fraîches dans le bois.',
+       'Under the trunk, fresh claw marks in the wood.'],
+      ['Le grenier était fermé à clé depuis vingt ans.',
+       'The attic had been locked for twenty years.'],
+    ]],
   },
   {
     n: 4, cle: 'faim', sur: CH(4),
     titre: ['LA PHOTO', 'THE PHOTOGRAPH'],
     accroche: ['Le journal du 1er novembre 1913.',
                'The newspaper of 1 November 1913.'],
-    lignes: [
-      ['Aux archives, le journal du 1er novembre 1913.',
-       'In the archives: the paper of 1 November 1913.'],
+    pages: [[
+      ['Aux archives de la ville, tu as demandé l\'année 1913.',
+       'At the city archives, you asked for the year 1913.'],
+      ['Un seul journal manquait : celui du 1er novembre.',
+       'Only one paper was missing: 1 November.'],
+      ['La bibliothécaire l\'a retrouvé. Dans le mauvais tiroir.',
+       'The librarian found it. In the wrong drawer.'],
+      ['Rangé sous ton nom.',
+       'Filed under your name.'],
+    ], [
       ['« Le sprinteur Lucien Marchal a disparu cette nuit. »',
        '“Sprinter Lucien Marchal vanished last night.”'],
-      ['Dessous, une photo de la ruelle et de ses chiens.',
-       'Below, a photo of the alley and its dogs.'],
-      ['Au fond de la photo, quelqu\'un te ressemble.',
-       'At the back of the photo, someone looks like you.'],
-    ],
+      ['« Il courait seul, la nuit, ruelle des Tanneurs. »',
+       '“He ran alone at night, in Tanners\' Alley.”'],
+      ['« On n\'a retrouvé que ses pointes. Le chien, jamais. »',
+       '“Only his spikes were found. The dog, never.”'],
+    ], [
+      ['Dessous, une photo de la ruelle, prise ce soir-là.',
+       'Below, a photo of the alley, taken that night.'],
+      ['Les réverbères. Le mur. Des chiens errants.',
+       'The lamps. The wall. Stray dogs.'],
+      ['Au milieu, un homme debout, qui regarde l\'objectif.',
+       'In the middle, a man standing, facing the camera.'],
+      ['Il porte ton blouson.',
+       'He is wearing your jacket.'],
+    ]],
   },
   {
     n: 5, cle: 'reflet', sur: CH(5),
     titre: ['LE REFLET', 'THE REFLECTION'],
     accroche: ['La vitrine du vieux tailleur.',
                'The old tailor\'s window.'],
-    lignes: [
-      ['Tu as soufflé devant la vitrine du vieux tailleur.',
-       'You caught your breath at the old tailor\'s window.'],
-      ['Dans le reflet, tu portais un maillot d\'un autre siècle.',
-       'In the glass, you wore a vest from another century.'],
-      ['Un dossard cousu main. Le numéro 13.',
-       'A hand-sewn bib. Number 13.'],
+    pages: [[
+      ['Ce soir, tu as évité la ruelle. Le grand tour.',
+       'Tonight you avoided the alley. The long way round.'],
+      ['La bête ne t\'a pas suivi. Mais tu entendais ses pas.',
+       'The beast didn\'t follow you. But you heard its steps.'],
+      ['Toujours un dixième derrière les tiens.',
+       'Always a tenth behind yours.'],
+      ['Devant la vitrine du vieux tailleur, tu t\'es arrêté.',
+       'At the old tailor\'s window, you stopped.'],
+    ], [
+      ['Dans le reflet, la rue derrière toi était vide.',
+       'In the glass, the street behind you was empty.'],
+      ['Mais tu ne portais plus ton blouson.',
+       'But you weren\'t wearing your jacket any more.'],
+      ['Un maillot de laine d\'un autre siècle. Un dossard cousu.',
+       'A wool vest from another century. A sewn-on bib.'],
+      ['Le numéro 13.',
+       'Number 13.'],
+    ], [
+      ['Le tailleur est sorti. Il a regardé la vitrine, puis toi.',
+       'The tailor came out. He looked at the window, then you.'],
+      ['« Mon grand-père a cousu ce maillot-là. En 1913. »',
+       '“My grandfather sewed that vest. In 1913.”'],
+      ['« Pour un coureur qui n\'est jamais venu le chercher. »',
+       '“For a runner who never came to collect it.”'],
       ['Ton reflet a souri. Pas toi.',
        'Your reflection smiled. You didn\'t.'],
-    ],
+    ]],
   },
   {
     n: 6, cle: 'appel', sur: CH(6),
     titre: ['L’APPEL', 'THE CALL'],
     accroche: ['Ton téléphone va sonner à 3 h 12.',
                'Your phone will ring at 3:12.'],
-    lignes: [
-      ['À 3 h 12, ton téléphone a sonné. Numéro masqué.',
-       'At 3:12 your phone rang. Number withheld.'],
-      ['Une voix d\'homme, essoufflée, venue de très loin.',
-       'A man\'s voice, out of breath, from very far away.'],
-      ['« Ne cours pas pour lui échapper. Cours pour finir. »',
-       '“Don\'t run to escape it. Run to finish.”'],
-      ['Derrière la voix, des griffes raclaient des pavés.',
-       'Behind the voice, claws were scraping cobbles.'],
-    ],
+    pages: [[
+      ['Cette nuit, tu n\'arrivais pas à dormir.',
+       'That night, you couldn\'t sleep.'],
+      ['3 h 12. Ton téléphone a vibré sur le drap.',
+       '3:12. Your phone buzzed on the sheet.'],
+      ['Numéro masqué.',
+       'Number withheld.'],
+      ['Tu as décroché. Un souffle. Un homme qui a couru.',
+       'You answered. Breathing. A man who had been running.'],
+    ], [
+      ['« Tu l\'entends, toi aussi ? » La voix venait de loin.',
+       '“You hear it too?” The voice came from far away.'],
+      ['« Il ne s\'arrête jamais. Il ne se fatigue jamais. »',
+       '“He never stops. He never gets tired.”'],
+      ['« Ne cours pas pour lui échapper. Ça ne marche pas. »',
+       '“Don\'t run to escape him. It doesn\'t work.”'],
+      ['« Cours pour finir. Il faut que quelqu\'un finisse. »',
+       '“Run to finish. Someone has to finish.”'],
+    ], [
+      ['Tu as demandé son nom. Un long silence.',
+       'You asked his name. A long silence.'],
+      ['Puis, derrière la voix, des griffes sur des pavés.',
+       'Then, behind the voice, claws on cobbles.'],
+      ['La ligne a coupé.',
+       'The line went dead.'],
+      ['Dans ton historique, aucun appel. Aucun.',
+       'In your call log, no call. None.'],
+    ]],
   },
   {
     n: 7, cle: 'porte-muree', sur: CH(7),
     titre: ['LA PORTE MURÉE', 'THE BRICKED-UP DOOR'],
     accroche: ['Une brique bouge, dans la porte murée.',
                'A brick is loose in the bricked-up door.'],
-    lignes: [
-      ['Tu es retourné à la porte murée. Une brique bougeait.',
-       'You went back to the bricked-up door. A brick moved.'],
-      ['Derrière : des pointes rouillées et un carnet.',
-       'Behind it: rusted spikes and a notebook.'],
-      ['Treize courses notées. Treize temps. Ceux de tes nuits.',
-       'Thirteen races. Thirteen times. Those of your nights.'],
-      ['Dernière page : « 31 octobre. Il me rattrape. »',
-       'Last page: “31 October. It\'s catching me.”'],
-    ],
+    pages: [[
+      ['Il fallait savoir. Tu es retourné à la porte murée.',
+       'You had to know. You went back to the bricked-up door.'],
+      ['De jour, avec une lampe. La ruelle se taisait.',
+       'By day, with a torch. The alley was silent.'],
+      ['Sous la plaque de 1913, une brique bougeait.',
+       'Under the 1913 plaque, a brick was loose.'],
+      ['Elle sentait le chien mouillé.',
+       'It smelled of wet dog.'],
+    ], [
+      ['Derrière, un creux. Des pointes de course rouillées.',
+       'Behind it, a hollow. Rusted running spikes.'],
+      ['Et un carnet, ficelé. Sec. Intact.',
+       'And a notebook, tied with string. Dry. Intact.'],
+      ['Treize courses notées à la main. Treize temps.',
+       'Thirteen races written by hand. Thirteen times.'],
+      ['Les temps de tes treize nuits. Au centième près.',
+       'The times of your thirteen nights. To the hundredth.'],
+    ], [
+      ['Les dernières pages sont écrites de plus en plus vite.',
+       'The last pages are written faster and faster.'],
+      ['« 29 octobre. Il a gagné un mètre. »',
+       '“29 October. He has gained a metre.”'],
+      ['« 30 octobre. Je sens son souffle sur mes mollets. »',
+       '“30 October. I can feel his breath on my calves.”'],
+      ['« 31 octobre. Il me rattrape. Ce soir, je finis. »',
+       '“31 October. He\'s catching me. Tonight I finish.”'],
+    ]],
   },
   {
     n: 8, cle: 'porte', sur: CH(8),
     titre: ['SOUS LE LIT', 'UNDER THE BED'],
     accroche: ['Tu as rapporté le carnet chez toi.',
                'You took the notebook home.'],
-    lignes: [
-      ['Tu as glissé le carnet de Lucien sous ton lit.',
-       'You slid Lucien\'s notebook under your bed.'],
-      ['Cette nuit, un souffle lent est monté du plancher.',
-       'That night, slow breathing rose from the floor.'],
-      ['Deux yeux rouges. Elle ne grognait pas. Elle veillait.',
-       'Two red eyes. It wasn\'t growling. It was keeping watch.'],
-      ['Elle dormait, la tête posée sur le carnet.',
-       'It was asleep, its head resting on the notebook.'],
-    ],
+    pages: [[
+      ['Tu as rapporté le carnet de Lucien chez toi.',
+       'You took Lucien\'s notebook home.'],
+      ['Tu l\'as glissé sous ton lit, dans une boîte.',
+       'You slid it under your bed, in a box.'],
+      ['Tu as fermé la porte à clé. Puis la fenêtre.',
+       'You locked the door. Then the window.'],
+    ], [
+      ['Vers 3 h, un bruit t\'a réveillé. Un souffle lent.',
+       'Around 3 a.m., a sound woke you. Slow breathing.'],
+      ['Il ne venait pas de la fenêtre. Ni de la porte.',
+       'It wasn\'t coming from the window. Nor the door.'],
+      ['Il montait du plancher. De sous le lit.',
+       'It rose from the floor. From under the bed.'],
+      ['Tu as allumé ton téléphone. Tu t\'es penché.',
+       'You switched on your phone. You leaned over.'],
+    ], [
+      ['Deux yeux rouges. Tout près.',
+       'Two red eyes. Very close.'],
+      ['Elle ne grognait pas. Elle ne bougeait pas.',
+       'It wasn\'t growling. It wasn\'t moving.'],
+      ['Elle avait sorti le carnet de la boîte.',
+       'It had taken the notebook out of the box.'],
+      ['Elle dormait, la tête posée dessus. Comme un chien.',
+       'It was asleep, its head resting on it. Like a dog.'],
+    ]],
   },
   {
     n: 9, cle: 'traces', sur: CH(9),
     titre: ['LE NOM', 'THE NAME'],
     accroche: ['La bête a un nom. Elle va te le donner.',
                'The beast has a name. It will give it to you.'],
-    lignes: [
-      ['Au matin, des traces de terre faisaient le tour du lit.',
-       'In the morning, muddy prints circled your bed.'],
-      ['Au pied du lit, des griffes avaient creusé un mot.',
-       'At the foot of the bed, claws had carved a word.'],
+    pages: [[
+      ['Au réveil, elle n\'était plus là.',
+       'When you woke, it was gone.'],
+      ['Mais la terre de la ruelle couvrait ton parquet.',
+       'But mud from the alley covered your floor.'],
+      ['Des traces de pattes faisaient le tour du lit.',
+       'Paw prints circled your bed.'],
+      ['Treize fois.',
+       'Thirteen times.'],
+    ], [
+      ['Au pied du lit, les griffes avaient creusé le bois.',
+       'At the foot of the bed, claws had dug into the wood.'],
+      ['Pas des griffures. Des lettres. Profondes. Appliquées.',
+       'Not scratches. Letters. Deep. Careful.'],
       ['ARGOS.',
        'ARGOS.'],
-      ['Tu l\'as dit à voix haute. Sous le plancher, ça a gémi.',
-       'You said it aloud. Under the floor, something whined.'],
-    ],
+    ], [
+      ['Dans la légende, Argos est le chien d\'Ulysse.',
+       'In the legend, Argos is the dog of Ulysses.'],
+      ['Il a attendu son maître vingt ans. Sans bouger.',
+       'He waited for his master for twenty years. Unmoving.'],
+      ['Tu as dit le nom à voix haute. Doucement.',
+       'You said the name aloud. Softly.'],
+      ['Sous le plancher, quelque chose a gémi.',
+       'Under the floor, something whined.'],
+    ]],
   },
   {
     n: 10, cle: 'odeur', sur: CH(10),
     titre: ['L’ODEUR', 'THE SCENT'],
     accroche: ['Ce n\'est pas toi qu\'Argos renifle.',
                'It isn\'t you that Argos is sniffing for.'],
-    lignes: [
-      ['Ce soir, Argos ne t\'a pas suivi jusqu\'au bout.',
-       'Tonight, Argos didn\'t follow you all the way.'],
-      ['Il s\'est arrêté sous ta fenêtre, et il a reniflé.',
-       'He stopped under your window, and sniffed.'],
-      ['Ce n\'est pas ta trace qu\'il suit. C\'est celle de Lucien.',
-       'It isn\'t your trail he follows. It\'s Lucien\'s.'],
-      ['Et chaque nuit, il la trouve un peu plus sur toi.',
-       'And every night, he finds more of it on you.'],
-    ],
+    pages: [[
+      ['Ce soir, Argos t\'a poursuivi comme chaque nuit.',
+       'Tonight, Argos chased you like every night.'],
+      ['Mais au bout de la ruelle, il ne s\'est pas arrêté.',
+       'But at the end of the alley, he didn\'t stop.'],
+      ['Il t\'a suivi jusque chez toi. Sans courir. Au pas.',
+       'He followed you home. Not running. Walking.'],
+    ], [
+      ['Tu l\'as vu par la fenêtre, assis sous le réverbère.',
+       'You saw him through the window, under the lamp.'],
+      ['Il levait le museau. Il reniflait l\'air. Longtemps.',
+       'He raised his muzzle and sniffed the air. For ages.'],
+      ['Puis il a regardé ta fenêtre. Pas toi : la fenêtre.',
+       'Then he looked at your window. Not you: the window.'],
+    ], [
+      ['Tu as compris. Ce n\'est pas ta trace qu\'il suit.',
+       'You understood. It isn\'t your trail he follows.'],
+      ['C\'est celle de Lucien. Le carnet. Le maillot. La ruelle.',
+       'It\'s Lucien\'s. The notebook. The vest. The alley.'],
+      ['Il la retrouve sur toi. Un peu plus chaque nuit.',
+       'He finds it on you. A little more every night.'],
+      ['Bientôt, il ne verra plus la différence.',
+       'Soon, he won\'t be able to tell the difference.'],
+    ]],
   },
   {
     n: 11, cle: 'miroir', sur: CH(11),
     titre: ['LE MIROIR', 'THE MIRROR'],
     accroche: ['Lucien va te parler. Dans le miroir.',
                'Lucien will speak to you. In the mirror.'],
-    lignes: [
-      ['Dans le miroir de la salle de bain, il y avait toi.',
-       'In the bathroom mirror, there you were.'],
-      ['Puis Lucien, derrière ton épaule. Il n\'avait pas vieilli.',
-       'Then Lucien, behind your shoulder. He hadn\'t aged.'],
-      ['« Il ne veut pas me mordre. Il veut que je finisse. »',
-       '“He doesn\'t want to bite me. He wants me to finish.”'],
-      ['« J\'ai abandonné à deux mètres de la ligne. »',
-       '“I gave up two metres from the line.”'],
-    ],
+    pages: [[
+      ['Tu t\'es lavé le visage dans le noir. L\'eau était glacée.',
+       'You washed your face in the dark. The water was icy.'],
+      ['Tu as relevé la tête. Dans le miroir, il y avait toi.',
+       'You looked up. In the mirror, there you were.'],
+      ['Et derrière ton épaule, un homme en maillot de laine.',
+       'And behind your shoulder, a man in a wool vest.'],
+    ], [
+      ['Lucien. Il n\'avait pas vieilli. Trempé de sueur.',
+       'Lucien. He hadn\'t aged. Soaked in sweat.'],
+      ['« Il ne veut pas me mordre. Il ne l\'a jamais voulu. »',
+       '“He doesn\'t want to bite me. He never did.”'],
+      ['« Le 31, j\'ai abandonné. À deux mètres de la ligne. »',
+       '“On the 31st I gave up. Two metres from the line.”'],
+      ['« Il m\'a attendu de l\'autre côté. Je ne suis pas venu. »',
+       '“He waited for me on the other side. I never came.”'],
+    ], [
+      ['« Depuis, il court ma course. Chaque nuit, à mon temps. »',
+       '“Since then he runs my race. Every night. At my time.”'],
+      ['« Il attend que quelqu\'un la finisse devant lui. »',
+       '“He is waiting for someone to finish it ahead of him.”'],
+      ['Dans le miroir, derrière vous deux, deux yeux rouges.',
+       'In the mirror, behind you both, two red eyes.'],
+      ['« Il t\'a choisi. »',
+       '“He has chosen you.”'],
+    ]],
   },
   {
     n: 12, cle: 'marque', sur: CH(12),
     titre: ['MINUIT', 'MIDNIGHT'],
     accroche: ['Ce qu\'Argos attend depuis 1913.',
                'What Argos has been waiting for since 1913.'],
-    lignes: [
-      ['Lucien n\'a jamais fini sa treizième course.',
-       'Lucien never finished his thirteenth race.'],
-      ['Depuis, Argos la recourt chaque nuit, à son temps.',
-       'Since then, Argos has run it every night, at his time.'],
-      ['Il attend que quelqu\'un passe la ligne devant lui.',
-       'He is waiting for someone to cross the line first.'],
-      ['La treizième nuit est la sienne. Et il t\'a choisi.',
-       'The thirteenth night is his. And he has chosen you.'],
-    ],
+    pages: [[
+      ['La dernière nuit approche. Tu la sens dans tes jambes.',
+       'The last night is coming. You can feel it in your legs.'],
+      ['Argos ne te poursuit plus jusque chez toi.',
+       'Argos no longer chases you home.'],
+      ['Il t\'attend. Toute la nuit, sous ta fenêtre.',
+       'He waits for you. All night, under your window.'],
+    ], [
+      ['Tu as relu le carnet de Lucien, page par page.',
+       'You read Lucien\'s notebook again, page by page.'],
+      ['Douze courses ont un temps. La treizième, non.',
+       'Twelve races have a time. The thirteenth does not.'],
+      ['Juste une ligne vide, au crayon.',
+       'Just an empty line, in pencil.'],
+      ['Celle-là, c\'est à toi de l\'écrire.',
+       'That one is yours to write.'],
+    ], [
+      ['À minuit, Argos a hurlé. Une seule fois.',
+       'At midnight, Argos howled. Just once.'],
+      ['Dans toute la ville, les chiens se sont tus.',
+       'All over town, the dogs fell silent.'],
+      ['La treizième nuit sera la sienne.',
+       'The thirteenth night will be his.'],
+      ['Et la tienne.',
+       'And yours.'],
+    ]],
   },
   {
     n: 13, cle: 'finale', sur: ['CHAPITRE 13 · LA FIN', 'CHAPTER 13 · THE END'],
     titre: ['LE JOUR SE LÈVE', 'DAYBREAK'],
     accroche: ['La treizième course de Lucien. À finir.',
                'Lucien\'s thirteenth race. Yours to finish.'],
-    lignes: [
+    pages: [[
+      ['Tu as couru comme jamais. Il était là, dans ton cou.',
+       'You ran like never before. He was there, at your neck.'],
+      ['Deux mètres avant la ligne, tes jambes ont voulu lâcher.',
+       'Two metres from the line, your legs wanted to give up.'],
+      ['Tu n\'as pas lâché.',
+       'You didn\'t.'],
       ['Tu as passé la ligne. Argos s\'est arrêté net.',
        'You crossed the line. Argos stopped dead.'],
-      ['Au bout de la ruelle, un homme en maillot l\'attendait.',
-       'At the end of the alley, a man in a vest was waiting.'],
+    ], [
+      ['Il ne grondait plus. Il regardait le bout de la ruelle.',
+       'No more growling. He was looking down the alley.'],
+      ['Un homme en maillot de laine l\'attendait là.',
+       'A man in a wool vest was waiting there.'],
+      ['Lucien s\'est agenouillé. Argos a posé la tête sur lui.',
+       'Lucien knelt. Argos laid his head on him.'],
       ['Ils sont partis ensemble, au pas, vers le premier jour.',
        'They walked off together, towards the first light.'],
+    ], [
+      ['Au matin, la porte murée était ouverte. Vide.',
+       'In the morning, the bricked-up door was open. Empty.'],
+      ['Sur les pavés, le carnet. À la dernière ligne, un temps.',
+       'On the cobbles, the notebook. On the last line, a time.'],
+      ['Le tien.',
+       'Yours.'],
       ['Derrière toi, quelque chose d\'autre s\'est mis à courir.',
        'Behind you, something else started to run.'],
-    ],
+    ]],
   },
 ];
 
@@ -519,6 +753,59 @@ function carteDe(cle: string): Carte | null {
 
 /** Faire venir l'image d'une carte avant d'en avoir besoin. */
 export function prechargerLaCarte(cle: string) { carteDe(cle); }
+
+/* L'APERCU DU CHAPITRE SUIVANT (18/10, « accentue l'envie d'attendre la
+   suite »). La page DEMAIN montre la carte du lendemain, mais floue et
+   presque eteinte : on devine une forme, une lumiere, deux yeux — pas assez
+   pour savoir. Le flou se fait en reduisant l'image puis en l'agrandissant
+   (le lissage bilineaire fait le reste) : `ctx.filter` n'existe pas partout
+   sur iOS. Une carte sans image donne la nuit dessinee, sous le meme voile. */
+const flous: Record<string, HTMLCanvasElement> = {};
+
+function flouDe(cle: string, im: HTMLImageElement): HTMLCanvasElement {
+  let f = flous[cle];
+  if (f) return f;
+  const w = Math.max(8, Math.round(im.naturalWidth / 6));
+  const h = Math.max(8, Math.round(im.naturalHeight / 6));
+  const a = document.createElement('canvas');
+  a.width = w; a.height = h;
+  a.getContext('2d')!.drawImage(im, 0, 0, w, h);
+  f = document.createElement('canvas');
+  f.width = Math.max(4, Math.round(w / 5)); f.height = Math.max(4, Math.round(h / 5));
+  const g = f.getContext('2d')!;
+  g.imageSmoothingEnabled = true;
+  g.drawImage(a, 0, 0, f.width, f.height);
+  flous[cle] = f;
+  return f;
+}
+
+export function peindreLApercu(ctx: CanvasRenderingContext2D, L: number, H: number, t: number, cle: string) {
+  const carte = carteDe(cle);
+  const im = carte && carte.im ? carte.im : null;
+  ctx.save();
+  ctx.fillStyle = 'rgb(3,2,5)';
+  ctx.fillRect(0, 0, L, H);
+  if (im) {
+    const f = flouDe(cle, im);
+    const k = Math.max(L / f.width, H / f.height) * (1.08 + 0.03 * Math.sin(t * 0.4));
+    const w = f.width * k, h = f.height * k;
+    ctx.imageSmoothingEnabled = true;
+    ctx.globalAlpha = Math.min(1, t / 1.5) * (0.5 + 0.08 * Math.sin(t * 1.3));
+    ctx.drawImage(f, (L - w) / 2, Math.min(0, (H - h) * 0.25), w, h);
+  } else {
+    peindreLaScene(ctx, L, H, t, false);
+    ctx.fillStyle = 'rgba(3,2,5,0.72)';
+    ctx.fillRect(0, 0, L, H);
+  }
+  ctx.globalAlpha = 1;
+  // le noir des bords : l'image est au fond d'un couloir
+  const v = ctx.createRadialGradient(L / 2, H * 0.38, Math.min(L, H) * 0.15, L / 2, H * 0.38, Math.max(L, H) * 0.75);
+  v.addColorStop(0, 'rgba(3,2,5,0)');
+  v.addColorStop(1, 'rgba(3,2,5,0.92)');
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, L, H);
+  ctx.restore();
+}
 
 /** La carte en image, couvrant la toile : elle sort du noir, la camera s'avance a peine. */
 function peindreLaCarte(ctx: CanvasRenderingContext2D, cle: string, im: HTMLImageElement,

@@ -19,8 +19,8 @@ import { prechargerLaNuit } from '@/game/chargement';
 import { mesurerLaNuit } from '@/game/halloween-mesure';
 import { preparerLaTraque, frayeurReduite, poserFrayeurReduite } from '@/game/halloween-traque';
 import {
-  CLES_MORSURES, chapitreDe, morsureDe, dit, peindreLaScene, prechargerLaCarte,
-  type Scene,
+  CLES_MORSURES, CHAPITRES, chapitreDe, morsureDe, dit, peindreLaScene, peindreLApercu,
+  prechargerLaCarte, type Scene, type Ligne,
 } from '@/game/halloween-cinema';
 import { mot, chrono } from '@/game/halloween-mots';
 import { COURSES, distanceDe } from '@/game/halloween-courses.js';
@@ -762,6 +762,12 @@ export function PanneauMolosse() {
             </div>
           )}
 
+          {/* LE RECIT, EN TETE DU TABLEAU (18/10, « mets encore plus en valeur
+              l'histoire »). Treize traits : les chapitres lus s'allument et se
+              relisent d'un toucher, le prochain bat. Dessous, ce qu'on sait du
+              prochain — son titre et sa promesse — et ce qui l'ouvre. */}
+          <RecitDuTableau lus={c.tenues} ouverte={ouverte} ms={ms} vivant={vivant} lire={lire} />
+
           <Frayeur />
 
           <BandeauTest jour={jour} />
@@ -882,7 +888,7 @@ export function PanneauMolosse() {
       </motion.div>
 
       {lu !== null && lu <= c.tenues && (
-        <LecteurDuRecit n={lu} dernier={c.tenues} aller={lire} />
+        <LecteurDuRecit key={lu} n={lu} dernier={c.tenues} aller={lire} />
       )}
     </motion.div>
   );
@@ -891,6 +897,50 @@ export function PanneauMolosse() {
 /* ===========================================================================
    LE RECIT, RELU
    =========================================================================== */
+
+function RecitDuTableau({ lus, ouverte, ms, vivant, lire }: {
+  lus: number; ouverte: number; ms: number; vivant: boolean; lire: (n: number) => void;
+}) {
+  const total = CHAPITRES.length;
+  const prochain = lus < total ? chapitreDe(lus + 1) : null;
+  const attente = prochain && prochain.n > ouverte ? resteAvant(prochain.n, ms) : '';
+  return (
+    <div className="rounded-xl border border-[#F8A02E]/35 bg-[#1A0E1A] px-3 py-2.5 mb-4">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[9px] font-bold tracking-[0.22em] uppercase text-[#F8A02E]">{mot('hw_recit')}</span>
+        <span className="font-mono text-[10px] text-foreground/55">
+          {mot('hw_recit_lu', { n: String(lus), t: String(total) })}
+        </span>
+      </div>
+      <div className="mt-2 flex gap-1">
+        {CHAPITRES.map(ch => {
+          const lu = ch.n <= lus;
+          const lui = ch.n === lus + 1;
+          return (
+            <motion.button key={ch.n} disabled={!lu} onClick={() => lire(ch.n)}
+              aria-label={`${mot('hw_ch_n', { n: String(ch.n) })} · ${dit(ch.titre)}`}
+              className={`flex-1 h-2 rounded-full ${lu ? 'bg-[#7CD04E]' : lui ? 'bg-[#FF5A1C]' : 'bg-white/10'}`}
+              animate={lui && vivant ? { opacity: [0.35, 1, 0.35] } : { opacity: 1 }}
+              transition={lui && vivant ? { duration: 1.5, repeat: Infinity } : { duration: 0 }} />
+          );
+        })}
+      </div>
+      {prochain ? (
+        <div className="mt-2 flex flex-col leading-snug">
+          <span className="text-[11px] font-bold text-foreground">
+            {mot('hw_ch_n', { n: String(prochain.n) })} · {dit(prochain.titre)}
+          </span>
+          <span className="text-[11px] italic text-foreground/70">{dit(prochain.accroche)}</span>
+          <span className="mt-0.5 font-mono text-[9px] tracking-[0.14em] uppercase text-[#FF5A1C]">
+            {attente ? mot('hw_ouvre_dans', { d: attente }) : mot('hw_suite_nuit', { n: String(prochain.n) })}
+          </span>
+        </div>
+      ) : (
+        <p className="mt-2 text-[11px] italic text-foreground/70">{mot('hw_toutes_sous')}</p>
+      )}
+    </div>
+  );
+}
 
 /** L'horloge d'une scene, en secondes, sur sa propre boucle ; repart a chaque `cle`. */
 function useHorlogeDeScene(cle: string | number): number {
@@ -911,7 +961,11 @@ function useHorlogeDeScene(cle: string | number): number {
 }
 
 /** La toile de la scene : la carte en image si elle existe, la nuit dessinee sinon. */
-function ToileDeScene({ t, mordu, cle }: { t: number; mordu: boolean; cle: string }) {
+function ToileDeScene({ t, mordu, cle, apercu }: {
+  t: number; mordu: boolean; cle: string;
+  /** La carte du chapitre suivant, vue de loin (page LA SUITE). */
+  apercu?: string | null;
+}) {
   const toile = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
     const el = toile.current;
@@ -925,9 +979,60 @@ function ToileDeScene({ t, mordu, cle }: { t: number; mordu: boolean; cle: strin
       el.height = Math.max(1, Math.round(H * r));
     }
     ctx.setTransform(r, 0, 0, r, 0, 0);
-    peindreLaScene(ctx, L, H, t, mordu, cle);
-  }, [t, mordu, cle]);
+    if (apercu) peindreLApercu(ctx, L, H, t, apercu);
+    else peindreLaScene(ctx, L, H, t, mordu, cle);
+  }, [t, mordu, cle, apercu]);
   return <canvas ref={toile} className="absolute inset-0 w-full h-full" />;
+}
+
+/**
+ * LES PAGES D'UN RECIT, tournees au doigt ou d'elles-memes.
+ *
+ * Les lignes d'une page arrivent une a une (`ligne` secondes) ; la page finie
+ * reste `pause` secondes puis se tourne seule. Un toucher montre la page
+ * entiere d'un coup, un second la tourne : on lit a son rythme, et qui ne
+ * touche rien lit quand meme tout. `auDela` : la derniere page se tourne-t-elle
+ * (vers la page LA SUITE de l'ecran de fin), ou reste-t-elle (le lecteur) ?
+ */
+function usePages(pages: Ligne[][], t: number, ligne: number, pause: number, auDela: boolean) {
+  const [p, setP] = useState(0);
+  const [debut, setDebut] = useState(0);
+  const finies = p >= pages.length;
+  const n = finies ? 0 : pages[p].length;
+  const pleine = 0.6 + Math.max(0, n - 1) * ligne;
+  const ecoule = t - debut;
+  const visibles = Math.min(n, Math.floor(Math.max(0, ecoule - 0.6) / ligne) + 1);
+  const entiere = !finies && ecoule >= pleine;
+  const derniere = p === pages.length - 1;
+  const tourner = () => { setP(x => x + 1); setDebut(t); };
+  useEffect(() => {
+    if (!finies && entiere && ecoule > pleine + pause && (auDela || !derniere)) tourner();
+  }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
+  const toucher = () => {
+    if (finies) return;
+    if (!entiere) setDebut(t - pleine);
+    else if (auDela || !derniere) tourner();
+  };
+  return { p, lignes: finies ? [] : pages[p], visibles, entiere, finies, derniere, toucher };
+}
+
+/** Les points des pages, sous le texte : ou l'on en est du chapitre. */
+function Points({ p, total, couleur, indice }: { p: number; total: number; couleur: string; indice: boolean }) {
+  if (total < 2) return null;
+  return (
+    <div className="mt-2 flex items-center gap-1.5">
+      {Array.from({ length: total }, (_, k) => (
+        <span key={k} className="h-1 rounded-full transition-all"
+              style={{ width: k === p ? 16 : 6, backgroundColor: k <= p ? couleur : 'rgba(255,255,255,0.18)' }} />
+      ))}
+      {indice && (
+        <motion.span className="ml-auto font-mono text-[9px] tracking-[0.14em] uppercase text-foreground/45"
+                     animate={{ opacity: [0.35, 0.9, 0.35] }} transition={{ duration: 1.8, repeat: Infinity }}>
+          {mot('hw_toucher')} ›
+        </motion.span>
+      )}
+    </div>
+  );
 }
 
 /**
@@ -937,11 +1042,13 @@ function ToileDeScene({ t, mordu, cle }: { t: number; mordu: boolean; cle: strin
  * aurait eu l'air d'un morceau rapporte — le mode est une edition du jeu, pas
  * un autre jeu.
  */
-function CarteDuTexte({ s, couleur, visibles, pied }: {
-  s: Scene; couleur: string; visibles: number; pied?: React.ReactNode;
+function CarteDuTexte({ s, lignes, couleur, visibles, pied, onToucher, page = 0 }: {
+  s: { sur: Ligne; titre: Ligne }; lignes: Ligne[]; couleur: string; visibles: number;
+  pied?: React.ReactNode; onToucher?: () => void; page?: number;
 }) {
   return (
-    <div className="absolute z-10 overflow-hidden rounded-2xl border border-white/10
+    <div onClick={onToucher}
+         className="absolute z-10 overflow-hidden rounded-2xl border border-white/10
                     bg-[rgba(9,7,16,0.86)] shadow-[0_18px_48px_rgba(0,0,0,0.5)]
                     pl-5 pr-4 py-3 sm:pl-6 sm:pr-5 sm:py-4 md:pl-8 md:pr-7 md:py-6
                     portrait:left-4 portrait:right-4 portrait:bottom-[calc(max(env(safe-area-inset-bottom),1.25rem)+4.5rem)]
@@ -958,8 +1065,8 @@ function CarteDuTexte({ s, couleur, visibles, pied }: {
       <div className="h-1 w-11/12 mt-2 md:mt-3" style={{ backgroundColor: couleur }} />
       <div className="mt-3 flex flex-col gap-1.5">
         <AnimatePresence>
-          {s.lignes.slice(0, visibles).map((l, k) => (
-            <motion.p key={k}
+          {lignes.slice(0, visibles).map((l, k) => (
+            <motion.p key={page + '-' + k}
                       initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                       className="text-[12px] sm:text-sm md:text-base leading-snug text-foreground/85">
               {dit(l)}
@@ -983,21 +1090,23 @@ function LecteurDuRecit({ n, dernier, aller }: {
 }) {
   const ch = chapitreDe(n);
   const t = useHorlogeDeScene(n);
-  const visibles = Math.min(ch.lignes.length, Math.floor(Math.max(0, t - 0.3) / 0.45) + 1);
-  const suivant = n < 13 ? chapitreDe(n + 1) : null;
+  const pg = usePages(ch.pages, t, 0.45, 4, false);
+  const suivant = n < CHAPITRES.length ? chapitreDe(n + 1) : null;
   return (
     <div className="absolute inset-0 z-10 bg-[#0B0710] pointer-events-auto">
       <ToileDeScene t={t} mordu={false} cle={ch.cle} />
-      <CarteDuTexte s={ch} couleur="#7CD04E" visibles={visibles} pied={
-        suivant && n === dernier && visibles === ch.lignes.length ? (
-          <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-0.5">
-            <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-[#F8A02E]">
-              {mot('hw_la_suite', { n: String(suivant.n) })}
-            </span>
-            <span className="text-[11px] sm:text-xs italic leading-snug text-foreground/70">{dit(suivant.accroche)}</span>
-          </div>
-        ) : undefined
-      } />
+      <CarteDuTexte s={ch} lignes={pg.lignes} page={pg.p} couleur="#7CD04E" visibles={pg.visibles}
+        onToucher={pg.toucher} pied={<>
+          <Points p={pg.p} total={ch.pages.length} couleur="#7CD04E" indice={pg.entiere && !pg.derniere} />
+          {suivant && n === dernier && pg.derniere && pg.entiere && (
+            <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-0.5">
+              <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-[#F8A02E]">
+                {mot('hw_la_suite', { n: String(suivant.n) })} · {dit(suivant.titre)}
+              </span>
+              <span className="text-[11px] sm:text-xs italic leading-snug text-foreground/70">{dit(suivant.accroche)}</span>
+            </div>
+          )}
+        </>} />
       <div className="absolute inset-x-0 bottom-0 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] flex gap-2">
         <button onClick={() => aller(n - 1)} disabled={n <= 1}
                 className="w-12 py-3 rounded-xl border border-white/15 bg-black/50 text-foreground/70
@@ -1049,8 +1158,9 @@ function Frayeur() {
    CE QU'ON RACONTE APRES
    =========================================================================== */
 
-/** Combien de temps s'ecoule entre deux lignes de la scenette, en secondes. */
-const LIGNE = 1.9;
+/** Combien de temps s'ecoule entre deux lignes de la scenette, en secondes.
+    1,9 s pour quatre lignes ; 1,7 depuis que les chapitres en ont douze. */
+const LIGNE = 1.7;
 
 /**
  * L'ecran de fin d'une nuit : la scenette, puis la suite.
@@ -1069,13 +1179,24 @@ export function FinDeLaNuit() {
   const joueur = useGameStore(s => s.player);
   // LA NUIT TENUE DONNE SON CHAPITRE, toujours le meme pour la meme nuit
   // (LE RECIT, halloween-cinema.ts) ; la morsure tire un cauchemar.
-  const [scene] = useState<{ mordu: boolean; s: Scene }>(() => {
+  //
+  // `premiere` : ce chapitre se lit-il pour la premiere fois ? Lu dans le
+  // carnet AVANT que le resultat ne s'y range (l'effet plus bas). Un chapitre
+  // deja gagne — on rejoue la nuit 2 pour un meilleur chrono — garde ses
+  // boutons des la premiere seconde : trois pages d'histoire deja lue a
+  // chaque essai, ce serait punir celui qui s'entraine.
+  const [scene] = useState<{ mordu: boolean; s: Scene | null; pages: Ligne[][]; n: number; premiere: boolean }>(() => {
     const c = etatDeLaChasse();
     const mordu = !c || c.verdict !== 'passe';
-    if (!mordu && c) return { mordu, s: chapitreDe(c.nuit.n) };
-    return { mordu: true, s: morsureDe(tirerLaScene(CLES_MORSURES)) };
+    if (!mordu && c) {
+      const ch = chapitreDe(c.nuit.n);
+      return { mordu, s: null, pages: ch.pages, n: c.nuit.n, premiere: c.nuit.n > carnet().tenues };
+    }
+    const m = morsureDe(tirerLaScene(CLES_MORSURES));
+    return { mordu: true, s: m, pages: [m.lignes], n: c ? c.nuit.n : 1, premiere: false };
   });
   const t = useHorlogeDeScene(0);
+  const pg = usePages(scene.pages, t, LIGNE, 2.4, !scene.mordu);
 
   const c = etatDeLaChasse();
   const nuit = nuitCourante();
@@ -1093,16 +1214,16 @@ export function FinDeLaNuit() {
       mesurerLaNuit('tenue', nuit.n);
     } else compterLaMorsure();
     // Le cauchemar est montre : on le note maintenant, une fois (voir tirerLaScene).
-    if (scene.mordu) noterLaScene(scene.s.cle);
+    if (scene.mordu && scene.s) noterLaScene(scene.s.cle);
+    // l'apercu de la page LA SUITE : la carte du lendemain se charge pendant la lecture
+    if (!scene.mordu && scene.n < CHAPITRES.length) prechargerLaCarte(chapitreDe(scene.n + 1).cle);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (state !== 'winall' || !nuitEnCours() || !nuit) return null;
 
-  const s = scene.s;
-  const visibles = Math.min(s.lignes.length, Math.floor(Math.max(0, t - 0.6) / LIGNE) + 1);
-  const finie = t > 0.6 + s.lignes.length * LIGNE;
-
   const passe = !!c && c.verdict === 'passe';
+  const ch = passe ? chapitreDe(nuit.n) : null;
+  const entete = ch ?? scene.s!;
   const suivante = nuit.n < NUITS.length ? nuit.n + 1 : null;
   // LA SUIVANTE N'EST PROPOSEE QUE SI ELLE EST OUVERTE. Ce bouton menait a la
   // nuit d'apres sans rien demander au calendrier — treize nuits le premier
@@ -1114,10 +1235,12 @@ export function FinDeLaNuit() {
   // L'ecart le plus court de la course : ce qui se raconte apres une victoire
   // — quand il vaut d'etre raconte. Huit metres ne sont pas un frisson.
   const frole = passe && c && c.ecartMin < 4 ? c.ecartMin : null;
-  // LA SUITE, ou ce qui reste a gagner. Tenue : l'accroche du chapitre
-  // suivant, et quand sa nuit s'ouvre. Mordu : le chapitre de cette nuit reste
-  // ferme, et l'accroche dit ce qu'on y apprendra.
-  const aVenir = passe ? (suivante !== null ? chapitreDe(suivante) : null) : chapitreDe(nuit.n);
+  // LA SUITE : le chapitre de demain, apres la derniere page. Mordu : le
+  // chapitre de cette nuit reste ferme, et son accroche dit ce qu'on y apprendra.
+  const prochain = passe && suivante !== null ? chapitreDe(suivante) : null;
+  const laSuite = passe && pg.finies;
+  const morsureLue = !passe && pg.entiere;
+  const boutons = laSuite || morsureLue || (passe && !scene.premiere);
 
   const sortir = () => { rangerLaNuit(); (SprinterApp as any).goHome(); };
   // Une nuit que le calendrier refuse ramene a l'accueil plutot que de laisser
@@ -1127,7 +1250,8 @@ export function FinDeLaNuit() {
 
   return (
     <div className="absolute inset-0 z-30 pointer-events-auto bg-[#0B0710]">
-      <ToileDeScene t={t} mordu={scene.mordu} cle={s.cle} />
+      <ToileDeScene t={t} mordu={!passe} cle={entete.cle}
+                    apercu={laSuite ? (prochain ? prochain.cle : 'quatorzieme') : null} />
 
       {/* LE VERDICT, EN HAUT. Trois mots et un chrono : c'est ce que le joueur
           cherche en premier, et la scenette n'a pas a le lui faire attendre.
@@ -1154,43 +1278,79 @@ export function FinDeLaNuit() {
         </span>
       </div>
 
-      <CarteDuTexte s={s} couleur={passe ? '#7CD04E' : '#E86826'} visibles={visibles} pied={
-        /* LE PIED DE LA CARTE : ce qu'on retient de cette nuit, et la suite.
-           Dans la carte plutot qu'a cote : poses en haut ou au-dessus des
-           boutons, ils passaient sous elle, en paysage comme en portrait. */
-        (frole !== null || (finie && aVenir)) ? (
-          <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-0.5">
-            {frole !== null && (
-              <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-[#F8A02E]">
-                {mot('hw_frole', { m: frole.toFixed(1) })}
-              </span>
+      {!laSuite && (
+        <CarteDuTexte s={entete} lignes={pg.lignes} page={pg.p} visibles={pg.visibles}
+          couleur={passe ? '#7CD04E' : '#E86826'} onToucher={pg.toucher} pied={<>
+            {passe && <Points p={pg.p} total={scene.pages.length} couleur="#7CD04E" indice={pg.entiere} />}
+            {/* LE PIED DE LA CARTE : ce qu'on retient de cette nuit — et,
+                mordu, ce qui reste de l'autre cote de la ligne. */}
+            {(frole !== null || morsureLue) && (
+              <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-0.5">
+                {frole !== null && pg.p === 0 && (
+                  <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-[#F8A02E]">
+                    {mot('hw_frole', { m: frole.toFixed(1) })}
+                  </span>
+                )}
+                {morsureLue && (
+                  <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                              className="flex flex-col gap-0.5">
+                    <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-foreground/60">
+                      {mot('hw_ch_ferme', { n: String(nuit.n) })}
+                    </span>
+                    <span className="text-[11px] sm:text-xs italic leading-snug text-[#F8A02E]">
+                      {dit(chapitreDe(nuit.n).titre)} — {dit(chapitreDe(nuit.n).accroche)}
+                    </span>
+                  </motion.div>
+                )}
+              </div>
             )}
-            {finie && aVenir && (
-              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
-                          className="flex flex-col gap-0.5">
-                <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-foreground/60">
-                  {passe
-                    ? <>{mot('hw_la_suite', { n: String(aVenir.n) })}
-                        {' · '}
-                        {attenteSuivante
-                          ? mot('hw_ouvre_dans', { d: attenteSuivante })
-                          : mot('hw_ch_ouvert', { n: String(aVenir.n) })}</>
-                    : mot('hw_ch_ferme', { n: String(aVenir.n) })}
-                </span>
-                <span className="text-[11px] sm:text-xs italic leading-snug text-[#F8A02E]">
-                  {dit(aVenir.accroche)}
-                </span>
-              </motion.div>
-            )}
-          </div>
-        ) : undefined
-      } />
+          </>} />
+      )}
 
-      {/* LES BOUTONS N'ARRIVENT QU'A LA FIN DE L'HISTOIRE. Poses tout de suite,
-          ils auraient tue la scenette : personne ne lit quatre lignes quand un
-          bouton « ENCORE » attend deja sous son pouce. */}
+      {/* LA PAGE LA SUITE. Le chapitre fini, l'image s'efface et laisse voir
+          celle de demain, floue et presque eteinte ; par-dessus, son titre,
+          sa promesse et le temps qu'il reste. C'est la que se decide le
+          retour du lendemain : on sait ce qu'on va apprendre, pas encore quoi.
+          Apres la treizieme : la quatorzieme, promise et pas sur le calendrier. */}
       <AnimatePresence>
-        {finie && (
+        {laSuite && (
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.6 }}
+                      className="absolute z-10 inset-x-4 bottom-[calc(max(env(safe-area-inset-bottom),1.25rem)+4.5rem)]
+                                 landscape:left-[45vw] landscape:right-auto landscape:top-[12vh] landscape:bottom-auto
+                                 landscape:w-[min(46vw,38rem)]
+                                 rounded-2xl border border-[#F8A02E]/40 bg-[rgba(9,7,16,0.82)]
+                                 shadow-[0_18px_48px_rgba(0,0,0,0.6)] px-5 py-4 text-center">
+            {prochain ? (<>
+              <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#F8A02E]">
+                {mot('hw_la_suite', { n: String(prochain.n) })}
+              </div>
+              <h2 className="mt-1 text-3xl sm:text-4xl font-black font-display uppercase leading-[0.95] text-foreground">
+                {dit(prochain.titre)}
+              </h2>
+              <p className="mt-2 text-sm italic leading-snug text-foreground/80">{dit(prochain.accroche)}</p>
+              <motion.div className="mt-3 font-mono tabular-nums text-base font-bold tracking-[0.12em] uppercase text-[#FF5A1C]"
+                          animate={{ opacity: [0.6, 1, 0.6] }} transition={{ duration: 2.4, repeat: Infinity }}>
+                {attenteSuivante
+                  ? mot('hw_ouvre_dans', { d: attenteSuivante })
+                  : mot('hw_ch_ouvert', { n: String(prochain.n) })}
+              </motion.div>
+            </>) : (<>
+              <div className="font-mono text-[10px] tracking-[0.2em] uppercase text-[#7CD04E]">
+                {mot('hw_toutes')}
+              </div>
+              <p className="mt-2 text-sm italic leading-snug text-foreground/80">{mot('hw_toutes_sous')}</p>
+            </>)}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* LES BOUTONS N'ARRIVENT QU'A LA FIN DE L'HISTOIRE — la premiere fois.
+          Poses tout de suite, ils auraient tue le chapitre : personne ne lit
+          trois pages quand un bouton « ENCORE » attend deja sous son pouce.
+          Un chapitre deja lu, lui, les a tout de suite (voir `premiere`). */}
+      <AnimatePresence>
+        {boutons && (
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                       className="absolute inset-x-0 bottom-0 px-4
                                  pb-[max(env(safe-area-inset-bottom),1rem)] flex gap-2">
@@ -1217,19 +1377,6 @@ export function FinDeLaNuit() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Les treize nuits tombees : on le dit ici, une fois, et le mode ne
-          change rien d'autre — le cimetiere reste ouvert et les nuits se
-          rejouent. Une recompense qui fermerait quoi que ce soit apres coup
-          serait exactement ce que ce jeu ne fait jamais. */}
-      {passe && !suivante && toutesTenues() && finie && (
-        <div className="absolute inset-x-0 top-[38%] text-center px-6 pointer-events-none">
-          <span className="font-black font-display text-lg sm:text-xl uppercase text-[#7CD04E]
-                           drop-shadow-[0_2px_10px_rgba(0,0,0,0.95)]">
-            {mot('hw_toutes')}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
