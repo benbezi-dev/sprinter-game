@@ -38,7 +38,7 @@ import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
          fantome as fantomeMarques, EPREUVES as EPREUVES_MARQUES } from './marques.js';
 import { poster as posterTchat, lire as lireTchat, participants as participantsTchat,
          invitables as invitablesTchat, inviter as inviterTchat, mesInvitations,
-         signalerMessage as signalerTchat, posterOfficiel, imiteOfficiel,
+         signalerMessage as signalerTchat, aimer as aimerTchat, posterOfficiel, imiteOfficiel,
          AUTEURS_OFFICIELS } from './tchat-marques.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
@@ -3053,6 +3053,10 @@ async function servir(request, env, ctx, porteur) {
         }
         if (url.pathname === '/marques/tchat/signaler' && request.method === 'POST') {
           const r = await signalerTchat(env.DB, { id: body.id, cleLecteur: key, motif: body.motif });
+          return json(r.corps, r.status);
+        }
+        if (url.pathname === '/marques/tchat/aimer' && request.method === 'POST') {
+          const r = await aimerTchat(env.DB, { id: body.id, cleLecteur: key, aime: body.aime !== false });
           return json(r.corps, r.status);
         }
         if (url.pathname === '/marques/invitables' && request.method === 'GET') {

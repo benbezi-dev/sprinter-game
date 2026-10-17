@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, MessageCircle, Search, ChevronDown, BadgeCheck } from 'lucide-react';
+import { motion, AnimatePresence, useDragControls, useMotionValue, animate } from 'motion/react';
+import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, MessageCircle, Search, ChevronDown, BadgeCheck, Heart } from 'lucide-react';
 import { FEUILLE, VOILE, RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { useRetour } from '@/hooks/use-retour';
 import { surCourrier, reprendreTouchee } from '@/game/boite';
@@ -13,7 +13,7 @@ import { bloquer, MOTIFS, type Motif } from '@/game/moderation';
 import { NOM_CAMP, type Camp } from '@/game/marques';
 import {
   lireTchat, ecrire, signalerMessage, lireInvitables, inviter, poserVu, dernierVu,
-  ecrireOfficiel, aLaCleOfficielle,
+  ecrireOfficiel, aLaCleOfficielle, aimerMessage,
   type Message, type Participant, type Invitation, type Invitable, type Refus,
 } from '@/game/tchat-marques';
 
@@ -28,6 +28,9 @@ import {
 
    Le tchat se relit toutes les quatre secondes tant qu'il est ouvert, et
    tout de suite quand la boite sonne (un prive, une designation).
+
+   Les J'AIME (17/10) : le coeur sous chaque message d'un autre, ou deux
+   touches sur le message. Le compteur se voit aussi sous les siens.
 
    Le compte SPRINTERGAME (16/10) : la voix du jeu, d'aucun camp. Ses messages
    portent un badge et une teinte a eux ; on ne peut ni lui repondre, ni le
@@ -94,6 +97,7 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
   const [charge, setCharge] = useState(false);
   const dernier = useRef(0);
   const enCours = useRef(false);
+  const enVol = useRef(new Set<number>());   // les coeurs touches, en route
   const ouvert = useRef(deplie);
   ouvert.current = deplie;
 
@@ -107,13 +111,34 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
     setCharge(true);
     if (r.participants) setParticipants(r.participants);
     if (r.invitations) setInvitations(r.invitations);
-    if (r.messages.length) {
-      dernier.current = Math.max(dernier.current, r.dernier);
-      setMessages(m => {
-        const vus = new Set(m.map(x => x.id));
-        return [...m, ...r.messages.filter(x => !vus.has(x.id))].slice(-300);
+    if (r.messages.length) dernier.current = Math.max(dernier.current, r.dernier);
+    // Les j'aime arrivent sur des messages deja recus : on les repose a chaque
+    // lecture, sauf sur un message qu'on vient de toucher (la reponse arrive).
+    const aimes = new Map((r.aimes || []).map(a => [a.id, a]));
+    setMessages(m => {
+      const vus = new Set(m.map(x => x.id));
+      const neufs = r.messages.filter(x => !vus.has(x.id));
+      if (!neufs.length && !r.aimes) return m;
+      return [...m, ...neufs].slice(-300).map(x => {
+        if (enVol.current.has(x.id)) return x;
+        const a = aimes.get(x.id);
+        const n = a ? a.n : 0, moi = a ? a.moi : false;
+        return (x.aimes || 0) === n && !!x.aime === moi ? x : { ...x, aimes: n, aime: moi };
       });
-    }
+    });
+  }, []);
+
+  // Un coeur touche : tout de suite a l'ecran, puis le compteur du serveur.
+  const poser = (id: number, aimes: number, aime: boolean) =>
+    setMessages(x => x.map(m => (m.id === id ? { ...m, aimes, aime } : m)));
+  const aimer = useCallback(async (m: Message) => {
+    if (m.a_moi || enVol.current.has(m.id)) return;
+    const veut = !m.aime;
+    enVol.current.add(m.id);
+    poser(m.id, Math.max(0, (m.aimes || 0) + (veut ? 1 : -1)), veut);
+    const r = await aimerMessage(m.id, veut);
+    enVol.current.delete(m.id);
+    if (r) poser(m.id, r.aimes, r.aime); else poser(m.id, m.aimes || 0, !!m.aime);
   }, []);
 
   useEffect(() => {
@@ -126,16 +151,19 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
 
   const ajouter = (m: Message) => setMessages(x => (x.some(y => y.id === m.id) ? x : [...x, m]));
   const oter = (de: string) => setMessages(x => x.filter(m => m.de.toLowerCase() !== de.toLowerCase()));
-  return { messages, participants, invitations, refus, charge, relire, ajouter, oter };
+  return { messages, participants, invitations, refus, charge, relire, ajouter, oter, aimer };
 }
 
 /** Une ligne du tchat. */
-function Ligne({ m, fr, onMenu }: { m: Message; fr: boolean; onMenu: (m: Message) => void }) {
+function Ligne({ m, fr, onMenu, onAimer }: { m: Message; fr: boolean; onMenu: (m: Message) => void; onAimer: (m: Message) => void }) {
   const vise = m.pour_moi;
-  // SprinterGame : on ne lui repond pas, on ne le signale ni ne le bloque
+  // SprinterGame : on ne lui repond pas, on ne le signale ni ne le bloque —
+  // mais on peut l'aimer
   const touchable = !m.a_moi && !m.officiel;
+  const n = m.aimes || 0;
   return (
     <motion.li initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
+      onDoubleClick={() => { if (!m.a_moi && !m.aime) onAimer(m); }}
       className={`group flex flex-col px-2.5 py-1.5 rounded-xl text-sm leading-snug
                   ${m.officiel ? 'bg-[#5CC8FF]/10 border border-[#5CC8FF]/35'
                     : vise ? 'bg-primary/15 border border-primary/40' : m.a_moi ? 'bg-white/5' : ''}`}>
@@ -158,7 +186,22 @@ function Ligne({ m, fr, onMenu }: { m: Message; fr: boolean; onMenu: (m: Message
         )}
         <span className="ml-auto text-muted-foreground/60 shrink-0">{heure(m.quand, fr)}</span>
       </span>
-      <span className="break-words whitespace-pre-wrap text-foreground/90">{m.texte}</span>
+      <span className="flex items-end gap-2">
+        <span className="flex-1 min-w-0 break-words whitespace-pre-wrap text-foreground/90">{m.texte}</span>
+        {(!m.a_moi || n > 0) && (
+          <button onClick={() => onAimer(m)} disabled={m.a_moi}
+                  aria-pressed={!!m.aime}
+                  aria-label={m.aime ? (fr ? 'Je n’aime plus' : 'Unlike') : (fr ? 'J’aime' : 'Like')}
+                  className={`shrink-0 -mb-0.5 flex items-center gap-0.5 px-1 py-0.5 rounded-md text-[10px] font-bold
+                              ${m.aime ? 'text-[#FF4D6D]' : 'text-muted-foreground/60 hover:text-foreground'} disabled:hover:text-muted-foreground/60`}>
+            <motion.span key={m.aime ? 'oui' : 'non'} initial={m.aime ? { scale: 0.4 } : false} animate={{ scale: 1 }}
+                         transition={RESSORT.trophee} className="flex">
+              <Heart className="w-3.5 h-3.5" fill={m.aime ? 'currentColor' : 'none'} aria-hidden />
+            </motion.span>
+            {n > 0 && <span>{n}</span>}
+          </button>
+        )}
+      </span>
     </motion.li>
   );
 }
@@ -321,6 +364,92 @@ function Inviter({ fr }: { fr: boolean }) {
   );
 }
 
+/* ---------------------------------------------------------------------------
+   LA BULLE DU TCHAT, sur l'accueil (demande de l'auteur, 17/10/2026) : le
+   bouton TCHAT flotte, et on l'emmene ou l'on veut du doigt. Lachee, elle va
+   se coller au bord le plus proche, et ce telephone se souvient ou on l'a
+   laissee. Une touche sans la deplacer ouvre le tchat.
+--------------------------------------------------------------------------- */
+const MARGE_BULLE = 12;
+const CLE_BULLE = 'sprinter_tchat_bulle';
+
+type PlaceBulle = { cote: 'g' | 'd'; haut: number };   // haut : 0 (en haut) a 1 (en bas)
+
+function lirePlace(): PlaceBulle {
+  try {
+    const p = JSON.parse(localStorage.getItem(CLE_BULLE) || 'null');
+    if (p && (p.cote === 'g' || p.cote === 'd') && typeof p.haut === 'number') return { cote: p.cote, haut: Math.min(1, Math.max(0, p.haut)) };
+  } catch { /* stockage refuse */ }
+  return { cote: 'd', haut: 0.82 };
+}
+
+function BulleTchat({ fr, nonLus, bas, onOuvrir }: { fr: boolean; nonLus: number; bas: number; onOuvrir: () => void }) {
+  const reduit = useAnimationsReduites();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const bouge = useRef(false);
+  const el = useRef<HTMLButtonElement>(null);
+  const [place, setPlace] = useState(lirePlace);
+  const taille = () => ({ w: el.current?.offsetWidth || 110, h: el.current?.offsetHeight || 40 });
+
+  // La ou elle doit etre, en pixels, pour une place et la taille de l'ecran.
+  const ou = useCallback((p: PlaceBulle) => {
+    const l = window.innerWidth, h = window.innerHeight, t = taille();
+    const haut = MARGE_BULLE + 40, basMax = h - t.h - MARGE_BULLE - bas;
+    return {
+      x: p.cote === 'g' ? MARGE_BULLE : l - t.w - MARGE_BULLE,
+      y: haut + p.haut * Math.max(0, basMax - haut),
+    };
+  }, [bas]);
+
+  useEffect(() => {
+    const poser = () => { const c = ou(place); x.set(c.x); y.set(c.y); };
+    poser();
+    window.addEventListener('resize', poser);
+    return () => window.removeEventListener('resize', poser);
+  }, [ou, place, x, y]);
+
+  const lacher = () => {
+    const l = window.innerWidth, h = window.innerHeight, t = taille();
+    const haut = MARGE_BULLE + 40, basMax = h - t.h - MARGE_BULLE - bas;
+    const p: PlaceBulle = {
+      cote: x.get() + t.w / 2 < l / 2 ? 'g' : 'd',
+      haut: Math.min(1, Math.max(0, (y.get() - haut) / Math.max(1, basMax - haut))),
+    };
+    const c = ou(p);
+    const ressort = reduit ? { duration: 0 } : { type: 'spring' as const, stiffness: 420, damping: 32 };
+    animate(x, c.x, ressort);
+    animate(y, c.y, ressort);
+    setPlace(p);
+    try { localStorage.setItem(CLE_BULLE, JSON.stringify(p)); } catch { /* stockage refuse */ }
+  };
+
+  return (
+    <motion.button key="bulle" ref={el}
+      drag dragMomentum={false} dragElastic={0}
+      onPointerDown={() => { bouge.current = false; }}
+      onDragStart={() => { bouge.current = true; }}
+      onDragEnd={lacher}
+      onClick={() => { if (!bouge.current) onOuvrir(); }}
+      initial={reduit ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+      exit={reduit ? { opacity: 0 } : { scale: 0.6, opacity: 0 }} whileTap={{ scale: 0.92 }} whileDrag={{ scale: 1.08 }}
+      transition={reduit ? { duration: 0 } : RESSORT.trophee}
+      aria-label={fr ? 'Ouvrir le tchat' : 'Open the chat'}
+      style={{ x, y }}
+      className="fixed left-0 top-0 z-[55] touch-none select-none flex items-center gap-2 pl-3 pr-4 py-2.5
+                 rounded-2xl bg-primary text-black font-black text-xs tracking-widest shadow-lg shadow-black/40
+                 cursor-grab active:cursor-grabbing">
+      <MessageCircle className="w-4 h-4" aria-hidden />
+      {fr ? 'TCHAT' : 'CHAT'}
+      {nonLus > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-white text-black text-[10px] flex items-center justify-center">
+          {nonLus > 99 ? '99+' : nonLus}
+        </span>
+      )}
+    </motion.button>
+  );
+}
+
 /**
  * Le tchat est un TIROIR RETRACTABLE (voulu par l'auteur, 13/10) : il
  * n'occupe pas l'ecran. Replie, un bouton qui flotte avec la pastille des
@@ -438,7 +567,10 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
     <>
       {/* replie : le bouton qui flotte, et sa pastille */}
       <AnimatePresence>
-        {!deplie && (
+        {!deplie && !duel && (
+          <BulleTchat fr={fr} nonLus={nonLus} bas={carte ? carte + 8 : 0} onOuvrir={() => onDeplier(true)} />
+        )}
+        {!deplie && duel && (
           <motion.button key="bouton" onClick={() => onDeplier(true)}
             initial={reduit ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             exit={reduit ? { opacity: 0 } : { scale: 0.6, opacity: 0 }} whileTap={{ scale: 0.94 }}
@@ -553,7 +685,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                 </p>
               )}
               <ul className="flex flex-col gap-0.5">
-                {fil.map(m => <Ligne key={m.id} m={m} fr={fr} onMenu={setMenu} />)}
+                {fil.map(m => <Ligne key={m.id} m={m} fr={fr} onMenu={setMenu} onAimer={t.aimer} />)}
               </ul>
               <div ref={fin} />
             </div>
@@ -606,8 +738,8 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                   </button>
                 </div>
                 <p className="text-[9px] text-muted-foreground/60 text-center leading-snug">
-                  {fr ? 'Pas de lien, pas de contact, pas d’insulte. Touche un nom pour répondre, écrire en privé, signaler ou bloquer.'
-                      : 'No links, no contacts, no insults. Tap a name to reply, write privately, report or block.'}
+                  {fr ? 'Pas de lien, pas de contact, pas d’insulte. Touche un nom pour répondre, écrire en privé, signaler ou bloquer. Le cœur pour aimer.'
+                      : 'No links, no contacts, no insults. Tap a name to reply, write privately, report or block. The heart to like.'}
                 </p>
               </div>
             )}
