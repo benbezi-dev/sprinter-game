@@ -1,0 +1,1130 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Monteur · Seul en Régional</title>
+<!-- Outfit 800 n'existe pas dans public/fonts : les titres de la charte le
+     demandent, il vient donc de Google Fonts, comme Space Mono 700. Le
+     chargement est VERIFIE avant tout rendu (voir fontes()). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800;900&family=Space+Mono:wght@700&display=block" rel="stylesheet">
+<style>
+  :root { --nuit: #060913; --or: #F8CD4A; --encre: #EEF0F8; --bord: #1E293B; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #02040a; color: var(--encre); font: 500 14px/1.45 Outfit, sans-serif; }
+  main { display: flex; gap: 20px; padding: 16px; align-items: flex-start; flex-wrap: wrap; }
+  #cv { height: calc(100vh - 32px); max-width: 100%; aspect-ratio: 9 / 16; border: 1px solid var(--bord); background: var(--nuit); }
+  aside { flex: 1; min-width: 320px; max-width: 640px; }
+  h1 { font: 900 20px Outfit; letter-spacing: -0.01em; text-transform: uppercase; margin: 0 0 4px; color: var(--or); }
+  h2 { font: 800 13px Outfit; letter-spacing: .12em; text-transform: uppercase; margin: 18px 0 6px; color: rgba(238,240,248,.55); }
+  .ligne { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 6px 0; }
+  button, select { font: 700 13px Outfit; color: var(--encre); background: #0d1424; border: 1px solid var(--bord); border-radius: 6px; padding: 7px 11px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--or); }
+  button:disabled { opacity: .35; cursor: not-allowed; }
+  button.or { background: var(--or); color: var(--nuit); border-color: var(--or); }
+  input[type=range] { width: 100%; accent-color: var(--or); }
+  pre, .etat { font: 400 12px/1.5 'Space Mono', monospace; background: #0a0f1c; border: 1px solid var(--bord); border-radius: 6px; padding: 10px; white-space: pre-wrap; margin: 0; max-height: 300px; overflow: auto; }
+  .ok { color: #7ee2a8; } .ko { color: #ff8a7a; } .att { color: var(--or); }
+  table { border-collapse: collapse; width: 100%; font: 400 12px 'Space Mono', monospace; }
+  td, th { border-bottom: 1px solid var(--bord); padding: 3px 6px; text-align: left; }
+  th { color: rgba(238,240,248,.5); font-weight: 700; }
+  #tps { font: 700 13px 'Space Mono', monospace; }
+</style>
+</head>
+<body>
+<main>
+  <canvas id="cv"></canvas>
+  <aside>
+    <h1>Un seul coureur en Régional</h1>
+    <div>Reel 11,0 s · sortie 1440 × 2560 · 60 i/s · muet, cartons brûlés · tout dessiné depuis GET /duels</div>
+
+    <h2>1 · La lecture du jour</h2>
+    <div id="lecture" class="etat">lecture en cours…</div>
+
+    <h2>2 · Ce que le propriétaire tranche</h2>
+    <div class="ligne">
+      <label for="statut">Le n° 1 du 100 m est</label>
+      <select id="statut">
+        <option value="">— à trancher —</option>
+        <option value="joueur">un joueur</option>
+        <option value="dire">le compte du créateur : on le dit à l'écran</option>
+        <option value="retirer">le compte du créateur ou de test : on le retire</option>
+      </select>
+    </div>
+    <div class="ligne">
+      <label for="noms">Pseudonymes</label>
+      <select id="noms">
+        <option value="clair">en entier (instruction du propriétaire, 17/10)</option>
+        <option value="masque">masqués : première lettre et points</option>
+      </select>
+    </div>
+
+    <h2>3 · Les contrôles</h2>
+    <div id="controles" class="etat">—</div>
+
+    <h2>4 · Aperçu</h2>
+    <input id="tete" type="range" min="0" max="11" step="0.0166667" value="0">
+    <div class="ligne">
+      <button id="jouer">Lire</button>
+      <span id="tps">0,00 s</span>
+    </div>
+
+    <h2>5 · Sortir les fichiers</h2>
+    <div class="ligne">
+      <button id="encoder" class="or" disabled>Encoder video.mp4 (image par image)</button>
+      <button id="filmer" disabled>Filmer en temps réel (MediaRecorder, secours)</button>
+      <button id="sequence" disabled>Séquence PNG pour After Effects</button>
+    </div>
+    <div class="ligne">
+      <button id="couverture" disabled>couverture.png</button>
+      <button id="legende" disabled>legende.txt</button>
+      <button id="srt" disabled>sous-titres.srt</button>
+      <button id="archive" disabled>lecture-duels.json</button>
+      <button id="lisezmoi" disabled>LISEZMOI.md</button>
+    </div>
+    <div id="rendu" class="etat">rien n'est encore filmé</div>
+
+    <h2>Le classement lu</h2>
+    <div id="table"></div>
+  </aside>
+</main>
+
+<script type="module">
+/* ---------------------------------------------------------------------------
+   REEL « UN SEUL COUREUR EN REGIONAL. » — 17 octobre 2026
+   ---------------------------------------------------------------------------
+   Aucun rush : l'echelle des duels se dessine a partir du JSON du jour, et de
+   rien d'autre. Chaque point est une ligne de GET /duels, le titre, le bilan,
+   le carton des points de ligue et la legende sortent de la meme lecture. Si
+   le classement bouge, c'est le texte qui change — jamais le chiffre.
+
+   La structure est celle du monteur : un canvas, MONTAGE = une liste de plans
+   { duree, src, debut, dessine(a) }, un deroulement EN TEMPS REEL capte par
+   cv.captureStream en flux continu. Il n'y a ici qu'un plan et aucune video :
+   avancer() n'a rien a caler, l'ecart qui se mesure est celui entre l'horloge
+   du montage et les images effectivement dessinees.
+
+   Le dessin se fait dans l'espace du conducteur, 1080 x 1920 : toutes les
+   cotes du conducteur (450, 1350, 380, 1450, la zone sure 250 → 1670) s'y
+   lisent telles quelles. La sortie est 2K, 1440 x 2560 : un seul facteur K
+   applique a la racine.
+--------------------------------------------------------------------------- */
+import { poserFond } from '../../../src/game/trace-affiche.js';
+
+const API = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
+const L = 1080, H = 1920;                 // l'espace du conducteur
+const K = 4 / 3;                          // 2K : 1440 x 2560
+const LS = Math.round(L * K), HS = Math.round(H * K);
+const IPS = 60;
+const DUREE = 11.0;
+const ZONE = { haut: 250, bas: 1670 };    // le rectangle central 1080 x 1420
+const ECH = { x0: 90, x1: 990, y0: 450, y1: 1350 };   // 900 px de haut, centree
+const OR = '#F8CD4A', ENCRE = '#EEF0F8', BORD = '#1E293B', NUIT = '#060913';
+const POINT = 18;
+const ZOOM = 1.60;
+
+// Les comptes qui ne sont pas des joueurs. Ils ne decident de rien seuls : le
+// n° 1 se tranche a la main dans la page, ceci ne sert qu'a le signaler.
+const COMPTES_CREATEUR = ['•benbezi•', 'benbezi'];
+
+const params = new URLSearchParams(location.search);
+const ESSAI = params.has('essai');                    // donnees fictives, filigrane
+const ARCHIVE = params.get('lecture');                // rejouer une lecture archivee
+
+const NOM_ETAGE = { departemental: 'DÉPARTEMENTAL', regional: 'RÉGIONAL', national: 'NATIONAL',
+                    elite: 'ÉLITE', legende: 'LÉGENDE' };
+const nomEtage = e => NOM_ETAGE[e] || String(e).toUpperCase();
+const ROMAINS = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+const ORDINAUX = ['PREMIER', 'DEUXIÈME', 'TROISIÈME', 'QUATRIÈME', 'CINQUIÈME', 'SIXIÈME'];
+const NBSP = ' ';
+
+const cv = document.getElementById('cv');
+cv.width = LS; cv.height = HS;
+const c = cv.getContext('2d');
+const $ = id => document.getElementById(id);
+
+/* ------------------------------------------------------------- la lecture */
+
+async function lire(chemin) {
+  const quand = new Date();
+  const r = await fetch(API + chemin, { cache: 'no-store' });
+  const texte = await r.text();
+  if (!r.ok) throw new Error(`${chemin} → HTTP ${r.status}`);
+  return { chemin, url: API + chemin, heure: quand.toISOString(), statut: r.status, texte };
+}
+
+const heureParis = iso => new Date(iso).toLocaleString('fr-FR', { timeZone: 'Europe/Paris',
+  dateStyle: 'full', timeStyle: 'medium' });
+
+/** Les donnees d'essai : le repere du 23 septembre, noms fictifs. Elles ne
+ *  servent qu'a verifier la mise en page, et le filigrane les rend
+ *  impubliables — aucune image d'essai ne peut passer pour la vraie. */
+function lectureEssai() {
+  const ligne = (n, palier, lp, w, l) => {
+    const p = palier, etages = ['departemental', 'regional', 'national', 'elite'];
+    return { name: `ESSAI-${String(n).padStart(2, '0')}`, lp, palier: p, wins: w, losses: l, draws: 0,
+             etage: etages[Math.floor(p / 4)], division: 4 - (p % 4), rank: n, pays: null };
+  };
+  const classement = params.get('essai') === 'plusieurs'
+    ? [ligne(1, 8, 12, 30, 9), ligne(2, 7, 6, 25, 10), ligne(3, 5, 61, 14, 6)]
+    : [ligne(1, 7, 6, 25, 10), ligne(2, 2, 61, 9, 4), ligne(3, 1, 40, 5, 3)];
+  for (let i = 4; i <= 39; i++) classement.push(ligne(i, 0, (97 * i) % 100, i % 7, (i * 3) % 5 + 1));
+  const echelle = { etages: ['departemental', 'regional', 'national', 'elite'], divisions: 4, legende: 16, lp_par_palier: 100 };
+  const corps = ep => JSON.stringify({ echelle, bareme: {}, epreuve: ep, epreuves: ['100', '200', '400'],
+    classement: ep === '100' ? classement : [ligne(1, 2, 10, 3, 1)], moi: null, mes_epreuves: [] });
+  const heure = new Date().toISOString();
+  return ['100', '200', '400'].map(ep => ({ chemin: ep === '100' ? '/duels' : `/duels?epreuve=${ep}`,
+    url: '(essai)', heure, statut: 200, texte: corps(ep) }));
+}
+
+/* -------------------------------------------------------------- le modele */
+
+/** Le rang d'un palier, recalcule depuis l'echelle du JSON — pour verifier
+ *  que chaque ligne dit la meme chose que son palier, pas pour la remplacer. */
+function rangDe(palier, e) {
+  if (palier >= e.legende) return { etage: 'legende', division: 0 };
+  return { etage: e.etages[Math.floor(palier / e.divisions)], division: e.divisions - (palier % e.divisions) };
+}
+
+function masquer(nom) {
+  const lettre = Array.from(String(nom).replace(/^[•\s._-]+/, ''))[0] || '?';
+  return lettre.toUpperCase() + '•••••';
+}
+
+function composer(lectures, choix) {
+  const [l100, l200, l400] = lectures.map(l => JSON.parse(l.texte));
+  const erreurs = [], notes = [];
+  for (const [l, ep] of [[l100, '100'], [l200, '200'], [l400, '400']]) {
+    if (String(l.epreuve) !== ep) erreurs.push(`la reponse de ${ep} m dit epreuve=${l.epreuve}`);
+  }
+  const e = l100.echelle;
+  if (!e || !Array.isArray(e.etages) || !e.divisions || !e.lp_par_palier) {
+    erreurs.push('champ echelle absent ou incomplet'); return { erreurs };
+  }
+  const etages = [...e.etages, 'legende'];             // du bas vers le haut
+  const nom = r => choix.noms === 'clair' ? r.name : masquer(r.name);
+  const romain = d => ROMAINS[d] || String(d);
+  const division = r => r.etage === 'legende' ? nomEtage('legende') : `${nomEtage(r.etage)} ${romain(r.division)}`;
+
+  // Chaque ligne : sa case, verifiee contre son palier.
+  for (const r of l100.classement) {
+    const attendu = rangDe(r.palier, e);
+    if (attendu.etage !== r.etage || (r.etage !== 'legende' && attendu.division !== r.division)) {
+      erreurs.push(`${r.name} : palier ${r.palier} mais etage ${r.etage} ${r.division}`);
+    }
+    if (!etages.includes(r.etage)) erreurs.push(`${r.name} : etage inconnu ${r.etage}`);
+  }
+
+  const n1 = l100.classement[0] || null;
+  const n1Createur = n1 && COMPTES_CREATEUR.includes(n1.name.trim().toLowerCase());
+  const retires = choix.statut === 'retirer' && n1 ? [n1] : [];
+  const lignes = l100.classement.filter(r => !retires.includes(r));
+  const dessus = lignes.filter(r => r.etage !== etages[0]);
+  const haut = dessus[0] || null;
+  const etage1 = etages[1];
+
+  // Les autres distances : la phrase « sur 100 m » ne tient que si personne
+  // n'y depasse Departemental.
+  const ailleurs = [[l200, '200'], [l400, '400']].map(([l, ep]) => ({ ep,
+    n: (l.classement || []).filter(r => r.etage !== etages[0]).length,
+    classes: (l.classement || []).length }));
+  const sur100Seul = ailleurs.every(a => a.n === 0);
+
+  // La variante : c'est la lecture qui la choisit.
+  let variante, titre;
+  if (!haut) {
+    variante = 'personne';
+    titre = `PERSONNE EN ${nomEtage(etage1)}.`;
+  } else if (dessus.length === 1 && choix.statut === 'dire' && haut === n1) {
+    variante = 'createur';
+    titre = `UN SEUL COMPTE EN ${nomEtage(haut.etage)}${NBSP}: CELUI QUI A ÉCRIT LE JEU`;
+  } else if (dessus.length === 1) {
+    variante = 'seul';
+    titre = `UN SEUL COUREUR EN ${nomEtage(haut.etage)}.`;
+  } else {
+    variante = 'plusieurs';
+    const memes = dessus.every(r => r.etage === haut.etage);
+    titre = memes ? `${dessus.length} COUREURS EN ${nomEtage(haut.etage)}.`
+                  : `${dessus.length} COUREURS AU-DESSUS DE ${nomEtage(etages[0])}.`;
+  }
+
+  // L'etage libre : celui juste au-dessus du plus haut occupe.
+  const plusHaut = Math.max(0, ...lignes.map(r => etages.indexOf(r.etage)));
+  const libre = plusHaut + 1 < etages.length ? plusHaut + 1 : null;
+  const phraseLibre = libre == null ? null
+    : `LE ${ORDINAUX[libre] || (libre + 1) + 'E'} ÉTAGE N’A ENCORE PERSONNE.`;
+
+  // Le carton des points : de la premiere division au premier etage du dessus,
+  // depuis zero point. Lu dans l'echelle, jamais ecrit a la main.
+  const pts = e.divisions * e.lp_par_palier;
+  const de = `${nomEtage(etages[0])} ${romain(e.divisions)}`;
+  const a = `${nomEtage(etage1)} ${romain(e.divisions)}`;
+
+  /* --- la geometrie : bandes, cases, points --- */
+  const hb = (ECH.y1 - ECH.y0) / etages.length;
+  const wc = (ECH.x1 - ECH.x0) / e.divisions;
+  const caseDe = (etage, div) => {
+    const i = etages.indexOf(etage), y = ECH.y1 - (i + 1) * hb;
+    if (etage === 'legende') return { x: ECH.x0, y, w: ECH.x1 - ECH.x0, h: hb, idx: 0, i };
+    const idx = e.divisions - div;
+    return { x: ECH.x0 + idx * wc, y, w: wc, h: hb, idx, i };
+  };
+  const groupes = new Map();
+  for (const r of lignes) {
+    const k = r.etage === 'legende' ? 'legende' : `${r.etage}:${r.division}`;
+    if (!groupes.has(k)) groupes.set(k, []);
+    groupes.get(k).push(r);
+  }
+  const points = [];
+  for (const [k, rs] of groupes) {
+    const r0 = rs[0];
+    const cs = caseDe(r0.etage, r0.division);
+    const zx = cs.x + 16, zy = cs.y + 50, zw = cs.w - 32, zh = cs.h - 66;
+    let pas = 24, cols, rangs;
+    for (; pas >= 4; pas -= 1) {
+      cols = Math.floor((zw - POINT) / pas) + 1;
+      rangs = Math.floor((zh - POINT) / pas) + 1;
+      if (cols * rangs >= rs.length) break;
+    }
+    if (cols * rangs < rs.length) erreurs.push(`case ${k} : ${rs.length} points ne tiennent pas`);
+    rs.forEach((r, j) => points.push({ r, x: zx + POINT / 2 + (j % cols) * pas,
+                                       y: zy + POINT / 2 + Math.floor(j / cols) * pas }));
+  }
+  const cibleCase = haut ? caseDe(haut.etage, haut.division) : caseDe(etage1, e.divisions);
+  const ciblePoint = haut ? points.find(p => p.r === haut) : null;
+  // Le bilan se pose du cote ou la scene est vide : a droite pour les
+  // divisions de droite, a gauche pour celles de gauche.
+  const droite = cibleCase.idx >= e.divisions / 2 || haut?.etage === 'legende';
+  const plan = { ax: droite ? 300 : 780, ay: 960,
+                 cx: cibleCase.x + cibleCase.w / 2, cy: cibleCase.y + cibleCase.h / 2, s: ZOOM };
+  if (haut?.etage === 'legende') { plan.cx = ciblePoint.x; }
+
+  /* --- le bilan, en lignes deja composees --- */
+  const vd = r => `${r.wins}${NBSP}V · ${r.losses}${NBSP}D` + (r.draws ? ` · ${r.draws}${NBSP}N` : '');
+  const divPl = r => `${division(r)} · ${r.lp}${NBSP}PL`;
+  let bilan;
+  if (variante === 'seul' || variante === 'createur') {
+    bilan = [
+      { t: nom(haut), f: 'Outfit', g: 700, taille: 36, coul: 'rgba(238,240,248,0.80)' },
+      { t: vd(haut), f: 'Space Mono', g: 700, taille: 84, coul: OR, chiffre: true },
+      { t: divPl(haut), f: 'Outfit', g: 700, taille: 40, coul: ENCRE },
+    ];
+  } else if (variante === 'plusieurs') {
+    const montres = dessus.slice(0, dessus.length > 6 ? 5 : 6);
+    bilan = [];
+    for (const r of montres) {
+      bilan.push({ t: vd(r), f: 'Space Mono', g: 700, taille: 50, coul: OR, chiffre: true });
+      bilan.push({ t: `${nom(r)} · ${divPl(r)}`, f: 'Outfit', g: 700, taille: 26, coul: ENCRE, apres: 14 });
+    }
+    if (dessus.length > montres.length) {
+      bilan.push({ t: `ET ${dessus.length - montres.length} AUTRES`, f: 'Outfit', g: 700, taille: 26, coul: 'rgba(238,240,248,0.55)' });
+    }
+  } else {
+    const proche = lignes[0] || null;
+    bilan = [
+      { t: `${nomEtage(etage1)} ${romain(e.divisions)}`, f: 'Outfit', g: 700, taille: 40, coul: ENCRE },
+      { t: '0', f: 'Space Mono', g: 700, taille: 160, coul: OR, chiffre: true },
+      { t: 'COUREUR', f: 'Outfit', g: 700, taille: 30, coul: 'rgba(238,240,248,0.55)', apres: 26 },
+    ];
+    if (proche) bilan.push(
+      { t: 'LE PLUS PROCHE', f: 'Outfit', g: 700, taille: 24, coul: 'rgba(238,240,248,0.45)' },
+      { t: nom(proche), f: 'Outfit', g: 700, taille: 32, coul: ENCRE },
+      { t: divPl(proche), f: 'Outfit', g: 700, taille: 30, coul: ENCRE },
+      { t: vd(proche), f: 'Space Mono', g: 700, taille: 44, coul: OR, chiffre: true });
+  }
+
+  const quand = new Date(lectures[0].heure);
+  const jour = quand.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: 'numeric', month: 'long' }).toUpperCase();
+  const surtitre = `DUELS ${sur100Seul ? 'SUR' : 'DU'} 100${NBSP}M · AU ${jour}`;
+
+  if (n1Createur && !choix.statut) notes.push(`le n° 1 (${n1.name}) est dans la liste des comptes du createur`);
+  if (!sur100Seul) notes.push('quelqu’un depasse Departemental sur 200 ou 400 m : le surtitre dit « DUELS DU 100 M », la legende le precise');
+
+  return {
+    erreurs, notes, e, etages, lignes, retires, dessus, haut, n1, n1Createur, variante, titre, surtitre,
+    libre, phraseLibre, pts, de, a, hb, wc, caseDe, points, cibleCase, ciblePoint, plan, droite, bilan,
+    ailleurs, sur100Seul, nom, division, vd, divPl, lectures, l100, jour,
+    cartonPts: { ligne1: `DE ${de} À ${a}${NBSP}:`, nombre: String(pts), unite: 'POINTS DE LIGUE' },
+  };
+}
+
+/* ---------------------------------------------------------------- l'outil */
+
+const clamp01 = u => Math.max(0, Math.min(1, u));
+const lisse = u => { u = clamp01(u); return u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2; };
+const fondu = (t, a, b, f = 0.25) => clamp01(Math.min((t - a) / f, (b - t) / f));
+const mix = (A, B, u) => Object.fromEntries(Object.keys(A).map(k => [k, A[k] + (B[k] - A[k]) * u]));
+
+let boites = [];      // les boites de texte de l'image en cours, pour la zone sure
+let nbPoints = 0;     // les points effectivement dessines dans l'image en cours
+
+function police(cx, f, g, taille, espace = 0) {
+  cx.font = `${g} ${taille}px ${f === 'Space Mono' ? "'Space Mono', monospace" : 'Outfit, sans-serif'}`;
+  cx.letterSpacing = `${espace}px`;
+}
+
+/** Coupe un texte en lignes qui tiennent dans `largeur`. Un insecable tient. */
+function couper(cx, texte, largeur) {
+  const mots = texte.split(' '), lignes = [];
+  let cur = '';
+  for (const m of mots) {
+    const essai = cur ? cur + ' ' + m : m;
+    if (cx.measureText(essai).width <= largeur || !cur) cur = essai;
+    else { lignes.push(cur); cur = m; }
+  }
+  if (cur) lignes.push(cur);
+  return equilibrer(cx, mots, lignes.length) || lignes;
+}
+
+/** Le meme nombre de lignes, mais coupees la ou la plus longue est la plus
+ *  courte : « UN SEUL COUREUR / EN RÉGIONAL. » et non « UN SEUL COUREUR EN /
+ *  RÉGIONAL. ». Trois lignes au plus, les titres n'en ont jamais davantage. */
+function equilibrer(cx, mots, n) {
+  if (n < 2 || n > 3 || mots.length < n) return null;
+  let mieux = null, pire = Infinity;
+  const w = l => cx.measureText(l).width;
+  for (let i = 1; i < mots.length; i++) {
+    if (n === 2) {
+      const ls = [mots.slice(0, i).join(' '), mots.slice(i).join(' ')];
+      const m = Math.max(...ls.map(w));
+      if (m < pire) { pire = m; mieux = ls; }
+    } else for (let j = i + 1; j < mots.length; j++) {
+      const ls = [mots.slice(0, i).join(' '), mots.slice(i, j).join(' '), mots.slice(j).join(' ')];
+      const m = Math.max(...ls.map(w));
+      if (m < pire) { pire = m; mieux = ls; }
+    }
+  }
+  return mieux;
+}
+
+/** Un titre centre en x et en y, a la plus grande taille qui tienne dans la
+ *  boite (largeur, hauteur). Interlettrage serre, comme la charte le veut. */
+function titreCentre(cx, texte, { cy, largeur = 940, hauteur, taille = 80, min = 30, g = 800, coul = OR, alpha = 1 }) {
+  let lignes, t = taille;
+  for (; t >= min; t -= 2) {
+    police(cx, 'Outfit', g, t, -0.01 * t);
+    lignes = couper(cx, texte, largeur);
+    if (lignes.length * t * 1.04 <= hauteur && lignes.every(l => cx.measureText(l).width <= largeur)) break;
+  }
+  const pas = t * 1.04, haut = cy - (lignes.length * pas) / 2;
+  cx.save();
+  cx.globalAlpha *= alpha; cx.fillStyle = coul; cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  lignes.forEach((l, i) => {
+    const y = haut + pas * (i + 0.5);
+    cx.fillText(l, L / 2, y);
+    const w = cx.measureText(l).width;
+    boites.push({ x0: L / 2 - w / 2, x1: L / 2 + w / 2, y0: y - t * 0.5, y1: y + t * 0.5, t: l });
+  });
+  cx.restore();
+  return { haut, bas: haut + lignes.length * pas };
+}
+
+function texte(cx, t, x, y, { f = 'Outfit', g = 700, taille, coul, align = 'left', espace = 0, alpha = 1, base = 'middle' }) {
+  cx.save();
+  police(cx, f, g, taille, espace);
+  cx.globalAlpha *= alpha; cx.fillStyle = coul; cx.textAlign = align; cx.textBaseline = base;
+  cx.fillText(t, x, y);
+  const w = cx.measureText(t).width;
+  const x0 = align === 'center' ? x - w / 2 : align === 'right' ? x - w : x;
+  const y0 = base === 'middle' ? y - taille / 2 : base === 'alphabetic' ? y - taille * 0.75 : y;
+  boites.push({ x0, x1: x0 + w, y0, y1: y0 + taille, t });
+  cx.restore();
+  return w;
+}
+
+/* --------------------------------------------------------------- le dessin */
+
+/** L'echelle, dans l'espace de la scene (la camera est deja posee).
+ *  `ton` regle tout ce qui est gris : 1 pour le reel, tres bas pour la couverture. */
+function dessinerEchelle(cx, m, { ton = 1, libreA = 0, cible = null, pointsA = 1, autresA = 1 } = {}) {
+  const { etages, e, hb, wc } = m;
+  cx.save();
+  // Les traits : 2 px, blanc a 20 %.
+  cx.strokeStyle = `rgba(255,255,255,${0.20 * ton})`; cx.lineWidth = 2;
+  cx.strokeRect(ECH.x0, ECH.y0, ECH.x1 - ECH.x0, ECH.y1 - ECH.y0);
+  for (let i = 1; i < etages.length; i++) {
+    const y = ECH.y1 - i * hb;
+    cx.beginPath(); cx.moveTo(ECH.x0, y); cx.lineTo(ECH.x1, y); cx.stroke();
+  }
+  for (let i = 0; i < etages.length; i++) {
+    if (etages[i] === 'legende') continue;
+    const y = ECH.y1 - (i + 1) * hb;
+    for (let d = 1; d < e.divisions; d++) {
+      const x = ECH.x0 + d * wc;
+      cx.beginPath(); cx.moveTo(x, y); cx.lineTo(x, y + hb); cx.stroke();
+    }
+  }
+
+  // L'etage libre, designe a la fin : la place vide est la provocation.
+  if (libreA > 0 && m.libre != null) {
+    const y = ECH.y1 - (m.libre + 1) * hb;
+    cx.fillStyle = `rgba(248,205,74,${0.07 * libreA})`;
+    cx.fillRect(ECH.x0, y, ECH.x1 - ECH.x0, hb);
+    cx.strokeStyle = `rgba(248,205,74,${0.75 * libreA})`; cx.lineWidth = 3;
+    cx.strokeRect(ECH.x0, y, ECH.x1 - ECH.x0, hb);
+  }
+
+  // Les libelles : Outfit 700 capitales, blanc a 45 %. Ce sont des libelles de
+  // scene, ils grossissent avec la camera — pas de boite de zone sure.
+  cx.textBaseline = 'top';
+  for (let i = 0; i < etages.length; i++) {
+    const y = ECH.y1 - (i + 1) * hb;
+    const estLibre = libreA > 0 && i === m.libre;
+    // Le libelle d'etage tient dans la premiere case, a cote de son chiffre romain.
+    const place = etages[i] === 'legende' ? ECH.x1 - ECH.x0 - 28 : wc - 28 - 44;
+    let tl = 22;
+    for (; tl > 12; tl -= 1) { police(cx, 'Outfit', 700, tl, tl * 0.12); if (cx.measureText(nomEtage(etages[i])).width <= place) break; }
+    cx.textAlign = 'left';
+    cx.fillStyle = estLibre ? `rgba(248,205,74,${0.45 + 0.5 * libreA})` : `rgba(255,255,255,${0.45 * ton})`;
+    cx.fillText(nomEtage(etages[i]), ECH.x0 + 14, y + 14);
+    if (etages[i] === 'legende') continue;
+    police(cx, 'Outfit', 700, 18, 18 * 0.12);
+    cx.textAlign = 'right';
+    for (let d = e.divisions; d >= 1; d--) {
+      const x = ECH.x0 + (e.divisions - d + 1) * wc;
+      cx.fillText(ROMAINS[d] || String(d), x - 12, y + 16);
+    }
+  }
+
+  // Les points : 18 px, or, un par ligne du JSON. Aucun nom a cote.
+  for (const p of m.points) {
+    const estCible = p === cible;
+    cx.globalAlpha = estCible ? pointsA : pointsA * autresA;
+    cx.fillStyle = OR;
+    if (estCible && ton < 1) { cx.shadowColor = 'rgba(248,205,74,0.9)'; cx.shadowBlur = 28; }
+    cx.beginPath(); cx.arc(p.x, p.y, POINT / 2, 0, Math.PI * 2); cx.fill();
+    cx.shadowBlur = 0;
+    nbPoints++;
+  }
+  cx.restore();
+}
+
+/** La camera a l'instant t : plan large, poussee 2,5 → 6,0, arret, retour 9,0 → 9,8. */
+function camera(t, m) {
+  const A = { ax: 540, ay: 900, cx: 540, cy: 900, s: 1 };
+  let u;
+  if (t < 2.5) u = 0;
+  else if (t < 6.0) u = lisse((t - 2.5) / 3.5);
+  else if (t < 9.0) u = 1;
+  else u = 1 - lisse((t - 9.0) / 0.8);
+  return mix(A, m.plan, u);
+}
+const versEcran = (cam, x, y) => ({ x: cam.ax + cam.s * (x - cam.cx), y: cam.ay + cam.s * (y - cam.cy) });
+
+function poserSignature(cx) {
+  // Dans la zone sure, et non a 8,8 % du bas : a 1751 px, sur un reel, le
+  // pouce et la legende Instagram la recouvrent. Le filet reste au-dessus.
+  cx.save();
+  cx.strokeStyle = 'rgba(255,255,255,0.10)'; cx.lineWidth = 1 / K;     // 1 px de sortie
+  cx.beginPath(); cx.moveTo(90, 1606); cx.lineTo(990, 1606); cx.stroke();
+  cx.restore();
+  texte(cx, '@sprintergame', L / 2, 1638, { g: 500, taille: 30, coul: 'rgba(255,255,255,0.30)', align: 'center', espace: 0.6 });
+}
+
+function filigraneEssai(cx) {
+  cx.save();
+  cx.translate(L / 2, H / 2); cx.rotate(-Math.PI / 7);
+  police(cx, 'Outfit', 900, 64, 2);
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.fillStyle = 'rgba(255,80,60,0.55)';
+  cx.fillText('DONNÉES D’ESSAI', 0, -40);
+  cx.fillText('NE PAS PUBLIER', 0, 40);
+  cx.restore();
+}
+
+/** Une image du reel a l'instant t. */
+function image(t, m) {
+  boites = []; nbPoints = 0;
+  c.setTransform(K, 0, 0, K, 0, 0);
+  poserFond(c, L, H);
+
+  const cam = camera(t, m);
+  const libreA = t >= 9.6 ? clamp01((t - 9.6) / 0.3) : 0;
+  c.save();
+  c.translate(cam.ax, cam.ay); c.scale(cam.s, cam.s); c.translate(-cam.cx, -cam.cy);
+  dessinerEchelle(c, m, { libreA, cible: m.ciblePoint });
+  c.restore();
+
+  // 0,2 → 2,4 : le titre, et son surtitre.
+  const aT = fondu(t, 0.2, 2.4);
+  if (aT > 0) {
+    texte(c, m.surtitre, L / 2, 272, { g: 700, taille: 22, coul: 'rgba(255,255,255,0.45)', align: 'center', espace: 22 * 0.24, alpha: aT });
+    titreCentre(c, m.titre, { cy: 376, hauteur: 140, alpha: aT });
+  }
+
+  // 6,0 → 9,0 : l'anneau autour du point, puis le bilan a cote (6,2 → 9,0).
+  const pt = m.ciblePoint ? versEcran(cam, m.ciblePoint.x, m.ciblePoint.y)
+                          : versEcran(cam, m.cibleCase.x + m.cibleCase.w / 2, m.cibleCase.y + m.cibleCase.h / 2);
+  if (t >= 6.0 && t < 9.0 && m.ciblePoint) {
+    const ph = ((t - 6.0) % 1.2) / 1.2;
+    c.save();
+    c.strokeStyle = `rgba(248,205,74,${0.8 * (1 - ph) * fondu(t, 6.0, 9.0, 0.2)})`; c.lineWidth = 3;
+    c.beginPath(); c.arc(pt.x, pt.y, 16 + ph * 26, 0, Math.PI * 2); c.stroke();
+    c.restore();
+  }
+  if (t >= 6.0 && t < 9.0 && !m.ciblePoint) {
+    // La case vide : un cadre or, c'est elle le sujet.
+    const r = m.cibleCase, a = versEcran(cam, r.x, r.y);
+    c.save(); c.strokeStyle = `rgba(248,205,74,${0.8 * fondu(t, 6.0, 9.0, 0.3)})`; c.lineWidth = 3;
+    c.strokeRect(a.x, a.y, r.w * cam.s, r.h * cam.s); c.restore();
+  }
+  const aB = fondu(t, 6.2, 9.0, 0.3);
+  if (aB > 0) dessinerBilan(c, m, pt, aB);
+
+  // 9,6 → 11,0 : l'etage libre en haut, les points de ligue a 1450.
+  if (libreA > 0) {
+    if (m.phraseLibre) titreCentre(c, m.phraseLibre, { cy: 376, hauteur: 140, taille: 72, alpha: libreA });
+    dessinerCartonPoints(c, m, libreA);
+  }
+
+  poserSignature(c);
+  if (ESSAI) filigraneEssai(c);
+  return { boites, points: nbPoints };
+}
+
+function dessinerBilan(cx, m, pt, a) {
+  const largeur = 440, marge = 26, monte = 14 * (1 - a);
+  // Chaque ligne a la plus grande taille qui tienne, sans depasser la sienne.
+  const lignes = m.bilan.map(l => {
+    let t = l.taille;
+    for (; t > 14; t -= 1) { police(cx, l.f, l.g, t); if (cx.measureText(l.t).width <= largeur) break; }
+    return { ...l, taille: t };
+  });
+  const pasDe = l => l.taille * 1.18 + (l.apres || 0);
+  const hTot = lignes.reduce((n, l) => n + pasDe(l), 0);
+  const panneauH = hTot + marge * 2, panneauW = largeur + marge * 2;
+  const px = m.droite ? 548 : 532 - panneauW;
+  const py = Math.max(ZONE.haut + 20, Math.min(ZONE.bas - 100 - panneauH, 960 - panneauH / 2)) + monte;
+
+  cx.save();
+  cx.globalAlpha = a;
+  // Le trait qui relie le point a son bilan.
+  cx.strokeStyle = 'rgba(248,205,74,0.6)'; cx.lineWidth = 2;
+  cx.beginPath(); cx.moveTo(pt.x + (m.droite ? 14 : -14), pt.y);
+  cx.lineTo(m.droite ? px : px + panneauW, Math.max(py + 30, Math.min(py + panneauH - 30, pt.y)));
+  cx.stroke();
+  cx.fillStyle = 'rgba(6,9,19,0.86)'; cx.strokeStyle = BORD; cx.lineWidth = 2;
+  cx.beginPath(); cx.roundRect(px, py, panneauW, panneauH, 14); cx.fill(); cx.stroke();
+  cx.restore();
+
+  let y = py + marge;
+  const x = m.droite ? px + marge : px + panneauW - marge;
+  for (const l of lignes) {
+    const h = l.taille * 1.18;
+    texte(cx, l.t, x, y + h / 2, { f: l.f, g: l.g, taille: l.taille, coul: l.coul, align: m.droite ? 'left' : 'right', alpha: a });
+    y += pasDe(l);
+  }
+}
+
+function dessinerCartonPoints(cx, m, a) {
+  const { ligne1, nombre, unite } = m.cartonPts;
+  texte(cx, ligne1, L / 2, 1402, { g: 700, taille: 38, coul: ENCRE, align: 'center', alpha: a });
+  // « 400 » est le plus gros element de l'image : c'est le chiffre a battre.
+  police(cx, 'Outfit', 700, 120); const wN = cx.measureText(nombre).width;
+  police(cx, 'Outfit', 700, 44); const wU = cx.measureText(' ' + unite).width;
+  const x0 = L / 2 - (wN + wU) / 2;
+  texte(cx, nombre, x0, 1530, { g: 700, taille: 120, coul: ENCRE, base: 'alphabetic', alpha: a });
+  texte(cx, ' ' + unite, x0 + wN, 1530, { g: 700, taille: 44, coul: ENCRE, base: 'alphabetic', alpha: a });
+}
+
+/** La couverture : l'echelle tres sombre, le point isole en or, le bilan
+ *  au tiers de la hauteur, l'etage au-dessus en petit. */
+function dessinerCouverture(m) {
+  boites = []; nbPoints = 0;
+  c.setTransform(K, 0, 0, K, 0, 0);
+  poserFond(c, L, H);
+  dessinerEchelle(c, m, { ton: 0.32, cible: m.ciblePoint, autresA: 0.16 });
+  let etiquette, nombre, sous;
+  if (m.variante === 'seul' || m.variante === 'createur') {
+    etiquette = nomEtage(m.haut.etage);
+    nombre = `${m.haut.wins}–${m.haut.losses}`;
+    sous = m.variante === 'createur' ? `VICTOIRES – DÉFAITES · LE COMPTE DU CRÉATEUR` : `VICTOIRES – DÉFAITES · DUELS SUR 100${NBSP}M`;
+  } else if (m.variante === 'plusieurs') {
+    etiquette = m.dessus.every(r => r.etage === m.haut.etage) ? `COUREURS EN ${nomEtage(m.haut.etage)}` : `AU-DESSUS DE ${nomEtage(m.etages[0])}`;
+    nombre = String(m.dessus.length);
+    sous = `DUELS SUR 100${NBSP}M`;
+  } else {
+    etiquette = `COUREUR EN ${nomEtage(m.etages[1])}`;
+    nombre = '0';
+    sous = `DUELS SUR 100${NBSP}M`;
+  }
+  texte(c, etiquette, L / 2, 488, { g: 800, taille: 44, coul: ENCRE, align: 'center', espace: 44 * 0.10 });
+  let t = 260;
+  for (; t > 60; t -= 4) { police(c, 'Space Mono', 700, t); if (c.measureText(nombre).width <= 920) break; }
+  texte(c, nombre, L / 2, H / 3, { f: 'Space Mono', g: 700, taille: t, coul: OR, align: 'center' });
+  texte(c, sous, L / 2, H / 3 + t * 0.62, { g: 700, taille: 24, coul: 'rgba(255,255,255,0.45)', align: 'center', espace: 24 * 0.16 });
+  poserSignature(c);
+  if (ESSAI) filigraneEssai(c);
+  return { boites, points: nbPoints };
+}
+
+/* --------------------------------------------------------------- le montage */
+
+let M = null;           // le modele du jour
+let lectures = null;
+let rendu = null;       // le compte rendu du dernier film
+const choix = () => ({ statut: $('statut').value, noms: $('noms').value });
+
+const MONTAGE = [
+  { duree: DUREE, src: null, debut: 0, dessine: a => image(a, M) },
+];
+function dessinerA(t) {
+  let base = 0;
+  for (const p of MONTAGE) {
+    if (t < base + p.duree || p === MONTAGE[MONTAGE.length - 1]) return p.dessine(Math.min(t - base, p.duree));
+    base += p.duree;
+  }
+}
+
+/** Les controles qui bloquent un export. */
+function controler() {
+  const lignes = [], bloque = [];
+  const dire = (ok, txt) => { lignes.push(`<span class="${ok ? 'ok' : 'ko'}">${ok ? '✓' : '✗'}</span> ${txt}`); if (!ok) bloque.push(txt); };
+  dire(fontesOk, `fontes chargees : ${fontesDetail}`);
+  dire(!!M && M.erreurs.length === 0, M ? (M.erreurs.length ? 'lecture : ' + M.erreurs.join(' ; ') : 'chaque ligne du JSON concorde avec son palier') : 'pas de lecture');
+  if (M && !M.erreurs.length) {
+    dire(!!choix().statut, choix().statut ? `n° 1 tranché : ${$('statut').selectedOptions[0].text}` : `le statut du n° 1 (${M.n1?.name ?? '—'}) n'est pas tranché`);
+    // Les points se comptent sur des images reellement dessinees.
+    const essais = [1.3, 4.2, 7.5, 10.6].map(t => ({ t, ...dessinerA(t) }));
+    const attendu = M.lignes.length;
+    dire(essais.every(x => x.points === attendu), `points dessinés : ${essais.map(x => x.points).join(' / ')} — classés retenus : ${attendu}` + (M.retires.length ? ` (${M.retires.length} retiré)` : ''));
+    const hors = essais.flatMap(x => x.boites.filter(b => b.x0 < 0 || b.x1 > L || b.y0 < ZONE.haut || b.y1 > ZONE.bas).map(b => `${x.t} s « ${b.t} »`));
+    const cv0 = dessinerCouverture(M);
+    hors.push(...cv0.boites.filter(b => b.x0 < 0 || b.x1 > L || b.y0 < ZONE.haut || b.y1 > ZONE.bas).map(b => `couverture « ${b.t} »`));
+    dire(hors.length === 0, hors.length ? 'texte hors du rectangle 1080 × 1420 : ' + hors.join(', ') : 'tout le texte tient dans le rectangle central 1080 × 1420');
+    dire(cv0.points === attendu, `couverture : ${cv0.points} points`);
+    lignes.push(`<span class="att">•</span> variante : ${M.variante} — « ${M.titre} »`);
+    for (const n of M.notes) lignes.push(`<span class="att">•</span> ${n}`);
+    if (ESSAI) dire(false, 'MODE ESSAI : données fictives, filigrane — rien de ceci ne se publie');
+    dessinerA(Number($('tete').value));
+  }
+  $('controles').innerHTML = lignes.join('\n');
+  const pret = bloque.length === 0 || (ESSAI && bloque.length === 1);
+  for (const id of ['encoder', 'filmer', 'sequence', 'couverture', 'legende', 'srt', 'archive', 'lisezmoi']) $(id).disabled = !pret;
+  return pret;
+}
+
+/* ------------------------------------------------------------ les textes */
+
+const pluriel = (n, s) => `${n} ${s}${n > 1 ? 's' : ''}`;
+const ETAGE_TEXTE = { departemental: 'Départemental', regional: 'Régional', national: 'National',
+                      elite: 'Élite', legende: 'Légende' };
+const etageTexte = e => ETAGE_TEXTE[e] || e;
+const divTexte = (m, r) => r.etage === 'legende' ? 'Légende' : `${etageTexte(r.etage)} ${ROMAINS[r.division]}`;
+
+/** La legende, prete a coller. Le present, un seul point d'exclamation au
+ *  plus (ici aucun), et chaque chiffre vient du modele. */
+function legende(m) {
+  const h = m.haut, nom = r => m.nom(r);
+  const dep = m.lignes.filter(r => r.etage === m.etages[0]).length;
+  const bilan = r => `${divTexte(m, r)}, ${r.lp} PL, ${pluriel(r.wins, 'victoire')}, ${pluriel(r.losses, 'défaite')}`
+    + (r.draws ? `, ${pluriel(r.draws, 'nul')}` : '');
+  const p = [];
+  if (m.variante === 'seul') {
+    p.push(`Un seul coureur en ${etageTexte(h.etage)} sur 100 m : ${nom(h)}. ${bilan(h)}.`);
+  } else if (m.variante === 'createur') {
+    p.push(`Un seul compte en ${etageTexte(h.etage)} sur 100 m, et c’est celui qui a écrit le jeu : ${nom(h)}. ${bilan(h)}.`);
+  } else if (m.variante === 'plusieurs') {
+    p.push(`${m.dessus.length} coureurs au-dessus de ${etageTexte(m.etages[0])} sur 100 m :`);
+    for (const r of m.dessus) p.push(`· ${nom(r)} — ${bilan(r)}`);
+  } else {
+    p.push(`Personne en ${etageTexte(m.etages[1])} sur 100 m.`
+      + (m.lignes[0] ? ` Le plus proche : ${nom(m.lignes[0])}, ${divTexte(m, m.lignes[0])}, ${m.lignes[0].lp} PL.` : ''));
+  }
+  if (dep) p.push(m.variante === 'personne' ? `Les ${dep} classés sont en ${etageTexte(m.etages[0])}.`
+                                            : `${dep > 1 ? `Les ${dep} autres classés sont` : 'L’autre classé est'} en ${etageTexte(m.etages[0])}.`);
+  p.push('');
+  p.push(`De ${etageTexte(m.etages[0])} ${ROMAINS[m.e.divisions]} à ${etageTexte(m.etages[1])} ${ROMAINS[m.e.divisions]} : ${m.pts} points de ligue.`
+    + (m.libre != null ? ` Le ${(ORDINAUX[m.libre] || '').toLowerCase()} étage n’a encore personne.` : ''));
+  if (m.retires.length) p.push(`Le compte du créateur du jeu (${m.retires[0].name}) est retiré du dessin et du décompte.`);
+  for (const x of m.ailleurs.filter(x => x.n > 0)) p.push(`Sur ${x.ep} m, ${pluriel(x.n, 'coureur')} au-dessus de ${etageTexte(m.etages[0])}.`);
+  p.push('');
+  p.push('Duels sur 100, 200 et 400 m. sprinter-game.com — gratuit, sans compte, dans le navigateur.');
+  return p.join('\n') + '\n';
+}
+
+function srt(m) {
+  const tc = s => { const ms = Math.round(s * 1000); const p = (n, l = 2) => String(n).padStart(l, '0');
+    return `${p(Math.floor(ms / 3600000))}:${p(Math.floor(ms / 60000) % 60)}:${p(Math.floor(ms / 1000) % 60)},${p(ms % 1000, 3)}`; };
+  const bilan = m.bilan.map(l => l.t.replace(/ /g, ' ')).join('\n');
+  const cues = [
+    [0.2, 2.4, m.titre.replace(/ /g, ' ')],
+    [6.2, 9.0, bilan],
+    [9.6, 11.0, [m.phraseLibre, `${m.cartonPts.ligne1} ${m.pts} ${m.cartonPts.unite}`].filter(Boolean).join('\n').replace(/ /g, ' ')],
+  ];
+  return cues.map(([a, b, t], i) => `${i + 1}\n${tc(a)} --> ${tc(b)}\n${t}\n`).join('\n');
+}
+
+function blocLecture(m) {
+  const lignes = [];
+  lignes.push('## La lecture du jour', '');
+  lignes.push(`Écrit par la page de montage le ${heureParis(new Date().toISOString())}.`, '');
+  if (ESSAI) lignes.push('**DONNÉES D’ESSAI — ce bloc ne vaut rien pour une publication.**', '');
+  for (const l of m.lectures) {
+    lignes.push(`### GET ${l.chemin}`, '', `Requête : ${l.heure} (UTC) — ${heureParis(l.heure)}, heure de Paris. HTTP ${l.statut}.` + (ARCHIVE ? ` Rejouée depuis ${ARCHIVE}.` : ''), '');
+    lignes.push('```json', l.texte, '```', '');
+  }
+  lignes.push('## Ce que la lecture décide', '');
+  lignes.push(`- Variante : **${m.variante}** — titre « ${m.titre.replace(/ /g, ' ')} »`);
+  lignes.push(`- Surtitre : « ${m.surtitre.replace(/ /g, ' ')} »`);
+  lignes.push(`- Classés sur 100 m : ${m.l100.classement.length} ; points dessinés : ${m.lignes.length}` + (m.retires.length ? ` (retiré : ${m.retires[0].name})` : ''));
+  const parCase = new Map();
+  for (const r of m.lignes) { const k = m.division(r); parCase.set(k, (parCase.get(k) || 0) + 1); }
+  lignes.push(`- Répartition : ${[...parCase].map(([k, n]) => `${k} ${n}`).join(' · ')}`);
+  lignes.push(`- Échelle lue : ${m.e.etages.length} étages, ${m.e.divisions} divisions, ${m.e.lp_par_palier} PL par division, Légende au palier ${m.e.legende} → carton « ${m.cartonPts.ligne1.replace(/ /g, ' ')} ${m.pts} ${m.cartonPts.unite} »`);
+  lignes.push(`- 200 m : ${m.ailleurs[0].classes} classés, ${m.ailleurs[0].n} au-dessus de Départemental · 400 m : ${m.ailleurs[1].classes} classés, ${m.ailleurs[1].n} au-dessus`);
+  lignes.push(`- Étage libre désigné : ${m.phraseLibre ?? '—'}`);
+  lignes.push(`- n° 1 : ${m.n1?.name ?? '—'} — statut tranché : **${$('statut').selectedOptions[0].text}**`);
+  lignes.push(`- Pseudonymes : **${$('noms').selectedOptions[0].text}**`);
+  lignes.push('', '### Accord écrit des joueurs nommés', '');
+  const nommes = m.variante === 'plusieurs' ? m.dessus.slice(0, 6) : m.variante === 'personne' ? m.lignes.slice(0, 1) : [m.haut];
+  for (const r of nommes.filter(Boolean)) lignes.push(`- ${r.name} : _(coller ici le message d'accord, avec sa date — ou écrire « compte du créateur »)_`);
+  lignes.push('', '## Le rendu', '');
+  if (rendu) {
+    lignes.push(`- Chemin : ${rendu.chemin}`);
+    lignes.push(`- Fichier : ${rendu.fichier} · ${rendu.type} · ${rendu.poids}`);
+    lignes.push(`- Durée relue dans le fichier : ${rendu.duree}`);
+    lignes.push(`- Images dessinées : ${rendu.images} · intervalle maximal entre deux images : ${rendu.ecart}`);
+  } else lignes.push('- Pas encore filmé au moment où ce bloc a été écrit.');
+  return lignes.join('\n');
+}
+
+/* -------------------------------------------------------------- les sorties */
+
+function telecharger(nom, contenu, type = 'text/plain;charset=utf-8') {
+  const blob = contenu instanceof Blob ? contenu : new Blob([contenu], { type });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nom; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}
+const mo = n => (n / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+const sec = s => s.toFixed(3).replace('.', ',') + ' s';
+const prochaineImage = () => new Promise(r => requestAnimationFrame(r));
+
+// Le MP4 d'abord : c'est le seul qu'un appareil Apple relit une fois
+// telecharge. avc1.640033 (High 5.1) en tete parce qu'un 1440 x 2560 a 60 i/s
+// depasse le niveau que Chrome choisit seul pour un « avc1 » nu.
+const TYPES = ['video/mp4;codecs=avc1.640033', 'video/mp4;codecs=avc1', 'video/mp4',
+               'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+
+async function dureeDe(blob) {
+  const v = document.createElement('video');
+  v.muted = true; v.src = URL.createObjectURL(blob);
+  await new Promise((ok, ko) => { v.onloadedmetadata = ok; v.onerror = ko; });
+  if (!isFinite(v.duration)) {          // un WebM de MediaRecorder n'a pas de duree d'en-tete
+    v.currentTime = 1e9;
+    await new Promise(ok => { v.ondurationchange = () => isFinite(v.duration) && ok(); });
+  }
+  const d = v.duration; URL.revokeObjectURL(v.src);
+  return d;
+}
+
+/* ------------------------------------------- l'encodage image par image */
+
+/* POURQUOI UN SECOND CHEMIN. MediaRecorder horodate a l'heure du mur : c'est
+   ce qu'il faut quand des <video> jouent sous le canvas, et c'est pour cela
+   que le monteur deroule en temps reel. Ici, AUCUNE video ne joue — tout est
+   calcule. Rien n'oblige donc a courir avec l'horloge, et tout y perd : le
+   demarrage de l'encodeur allonge ou ampute le debut (+0,6 s a +1,6 s
+   releves en essai sur une machine sans GPU), et une image lente en saute une.
+
+   VideoEncoder recoit chaque image avec SON horodatage, f / 60 exactement.
+   Le fichier dure 11,000 s par construction, a 60 images par seconde
+   constantes, quelle que soit la vitesse de la machine. Le multiplexeur MP4
+   est ecrit ci-dessous, sans bibliotheque : une piste H.264, un seul bloc
+   d'echantillons, les tables que tout lecteur — Instagram, QuickTime, After
+   Effects — sait lire. */
+
+// H.264 High 5.1 d'abord : c'est le format qu'Instagram et un iPhone relisent
+// sans transcodage. VP9 dans MP4 n'est qu'un repli pour un navigateur sans
+// encodeur H.264 (Chromium sous Linux) — la page le dit en rouge s'il sert.
+const CODECS = ['avc1.640033', 'avc1.4d0033', 'avc1.640034', 'avc1.42003e', 'vp09.00.51.08'];
+
+async function encoder() {
+  if (!window.VideoEncoder) { alert('WebCodecs absent de ce navigateur : utiliser Chrome, ou le chemin MediaRecorder.'); return; }
+  arreterApercu();
+  let config = null;
+  for (const codec of CODECS) {
+    const essai = { codec, width: LS, height: HS, bitrate: 40_000_000, framerate: IPS,
+                    latencyMode: 'quality', bitrateMode: 'variable' };
+    if (codec.startsWith('avc1')) essai.avc = { format: 'avc' };
+    const r = await VideoEncoder.isConfigSupported(essai).catch(() => null);
+    if (r?.supported) { config = r.config; break; }
+  }
+  if (!config) { alert('Aucun encodeur 1440 × 2560 dans ce navigateur : utiliser Chrome, ou la séquence PNG pour After Effects.'); return; }
+  const h264 = config.codec.startsWith('avc1');
+
+  const N = Math.round(DUREE * IPS);
+  const echantillons = [];
+  let avcC = null, erreur = null;
+  const enc = new VideoEncoder({
+    output: (morceau, meta) => {
+      const d = meta?.decoderConfig?.description;
+      if (d && !avcC) avcC = ArrayBuffer.isView(d) ? new Uint8Array(d.buffer, d.byteOffset, d.byteLength).slice() : new Uint8Array(d).slice();
+      const octets = new Uint8Array(morceau.byteLength); morceau.copyTo(octets);
+      echantillons.push({ octets, cle: morceau.type === 'key', ts: morceau.timestamp });
+    },
+    error: e => { erreur = e; },
+  });
+  enc.configure(config);
+  const t0 = performance.now();
+  for (let f = 0; f < N; f++) {
+    dessinerA(f / IPS);
+    const image = new VideoFrame(cv, { timestamp: Math.round(f * 1e6 / IPS), duration: Math.round(1e6 / IPS) });
+    enc.encode(image, { keyFrame: f % IPS === 0 });          // une image cle par seconde
+    image.close();
+    while (enc.encodeQueueSize > 6) await new Promise(r => setTimeout(r, 1));
+    if (f % 15 === 0) { $('rendu').textContent = `encodage : image ${f + 1} / ${N}`; await new Promise(r => setTimeout(r, 0)); }
+    if (erreur) break;
+  }
+  await enc.flush(); enc.close();
+  if (erreur) { $('rendu').innerHTML = `<span class="ko">encodeur : ${escape(erreur.message)}</span>`; return; }
+
+  // Les controles avant d'ecrire : autant d'echantillons que d'images, dans
+  // l'ordre (pas d'image B, donc pas de table de composition), une cle d'abord.
+  const ordre = echantillons.every((x, i) => i === 0 || x.ts > echantillons[i - 1].ts);
+  if (echantillons.length !== N || !ordre || !echantillons[0].cle || (h264 && !avcC)) {
+    $('rendu').innerHTML = `<span class="ko">encodage incomplet : ${echantillons.length} / ${N} images, ordre ${ordre ? 'ok' : 'NON'}, avcC ${avcC ? 'ok' : 'absent'}</span>`;
+    return;
+  }
+  const blob = mp4(echantillons, h264 ? { avcC } : { vp9: config.codec }, LS, HS, IPS);
+  const duree = await dureeDe(blob);
+  rendu = { chemin: 'WebCodecs, image par image', fichier: 'video.mp4',
+            type: `video/mp4 · ${h264 ? 'H.264' : 'VP9 (REPLI — pas pour Instagram ni un iPhone)'} ${config.codec} · ${LS} × ${HS} · ${IPS} i/s constants · 40 Mb/s visés`,
+            poids: mo(blob.size), duree: sec(duree), images: N,
+            ecart: '0 ms — chaque image porte son horodatage exact (f / 60)' };
+  $('rendu').innerHTML = [
+    `<span class="${Math.abs(duree - DUREE) < 0.001 ? 'ok' : 'ko'}">durée relue dans le fichier : ${rendu.duree}</span> (attendu 11,000 s)`,
+    `<span class="${h264 ? 'ok' : 'ko'}">format : ${rendu.type}</span>`,
+    `poids : ${rendu.poids} · ${N} images · ${echantillons.filter(x => x.cle).length} images clés · encodé en ${((performance.now() - t0) / 1000).toFixed(1).replace('.', ',')} s`,
+  ].join('\n');
+  window.__dernierFilm = blob;
+  telecharger('video.mp4', blob);
+}
+
+/** Un MP4 a une piste video H.264 : ftyp, mdat, moov. Les echantillons sont
+ *  au format AVCC (longueurs en tete), celui que rend VideoEncoder avec
+ *  avc.format = 'avc' et celui qu'attend un MP4. */
+function mp4(echantillons, piste, l, h, ips) {
+  const ECHELLE = ips * 100, PAS = 100;            // 6000 unites/s, 100 par image : exact
+  const n = echantillons.length;
+  const dureeMs = Math.round(n * 1000 / ips);
+  const u32 = v => [(v >>> 24) & 255, (v >>> 16) & 255, (v >>> 8) & 255, v & 255];
+  const u16 = v => [(v >>> 8) & 255, v & 255];
+  const txt = t => [...t].map(x => x.charCodeAt(0));
+  const boite = (type, ...contenu) => {
+    const corps = contenu.flatMap(x => x instanceof Uint8Array ? [...x] : x);
+    return [...u32(corps.length + 8), ...txt(type), ...corps];
+  };
+  const plein = (type, version, drapeaux, ...contenu) => boite(type, [version, ...u32(drapeaux).slice(1)], ...contenu);
+  const matrice = [0x00010000, 0, 0, 0, 0x00010000, 0, 0, 0, 0x40000000].flatMap(u32);
+
+  const ftyp = boite('ftyp', txt('isom'), u32(512), txt('isom'), txt('iso2'), txt('avc1'), txt('mp41'));
+  const tailleDonnees = echantillons.reduce((s, x) => s + x.octets.length, 0);
+  const debutDonnees = ftyp.length + 8;            // l'en-tete du mdat fait 8 octets
+
+  const cles = echantillons.map((x, i) => x.cle ? i + 1 : 0).filter(Boolean);
+  // L'entree d'echantillon : avc1 + avcC (rendu par l'encodeur), ou vp09 +
+  // vpcC (compose depuis la chaine de codec : profil, niveau, 8 bits, 4:2:0,
+  // BT.709).
+  const config = piste.avcC ? boite('avcC', piste.avcC) : (() => {
+    const [, prof, niv, prof8] = piste.vp9.split('.').map(Number);
+    return plein('vpcC', 1, 0, [prof, niv, (prof8 << 4) | (1 << 1) | 0, 1, 1, 1], u16(0));
+  })();
+  const avc1 = boite(piste.avcC ? 'avc1' : 'vp09', new Array(6).fill(0), u16(1), new Array(16).fill(0), u16(l), u16(h),
+    u32(0x00480000), u32(0x00480000), u32(0), u16(1), new Array(32).fill(0), u16(0x0018), u16(0xffff),
+    config);
+  const stbl = boite('stbl',
+    plein('stsd', 0, 0, u32(1), avc1),
+    plein('stts', 0, 0, u32(1), u32(n), u32(PAS)),
+    plein('stss', 0, 0, u32(cles.length), cles.flatMap(u32)),
+    plein('stsc', 0, 0, u32(1), u32(1), u32(n), u32(1)),
+    plein('stsz', 0, 0, u32(0), u32(n), echantillons.flatMap(x => u32(x.octets.length))),
+    plein('stco', 0, 0, u32(1), u32(debutDonnees)));
+  const minf = boite('minf',
+    plein('vmhd', 0, 1, u16(0), u16(0), u16(0), u16(0)),
+    boite('dinf', plein('dref', 0, 0, u32(1), plein('url ', 0, 1))),
+    stbl);
+  const mdia = boite('mdia',
+    plein('mdhd', 0, 0, u32(0), u32(0), u32(ECHELLE), u32(n * PAS), u16(0x55c4), u16(0)),
+    plein('hdlr', 0, 0, u32(0), txt('vide'), u32(0), u32(0), u32(0), txt('Sprinter video'), [0]),
+    minf);
+  const trak = boite('trak',
+    plein('tkhd', 0, 3, u32(0), u32(0), u32(1), u32(0), u32(dureeMs), u32(0), u32(0),
+          u16(0), u16(0), u16(0), u16(0), matrice, u32(l << 16), u32(h << 16)),
+    mdia);
+  const moov = boite('moov',
+    plein('mvhd', 0, 0, u32(0), u32(0), u32(1000), u32(dureeMs), u32(0x00010000), u16(0x0100), u16(0),
+          u32(0), u32(0), matrice, new Array(24).fill(0), u32(2)),
+    trak);
+
+  return new Blob([new Uint8Array(ftyp), new Uint8Array([...u32(tailleDonnees + 8), ...txt('mdat')]),
+                   ...echantillons.map(x => x.octets), new Uint8Array(moov)], { type: 'video/mp4' });
+}
+
+async function filmer() {
+  if (document.visibilityState !== 'visible') { alert('L’onglet doit rester visible pendant les 11 s.'); return; }
+  arreterApercu();
+  const type = TYPES.find(t => MediaRecorder.isTypeSupported(t));
+  const flux = cv.captureStream(IPS);                    // flux continu, jamais captureStream(0)
+  const rec = new MediaRecorder(flux, { mimeType: type, videoBitsPerSecond: 40_000_000 });
+  const morceaux = [];
+  rec.ondataavailable = ev => ev.data.size && morceaux.push(ev.data);
+  const fini = new Promise(r => { rec.onstop = r; });
+  $('rendu').textContent = `filmage en temps réel (${type}) — ne pas changer d'onglet…`;
+
+  // Le demarrage de l'encodeur se paie ici : selon la machine, une premiere
+  // image tenue un peu trop longtemps, ou quelques images perdues au debut.
+  // La duree relue plus bas le dit, en rouge si l'ecart depasse 0,1 s. C'est
+  // la raison pour laquelle encoder() est le chemin principal de ce montage.
+  dessinerA(0);
+  rec.start();
+  const temps = [];
+  await new Promise(resolve => {
+    let t0 = null;
+    const pas = now => {
+      if (t0 == null) t0 = now;
+      const brut = (now - t0) / 1000;
+      // La derniere image se redessine pendant une image de plus : captureStream
+      // n'emet que sur un canvas modifie, et le fichier s'arreterait sinon a
+      // l'horodatage de la derniere image — une image trop court.
+      dessinerA(Math.min(brut, DUREE)); temps.push(now);
+      $('tps').textContent = Math.min(brut, DUREE).toFixed(2).replace('.', ',') + ' s';
+      if (brut >= DUREE + 1 / IPS) return resolve();
+      requestAnimationFrame(pas);
+    };
+    requestAnimationFrame(pas);
+  });
+  rec.stop(); await fini;
+  flux.getTracks().forEach(tr => tr.stop());
+
+  const blob = new Blob(morceaux, { type: type.split(';')[0] });
+  const ext = type.startsWith('video/mp4') ? 'mp4' : 'webm';
+  const duree = await dureeDe(blob);
+  let ecartMax = 0;
+  for (let i = 1; i < temps.length; i++) ecartMax = Math.max(ecartMax, temps[i] - temps[i - 1]);
+  rendu = { chemin: 'MediaRecorder, temps réel (secours)', fichier: `video.${ext}`, type, poids: mo(blob.size),
+            duree: sec(duree), images: temps.length,
+            ecart: `${ecartMax.toFixed(1).replace('.', ',')} ms (idéal ${(1000 / IPS).toFixed(1).replace('.', ',')} ms)` };
+  $('rendu').innerHTML = [
+    `<span class="${Math.abs(duree - DUREE) < 0.1 ? 'ok' : 'ko'}">durée relue : ${rendu.duree}</span> (attendu 11,000 s)`,
+    `format : ${type} · ${LS} × ${HS} · poids : ${rendu.poids}`,
+    `images dessinées : ${rendu.images} · intervalle max : ${rendu.ecart}`,
+  ].join('\n');
+  telecharger(`video.${ext}`, blob);
+}
+
+/** La sequence PNG, image par image, pour After Effects. Ici rien ne court en
+ *  temps reel : chaque image est l'instant f / 60, exactement, et AE encode
+ *  ensuite a la cadence et au debit qu'on lui donne. Aucune video source,
+ *  donc aucun index de recherche a craindre. */
+async function sequence() {
+  if (!window.showDirectoryPicker) { alert('Ce navigateur ne sait pas écrire dans un dossier : Chrome ou Edge.'); return; }
+  arreterApercu();
+  const dossier = await window.showDirectoryPicker({ mode: 'readwrite', id: 'seul-en-regional' });
+  const sous = await dossier.getDirectoryHandle('sequence-png', { create: true });
+  const N = Math.round(DUREE * IPS);
+  const t0 = performance.now();
+  for (let f = 0; f < N; f++) {
+    dessinerA(f / IPS);
+    const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+    const fh = await sous.getFileHandle(`seul-en-regional_${String(f).padStart(4, '0')}.png`, { create: true });
+    const w = await fh.createWritable(); await w.write(blob); await w.close();
+    if (f % 10 === 0) $('rendu').textContent = `séquence : ${f + 1} / ${N}`;
+  }
+  rendu = { chemin: 'séquence PNG → After Effects (assembler-ae.jsx)', fichier: 'video.mp4 (rendu AE)',
+            type: `PNG 1440 × 2560, ${N} images à ${IPS} i/s`, poids: '—', duree: `${sec(N / IPS)} par construction`,
+            images: N, ecart: '0 ms — chaque image est calculée à son instant exact' };
+  $('rendu').textContent = `séquence écrite : ${N} images dans sequence-png/ en ${((performance.now() - t0) / 1000).toFixed(0)} s.\nLancer assembler-ae.jsx dans After Effects (Fichier → Scripts → Exécuter le fichier de script).`;
+}
+
+/* ------------------------------------------------------------------ l'apercu */
+
+let lecture = null;
+function arreterApercu() { if (lecture) cancelAnimationFrame(lecture); lecture = null; $('jouer').textContent = 'Lire'; }
+$('jouer').onclick = () => {
+  if (lecture) return arreterApercu();
+  if (!M) return;
+  $('jouer').textContent = 'Arrêter';
+  const depart = performance.now() - Number($('tete').value) * 1000;
+  const pas = now => {
+    let t = (now - depart) / 1000;
+    if (t >= DUREE) { t = DUREE; dessinerA(t); $('tete').value = t; arreterApercu(); return; }
+    dessinerA(t); $('tete').value = t; $('tps').textContent = t.toFixed(2).replace('.', ',') + ' s';
+    lecture = requestAnimationFrame(pas);
+  };
+  if (Number($('tete').value) >= DUREE) $('tete').value = 0;
+  lecture = requestAnimationFrame(pas);
+};
+$('tete').oninput = () => { arreterApercu(); const t = Number($('tete').value); if (M) dessinerA(t); $('tps').textContent = t.toFixed(2).replace('.', ',') + ' s'; };
+
+/* ------------------------------------------------------------------ le depart */
+
+let fontesOk = false, fontesDetail = '…';
+async function fontes() {
+  const voulues = ['500 40px Outfit', '700 40px Outfit', '800 40px Outfit', "700 40px 'Space Mono'"];
+  const chargees = await Promise.all(voulues.map(f => document.fonts.load(f, 'ÉÀ0123456789')));
+  fontesOk = chargees.every(x => x.length > 0);
+  fontesDetail = voulues.map((f, i) => `${f.replace(' 40px', '')} ${chargees[i].length ? 'ok' : 'ABSENTE'}`).join(' · ');
+}
+
+function tableau(m) {
+  const rangees = m.l100.classement.map(r => `<tr><td>${r.rank}</td><td>${m.retires.includes(r) ? '<s>' : ''}${escape(r.name)}${m.retires.includes(r) ? '</s>' : ''}</td><td>${m.division(r)}</td><td>${r.lp}</td><td>${r.wins}–${r.losses}${r.draws ? '–' + r.draws : ''}</td></tr>`);
+  $('table').innerHTML = `<table><tr><th>#</th><th>nom</th><th>division</th><th>PL</th><th>V–D</th></tr>${rangees.join('')}</table>`;
+}
+const escape = s => String(s).replace(/[&<>"]/g, x => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[x]));
+
+function recomposer() {
+  if (!lectures) return;
+  M = composer(lectures, choix());
+  if (!M.erreurs.length || M.l100) tableau(M);
+  controler();
+}
+
+async function demarrer() {
+  await fontes();
+  try {
+    if (ESSAI) lectures = lectureEssai();
+    else if (ARCHIVE) lectures = (await (await fetch(ARCHIVE, { cache: 'no-store' })).json()).lectures;
+    else lectures = [];
+    if (!ESSAI && !ARCHIVE) for (const ch of ['/duels', '/duels?epreuve=200', '/duels?epreuve=400']) lectures.push(await lire(ch));
+    $('lecture').innerHTML = lectures.map(l => `GET ${l.chemin}  →  HTTP ${l.statut} · ${(l.texte.length / 1024).toFixed(1)} ko · ${heureParis(l.heure)}`).join('\n')
+      + (ESSAI ? '\n<span class="ko">MODE ESSAI — données fictives</span>' : ARCHIVE ? `\n<span class="att">lecture archivée : ${ARCHIVE}</span>` : '');
+  } catch (err) {
+    $('lecture').innerHTML = `<span class="ko">lecture impossible : ${escape(err.message)}</span>\nAucun chiffre ne s'invente : sans lecture, rien ne se monte.`;
+    controler();
+    return;
+  }
+  // Le n° 1 dans la liste du createur : on le signale, on ne tranche pas.
+  recomposer();
+}
+
+$('statut').onchange = recomposer;
+$('noms').onchange = recomposer;
+$('filmer').onclick = filmer;
+$('encoder').onclick = encoder;
+$('sequence').onclick = sequence;
+$('couverture').onclick = () => {
+  dessinerCouverture(M);
+  cv.toBlob(b => { telecharger('couverture.png', b); dessinerA(Number($('tete').value)); }, 'image/png');
+};
+$('legende').onclick = () => telecharger('legende.txt', legende(M));
+$('srt').onclick = () => telecharger('sous-titres.srt', srt(M));
+$('archive').onclick = () => telecharger('lecture-duels.json', JSON.stringify({ lectures }, null, 1), 'application/json');
+$('lisezmoi').onclick = async () => {
+  const modele = await (await fetch('./LISEZMOI.md', { cache: 'no-store' })).text();
+  const bloc = `<!-- LECTURE:DEBUT -->\n${blocLecture(M)}\n<!-- LECTURE:FIN -->`;
+  // Une fonction et non une chaine : un pseudonyme qui contient « $& » ne doit rien remplacer.
+  telecharger('LISEZMOI.md', modele.replace(/<!-- LECTURE:DEBUT -->[\s\S]*<!-- LECTURE:FIN -->/, () => bloc), 'text/markdown;charset=utf-8');
+};
+
+// Pour le pilotage sans tete (verification de mise en page) : rien de plus.
+window.__monteur = { dessinerA, dessinerCouverture: () => dessinerCouverture(M), modele: () => M,
+                     legende: () => legende(M), srt: () => srt(M), controler, blocLecture: () => blocLecture(M),
+                     choisir: (statut, noms) => { $('statut').value = statut; if (noms) $('noms').value = noms; recomposer(); } };
+demarrer().then(() => { document.documentElement.dataset.pret = '1'; });
+</script>
+</body>
+</html>
