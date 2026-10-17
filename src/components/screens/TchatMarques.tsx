@@ -29,8 +29,8 @@ import {
    Le tchat se relit toutes les quatre secondes tant qu'il est ouvert, et
    tout de suite quand la boite sonne (un prive, une designation).
 
-   Les J'AIME (17/10) : le coeur sous chaque message d'un autre, ou deux
-   touches sur le message. Le compteur se voit aussi sous les siens.
+   Les J'AIME (17/10) : le coeur sous chaque message d'un autre, ou un
+   double tap sur le message, qui fait eclore un grand coeur. Le compteur se voit aussi sous les siens.
 
    Le compte SPRINTERGAME (16/10) : la voix du jeu, d'aucun camp. Ses messages
    portent un badge et une teinte a eux ; on ne peut ni lui repondre, ni le
@@ -161,10 +161,26 @@ function Ligne({ m, fr, onMenu, onAimer }: { m: Message; fr: boolean; onMenu: (m
   // mais on peut l'aimer
   const touchable = !m.a_moi && !m.officiel;
   const n = m.aimes || 0;
+  // Le double tap (17/10) : deux touches rapprochees sur le message l'aiment,
+  // au doigt comme a la souris — le `dblclick` ne vient pas sur tous les
+  // telephones. Il aime seulement, comme ailleurs : le coeur, lui, retire.
+  const derniere = useRef(0);
+  const [eclat, setEclat] = useState(0);
+  const taper = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    const t = e.timeStamp;
+    if (t - derniere.current < 320) {
+      derniere.current = 0;
+      window.getSelection()?.removeAllRanges();
+      if (m.a_moi) return;
+      setEclat(x => x + 1);
+      if (!m.aime) onAimer(m);
+    } else derniere.current = t;
+  };
   return (
     <motion.li initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
-      onDoubleClick={() => { if (!m.a_moi && !m.aime) onAimer(m); }}
-      className={`group flex flex-col px-2.5 py-1.5 rounded-xl text-sm leading-snug
+      onPointerUp={taper}
+      className={`relative touch-manipulation group flex flex-col px-2.5 py-1.5 rounded-xl text-sm leading-snug
                   ${m.officiel ? 'bg-[#5CC8FF]/10 border border-[#5CC8FF]/35'
                     : vise ? 'bg-primary/15 border border-primary/40' : m.a_moi ? 'bg-white/5' : ''}`}>
       <span className="flex items-baseline gap-1.5 text-[11px] min-w-0">
@@ -186,6 +202,17 @@ function Ligne({ m, fr, onMenu, onAimer }: { m: Message; fr: boolean; onMenu: (m
         )}
         <span className="ml-auto text-muted-foreground/60 shrink-0">{heure(m.quand, fr)}</span>
       </span>
+      <AnimatePresence>
+        {eclat > 0 && (
+          <motion.span key={eclat} aria-hidden
+            initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: [0.3, 1.25, 1], opacity: [0, 1, 1] }}
+            exit={{ scale: 1.4, opacity: 0 }} transition={{ duration: 0.35 }}
+            onAnimationComplete={() => setTimeout(() => setEclat(x => (x === eclat ? 0 : x)), 250)}
+            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[#FF4D6D]">
+            <Heart className="w-9 h-9 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]" fill="currentColor" />
+          </motion.span>
+        )}
+      </AnimatePresence>
       <span className="flex items-end gap-2">
         <span className="flex-1 min-w-0 break-words whitespace-pre-wrap text-foreground/90">{m.texte}</span>
         {(!m.a_moi || n > 0) && (
@@ -738,8 +765,8 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                   </button>
                 </div>
                 <p className="text-[9px] text-muted-foreground/60 text-center leading-snug">
-                  {fr ? 'Pas de lien, pas de contact, pas d’insulte. Touche un nom pour répondre, écrire en privé, signaler ou bloquer. Le cœur pour aimer.'
-                      : 'No links, no contacts, no insults. Tap a name to reply, write privately, report or block. The heart to like.'}
+                  {fr ? 'Pas de lien, pas de contact, pas d’insulte. Touche un nom pour répondre, écrire en privé, signaler ou bloquer. Double tap pour aimer.'
+                      : 'No links, no contacts, no insults. Tap a name to reply, write privately, report or block. Double-tap to like.'}
                 </p>
               </div>
             )}
