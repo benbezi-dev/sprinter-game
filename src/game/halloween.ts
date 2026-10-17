@@ -420,7 +420,7 @@ export function pasDuMolosse(joueur: any) {
   if (c.demiFoulee === undefined) c.demiFoulee = demi;
   if (demi !== c.demiFoulee) {
     c.demiFoulee = demi;
-    // On l'ENTEND avant de la sentir : ses pattes portent jusqu'a vingt
+    // On l'ENTEND avant de la sentir : son souffle porte jusqu'a vingt
     // metres (halloween-traque.ts), la secousse ne commence qu'a douze.
     appuiDeLaBete(demi % 2 === 0, c.ecart);
     if (pres > 0 && c.secousses) {

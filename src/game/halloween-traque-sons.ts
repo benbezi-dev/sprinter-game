@@ -19,12 +19,11 @@
 // CE QU'UN TELEPHONE NE JOUE PAS. Un haut-parleur de telephone ne rend presque
 // rien sous deux cents hertz : un grondement a soixante hertz y est muet. Chaque
 // son grave porte donc aussi ce qu'un telephone sait jouer — le raclement
-// autour de six cents hertz, les harmoniques du coup, la terre sous les
-// pattes —, et le grave n'est la que pour qui porte un casque.
+// autour de six cents hertz, les harmoniques du coup, le choc dans la
+// poitrine —, et le grave n'est la que pour qui porte un casque.
 //
-// LES NEUF SONS, dans l'ordre ou le joueur les rencontre :
+// LES HUIT SONS, dans l'ordre ou le joueur les rencontre :
 //   grondement  la gorge de la bete, en boucle, qui monte quand elle approche
-//   patte       un appui du galop (deux variantes, pour ne pas faire mitraillette)
 //   souffle     le halètement, cale sur la foulee (inspire et expire)
 //   coeur       le coeur du coureur, qui s'emballe
 //   arrivee     LE SIGNAL : elle arrive — une montee dissonante qui se coupe net
@@ -33,10 +32,14 @@
 //   morsure     la machoire qui claque, et la bete qui secoue
 //   hurlement   elle renonce derriere la ligne, et hurle
 //   salle       la reponse d'un lieu vide, pour la reverberation
+//
+// IL Y AVAIT UNE PATTE, UN APPUI DU GALOP, et il n'y en a plus (17/10) : deux
+// coups par foulee pendant toute la course, l'oreille les prenait pour les pas
+// du coureur. Le souffle suffit a dire la foulee de la bete.
 
 /** Les sons, et ce qu'on attend de chacun : sa duree en secondes. */
 export const DUREES = {
-  grondement: 2.0, patte: 0.16, souffleIn: 0.16, souffleOut: 0.2, coeur: 0.5,
+  grondement: 2.0, souffleIn: 0.16, souffleOut: 0.2, coeur: 0.5,
   arrivee: 2.8, rage: 0.95, morsure: 1.3, hurlement: 3.4, salle: 2.4,
 } as const;
 
@@ -129,28 +132,6 @@ export function grondement(sr: number): Float32Array {
       const a = i / nX;
       out[i] = brut[i] * Math.sin(a * Math.PI / 2) + brut[nL + i] * Math.cos(a * Math.PI / 2);
     } else out[i] = brut[i];
-  }
-  return normaliser(out, 0.9);
-}
-
-/* ===========================================================================
-   UN APPUI DU GALOP
-   ===========================================================================
-   Un coup sourd qui tombe (le poids), la terre qui crisse (ce qu'un telephone
-   entend), et la griffe qui accroche, trois millisecondes. */
-export function patte(sr: number, graine: number): Float32Array {
-  const n = Math.round(DUREES.patte * sr), out = new Float32Array(n);
-  const bruit = alea(graine);
-  const terre = new Filtre('bande', 1500 + (graine % 7) * 120, 0.9, sr);
-  let ph = 0;
-  for (let i = 0; i < n; i++) {
-    const t = i / sr;
-    const f = 45 + 75 * Math.exp(-t / 0.018);
-    ph += f / sr;
-    const coup = (Math.sin(TAU * ph) + 0.4 * Math.sin(TAU * ph * 2.7)) * Math.exp(-t / 0.035);
-    const sol = terre.pas(bruit()) * Math.exp(-t / 0.024) * 2.2;
-    const griffe = t < 0.006 ? bruit() * 0.7 * (1 - t / 0.006) : 0;
-    out[i] = (coup * 0.9 + sol + griffe) * Math.min(1, t / 0.001);
   }
   return normaliser(out, 0.9);
 }

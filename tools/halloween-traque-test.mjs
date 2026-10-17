@@ -20,7 +20,7 @@
 //   node tools/halloween-traque-test.mjs
 //   node tools/halloween-traque-test.mjs /chemin/vers/un/dossier
 
-import { writeFileSync, mkdirSync } from 'fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import * as S from '../src/game/halloween-traque-sons.ts';
 
@@ -31,7 +31,7 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
 const sr = 48000;
 const t0 = performance.now();
 const sons = {
-  grondement: S.grondement(sr), patteA: S.patte(sr, 17), patteB: S.patte(sr, 29),
+  grondement: S.grondement(sr),
   souffleIn: S.souffle(sr, false), souffleOut: S.souffle(sr, true), coeur: S.coeur(sr),
   arrivee: S.arrivee(sr), rage: S.rage(sr), morsure: S.morsure(sr), hurlement: S.hurlement(sr),
 };
@@ -50,7 +50,7 @@ ok('la salle a deux canaux sains',
 
 titre('LES DUREES ANNONCEES');
 const attendues = {
-  grondement: 'grondement', patteA: 'patte', patteB: 'patte', souffleIn: 'souffleIn',
+  grondement: 'grondement', souffleIn: 'souffleIn',
   souffleOut: 'souffleOut', coeur: 'coeur', arrivee: 'arrivee', rage: 'rage',
   morsure: 'morsure', hurlement: 'hurlement',
 };
@@ -78,14 +78,24 @@ const partHaute = a => {
   for (const x of a) { y = al * (y + x - xp); xp = x; eH += y * y; eT += x * x; }
   return eH / eT;
 };
-for (const [k, min] of [['grondement', 0.25], ['patteA', 0.25], ['arrivee', 0.25],
+for (const [k, min] of [['grondement', 0.25], ['arrivee', 0.25],
                         ['rage', 0.4], ['morsure', 0.35], ['souffleOut', 0.4]]) {
   const p = partHaute(sons[k]);
   ok(`${k} : ${(p * 100).toFixed(0)} % de son energie au-dessus de 300 Hz (au moins ${min * 100} %)`, p >= min);
 }
 
+titre('PAS DE BRUIT DE PAS');
+// RETIRES LE 17/10 : la patte de la bete, deux coups par foulee pendant toute
+// la course, se faisait prendre pour les pas du coureur. Ni le son ni sa
+// lecture ne doivent revenir sans qu'on le decide.
+{
+  const lecteur = readFileSync(new URL('../src/game/halloween-traque.ts', import.meta.url), 'utf8');
+  ok('la fabrique ne fait plus de patte', !('patte' in S));
+  ok('et le lecteur n en joue aucune', !/molosse-patte|SON\.patte/.test(lecteur));
+}
+
 titre('LA FABRIQUE TIENT DANS SON BUDGET');
-ok(`les dix sons et la salle en ${duree.toFixed(0)} ms (moins de 600 ms ici, quatre fois plus sur un telephone)`,
+ok(`les huit sons et la salle en ${duree.toFixed(0)} ms (moins de 600 ms ici, quatre fois plus sur un telephone)`,
    duree < 600);
 
 /* ------------------------------------------------------------- les apercus */
@@ -139,8 +149,6 @@ if (dossier) {
       if (d !== demi) {
         demi = d;
         const lourd = d % 2 === 0;
-        poser(Math.random() < 0.5 ? sons.patteA : sons.patteB, t,
-              (lourd ? 1 : 0.62) * (0.12 + 0.78 * audible * audible), 0.92 + Math.random() * 0.16);
         if (lourd && audible > 0.3) {
           expire = !expire;
           poser(expire ? sons.souffleOut : sons.souffleIn, t, 0.55 * Math.pow(audible, 1.6));
