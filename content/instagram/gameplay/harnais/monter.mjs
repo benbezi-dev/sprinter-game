@@ -2,7 +2,7 @@
  * Le monteur.
  *
  * Il prend une suite d'images numerotees (le rush), un conducteur, et rend un
- * MP4 1080 x 1920 H.264. Trois partis pris, tous dictes par la charte :
+ * MP4 1440 x 2560 (2K) H.264. Trois partis pris, tous dictes par la charte :
  *
  *   · LA POUSSEE. Chaque plan monte lentement d'echelle, ou pousse vers un
  *     endroit precis — le chrono, le drapeau, la fleche du classement. Un plan
@@ -19,7 +19,7 @@ import { mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const FFMPEG = '/Volumes/MUSIQUE/BENBEZI/Sprinter/assets-stores/promo/node_modules/ffmpeg-static/ffmpeg';
-const L = 1080, H = 1920;
+const L = 1440, H = 2560;   // 2K, le cadre de base.mjs
 
 const ff = (args, muet = true) =>
   execFileSync(FFMPEG, ['-hide_banner', '-loglevel', muet ? 'error' : 'info', '-y', ...args],
@@ -127,7 +127,7 @@ export function monter({ nom, rush, ips = 30, plans, cartons = [], fin = null,
     // seconde. Assez pour que l'oeil voie arriver le texte, trop peu pour
     // qu'il attende la fin du mouvement avant de lire.
     const glisse = c.entree === 'fixe' ? '0'
-      : `${c.entree === 'haut' ? '-' : ''}28*(1-min(1\\,(t-${c.de.toFixed(3)})/0.26))`;
+      : `${c.entree === 'haut' ? '-' : ''}${Math.round(28 * L / 1080)}*(1-min(1\\,(t-${c.de.toFixed(3)})/0.26))`;
     filtres.push(
       `[${courant}][c${k}]overlay=x=0:y='${glisse}':` +
       `enable='between(t,${c.de.toFixed(3)},${(c.de + d).toFixed(3)})':` +
@@ -153,7 +153,7 @@ export function monter({ nom, rush, ips = 30, plans, cartons = [], fin = null,
     filtres.push(`[${courant}]format=yuv420p${noir}[out]`);
     ff([...entrees, '-filter_complex', filtres.join(';'), '-map', '[out]',
         '-c:v', 'libx264', '-preset', 'slow', '-crf', '19', '-profile:v', 'high',
-        '-level', '4.0', '-movflags', '+faststart', '-r', String(ips), final]);
+        '-level', '5.1', '-movflags', '+faststart', '-r', String(ips), final]);
   } else {
     ff(['-i', brut, '-c:v', 'libx264', '-preset', 'slow', '-crf', '19',
         '-pix_fmt', 'yuv420p', '-movflags', '+faststart', final]);

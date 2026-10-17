@@ -20,7 +20,7 @@ import json, sys
 from pathlib import Path
 from PIL import Image
 
-L, H = 1080, 1920
+L, H = 1440, 2560  # 2K, le cadre de base.mjs
 
 
 def douceur(a):

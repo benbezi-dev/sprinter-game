@@ -4,6 +4,9 @@
 Muette : poser une musique ou un son tendance au montage.
 `couverture-1080x1920.png` — image de couverture proposée pour le post.
 
+Le prochain rendu sort en 2K : `sprinter-nouveautes-1440x2560.mp4` (scène en
+1080×1920 photographiée à l'échelle 4/3, réglable par `SPRINTER_ECHELLE`).
+
 ## Refabriquer la vidéo
 
 `source-video/video.html` est le film entier : une scène par plan, animée par
