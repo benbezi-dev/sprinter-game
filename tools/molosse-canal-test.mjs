@@ -234,9 +234,10 @@ const jsProd = texteDe(dossierProd, fichiersProd);
 const jsTest = texteDe(dossierTest, fichiersTest);
 
 // Des noms de nuits qui n'existent nulle part ailleurs dans le jeu.
-const NUITS_SECRETES = ['La ruelle', 'Le caveau', 'La lune rousse', 'Le glas',
-                        'La terre remuee', 'La terre remuée', 'LE CALENDRIER',
-                        'halloween2026', '/now'];
+// (17/10 : les nuits portent les noms des chapitres du recit, et le recit
+// ses propres noms — Lucien Marchal, la ruelle des Tanneurs.)
+const NUITS_SECRETES = ['La ruelle', 'Le registre', 'Lucien Marchal', 'Tanneurs',
+                        'LE CALENDRIER', 'halloween2026', '/now'];
 // LES OUTILS DU TESTEUR NE PARTENT JAMAIS, mode ouvert ou non : « MODE TEST »
 // publie serait le plus embarrassant des trois. Leurs mots vivent a part dans
 // halloween-mots.ts, derriere EST_TEST.

@@ -1,7 +1,9 @@
 // LA NUIT DU MOLOSSE — ce qu'on raconte apres la course.
 //
-// Quatorze scenettes : six pour les nuits tenues, huit pour les morsures. Elles
-// sont le vrai contenu du mode — la course dure onze secondes, la scene reste.
+// Treize chapitres, un par nuit tenue, et quatre cauchemars pour les morsures
+// (voir LE RECIT). Ils sont le vrai contenu du mode — la course dure onze
+// secondes, l'histoire reste, et c'est elle qu'on revient chercher le
+// lendemain.
 //
 // ELLES FONT PEUR (08/10, « je veux qu'il fasse peur »). La premiere serie
 // faisait rire : un facteur promu, un short refuse par les commissaires. Elle
@@ -55,130 +57,289 @@ function i(): 0 | 1 { return SprinterI18N.index() as 0 | 1; }
 export function dit(paire: [string, string]): string { return paire[i()]; }
 
 /* ---------------------------------------------------------------------------
-   IL S'EN EST SORTI — les nuits tenues
+   LE RECIT — un chapitre par nuit tenue
    ---------------------------------------------------------------------------
-   REECRITES LE 09/10, avec les morsures. La serie d'avant faisait temoigner
-   un tiers — un facteur, un radar, un entraineur — et le detour amusait
-   avant d'inquieter. Ici, rien que lui : il a passe la ligne avant la bete,
-   et la derniere ligne dit qu'elle n'en a pas fini — elle l'attend, elle le
-   double, elle est deja dans la chambre. Meme regle que les morsures :
-   aucune blessure, et le froid sur la derniere ligne.
+   REECRIT LE 17/10 (« une vraie histoire, a travers les cartes, qui donne
+   envie de revenir chaque jour pour la suite comme une recompense »).
+
+   Les six scenettes de victoire etaient tirees au hasard : la nuit 9 pouvait
+   raconter la meme chose que la nuit 2, et rien ne reliait un soir au
+   suivant. Elles sont remplacees par TREIZE CHAPITRES, dans l'ordre, un par
+   nuit. Tenir la nuit N, c'est lire le chapitre N — et c'est la seule facon de
+   le lire. Le calendrier ouvre une nuit par jour : l'histoire avance donc
+   d'un chapitre par jour, et chaque chapitre se termine sur ce qui manque
+   pour comprendre (`accroche` du suivant), affiche avec le compte a rebours.
+
+   L'HISTOIRE. Le joueur coupe chaque soir par la ruelle des Tanneurs. Une
+   bete le poursuit ; elle court au temps exact d'un sprinteur de 1913,
+   Lucien Marchal, disparu dans cette ruelle le 31 octobre, a deux metres de
+   sa treizieme ligne d'arrivee. Son chien, Argos, recourt depuis cette
+   course chaque nuit, en attendant que quelqu'un la finisse devant lui. La
+   regle du mode (la bete passe la ligne a la seconde pres) devient le coeur
+   de l'intrigue : ce sont les temps de Lucien.
+
+   LES REGLES D'ECRITURE DU 08/10 TIENNENT TOUJOURS : le froid sur la derniere
+   ligne, jamais de blessure montree, rien qui fasse rire. Le recit passe au
+   TUTOIEMENT : l'ecran dit deja « TU ES PASSE » au-dessus, et une histoire
+   qu'on gagne se lit mieux a la deuxieme personne. Lignes de 57 signes au
+   plus (au-dela, un mot reste seul a 375 px).
+
+   LES IMAGES. Les dix cartes rendues dans Unity (assets/molosse-cartes) sont
+   distribuees sur les chapitres dont elles montrent la scene ; `cle` est le
+   nom du fichier. Les chapitres 3, 7 et 13 n'ont pas d'image et retombent
+   sur la scene dessinee.
 --------------------------------------------------------------------------- */
-export const TENUES: readonly Scene[] = [
+export type Chapitre = Scene & {
+  n: number;
+  /** Ce qu'on sait du chapitre AVANT de l'avoir gagne : la promesse. */
+  accroche: [string, string];
+};
+
+const CH = (n: number): [string, string] => [`CHAPITRE ${n}`, `CHAPTER ${n}`];
+
+export const CHAPITRES: readonly Chapitre[] = [
   {
-    cle: 'attente',
-    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
-    titre: ['L’ATTENTE', 'THE WAIT'],
+    n: 1, cle: 'empreintes', sur: CH(1),
+    titre: ['LA RUELLE', 'THE ALLEY'],
+    accroche: ['Quelque chose court dans la ruelle, la nuit.',
+               'Something runs in the alley at night.'],
     lignes: [
-      ['Il s\'en est sorti. Cette nuit.',
-       'He got away. Tonight.'],
-      ['La bête ne l\'a pas suivi au-delà de la ligne.',
-       'The beast did not follow him past the line.'],
-      ['Elle s\'est couchée là, la tête sur les pattes.',
-       'It lay down there, its head on its paws.'],
-      ['Elle sait qu\'il reviendra demain soir.',
-       'It knows he will come back tomorrow night.'],
+      ['Chaque soir, tu coupes par la ruelle des Tanneurs.',
+       'Every evening you cut through Tanners\' Alley.'],
+      ['Ce soir, quelque chose t\'a couru après. Tu l\'as semé.',
+       'Tonight something ran after you. You lost it.'],
+      ['Ses empreintes repartaient vers une porte murée.',
+       'Its prints led back to a bricked-up door.'],
+      ['Sur la plaque, une date : 31 octobre 1913.',
+       'On the plaque, a date: 31 October 1913.'],
     ],
   },
   {
-    cle: 'chrono',
-    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
+    n: 2, cle: 'chrono', sur: CH(2),
     titre: ['LE CHRONO', 'THE WATCH'],
+    accroche: ['Ta montre a vu quelque chose que tu n\'as pas vu.',
+               'Your watch saw something you didn\'t.'],
     lignes: [
-      ['Il a battu son meilleur temps cette nuit-là.',
-       'He beat his best time that night.'],
-      ['Sur sa montre, un second temps s\'est enregistré.',
-       'His watch logged a second time.'],
-      ['Un dixième de seconde derrière le sien.',
-       'A tenth of a second behind his own.'],
-      ['Il courait seul.',
-       'He was running alone.'],
+      ['Ce soir, ta montre a enregistré deux temps.',
+       'Tonight your watch logged two times.'],
+      ['Le tien. Et un second, un dixième derrière.',
+       'Yours. And another, a tenth behind.'],
+      ['La bête ne court pas au hasard. Elle court un temps.',
+       'The beast doesn\'t run at random. It runs a time.'],
+      ['Le temps de quelqu\'un qui courait ici avant toi.',
+       'The time of someone who ran here before you.'],
     ],
   },
   {
-    cle: 'porte',
-    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
-    titre: ['LA PORTE', 'THE DOOR'],
+    n: 3, cle: 'registre', sur: CH(3),
+    titre: ['LE REGISTRE', 'THE LEDGER'],
+    accroche: ['Un nom, dans le vieux registre du club.',
+               'A name, in the club\'s old ledger.'],
     lignes: [
-      ['Il a couru jusque chez lui sans se retourner.',
-       'He ran all the way home without looking back.'],
-      ['Il a tiré le verrou et éteint toutes les lumières.',
-       'He bolted the door and switched off every light.'],
-      ['Dans le noir, il a entendu un souffle. Pas dehors.',
-       'In the dark he heard breathing. Not outside.'],
-      ['Sous son lit.',
-       'Under his bed.'],
+      ['Au club, tu as ouvert le registre des courses de 1913.',
+       'At the club, you opened the 1913 race ledger.'],
+      ['Une seule page tenait encore. Un seul nom :',
+       'Only one page was left. Only one name:'],
+      ['« Lucien Marchal. 100 m en 9″00. Et son chien. »',
+       '“Lucien Marchal. 100 m in 9.00. And his dog.”'],
+      ['En marge, d\'une autre encre : « Il court encore. »',
+       'In the margin, in other ink: “He is still running.”'],
     ],
   },
   {
-    cle: 'empreintes',
-    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
-    titre: ['LES EMPREINTES', 'THE PRINTS'],
+    n: 4, cle: 'faim', sur: CH(4),
+    titre: ['LA PHOTO', 'THE PHOTOGRAPH'],
+    accroche: ['Le journal du 1er novembre 1913.',
+               'The newspaper of 1 November 1913.'],
     lignes: [
-      ['Au matin, il y avait des empreintes dans la cour.',
-       'In the morning there were prints in the yard.'],
-      ['Elles allaient jusqu\'à sa fenêtre, et s\'arrêtaient.',
-       'They led up to his window, and stopped.'],
-      ['Quelque chose était resté là, debout, à regarder.',
-       'Something had stood there, watching.'],
-      ['Toute la nuit.',
-       'All night long.'],
+      ['Aux archives, le journal du 1er novembre 1913.',
+       'In the archives: the paper of 1 November 1913.'],
+      ['« Le sprinteur Lucien Marchal a disparu cette nuit. »',
+       '“Sprinter Lucien Marchal vanished last night.”'],
+      ['Dessous, une photo de la ruelle et de ses chiens.',
+       'Below, a photo of the alley and its dogs.'],
+      ['Au fond de la photo, quelqu\'un te ressemble.',
+       'At the back of the photo, someone looks like you.'],
     ],
   },
   {
-    cle: 'bus',
-    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
-    titre: ['LE DERNIER BUS', 'THE LAST BUS'],
-    lignes: [
-      ['Dans le dernier bus, il a enfin repris son souffle.',
-       'On the last bus he finally caught his breath.'],
-      ['Il a posé son front contre la vitre froide.',
-       'He rested his forehead on the cold window.'],
-      ['Dehors, quelque chose courait à côté du bus.',
-       'Outside, something was running beside the bus.'],
-      ['À quatre pattes. Aussi vite que lui.',
-       'On all fours. Just as fast.'],
-    ],
-  },
-  {
-    cle: 'reflet',
-    sur: ['IL S\'EN EST SORTI', 'HE GOT AWAY'],
+    n: 5, cle: 'reflet', sur: CH(5),
     titre: ['LE REFLET', 'THE REFLECTION'],
+    accroche: ['La vitrine du vieux tailleur.',
+               'The old tailor\'s window.'],
     lignes: [
-      ['Il s\'est arrêté devant une vitrine pour souffler.',
-       'He stopped by a shop window to catch his breath.'],
-      ['Dans le reflet, la rue derrière lui était vide.',
-       'In the reflection, the street behind him was empty.'],
-      ['Il s\'est retourné. Elle l\'était aussi.',
-       'He turned round. It was empty too.'],
-      ['Mais le reflet, lui, n\'avait pas bougé.',
-       'But his reflection had not moved.'],
+      ['Tu as soufflé devant la vitrine du vieux tailleur.',
+       'You caught your breath at the old tailor\'s window.'],
+      ['Dans le reflet, tu portais un maillot d\'un autre siècle.',
+       'In the glass, you wore a vest from another century.'],
+      ['Un dossard cousu main. Le numéro 13.',
+       'A hand-sewn bib. Number 13.'],
+      ['Ton reflet a souri. Pas toi.',
+       'Your reflection smiled. You didn\'t.'],
+    ],
+  },
+  {
+    n: 6, cle: 'appel', sur: CH(6),
+    titre: ['L’APPEL', 'THE CALL'],
+    accroche: ['Ton téléphone va sonner à 3 h 12.',
+               'Your phone will ring at 3:12.'],
+    lignes: [
+      ['À 3 h 12, ton téléphone a sonné. Numéro masqué.',
+       'At 3:12 your phone rang. Number withheld.'],
+      ['Une voix d\'homme, essoufflée, venue de très loin.',
+       'A man\'s voice, out of breath, from very far away.'],
+      ['« Ne cours pas pour lui échapper. Cours pour finir. »',
+       '“Don\'t run to escape it. Run to finish.”'],
+      ['Derrière la voix, des griffes raclaient des pavés.',
+       'Behind the voice, claws were scraping cobbles.'],
+    ],
+  },
+  {
+    n: 7, cle: 'porte-muree', sur: CH(7),
+    titre: ['LA PORTE MURÉE', 'THE BRICKED-UP DOOR'],
+    accroche: ['Une brique bouge, dans la porte murée.',
+               'A brick is loose in the bricked-up door.'],
+    lignes: [
+      ['Tu es retourné à la porte murée. Une brique bougeait.',
+       'You went back to the bricked-up door. A brick moved.'],
+      ['Derrière : des pointes rouillées et un carnet.',
+       'Behind it: rusted spikes and a notebook.'],
+      ['Treize courses notées. Treize temps. Ceux de tes nuits.',
+       'Thirteen races. Thirteen times. Those of your nights.'],
+      ['Dernière page : « 31 octobre. Il me rattrape. »',
+       'Last page: “31 October. It\'s catching me.”'],
+    ],
+  },
+  {
+    n: 8, cle: 'porte', sur: CH(8),
+    titre: ['SOUS LE LIT', 'UNDER THE BED'],
+    accroche: ['Tu as rapporté le carnet chez toi.',
+               'You took the notebook home.'],
+    lignes: [
+      ['Tu as glissé le carnet de Lucien sous ton lit.',
+       'You slid Lucien\'s notebook under your bed.'],
+      ['Cette nuit, un souffle lent est monté du plancher.',
+       'That night, slow breathing rose from the floor.'],
+      ['Deux yeux rouges. Elle ne grognait pas. Elle veillait.',
+       'Two red eyes. It wasn\'t growling. It was keeping watch.'],
+      ['Elle dormait, la tête posée sur le carnet.',
+       'It was asleep, its head resting on the notebook.'],
+    ],
+  },
+  {
+    n: 9, cle: 'traces', sur: CH(9),
+    titre: ['LE NOM', 'THE NAME'],
+    accroche: ['La bête a un nom. Elle va te le donner.',
+               'The beast has a name. It will give it to you.'],
+    lignes: [
+      ['Au matin, des traces de terre faisaient le tour du lit.',
+       'In the morning, muddy prints circled your bed.'],
+      ['Au pied du lit, des griffes avaient creusé un mot.',
+       'At the foot of the bed, claws had carved a word.'],
+      ['ARGOS.',
+       'ARGOS.'],
+      ['Tu l\'as dit à voix haute. Sous le plancher, ça a gémi.',
+       'You said it aloud. Under the floor, something whined.'],
+    ],
+  },
+  {
+    n: 10, cle: 'odeur', sur: CH(10),
+    titre: ['L’ODEUR', 'THE SCENT'],
+    accroche: ['Ce n\'est pas toi qu\'Argos renifle.',
+               'It isn\'t you that Argos is sniffing for.'],
+    lignes: [
+      ['Ce soir, Argos ne t\'a pas suivi jusqu\'au bout.',
+       'Tonight, Argos didn\'t follow you all the way.'],
+      ['Il s\'est arrêté sous ta fenêtre, et il a reniflé.',
+       'He stopped under your window, and sniffed.'],
+      ['Ce n\'est pas ta trace qu\'il suit. C\'est celle de Lucien.',
+       'It isn\'t your trail he follows. It\'s Lucien\'s.'],
+      ['Et chaque nuit, il la trouve un peu plus sur toi.',
+       'And every night, he finds more of it on you.'],
+    ],
+  },
+  {
+    n: 11, cle: 'miroir', sur: CH(11),
+    titre: ['LE MIROIR', 'THE MIRROR'],
+    accroche: ['Lucien va te parler. Dans le miroir.',
+               'Lucien will speak to you. In the mirror.'],
+    lignes: [
+      ['Dans le miroir de la salle de bain, il y avait toi.',
+       'In the bathroom mirror, there you were.'],
+      ['Puis Lucien, derrière ton épaule. Il n\'avait pas vieilli.',
+       'Then Lucien, behind your shoulder. He hadn\'t aged.'],
+      ['« Il ne veut pas me mordre. Il veut que je finisse. »',
+       '“He doesn\'t want to bite me. He wants me to finish.”'],
+      ['« J\'ai abandonné à deux mètres de la ligne. »',
+       '“I gave up two metres from the line.”'],
+    ],
+  },
+  {
+    n: 12, cle: 'marque', sur: CH(12),
+    titre: ['MINUIT', 'MIDNIGHT'],
+    accroche: ['Ce qu\'Argos attend depuis 1913.',
+               'What Argos has been waiting for since 1913.'],
+    lignes: [
+      ['Lucien n\'a jamais fini sa treizième course.',
+       'Lucien never finished his thirteenth race.'],
+      ['Depuis, Argos la recourt chaque nuit, à son temps.',
+       'Since then, Argos has run it every night, at his time.'],
+      ['Il attend que quelqu\'un passe la ligne devant lui.',
+       'He is waiting for someone to cross the line first.'],
+      ['La treizième nuit est la sienne. Et il t\'a choisi.',
+       'The thirteenth night is his. And he has chosen you.'],
+    ],
+  },
+  {
+    n: 13, cle: 'finale', sur: ['CHAPITRE 13 · LA FIN', 'CHAPTER 13 · THE END'],
+    titre: ['LE JOUR SE LÈVE', 'DAYBREAK'],
+    accroche: ['La treizième course de Lucien. À finir.',
+               'Lucien\'s thirteenth race. Yours to finish.'],
+    lignes: [
+      ['Tu as passé la ligne. Argos s\'est arrêté net.',
+       'You crossed the line. Argos stopped dead.'],
+      ['Au bout de la ruelle, un homme en maillot l\'attendait.',
+       'At the end of the alley, a man in a vest was waiting.'],
+      ['Ils sont partis ensemble, au pas, vers le premier jour.',
+       'They walked off together, towards the first light.'],
+      ['Derrière toi, quelque chose d\'autre s\'est mis à courir.',
+       'Behind you, something else started to run.'],
     ],
   },
 ];
 
+/** Le chapitre de la nuit `n` (borne aux treize). */
+export function chapitreDe(n: number): Chapitre {
+  return CHAPITRES[Math.max(0, Math.min(CHAPITRES.length - 1, n - 1))];
+}
+
 /* ---------------------------------------------------------------------------
    APRES LA MORSURE — les nuits perdues
    ---------------------------------------------------------------------------
-   PLUS DE LISTE DE CE QU'IL A PERDU (09/10, « les cartes restent droles »).
-   La serie precedente comptait les pertes — le short, le petit doigt,
-   l'oreille, son nom — et le principe meme faisait gag : un inventaire
-   d'objets arraches se lit comme une chute, pas comme une menace. Celle-ci
-   ne retire rien au joueur. Elle dit que la bete l'a MARQUE et qu'elle
-   revient : une cicatrice qui chauffe, des yeux dans un miroir, des traces
-   autour du lit. Toujours aucune blessure montree, et le froid sur la
-   derniere ligne.
+   Une morsure ne fait pas avancer l'histoire : le chapitre reste de l'autre
+   cote de la ligne, et l'ecran le dit (`hw_ch_ferme`, avec l'accroche). Ce qui
+   s'affiche, c'est un des cauchemars ci-dessous, tire sans repetition.
+
+   PASSES AU TUTOIEMENT LE 17/10, comme le recit, et SANS NOM : ils peuvent
+   tomber avant le chapitre 9, ou le nom de la bete se donne. Leurs clefs ne
+   sont celles d'aucune image : les dix cartes appartiennent au recit, et un
+   cauchemar qui montrerait l'image d'un chapitre le gacherait. Ils retombent
+   sur la scene dessinee de la morsure.
+
+   Regles de 09/10 inchangees : pas d'inventaire de ce qui est arrache, la
+   bete MARQUE et revient.
 --------------------------------------------------------------------------- */
+const MORDU: [string, string] = ['APRÈS LA MORSURE', 'AFTER THE BITE'];
+
 export const MORSURES: readonly Scene[] = [
   {
-    cle: 'marque',
-    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
+    cle: 'cauchemar-marque', sur: MORDU,
     titre: ['LA MARQUE', 'THE MARK'],
     lignes: [
-      ['La morsure a guéri en une nuit. Sans un point.',
-       'The bite healed overnight. Not a single stitch.'],
-      ['Il reste quatre petites marques, en demi-cercle.',
-       'Four small marks are left, in a half circle.'],
+      ['Elle t\'a eu au mollet. Au matin, plus rien.',
+       'It got you by the calf. By morning, nothing.'],
+      ['Seulement quatre petites marques, en demi-cercle.',
+       'Only four small marks, in a half circle.'],
       ['Chaque soir, elles sont un peu plus chaudes.',
        'Every evening, they are a little warmer.'],
       ['Ce soir, elles battent. Comme des pas qui approchent.',
@@ -186,147 +347,55 @@ export const MORSURES: readonly Scene[] = [
     ],
   },
   {
-    cle: 'miroir',
-    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
-    titre: ['LE MIROIR', 'THE MIRROR'],
+    cle: 'cauchemar-chiens', sur: MORDU,
+    titre: ['LES CHIENS', 'THE DOGS'],
     lignes: [
-      ['Rentré chez lui, il s\'est lavé le visage dans le noir.',
-       'Back home, he washed his face in the dark.'],
-      ['Dans le miroir, ses yeux ont brillé. Rouges.',
-       'In the mirror, his eyes glowed. Red.'],
-      ['Une seconde à peine. Il a cru rêver.',
-       'Only for a second. He thought he was dreaming.'],
-      ['Puis deux autres yeux se sont allumés, derrière lui.',
-       'Then two more eyes lit up, behind him.'],
+      ['Depuis la morsure, la lumière te brûle les yeux.',
+       'Since the bite, light burns your eyes.'],
+      ['Hier, les chiens du quartier aboyaient sur ton passage.',
+       'Yesterday, the neighbourhood dogs barked at you.'],
+      ['Aujourd\'hui, ils se taisent.',
+       'Today they fall silent.'],
+      ['Et ils baissent la tête quand tu passes.',
+       'And they lower their heads as you go by.'],
     ],
   },
   {
-    cle: 'appel',
-    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
-    titre: ['L’APPEL', 'THE CALL'],
+    cle: 'cauchemar-sommeil', sur: MORDU,
+    titre: ['TON SOMMEIL', 'YOUR SLEEP'],
     lignes: [
-      ['À 3 h 12, son téléphone a sonné. Numéro masqué.',
-       'At 3:12 his phone rang. Number withheld.'],
-      ['Il a décroché. Personne. Juste un souffle, lent.',
-       'He answered. Nobody. Just slow breathing.'],
-      ['Puis des griffes, tout près du micro.',
-       'Then claws, right against the microphone.'],
-      ['Le même souffle, derrière la porte de sa chambre.',
-       'The same breathing, behind his bedroom door.'],
-    ],
-  },
-  {
-    cle: 'traces',
-    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
-    titre: ['LES TRACES', 'THE TRACKS'],
-    lignes: [
-      ['Au matin, il y avait de la terre sur son parquet.',
-       'In the morning, there was soil on his floor.'],
-      ['Des traces de pattes, larges comme une main.',
-       'Paw prints, as wide as a hand.'],
-      ['Elles faisaient le tour de son lit. Lentement.',
-       'They circled his bed. Slowly.'],
-      ['Elles ne ressortaient nulle part.',
-       'They did not lead out anywhere.'],
-    ],
-  },
-  {
-    cle: 'faim',
-    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
-    titre: ['LA FAIM', 'THE HUNGER'],
-    lignes: [
-      ['Depuis la morsure, la lumière lui brûle les yeux.',
-       'Since the bite, light burns his eyes.'],
-      ['Il mange la nuit, debout, sans allumer.',
-       'He eats at night, standing, lights off.'],
-      ['Hier, les chiens du quartier aboyaient sur son passage.',
-       'Yesterday, the neighbourhood dogs barked at him.'],
-      ['Aujourd\'hui, ils se taisent. Et ils baissent la tête.',
-       'Today they fall silent. And they lower their heads.'],
-    ],
-  },
-  {
-    cle: 'tombe',
-    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
-    titre: ['LA TOMBE', 'THE GRAVE'],
-    lignes: [
-      ['Le gardien l\'a appelé : une tombe neuve, au fond.',
-       'The keeper called him: a new grave, at the back.'],
-      ['Pas de fleurs, pas de date. Juste un nom gravé.',
-       'No flowers, no date. Just a carved name.'],
-      ['Le sien.',
-       'His own.'],
-      ['Et tout autour, la terre labourée par des griffes.',
-       'And all around, the earth torn up by claws.'],
-    ],
-  },
-  {
-    cle: 'sommeil',
-    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
-    titre: ['SON SOMMEIL', 'HIS SLEEP'],
-    lignes: [
-      ['Elle ne l\'a pas lâché. Elle a seulement desserré.',
+      ['Elle ne t\'a pas lâché. Elle a seulement desserré.',
        'It did not let go. It only loosened its grip.'],
-      ['Dès qu\'il ferme les yeux, il est de retour au cimetière.',
-       'Whenever he closes his eyes, he is back in the cemetery.'],
-      ['Et il court. Il court toute la nuit.',
-       'And he runs. He runs all night.'],
-      ['Chaque nuit, la bête part un peu plus près de lui.',
-       'Every night, the beast starts a little closer.'],
+      ['Dès que tu fermes les yeux, tu es dans la ruelle.',
+       'Whenever you close your eyes, you are in the alley.'],
+      ['Et tu cours. Tu cours toute la nuit.',
+       'And you run. You run all night.'],
+      ['Chaque nuit, elle part un peu plus près de toi.',
+       'Every night, it starts a little closer.'],
     ],
   },
   {
-    cle: 'odeur',
-    sur: ['APRÈS LA MORSURE', 'AFTER THE BITE'],
-    titre: ['L’ODEUR', 'THE SCENT'],
+    cle: 'cauchemar-piste', sur: MORDU,
+    titre: ['LA PISTE', 'THE TRAIL'],
     lignes: [
-      ['Elle l\'a lâché à la grille. Elle avait son odeur.',
-       'It let go at the gate. It had his scent.'],
-      ['Il a changé de rue. Puis de ville. Puis de nom.',
-       'He changed streets. Then towns. Then his name.'],
-      ['Hier soir, sous sa fenêtre, quelque chose a reniflé.',
-       'Last night, under his window, something sniffed.'],
+      ['Elle t\'a lâché au bout de la ruelle. Elle a ton odeur.',
+       'It let go at the end of the alley. It had your scent.'],
+      ['Tu as changé de chemin pour rentrer. Deux fois.',
+       'You changed your way home. Twice.'],
+      ['Hier soir, sous ta fenêtre, quelque chose a reniflé.',
+       'Last night, under your window, something sniffed.'],
       ['Elle n\'a jamais perdu une piste.',
        'It has never lost a trail.'],
     ],
   },
 ];
 
-/* ---------------------------------------------------------------------------
-   LA DERNIERE NUIT — la fin de l'edition
-   ---------------------------------------------------------------------------
-   AJOUTEE LE 16/10 : la treizieme nuit tenue tirait une scenette au hasard,
-   comme les douze autres, et l'edition se finissait sur « le dernier bus » ou
-   « la porte » — un soir parmi d'autres. Celle-ci n'est servie qu'une fois la
-   treizieme passee, jamais tiree au sort. Meme regle que les autres : aucune
-   blessure, et le froid sur la derniere ligne — qui annonce la quatorzieme
-   promise par la banniere (hw_toutes_sous). */
-export const FINALE: Scene = {
-  cle: 'finale',
-  sur: ['LA TREIZIÈME NUIT', 'THE THIRTEENTH NIGHT'],
-  titre: ['LE JOUR SE LÈVE', 'DAYBREAK'],
-  lignes: [
-    ['Il a passé la ligne une treizième fois.',
-     'He crossed the line a thirteenth time.'],
-    ['Derrière lui, la bête s\'est arrêtée net. Elle n\'a plus bougé.',
-     'Behind him, the beast stopped dead. It did not move again.'],
-    ['Au premier rayon, il ne restait d\'elle qu\'une ombre sur les pavés.',
-     'At first light, all that was left of it was a shadow on the cobbles.'],
-    ['Puis l\'ombre s\'est mise à courir.',
-     'Then the shadow started to run.'],
-  ],
-};
-
-/** Les clefs des scenettes de victoire, pour le tirage. */
-export const CLES_TENUES = TENUES.map(s => s.cle);
-/** Les clefs des scenettes de morsure, pour le tirage. */
+/** Les clefs des cauchemars, pour le tirage. */
 export const CLES_MORSURES = MORSURES.map(s => s.cle);
 
-/** La scenette de cette clef, ou la premiere du lot a defaut. */
-export function sceneDe(cle: string, mordu: boolean): Scene {
-  if (!mordu && cle === FINALE.cle) return FINALE;
-  const lot = mordu ? MORSURES : TENUES;
-  return lot.find(s => s.cle === cle) || lot[0];
+/** Le cauchemar de cette clef, ou le premier a defaut. */
+export function morsureDe(cle: string): Scene {
+  return MORSURES.find(s => s.cle === cle) || MORSURES[0];
 }
 
 /* ---------------------------------------------------------------------------

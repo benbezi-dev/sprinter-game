@@ -19,7 +19,8 @@ import { prechargerLaNuit } from '@/game/chargement';
 import { mesurerLaNuit } from '@/game/halloween-mesure';
 import { preparerLaTraque, frayeurReduite, poserFrayeurReduite } from '@/game/halloween-traque';
 import {
-  CLES_TENUES, CLES_MORSURES, FINALE, sceneDe, dit, peindreLaScene,
+  CLES_MORSURES, chapitreDe, morsureDe, dit, peindreLaScene, prechargerLaCarte,
+  type Scene,
 } from '@/game/halloween-cinema';
 import { mot, chrono } from '@/game/halloween-mots';
 import { COURSES, distanceDe } from '@/game/halloween-courses.js';
@@ -132,6 +133,9 @@ function partir(n: number): boolean {
   if (!jouableMaintenant(n)) return false;
   poserOuvert(false);
   prechargerLaNuit(cameraDe(n).deg);
+  // L'image du chapitre se charge pendant la course : elle est la recompense,
+  // elle ne doit pas arriver apres le noir de l'ecran de fin.
+  prechargerLaCarte(chapitreDe(n).cle);
   mesurerLaNuit('nuit', n);
   // CHAQUE NUIT A SON TRACE (halloween-loi.js) : cent metres, cent metres en
   // courbe, ou une ligne droite de deux, trois ou quatre cents. C'est ce qui
@@ -462,8 +466,13 @@ function CarteDuMolosse({ commence }: { commence: boolean }) {
             >
               {mot('hw_titre')}
             </motion.span>
+            {/* L'ACCROCHE DU CHAPITRE A VENIR, des qu'une nuit est tenue : c'est
+                elle qui fait revenir le lendemain, pas le chrono. Avant la
+                premiere, la phrase du mode suffit. */}
             <span className="text-[10px] md:text-xs text-foreground/65 leading-snug">
-              {fini ? mot('hw_toutes_sous') : mot('hw_sous')}
+              {fini ? mot('hw_toutes_sous')
+                : carnet().tenues > 0 ? <>{mot('hw_ch_n', { n: String(n) })} · <i>{dit(chapitreDe(n).accroche)}</i></>
+                : mot('hw_sous')}
             </span>
             <span className="mt-1 flex items-center gap-2">
               <motion.span
@@ -602,6 +611,9 @@ export function PanneauMolosse() {
   const c = carnet();
   const [jour, poserJour] = useVoyageur();
   const [, rafraichir] = useState(0);
+  // Le chapitre relu, ou null. Les chapitres gagnes se relisent depuis le
+  // tableau : on y revient avant d'aller chercher le suivant.
+  const [lu, lire] = useState<number | null>(null);
 
   /* L'HORLOGE SE REGLE A L'OUVERTURE DU PANNEAU, PAS AU CHARGEMENT DU JEU.
      Un joueur qui n'entre jamais dans le mode n'a aucune raison d'appeler le
@@ -819,7 +831,24 @@ export function PanneauMolosse() {
                           : mot('hw_verrouille')}
                       {best !== null && <> · {mot('hw_meilleur', { s: chrono(best) })}</>}
                     </span>
+                    {/* LA PROMESSE DU CHAPITRE A GAGNER : ce qu'on saura en tenant
+                        cette nuit. Une seule ligne, sur la nuit qui l'ouvre. */}
+                    {nuit.n === c.tenues + 1 && (
+                      <span className="mt-0.5 text-[10px] italic leading-snug text-[#F8A02E]/85">
+                        {dit(chapitreDe(nuit.n).accroche)}
+                      </span>
+                    )}
                   </span>
+                  {tenue && (
+                    <motion.button
+                      onClick={() => lire(nuit.n)}
+                      whileTap={{ scale: 0.92 }}
+                      className="relative shrink-0 px-2 py-1 rounded-lg border border-[#7CD04E]/50
+                                 text-[#7CD04E] text-[10px] font-black tracking-widest"
+                    >
+                      {mot('hw_lire')}
+                    </motion.button>
+                  )}
                   {jouable && (
                     <motion.button
                       onClick={() => partir(nuit.n)}
@@ -851,7 +880,138 @@ export function PanneauMolosse() {
           </button>
         </div>
       </motion.div>
+
+      {lu !== null && lu <= c.tenues && (
+        <LecteurDuRecit n={lu} dernier={c.tenues} aller={lire} />
+      )}
     </motion.div>
+  );
+}
+
+/* ===========================================================================
+   LE RECIT, RELU
+   =========================================================================== */
+
+/** L'horloge d'une scene, en secondes, sur sa propre boucle ; repart a chaque `cle`. */
+function useHorlogeDeScene(cle: string | number): number {
+  const [t, setT] = useState(0);
+  useEffect(() => {
+    let vivant = true;
+    const depart = performance.now();
+    setT(0);
+    const battre = () => {
+      if (!vivant) return;
+      setT((performance.now() - depart) / 1000);
+      requestAnimationFrame(battre);
+    };
+    requestAnimationFrame(battre);
+    return () => { vivant = false; };
+  }, [cle]);
+  return t;
+}
+
+/** La toile de la scene : la carte en image si elle existe, la nuit dessinee sinon. */
+function ToileDeScene({ t, mordu, cle }: { t: number; mordu: boolean; cle: string }) {
+  const toile = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const el = toile.current;
+    if (!el) return;
+    const ctx = el.getContext('2d');
+    if (!ctx) return;
+    const r = Math.min(window.devicePixelRatio || 1, 2);
+    const L = el.clientWidth, H = el.clientHeight;
+    if (el.width !== L * r || el.height !== H * r) {
+      el.width = Math.max(1, Math.round(L * r));
+      el.height = Math.max(1, Math.round(H * r));
+    }
+    ctx.setTransform(r, 0, 0, r, 0, 0);
+    peindreLaScene(ctx, L, H, t, mordu, cle);
+  }, [t, mordu, cle]);
+  return <canvas ref={toile} className="absolute inset-0 w-full h-full" />;
+}
+
+/**
+ * LA CARTE DE TEXTE. Sa mise en forme est celle des cinematiques du jeu
+ * (voir CutScreen) : meme carte sombre, meme filet de couleur a gauche, meme
+ * place a l'ecran. Une scenette d'Halloween qui aurait invente sa propre boite
+ * aurait eu l'air d'un morceau rapporte — le mode est une edition du jeu, pas
+ * un autre jeu.
+ */
+function CarteDuTexte({ s, couleur, visibles, pied }: {
+  s: Scene; couleur: string; visibles: number; pied?: React.ReactNode;
+}) {
+  return (
+    <div className="absolute z-10 overflow-hidden rounded-2xl border border-white/10
+                    bg-[rgba(9,7,16,0.86)] shadow-[0_18px_48px_rgba(0,0,0,0.5)]
+                    pl-5 pr-4 py-3 sm:pl-6 sm:pr-5 sm:py-4 md:pl-8 md:pr-7 md:py-6
+                    portrait:left-4 portrait:right-4 portrait:bottom-[calc(max(env(safe-area-inset-bottom),1.25rem)+4.5rem)]
+                    landscape:left-[45vw] landscape:top-[12vh] landscape:w-[min(46vw,38rem)]">
+      <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5" style={{ backgroundColor: couleur }} />
+      <div className="text-[10px] sm:text-xs font-bold tracking-widest uppercase mb-1 md:mb-2"
+           style={{ color: couleur }}>
+        {dit(s.sur)}
+      </div>
+      <h2 className="text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight
+                     uppercase leading-[0.95] text-foreground">
+        {dit(s.titre)}
+      </h2>
+      <div className="h-1 w-11/12 mt-2 md:mt-3" style={{ backgroundColor: couleur }} />
+      <div className="mt-3 flex flex-col gap-1.5">
+        <AnimatePresence>
+          {s.lignes.slice(0, visibles).map((l, k) => (
+            <motion.p key={k}
+                      initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+                      className="text-[12px] sm:text-sm md:text-base leading-snug text-foreground/85">
+              {dit(l)}
+            </motion.p>
+          ))}
+        </AnimatePresence>
+      </div>
+      {pied}
+    </div>
+  );
+}
+
+/**
+ * Un chapitre gagne, relu depuis le tableau. Les lignes arrivent plus vite
+ * qu'a la premiere lecture : on connait la fin, on vient la retrouver. On
+ * passe d'un chapitre a l'autre sans sortir, jusqu'au dernier gagne — jamais
+ * au-dela : la suite se gagne.
+ */
+function LecteurDuRecit({ n, dernier, aller }: {
+  n: number; dernier: number; aller: (n: number | null) => void;
+}) {
+  const ch = chapitreDe(n);
+  const t = useHorlogeDeScene(n);
+  const visibles = Math.min(ch.lignes.length, Math.floor(Math.max(0, t - 0.3) / 0.45) + 1);
+  const suivant = n < 13 ? chapitreDe(n + 1) : null;
+  return (
+    <div className="absolute inset-0 z-10 bg-[#0B0710] pointer-events-auto">
+      <ToileDeScene t={t} mordu={false} cle={ch.cle} />
+      <CarteDuTexte s={ch} couleur="#7CD04E" visibles={visibles} pied={
+        suivant && n === dernier && visibles === ch.lignes.length ? (
+          <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-0.5">
+            <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-[#F8A02E]">
+              {mot('hw_la_suite', { n: String(suivant.n) })}
+            </span>
+            <span className="text-[11px] sm:text-xs italic leading-snug text-foreground/70">{dit(suivant.accroche)}</span>
+          </div>
+        ) : undefined
+      } />
+      <div className="absolute inset-x-0 bottom-0 px-4 pb-[max(env(safe-area-inset-bottom),1rem)] flex gap-2">
+        <button onClick={() => aller(n - 1)} disabled={n <= 1}
+                className="w-12 py-3 rounded-xl border border-white/15 bg-black/50 text-foreground/70
+                           text-sm font-black disabled:opacity-25">‹</button>
+        <button onClick={() => aller(null)}
+                className="flex-1 py-3 rounded-xl border border-white/15 bg-black/50
+                           text-foreground/70 text-[11px] font-black tracking-widest uppercase">
+          {mot('hw_refermer')}
+        </button>
+        <button onClick={() => aller(n + 1)} disabled={n >= dernier}
+                className="w-12 py-3 rounded-xl border border-white/15 bg-black/50 text-foreground/70
+                           text-sm font-black disabled:opacity-25">›</button>
+      </div>
+    </div>
   );
 }
 
@@ -907,16 +1067,15 @@ export function FinDeLaNuit() {
   // position du chien pour parler de la course du joueur est le genre de
   // raccourci qui devient faux le jour ou la morsure change de regle.
   const joueur = useGameStore(s => s.player);
-  const toile = useRef<HTMLCanvasElement | null>(null);
-  const [t, setT] = useState(0);
-  const depart = useRef(0);
-  const [scene] = useState(() => {
+  // LA NUIT TENUE DONNE SON CHAPITRE, toujours le meme pour la meme nuit
+  // (LE RECIT, halloween-cinema.ts) ; la morsure tire un cauchemar.
+  const [scene] = useState<{ mordu: boolean; s: Scene }>(() => {
     const c = etatDeLaChasse();
     const mordu = !c || c.verdict !== 'passe';
-    // La treizieme tenue a SA scene, jamais tiree au sort : c'est la fin.
-    if (!mordu && c && c.nuit.n === NUITS.length) return { mordu, cle: FINALE.cle };
-    return { mordu, cle: tirerLaScene(mordu ? CLES_MORSURES : CLES_TENUES) };
+    if (!mordu && c) return { mordu, s: chapitreDe(c.nuit.n) };
+    return { mordu: true, s: morsureDe(tirerLaScene(CLES_MORSURES)) };
   });
+  const t = useHorlogeDeScene(0);
 
   const c = etatDeLaChasse();
   const nuit = nuitCourante();
@@ -933,43 +1092,13 @@ export function FinDeLaNuit() {
       tenirLaNuit(nuit.n, e.chrono, e.ecartMin);
       mesurerLaNuit('tenue', nuit.n);
     } else compterLaMorsure();
-    // La scene est montree : on la note maintenant, une fois (voir tirerLaScene).
-    if (scene.cle !== FINALE.cle) noterLaScene(scene.cle);
+    // Le cauchemar est montre : on le note maintenant, une fois (voir tirerLaScene).
+    if (scene.mordu) noterLaScene(scene.s.cle);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // L'horloge de la scenette. Elle tourne sur sa propre boucle : le chrono de
-  // la course est fige depuis l'arrivee, et la scene doit continuer a vivre.
-  useEffect(() => {
-    let vivant = true;
-    depart.current = performance.now();
-    const battre = () => {
-      if (!vivant) return;
-      setT((performance.now() - depart.current) / 1000);
-      requestAnimationFrame(battre);
-    };
-    requestAnimationFrame(battre);
-    return () => { vivant = false; };
-  }, []);
-
-  // Le decor de la scenette, peint sur sa propre toile.
-  useEffect(() => {
-    const el = toile.current;
-    if (!el) return;
-    const ctx = el.getContext('2d');
-    if (!ctx) return;
-    const r = Math.min(window.devicePixelRatio || 1, 2);
-    const L = el.clientWidth, H = el.clientHeight;
-    if (el.width !== L * r || el.height !== H * r) {
-      el.width = Math.max(1, Math.round(L * r));
-      el.height = Math.max(1, Math.round(H * r));
-    }
-    ctx.setTransform(r, 0, 0, r, 0, 0);
-    peindreLaScene(ctx, L, H, t, scene.mordu, scene.cle);
-  }, [t, scene.mordu, scene.cle]);
 
   if (state !== 'winall' || !nuitEnCours() || !nuit) return null;
 
-  const s = sceneDe(scene.cle, scene.mordu);
+  const s = scene.s;
   const visibles = Math.min(s.lignes.length, Math.floor(Math.max(0, t - 0.6) / LIGNE) + 1);
   const finie = t > 0.6 + s.lignes.length * LIGNE;
 
@@ -985,6 +1114,10 @@ export function FinDeLaNuit() {
   // L'ecart le plus court de la course : ce qui se raconte apres une victoire
   // — quand il vaut d'etre raconte. Huit metres ne sont pas un frisson.
   const frole = passe && c && c.ecartMin < 4 ? c.ecartMin : null;
+  // LA SUITE, ou ce qui reste a gagner. Tenue : l'accroche du chapitre
+  // suivant, et quand sa nuit s'ouvre. Mordu : le chapitre de cette nuit reste
+  // ferme, et l'accroche dit ce qu'on y apprendra.
+  const aVenir = passe ? (suivante !== null ? chapitreDe(suivante) : null) : chapitreDe(nuit.n);
 
   const sortir = () => { rangerLaNuit(); (SprinterApp as any).goHome(); };
   // Une nuit que le calendrier refuse ramene a l'accueil plutot que de laisser
@@ -994,7 +1127,7 @@ export function FinDeLaNuit() {
 
   return (
     <div className="absolute inset-0 z-30 pointer-events-auto bg-[#0B0710]">
-      <canvas ref={toile} className="absolute inset-0 w-full h-full" />
+      <ToileDeScene t={t} mordu={scene.mordu} cle={s.cle} />
 
       {/* LE VERDICT, EN HAUT. Trois mots et un chrono : c'est ce que le joueur
           cherche en premier, et la scenette n'a pas a le lui faire attendre.
@@ -1021,57 +1154,37 @@ export function FinDeLaNuit() {
         </span>
       </div>
 
-      {/* LA CARTE DE TEXTE. Sa mise en forme est celle des cinematiques du jeu
-          (voir CutScreen) : meme carte sombre, meme filet de couleur a gauche,
-          meme place a l'ecran. Une scenette d'Halloween qui aurait invente sa
-          propre boite aurait eu l'air d'un morceau rapporte — le mode est une
-          edition du jeu, pas un autre jeu. */}
-      <div className="absolute z-10 overflow-hidden rounded-2xl border border-white/10
-                      bg-[rgba(9,7,16,0.86)] shadow-[0_18px_48px_rgba(0,0,0,0.5)]
-                      pl-5 pr-4 py-3 sm:pl-6 sm:pr-5 sm:py-4 md:pl-8 md:pr-7 md:py-6
-                      portrait:left-4 portrait:right-4 portrait:bottom-[calc(max(env(safe-area-inset-bottom),1.25rem)+4.5rem)]
-                      landscape:left-[45vw] landscape:top-[12vh] landscape:w-[min(46vw,38rem)]">
-        <div className="absolute left-0 top-0 bottom-0 w-1 md:w-1.5"
-             style={{ backgroundColor: passe ? '#7CD04E' : '#E86826' }} />
-        <div className="text-[10px] sm:text-xs font-bold tracking-widest uppercase mb-1 md:mb-2"
-             style={{ color: passe ? '#7CD04E' : '#E86826' }}>
-          {dit(s.sur)}
-        </div>
-        <h2 className="text-2xl sm:text-3xl md:text-4xl font-black font-display tracking-tight
-                       uppercase leading-[0.95] text-foreground">
-          {dit(s.titre)}
-        </h2>
-        <div className="h-1 w-11/12 mt-2 md:mt-3"
-             style={{ backgroundColor: passe ? '#7CD04E' : '#E86826' }} />
-        <div className="mt-3 flex flex-col gap-1.5">
-          <AnimatePresence>
-            {s.lignes.slice(0, visibles).map((l, k) => (
-              <motion.p key={k}
-                        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                        className="text-[12px] sm:text-sm md:text-base leading-snug text-foreground/85">
-                {dit(l)}
-              </motion.p>
-            ))}
-          </AnimatePresence>
-        </div>
-        {/* LE PIED DE LA CARTE : ce qu'on retient de cette nuit, et quand
-            revient la suivante. Dans la carte plutot qu'a cote : poses en
-            haut ou au-dessus des boutons, ils passaient sous elle, en paysage
-            comme en portrait. */}
-        {(frole !== null || (finie && attenteSuivante && suivante !== null)) && (
-          <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-0.5
-                          font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase">
+      <CarteDuTexte s={s} couleur={passe ? '#7CD04E' : '#E86826'} visibles={visibles} pied={
+        /* LE PIED DE LA CARTE : ce qu'on retient de cette nuit, et la suite.
+           Dans la carte plutot qu'a cote : poses en haut ou au-dessus des
+           boutons, ils passaient sous elle, en paysage comme en portrait. */
+        (frole !== null || (finie && aVenir)) ? (
+          <div className="mt-3 pt-2 border-t border-white/10 flex flex-col gap-0.5">
             {frole !== null && (
-              <span className="text-[#F8A02E]">{mot('hw_frole', { m: frole.toFixed(1) })}</span>
+              <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-[#F8A02E]">
+                {mot('hw_frole', { m: frole.toFixed(1) })}
+              </span>
             )}
-            {finie && attenteSuivante && suivante !== null && (
-              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-foreground/60">
-                {mot('hw_prochaine', { n: String(suivante), d: attenteSuivante })}
-              </motion.span>
+            {finie && aVenir && (
+              <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                          className="flex flex-col gap-0.5">
+                <span className="font-mono text-[10px] sm:text-[11px] tracking-[0.14em] uppercase text-foreground/60">
+                  {passe
+                    ? <>{mot('hw_la_suite', { n: String(aVenir.n) })}
+                        {' · '}
+                        {attenteSuivante
+                          ? mot('hw_ouvre_dans', { d: attenteSuivante })
+                          : mot('hw_ch_ouvert', { n: String(aVenir.n) })}</>
+                    : mot('hw_ch_ferme', { n: String(aVenir.n) })}
+                </span>
+                <span className="text-[11px] sm:text-xs italic leading-snug text-[#F8A02E]">
+                  {dit(aVenir.accroche)}
+                </span>
+              </motion.div>
             )}
           </div>
-        )}
-      </div>
+        ) : undefined
+      } />
 
       {/* LES BOUTONS N'ARRIVENT QU'A LA FIN DE L'HISTOIRE. Poses tout de suite,
           ils auraient tue la scenette : personne ne lit quatre lignes quand un
