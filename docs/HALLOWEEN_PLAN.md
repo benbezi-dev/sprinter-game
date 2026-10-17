@@ -11,8 +11,8 @@
 >   rendu sous les angles des nuits), les trois départs, 15 scènettes dont une
 >   fin propre à la nuit 13, le carnet versionné à deux espaces (joueur /
 >   testeur), le voyageur temporel, **le son de la traque** (la bête s'entend
->   approcher : pattes, gorge, halètement, cœur, signal d'arrivée, rage,
->   morsure, hurlement), la mesure par nuit, « frayeur réduite » et le respect
+>   approcher : gorge, halètement, cœur, signal d'arrivée, rage, morsure,
+>   hurlement — sans bruit de pas depuis le 17/10), la mesure par nuit, « frayeur réduite » et le respect
 >   de « réduire les animations ».
 > - **Ouverture** : un seul interrupteur, `HALLOWEEN_PUBLIC`
 >   (`src/game/halloween-ouverture.js`), vérifié par

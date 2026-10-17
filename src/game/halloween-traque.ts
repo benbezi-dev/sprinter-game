@@ -5,8 +5,7 @@
 // musique. Ce fichier lui donne un corps sonore, qui suit l'ECART a chaque pas
 // — la seule grandeur qui compte dans ce mode :
 //
-//   a vingt metres   on l'entend avant de la voir : ses pattes sur les paves,
-//                    un grondement au loin ;
+//   a vingt metres   on l'entend avant de la voir : un grondement au loin ;
 //   a sept metres    ELLE ARRIVE — une montee dissonante, coupee net, un impact.
 //                    Une fois par nuit (deux si on l'a semee entre-temps) ;
 //   en se rapprochant le grondement monte et s'eclaircit, le halètement se cale
@@ -26,18 +25,24 @@
 // prepare un par un a l'ouverture du tableau des nuits, entre deux images, et
 // la course les trouve prets (sinon elle finit d'une traite, avant le decompte).
 //
+// PAS DE BRUIT DE PAS (17/10, « retire les bruits de pas de l'athlete »). La
+// bete avait ses pattes sur les paves, deux coups par foulee des vingt metres :
+// une dizaine de coups sourds par seconde, de la premiere a la derniere
+// foulee, que l'oreille prenait pour les pas du coureur. Ils sont retires ; la
+// foulee de la bete ne se fait plus entendre que par son souffle.
+//
 // FRAYEUR REDUITE (reglage du tableau des nuits) : pas de signal d'arrivee, pas
 // d'aboiement, pas de coeur, un grondement plus bas. La bete reste audible —
 // c'est l'information du mode —, elle cesse seulement de faire sursauter.
 
 import { SprinterApp } from './engine';
 import {
-  grondement, patte, souffle, coeur, arrivee, rage, morsure, hurlement, salle,
+  grondement, souffle, coeur, arrivee, rage, morsure, hurlement, salle,
 } from './halloween-traque-sons';
 
 /** Les noms sous lesquels les sons entrent dans la table du moteur. */
 const SON = {
-  grondement: 'molosse-grondement', patteA: 'molosse-patte-a', patteB: 'molosse-patte-b',
+  grondement: 'molosse-grondement',
   souffleIn: 'molosse-inspire', souffleOut: 'molosse-expire', coeur: 'molosse-coeur',
   arrivee: 'molosse-arrivee', rage: 'molosse-rage', morsure: 'molosse-morsure',
   hurlement: 'molosse-hurlement', salle: 'molosse-salle',
@@ -90,8 +95,6 @@ function reduite(): boolean { return reduiteSession ?? frayeurReduite(); }
 type Fabrique = [string, (sr: number) => Float32Array | [Float32Array, Float32Array]];
 const FABRIQUE: Fabrique[] = [
   [SON.grondement, grondement],
-  [SON.patteA, sr => patte(sr, 17)],
-  [SON.patteB, sr => patte(sr, 29)],
   [SON.souffleIn, sr => souffle(sr, false)],
   [SON.souffleOut, sr => souffle(sr, true)],
   [SON.coeur, coeur],
@@ -288,17 +291,14 @@ export function armerLaTraque() {
 }
 
 /**
- * Un appui de la bete (deux par foulee, voir pasDuMolosse) : la patte sur les
- * paves, et le souffle une fois par foulee.
+ * Un appui de la bete (deux par foulee, voir pasDuMolosse) : son souffle, une
+ * fois par foulee. Aucun bruit de pas (voir l'en-tete).
  */
 export function appuiDeLaBete(lourd: boolean, ecart: number) {
   const T = traque;
   if (!T || T.fini) return;
   const audible = Math.max(0, Math.min(1, 1 - ecart / AUDIBLE));
   if (audible <= 0) return;
-  const jitter = 0.92 + Math.random() * 0.16;
-  jouer(T, Math.random() < 0.5 ? SON.patteA : SON.patteB,
-        (lourd ? 1 : 0.62) * (0.12 + 0.78 * audible * audible), { rate: jitter });
   // le souffle se cale sur l'appui lourd : une respiration par foulee
   if (lourd && audible > 0.3) {
     T.expire = !T.expire;
