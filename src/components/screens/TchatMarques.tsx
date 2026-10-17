@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, useDragControls } from 'motion/react';
+import { motion, AnimatePresence, useDragControls, useMotionValue, animate } from 'motion/react';
 import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, MessageCircle, Search, ChevronDown, BadgeCheck, Heart } from 'lucide-react';
 import { FEUILLE, VOILE, RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { useRetour } from '@/hooks/use-retour';
@@ -364,6 +364,92 @@ function Inviter({ fr }: { fr: boolean }) {
   );
 }
 
+/* ---------------------------------------------------------------------------
+   LA BULLE DU TCHAT, sur l'accueil (demande de l'auteur, 17/10/2026) : le
+   bouton TCHAT flotte, et on l'emmene ou l'on veut du doigt. Lachee, elle va
+   se coller au bord le plus proche, et ce telephone se souvient ou on l'a
+   laissee. Une touche sans la deplacer ouvre le tchat.
+--------------------------------------------------------------------------- */
+const MARGE_BULLE = 12;
+const CLE_BULLE = 'sprinter_tchat_bulle';
+
+type PlaceBulle = { cote: 'g' | 'd'; haut: number };   // haut : 0 (en haut) a 1 (en bas)
+
+function lirePlace(): PlaceBulle {
+  try {
+    const p = JSON.parse(localStorage.getItem(CLE_BULLE) || 'null');
+    if (p && (p.cote === 'g' || p.cote === 'd') && typeof p.haut === 'number') return { cote: p.cote, haut: Math.min(1, Math.max(0, p.haut)) };
+  } catch { /* stockage refuse */ }
+  return { cote: 'd', haut: 0.82 };
+}
+
+function BulleTchat({ fr, nonLus, bas, onOuvrir }: { fr: boolean; nonLus: number; bas: number; onOuvrir: () => void }) {
+  const reduit = useAnimationsReduites();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const bouge = useRef(false);
+  const el = useRef<HTMLButtonElement>(null);
+  const [place, setPlace] = useState(lirePlace);
+  const taille = () => ({ w: el.current?.offsetWidth || 110, h: el.current?.offsetHeight || 40 });
+
+  // La ou elle doit etre, en pixels, pour une place et la taille de l'ecran.
+  const ou = useCallback((p: PlaceBulle) => {
+    const l = window.innerWidth, h = window.innerHeight, t = taille();
+    const haut = MARGE_BULLE + 40, basMax = h - t.h - MARGE_BULLE - bas;
+    return {
+      x: p.cote === 'g' ? MARGE_BULLE : l - t.w - MARGE_BULLE,
+      y: haut + p.haut * Math.max(0, basMax - haut),
+    };
+  }, [bas]);
+
+  useEffect(() => {
+    const poser = () => { const c = ou(place); x.set(c.x); y.set(c.y); };
+    poser();
+    window.addEventListener('resize', poser);
+    return () => window.removeEventListener('resize', poser);
+  }, [ou, place, x, y]);
+
+  const lacher = () => {
+    const l = window.innerWidth, h = window.innerHeight, t = taille();
+    const haut = MARGE_BULLE + 40, basMax = h - t.h - MARGE_BULLE - bas;
+    const p: PlaceBulle = {
+      cote: x.get() + t.w / 2 < l / 2 ? 'g' : 'd',
+      haut: Math.min(1, Math.max(0, (y.get() - haut) / Math.max(1, basMax - haut))),
+    };
+    const c = ou(p);
+    const ressort = reduit ? { duration: 0 } : { type: 'spring' as const, stiffness: 420, damping: 32 };
+    animate(x, c.x, ressort);
+    animate(y, c.y, ressort);
+    setPlace(p);
+    try { localStorage.setItem(CLE_BULLE, JSON.stringify(p)); } catch { /* stockage refuse */ }
+  };
+
+  return (
+    <motion.button key="bulle" ref={el}
+      drag dragMomentum={false} dragElastic={0}
+      onPointerDown={() => { bouge.current = false; }}
+      onDragStart={() => { bouge.current = true; }}
+      onDragEnd={lacher}
+      onClick={() => { if (!bouge.current) onOuvrir(); }}
+      initial={reduit ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+      exit={reduit ? { opacity: 0 } : { scale: 0.6, opacity: 0 }} whileTap={{ scale: 0.92 }} whileDrag={{ scale: 1.08 }}
+      transition={reduit ? { duration: 0 } : RESSORT.trophee}
+      aria-label={fr ? 'Ouvrir le tchat' : 'Open the chat'}
+      style={{ x, y }}
+      className="fixed left-0 top-0 z-[55] touch-none select-none flex items-center gap-2 pl-3 pr-4 py-2.5
+                 rounded-2xl bg-primary text-black font-black text-xs tracking-widest shadow-lg shadow-black/40
+                 cursor-grab active:cursor-grabbing">
+      <MessageCircle className="w-4 h-4" aria-hidden />
+      {fr ? 'TCHAT' : 'CHAT'}
+      {nonLus > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-white text-black text-[10px] flex items-center justify-center">
+          {nonLus > 99 ? '99+' : nonLus}
+        </span>
+      )}
+    </motion.button>
+  );
+}
+
 /**
  * Le tchat est un TIROIR RETRACTABLE (voulu par l'auteur, 13/10) : il
  * n'occupe pas l'ecran. Replie, un bouton qui flotte avec la pastille des
@@ -481,7 +567,10 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
     <>
       {/* replie : le bouton qui flotte, et sa pastille */}
       <AnimatePresence>
-        {!deplie && (
+        {!deplie && !duel && (
+          <BulleTchat fr={fr} nonLus={nonLus} bas={carte ? carte + 8 : 0} onOuvrir={() => onDeplier(true)} />
+        )}
+        {!deplie && duel && (
           <motion.button key="bouton" onClick={() => onDeplier(true)}
             initial={reduit ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             exit={reduit ? { opacity: 0 } : { scale: 0.6, opacity: 0 }} whileTap={{ scale: 0.94 }}
