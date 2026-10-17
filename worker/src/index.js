@@ -75,6 +75,7 @@ import {
 import {
   deposerImage, lireImage, oublierImage, envoiPret, publierInstagram,
   ouvrirVideo, chargerVideo, etatConteneur, publierConteneur, FORMATS, diagnostiquer,
+  publicationsDuCompte,
 } from './instagram-envoi.js';
 import {
   inviterEnDirect, mesInvitationsDirectes, trancherInvitation,
@@ -4334,6 +4335,14 @@ async function servir(request, env, ctx, porteur) {
       // Les deux secrets, decrits sans etre montres : leur forme (longueur,
       // famille, blancs parasites) et l'avis de Meta. C'est la seule facon de
       // savoir ce qui est REELLEMENT pose, un secret ne se relisant pas.
+      // Ce que le compte Instagram montre vraiment : l'onglet « Publies » de
+      // l'atelier le lit ici, plutot que de se fier aux seuls moments marques.
+      if (quoi === 'instagram' && request.method === 'GET') {
+        const r = await publicationsDuCompte(env, url.searchParams.get('limite'));
+        if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, r.etape === 'configuration' ? 409 : 502);
+        return json({ publications: r.publications });
+      }
+
       if (quoi === 'diagnostic' && request.method === 'GET') {
         return json(await diagnostiquer(env));
       }
