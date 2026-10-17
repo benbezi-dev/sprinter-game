@@ -55,7 +55,7 @@
  * et ce qu'ils demandent au pouce se lit sur la courbe mesuree (harnais,
  * automate parfaitement alterne — un vrai doigt fait moins bien) :
  *
- *     1 -> 9,25/s  100 m         8  -> 12,0/s  100 m en courbe
+ *     1 -> 10,5/s  100 m         8  -> 12,0/s  100 m en courbe
  *     2 ->  9,0/s  200 m ligne   9  -> 12,5/s  300 m ligne
  *     3 -> 11,0/s  100 m courbe  10 -> 13,0/s  200 m ligne
  *     4 -> 11,5/s  300 m ligne   11 -> 13,0/s  100 m
@@ -63,12 +63,12 @@
  *     6 -> 12,25/s 400 m ligne   13 -> 14,5/s  100 m en courbe
  *     7 -> 10,25/s 200 m ligne
  *
- * DEUX RETOUCHES LE 16/10, APRES AUDIT, ET ELLES SONT FACILES A DEFAIRE :
+ * UNE RETOUCHE LE 16/10, APRES AUDIT, FACILE A DEFAIRE :
  *
- *   — LA NUIT 1 PASSE DE 9"10 A 9"40 (10,5 -> 9,25 appuis/s). C'est la porte
- *     de toute l'edition : avec le calendrier, une nuit 1 manquee ferme les
- *     douze autres. A 10,5 appuis parfaitement alternes — un vrai doigt fait
- *     moins bien —, « tout le monde y arrive » n'etait plus vrai.
+ *   — LA NUIT 1 RESTE A 9"10 (10,5 appuis/s). L'audit l'avait passee a 9"40
+ *     (9,25 appuis/s), pour que la porte de l'edition s'ouvre a tout le monde ;
+ *     l'auteur l'a jugee trop lente et l'a redescendue le 17/10 (« 9"40 c'est
+ *     trop lent »). Le tableau de bord dira combien la passent.
  *   — LA NUIT 6 PASSE DE 36"20 A 36"35 (13,25 -> 12,25 appuis/s). Elle sautait
  *     d'un appui trois quarts au-dessus de la 5, pendant trente-six secondes,
  *     avant de redescendre a 10,25 sur la 7 : un mur au milieu du calendrier,
@@ -103,7 +103,7 @@
 // sprinteurs). Un cycle blocs / surpris / elan, la premiere nuit en blocs —
 // on decouvre le mode avec un depart connu — et la derniere surprise.
 export const NUITS = [
-  { n: 1,  epreuve: 'nuit-100',  imparti: 9.40,  retard: 9, depart: 'blocs',  nom: ['La ruelle', 'The alley'] },
+  { n: 1,  epreuve: 'nuit-100',  imparti: 9.10,  retard: 9, depart: 'blocs',  nom: ['La ruelle', 'The alley'] },
   { n: 2,  epreuve: 'nuit-200',  imparti: 18.30, retard: 10, depart: 'surpris', nom: ['Le portail', 'The gate'] },
   { n: 3,  epreuve: 'nuit-100v', imparti: 9.00,  retard: 8, depart: 'elan',  nom: ['Les cyprès', 'The cypresses'] },
   { n: 4,  epreuve: 'nuit-300',  imparti: 26.85, retard: 11, depart: 'blocs', nom: ['La lune rousse', 'The blood moon'] },
