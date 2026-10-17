@@ -23,7 +23,7 @@ for f in $films; do
   src="$ICI/images/$f"
   [[ -d "$src" ]] || { echo "✗ $f : aucune image (lance d'abord : node rendu.mjs film $f)"; continue; }
   "$FF" -y -loglevel error -framerate 30 -i "$src/f%05d.jpg" \
-    -c:v libx264 -profile:v high -level 4.2 -pix_fmt yuv420p -preset slow -crf 18 \
+    -c:v libx264 -profile:v high -level 5.1 -pix_fmt yuv420p -preset slow -crf 17 \
     -x264-params "keyint=60:min-keyint=30:scenecut=0" -movflags +faststart \
     "$OUT/sprinter-$f.mp4"
   echo "✓ $OUT/sprinter-$f.mp4"
