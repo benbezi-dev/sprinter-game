@@ -294,7 +294,7 @@ Par ordre d'impact sur un événement d'une nuit par jour :
 | 1.4 testeurs → joueurs | `halloween-carnet.ts` branché ; l'ancienne clé n'est reprise que dans l'espace testeur | `halloween-carnet-test.mjs` |
 | 2.1 30 à 105 Mo pour tous | plus aucun téléchargement de fond : la série de la nuit choisie, à l'ouverture du panneau | harnais |
 | 2.2 107 Mo de décor | série à 12° supprimée (elle ne servait qu'à la finale en 3 phases). Les autres séries sont gardées : le passage aux 4 familles change l'image de 1 à 2°, à valider à l'œil avant de supprimer | `halloween-camera-test.mjs` (aucune série morte) |
-| 2.3 difficulté | nuit 1 : 9″10 → 9″40 (9,25 appuis/s) ; nuit 6 : 36″20 → 36″35 (12,25 appuis/s) | `molosse-test.mjs` |
+| 2.3 difficulté | nuit 6 : 36″20 → 36″35 (12,25 appuis/s). La nuit 1, passée à 9″40, est revenue à 9″10 le 17/10 à la demande de l'auteur (« trop lent ») | `molosse-test.mjs` |
 | 2.4 mesure | marches `hw_entree`, `hw_nuit_n`, `hw_tenue_n` dans le tunnel ; bloc `halloween` dans `/stats` (tableau de bord, sous clé) | `halloween-ouverture-test.mjs` |
 | 2.5 petits bogues | bannière selon le calendrier, durées et dates traduites, noms de tracés traduits, `Date` exposé en CORS, compte à rebours jusqu'à 18 h locale pour la finale | essai Chromium (Paris et Montréal) |
 | 3.1 son | `halloween-traque-sons.ts` (synthèse, sans fichier) + `halloween-traque.ts` (lecture selon l'écart) | `halloween-traque-test.mjs` + essai Chromium |
