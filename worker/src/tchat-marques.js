@@ -243,14 +243,14 @@ export async function poster(db, { auteurKey, auteurName, texte, pour = null, pr
 
 /**
  * Un message du compte SprinterGame, dans le tchat commun. L'appelant a deja
- * verifie la cle. Le texte n'est que nettoye et borne : pas de filtre, c'est
- * l'auteur qui ecrit — il peut donner un lien vers le site.
+ * verifie la cle. Le texte n'est que nettoye : pas de filtre ni de limite de
+ * longueur (17/10, demande de l'auteur), c'est l'auteur qui ecrit — il peut
+ * donner un lien vers le site.
  */
 export async function posterOfficiel(db, { texte, maintenant = Date.now() }) {
   await ensureTchatTables(db);
   const propre = typeof texte === 'string' ? texte.replace(/\s+/g, ' ').trim() : '';
   if (!propre) return { status: 422, corps: { error: 'texte refuse', raison: 'vide' } };
-  if (propre.length > TCHAT_MAX) return { status: 422, corps: { error: 'texte refuse', raison: 'long' } };
   const r = await db.prepare(
     `INSERT INTO marques_tchat (evenement, quand, auteur_key, auteur_name, camp, prive, texte)
      VALUES (?, ?, ?, ?, ?, 0, ?)`

@@ -588,8 +588,9 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                     </button>
                   )}
                   <div className="flex-1 relative">
-                    <textarea value={texte} rows={1} maxLength={MAX}
-                              onChange={e => setTexte(e.target.value.slice(0, MAX))}
+                    {/* SprinterGame ecrit sans limite de longueur (17/10) */}
+                    <textarea value={texte} rows={1} maxLength={enJeu ? undefined : MAX}
+                              onChange={e => setTexte(enJeu ? e.target.value : e.target.value.slice(0, MAX))}
                               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
                               placeholder={onglet === 'prives'
                                 ? (fr ? `Message privé à ${avec}` : `Private message to ${avec}`)
@@ -597,7 +598,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                                 : duel ? (fr ? 'Écris aux deux camps…' : 'Write to both sides…')
                                 : (fr ? 'Écris à tout le monde…' : 'Write to everyone…')}
                               className="w-full resize-none px-3 py-2.5 pr-12 rounded-xl bg-background/70 border border-white/10 outline-none text-sm focus:border-primary/60" />
-                    <span className="absolute right-2.5 bottom-2.5 text-[10px] text-muted-foreground/70">{MAX - texte.length}</span>
+                    {!enJeu && <span className="absolute right-2.5 bottom-2.5 text-[10px] text-muted-foreground/70">{MAX - texte.length}</span>}
                   </div>
                   <button onClick={envoyer} disabled={envoi || !texte.trim()}
                           className="p-2.5 rounded-xl bg-primary text-black shrink-0 disabled:opacity-40">

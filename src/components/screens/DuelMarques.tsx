@@ -15,6 +15,7 @@ import { useRetour } from '@/hooks/use-retour';
 import FaceAFace from './DuelMarquesIntro';
 import { TchatMarques } from './TchatMarques';
 import { surCourrier, reprendreTouchee } from '@/game/boite';
+import { LANCEMENT_DUEL_MARQUES, DUREE_DUEL_MARQUES_MS } from '@/game/canal';
 
 /* ---------------------------------------------------------------------------
    LE DUEL DES MARQUES — Team adidas contre Team Nike (09/10/2026).
@@ -180,6 +181,7 @@ export function BanderoleMarques() {
     return surCourrier(() => ouvrirSur(reprendreTouchee(['marques_tchat', 'marques_invit'])));
   }, []);
   const { ref, vivant } = useVivant<HTMLButtonElement>();
+  const reste = useReste(FIN_DUEL);
   return (
     <motion.div {...MONTEE}>
       <motion.button ref={ref} onClick={() => setOuvert(true)} whileTap={{ scale: 0.98 }}
@@ -212,7 +214,9 @@ export function BanderoleMarques() {
 
         <span className="relative flex-1 min-w-0 flex flex-col">
           <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-white/90 truncate">
-            {fr ? 'Le duel · 100 · 200 · 400 m' : 'The duel · 100 · 200 · 400 m'}
+            {reste != null && reste > 0
+              ? (fr ? `Fin du duel dans ${horloge(reste)}` : `Duel ends in ${horloge(reste)}`)
+              : (fr ? 'Le duel · 100 · 200 · 400 m' : 'The duel · 100 · 200 · 400 m')}
           </span>
           <span className="font-black text-sm md:text-base leading-tight whitespace-nowrap">
             <motion.span className="inline-block" style={{ color: TEINTE.adidas }}
@@ -248,6 +252,63 @@ export function BanderoleMarques() {
         {ouvert && <EcranMarques tchatAuDepart={tchat} sansIntro={retour}
                                  onClose={() => { setOuvert(false); setTchat(null); setRetour(false); }} />}
       </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/* ------------------------------------------------- le compte a rebours (17/10) */
+
+/** La fin du duel connue du jeu lui-meme (vite.config.ts), avant que le tableau reponde. */
+const FIN_DUEL = LANCEMENT_DUEL_MARQUES + DUREE_DUEL_MARQUES_MS;
+
+/** Ce qui reste avant `fin`, relu chaque seconde ; null sans fin connue. */
+function useReste(fin: number | null | undefined): number | null {
+  const [maintenant, setMaintenant] = useState(() => Date.now());
+  useEffect(() => {
+    if (!fin || !Number.isFinite(fin)) return;
+    const id = window.setInterval(() => setMaintenant(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [fin]);
+  return fin && Number.isFinite(fin) ? Math.max(0, fin - maintenant) : null;
+}
+
+const deuxChiffres = (n: number) => String(n).padStart(2, '0');
+/** 9:05:07, ou 5:07 sous l'heure. */
+function horloge(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return h > 0 ? `${h}:${deuxChiffres(m)}:${deuxChiffres(r)}` : `${m}:${deuxChiffres(r)}`;
+}
+
+/** En haut de l'ecran du duel : le temps qui reste, aux couleurs du jeu. */
+function CompteARebours({ fin, fr, reduit }: { fin: number | null | undefined; fr: boolean; reduit: boolean }) {
+  const reste = useReste(fin);
+  if (reste == null) return null;
+  const fini = reste <= 0;
+  const derniereHeure = !fini && reste < 3600_000;
+  return (
+    <motion.div className="w-full rounded-2xl bg-card/80 border-2 border-primary/60 px-4 py-3 flex flex-col items-center gap-0.5"
+      initial={reduit ? false : { opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+      transition={reduit ? { duration: 0 } : { ...RESSORT.glissement, delay: 0.2 }}>
+      <span className="text-[10px] font-bold tracking-[0.25em] uppercase text-foreground/70">
+        {fini ? (fr ? 'Le duel est terminé' : 'The duel is over')
+              : derniereHeure ? (fr ? 'Dernière heure · fin du duel dans' : 'Final hour · duel ends in')
+              : (fr ? 'Fin du duel dans' : 'Duel ends in')}
+      </span>
+      {!fini && (
+        <motion.span className="font-display font-black tabular-nums text-4xl md:text-5xl leading-none text-primary"
+          animate={derniereHeure && !reduit ? { scale: [1, 1.06, 1] } : { scale: 1 }}
+          transition={derniereHeure && !reduit ? { duration: 1, repeat: Infinity, ease: 'easeOut' } : { duration: 0 }}>
+          {horloge(reste)}
+        </motion.span>
+      )}
+      {fin && (
+        <span className="text-[10px] text-muted-foreground">
+          {fini ? (fr ? 'Résultat sur le tableau.' : 'Result on the board.')
+                : `${fr ? 'ce soir' : 'tonight'} ${new Date(fin).toLocaleTimeString(fr ? 'fr-FR' : 'en-GB', { hour: '2-digit', minute: '2-digit' })}`
+                  + ` · ${fr ? 'chaque course compte' : 'every race counts'}`}
+        </span>
+      )}
     </motion.div>
   );
 }
@@ -375,6 +436,8 @@ export function EcranMarques({ onClose, tchatAuDepart = null, sansIntro = false 
             </button>
           </div>
         )}
+
+        <CompteARebours fin={t?.fin ?? FIN_DUEL} fr={fr} reduit={reduit} />
 
         {t && <Score t={t} fr={fr} reduit={reduit} />}
 
