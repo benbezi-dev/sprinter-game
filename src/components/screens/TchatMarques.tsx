@@ -29,8 +29,9 @@ import {
    Le tchat se relit toutes les quatre secondes tant qu'il est ouvert, et
    tout de suite quand la boite sonne (un prive, une designation).
 
-   Les J'AIME (17/10) : le coeur sous chaque message d'un autre, ou un
-   double tap sur le message, qui fait eclore un grand coeur. Le compteur se voit aussi sous les siens.
+   Les J'AIME (17/10) : un double tap sur le message, qui fait eclore un
+   grand coeur. Le petit coeur rouge et son compteur n'apparaissent qu'avec
+   des j'aime ; le toucher retire le sien. Le compteur se voit aussi sous les siens.
 
    Le compte SPRINTERGAME (16/10) : la voix du jeu, d'aucun camp. Ses messages
    portent un badge et une teinte a eux ; on ne peut ni lui repondre, ni le
@@ -215,17 +216,18 @@ function Ligne({ m, fr, onMenu, onAimer }: { m: Message; fr: boolean; onMenu: (m
       </AnimatePresence>
       <span className="flex items-end gap-2">
         <span className="flex-1 min-w-0 break-words whitespace-pre-wrap text-foreground/90">{m.texte}</span>
-        {(!m.a_moi || n > 0) && (
+        {/* Pas de coeur vide (17/10) : il n'apparait, rouge, qu'avec des j'aime.
+            On aime d'un double tap ; toucher le coeur retire ou ajoute le sien. */}
+        {n > 0 && (
           <button onClick={() => onAimer(m)} disabled={m.a_moi}
                   aria-pressed={!!m.aime}
                   aria-label={m.aime ? (fr ? 'Je n’aime plus' : 'Unlike') : (fr ? 'J’aime' : 'Like')}
-                  className={`shrink-0 -mb-0.5 flex items-center gap-0.5 px-1 py-0.5 rounded-md text-[10px] font-bold
-                              ${m.aime ? 'text-[#FF4D6D]' : 'text-muted-foreground/60 hover:text-foreground'} disabled:hover:text-muted-foreground/60`}>
+                  className="shrink-0 -mb-0.5 flex items-center gap-0.5 px-1 py-0.5 rounded-md text-[10px] font-bold text-[#FF4D6D]">
             <motion.span key={m.aime ? 'oui' : 'non'} initial={m.aime ? { scale: 0.4 } : false} animate={{ scale: 1 }}
                          transition={RESSORT.trophee} className="flex">
-              <Heart className="w-3.5 h-3.5" fill={m.aime ? 'currentColor' : 'none'} aria-hidden />
+              <Heart className="w-3.5 h-3.5" fill="currentColor" aria-hidden />
             </motion.span>
-            {n > 0 && <span>{n}</span>}
+            <span>{n}</span>
           </button>
         )}
       </span>
