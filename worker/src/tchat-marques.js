@@ -62,6 +62,14 @@
    sonne chez personne : ce n'est pas une raison de reveiller un telephone.
    La lecture rend les compteurs des derniers messages (`aimes`) a chaque
    fois, puisqu'un j'aime arrive sur un message deja recu.
+
+   LES PRIVES LUS (signale par l'auteur, 18/10/2026) : une conversation privee
+   restait marquee non lue apres avoir ete ouverte. Le jeu la croyait non lue
+   tant que le dernier message n'etait pas le sien — ouvrir n'y changeait rien.
+   Ouvrir une conversation la marque lue ICI, par nom et non par appareil :
+   lue sur un telephone, elle l'est sur les autres, et au redemarrage. On
+   retient, par lecteur et par interlocuteur, le dernier message RECU qu'il a
+   vu (`marques_tchat_lus`) ; la lecture rend cette table a chaque fois.
 --------------------------------------------------------------------------- */
 import { EVENEMENT, inscriptionDe, ensureMarquesTables } from './marques.js';
 import { texteRecevable, TCHAT_MAX } from './mot.js';
@@ -147,6 +155,13 @@ export async function ensureTchatTables(db) {
       name_key TEXT NOT NULL,
       quand INTEGER NOT NULL,
       PRIMARY KEY (message_id, name_key)
+    )`),
+    // Le dernier prive recu de `avec_key` que `name_key` a vu.
+    db.prepare(`CREATE TABLE IF NOT EXISTS marques_tchat_lus (
+      name_key TEXT NOT NULL,
+      avec_key TEXT NOT NULL,
+      jusqua INTEGER NOT NULL,
+      PRIMARY KEY (name_key, avec_key)
     )`),
   ]);
   pret.add(db);
@@ -326,7 +341,45 @@ export async function lire(db, { cleLecteur, depuis = 0 }) {
     const a = parId.get(m.id);
     if (a) { m.aimes = a.n; m.aime = a.moi; }
   }
-  return { messages, dernier: messages.length ? messages[messages.length - 1].id : d, aimes };
+  const lus = cleLecteur ? await mesLus(db, cleLecteur) : [];
+  return { messages, dernier: messages.length ? messages[messages.length - 1].id : d, aimes, lus };
+}
+
+/** Ses conversations privees lues : `{ avec, id }`, la cle de l'autre et le dernier prive recu vu. */
+async function mesLus(db, cleLecteur) {
+  const { results } = await db.prepare(
+    `SELECT avec_key, jusqua FROM marques_tchat_lus WHERE name_key = ? ORDER BY jusqua DESC LIMIT 500`
+  ).bind(cleLecteur).all();
+  return (results || []).map(r => ({ avec: r.avec_key, id: r.jusqua }));
+}
+
+/**
+ * Marquer lue la conversation avec `avec`, jusqu'au message `jusqua` (le
+ * dernier que l'ecran montre). On retient le dernier prive RECU de lui qui
+ * n'est pas plus loin : un id invente ne marque rien qui ne soit arrive, et
+ * un message arrive apres l'ouverture reste non lu. Ne recule jamais.
+ */
+export async function marquerLu(db, { cleLecteur, avec, jusqua }) {
+  await ensureTchatTables(db);
+  const avecKey = cle(avec);
+  const n = Number(jusqua);
+  if (!cleLecteur || !avecKey || avecKey === cleLecteur) return { status: 400, corps: { error: 'conversation invalide' } };
+  if (!Number.isInteger(n) || n <= 0) return { status: 400, corps: { error: 'message invalide' } };
+  const r = await db.prepare(
+    `SELECT MAX(id) AS id FROM marques_tchat
+      WHERE evenement = ? AND prive = 1 AND auteur_key = ? AND pour_key = ? AND id <= ?`
+  ).bind(EVENEMENT, avecKey, cleLecteur, n).first();
+  const id = r && r.id != null ? r.id : 0;
+  if (id) {
+    await db.prepare(
+      `INSERT INTO marques_tchat_lus (name_key, avec_key, jusqua) VALUES (?, ?, ?)
+       ON CONFLICT(name_key, avec_key) DO UPDATE SET jusqua = MAX(jusqua, excluded.jusqua)`
+    ).bind(cleLecteur, avecKey, id).run();
+  }
+  const l = await db.prepare(
+    `SELECT jusqua FROM marques_tchat_lus WHERE name_key = ? AND avec_key = ?`
+  ).bind(cleLecteur, avecKey).first();
+  return { status: 200, corps: { ok: true, avec: avecKey, id: (l && l.jusqua) || 0 } };
 }
 
 /**

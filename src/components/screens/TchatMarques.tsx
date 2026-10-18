@@ -13,8 +13,8 @@ import { bloquer, MOTIFS, type Motif } from '@/game/moderation';
 import { NOM_CAMP, type Camp } from '@/game/marques';
 import {
   lireTchat, ecrire, signalerMessage, lireInvitables, inviter, poserVu, dernierVu,
-  ecrireOfficiel, aLaCleOfficielle, aimerMessage,
-  type Message, type Participant, type Invitation, type Invitable, type Refus,
+  ecrireOfficiel, aLaCleOfficielle, aimerMessage, marquerLu as marquerLuServeur,
+  type Message, type Lu, type Participant, type Invitation, type Invitable, type Refus,
 } from '@/game/tchat-marques';
 
 /* ---------------------------------------------------------------------------
@@ -33,6 +33,11 @@ import {
    grand coeur. Le petit coeur rouge et son compteur n'apparaissent qu'avec
    des j'aime ; le toucher retire le sien. Le compteur se voit aussi sous les siens.
 
+   Les PRIVES LUS (18/10) : une conversation est non lue tant qu'un message
+   recu de l'autre n'a pas ete vu — ouverte, tiroir deplie — ni suivi d'une
+   reponse. Ouvrir la marque lue sur le serveur, qui rend ses marques a chaque
+   lecture : elles tiennent a la relecture, a la reouverture, au redemarrage.
+
    Le compte SPRINTERGAME (16/10) : la voix du jeu, d'aucun camp. Ses messages
    portent un badge et une teinte a eux ; on ne peut ni lui repondre, ni le
    signaler, ni le bloquer. Le telephone qui porte sa cle (tchat-officiel.ts)
@@ -49,6 +54,8 @@ const RELIRE_REPLIE_MS = 15000;
 /** Replie sur l'accueil, chez tous les joueurs : une relecture par minute suffit a la pastille. */
 const RELIRE_REPLIE_ACCUEIL_MS = 60000;
 const MAX = 140;
+/** La cle d'un nom, comme le serveur la forme (tchat-marques.js, `cle`). */
+const cleDe = (nom: string) => nom.trim().toLowerCase().slice(0, 40);
 
 type Onglet = 'tous' | 'prives' | 'inviter';
 
@@ -96,6 +103,8 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [refus, setRefus] = useState<Refus | null>(null);
   const [charge, setCharge] = useState(false);
+  // les conversations privees lues : cle de l'autre -> dernier message vu
+  const [lus, setLus] = useState<Map<string, number>>(() => new Map());
   const dernier = useRef(0);
   const enCours = useRef(false);
   const enVol = useRef(new Set<number>());   // les coeurs touches, en route
@@ -112,6 +121,7 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
     setCharge(true);
     if (r.participants) setParticipants(r.participants);
     if (r.invitations) setInvitations(r.invitations);
+    if (r.lus) poserLus(r.lus);
     if (r.messages.length) dernier.current = Math.max(dernier.current, r.dernier);
     // Les j'aime arrivent sur des messages deja recus : on les repose a chaque
     // lecture, sauf sur un message qu'on vient de toucher (la reponse arrive).
@@ -128,6 +138,22 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
       });
     });
   }, []);
+
+  // Une marque ne recule jamais : on garde la plus avancee, d'ici ou du serveur.
+  const poserLus = useCallback((liste: Lu[]) => setLus(l => {
+    let n: Map<string, number> | null = null;
+    for (const x of liste) {
+      if (x.id > (l.get(x.avec) || 0)) (n ??= new Map(l)).set(x.avec, x.id);
+    }
+    return n || l;
+  }), []);
+  // Ouvrir une conversation la marque lue : tout de suite a l'ecran, puis
+  // sur le serveur, qui la rendra aux lectures suivantes et au redemarrage.
+  const marquerLu = useCallback(async (avec: string, jusqua: number) => {
+    poserLus([{ avec: cleDe(avec), id: jusqua }]);
+    const r = await marquerLuServeur(avec, jusqua);
+    if (r) poserLus([r]);
+  }, [poserLus]);
 
   // Un coeur touche : tout de suite a l'ecran, puis le compteur du serveur.
   const poser = (id: number, aimes: number, aime: boolean) =>
@@ -152,7 +178,7 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
 
   const ajouter = (m: Message) => setMessages(x => (x.some(y => y.id === m.id) ? x : [...x, m]));
   const oter = (de: string) => setMessages(x => x.filter(m => m.de.toLowerCase() !== de.toLowerCase()));
-  return { messages, participants, invitations, refus, charge, relire, ajouter, oter, aimer };
+  return { messages, participants, invitations, refus, charge, lus, relire, ajouter, oter, aimer, marquerLu };
 }
 
 /** Une ligne du tchat. */
@@ -514,19 +540,26 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   const cleMoi = moi.name.trim().toLowerCase();
 
   const communs = t.messages.filter(m => !m.prive);
-  // les conversations privees : une par interlocuteur, la plus recente d'abord
+  // les conversations privees : une par interlocuteur, la plus recente d'abord.
+  // Non lue : un message recu apres la marque du serveur et apres sa propre
+  // derniere reponse — repondre, c'est avoir lu ce qui precede.
   const conversations = useMemo(() => {
     const parQui = new Map<string, Message[]>();
     for (const m of t.messages.filter(x => x.prive)) {
       const qui = m.a_moi ? (m.pour || '') : m.de;
       if (!qui) continue;
-      const k = qui.toLowerCase();
+      const k = cleDe(qui);
       parQui.set(k, [...(parQui.get(k) || []), m]);
     }
-    return [...parQui.values()].map(ms => ({
-      qui: ms[0].a_moi ? ms[0].pour! : ms[0].de, ms, dernier: ms[ms.length - 1],
-    })).sort((a, b) => b.dernier.id - a.dernier.id);
-  }, [t.messages]);
+    return [...parQui.entries()].map(([k, ms]) => {
+      let vu = t.lus.get(k) || 0;
+      for (const m of ms) if (m.a_moi && m.id > vu) vu = m.id;
+      return {
+        k, qui: ms[0].a_moi ? ms[0].pour! : ms[0].de, ms, dernier: ms[ms.length - 1],
+        nonLu: ms.some(m => !m.a_moi && m.id > vu),
+      };
+    }).sort((a, b) => b.dernier.id - a.dernier.id);
+  }, [t.messages, t.lus]);
   // La notification ne dit pas si c'etait un prive ou une designation (elle ne
   // porte que son genre) : on va au dernier message qui vise ce joueur, une fois.
   const vise = useRef(!viserLeDernier);
@@ -537,8 +570,13 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
     if (!m) return;
     if (m.prive) { setOnglet('prives'); setAvec(m.de); } else setOnglet('tous');
   }, [t.charge, t.messages]);
-  const fil = onglet === 'tous' ? communs
-    : avec ? (conversations.find(c => c.qui.toLowerCase() === avec.toLowerCase())?.ms || []) : [];
+  const ouverte = onglet === 'prives' && avec ? conversations.find(c => c.k === cleDe(avec)) : undefined;
+  const fil = onglet === 'tous' ? communs : ouverte?.ms || [];
+  // la conversation ouverte sous les yeux, tiroir deplie : elle est lue
+  const { marquerLu } = t;
+  useEffect(() => {
+    if (deplie && ouverte?.nonLu) marquerLu(ouverte.qui, ouverte.dernier.id);
+  }, [deplie, ouverte?.nonLu, ouverte?.qui, ouverte?.dernier.id, marquerLu]);
 
   // deplier le tchat, c'est avoir vu ce qu'il porte ; replie, il compte
   const [vuJusqua, setVuJusqua] = useState(() => dernierVu());
@@ -570,7 +608,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   // SprinterGame n'ecrit que dans TOUS, et n'a pas besoin d'un camp pour cela
   const enJeu = cleJeu && voixDuJeu && onglet === 'tous';
   const peutEcrire = (moi.inscrit || enJeu) && !t.refus && (onglet === 'tous' || !!avec);
-  const nonLusPrives = conversations.filter(c => !c.dernier.a_moi).length;
+  const nonLusPrives = conversations.filter(c => c.nonLu).length;
 
   const ressort = reduit ? { duration: 0 } : RESSORT.panneau;
   // le tiroir se tire par sa poignee seulement : le fil, lui, defile
@@ -690,7 +728,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                   <button key={c.qui} onClick={() => setAvec(c.qui)}
                           className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-bold border
                                       ${avec && avec.toLowerCase() === c.qui.toLowerCase() ? 'bg-white/15 border-white/40' : 'border-white/10'}`}>
-                    {c.qui}{!c.dernier.a_moi && <span className="ml-1 text-primary">•</span>}
+                    {c.qui}{c.nonLu && <span className="ml-1 text-primary">•</span>}
                   </button>
                 ))}
                 {avec && !conversations.some(c => c.qui.toLowerCase() === avec.toLowerCase()) && (

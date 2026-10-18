@@ -1,13 +1,13 @@
 // Le tchat du duel des marques (worker/src/tchat-marques.js), sur une base
 // SQLite en memoire : poster, designer, ecrire en prive, lire, bloquer,
-// signaler, retirer, inviter, aimer, et les cadences.
+// signaler, retirer, inviter, aimer, marquer lu, et les cadences.
 //
 //   node tools/tchat-marques-test.mjs
 import { DatabaseSync } from 'node:sqlite';
 import {
   poster, lire, participants, invitables, inviter, mesInvitations, signalerMessage,
   reserverSonnerie, ECART_MS, PAR_MINUTE, INVITS_PAR_JOUR, SONNERIE_TCHAT_MS,
-  posterOfficiel, imiteOfficiel, aimer,
+  posterOfficiel, imiteOfficiel, aimer, marquerLu,
 } from '../worker/src/tchat-marques.js';
 import { choisirCamp } from '../worker/src/marques.js';
 import { bloquer, trancher, listeSignalements } from '../worker/src/moderation.js';
@@ -198,6 +198,27 @@ ok('Bob aime le prive de Carla', (await aimer(db, { id: pv.id, cleLecteur: 'bob'
 ok('Dan ne voit pas le compteur de ce prive', !(await lire(db, { cleLecteur: 'dan', depuis: 1e9 })).aimes.some(x => x.id === pv.id));
 ok('message inconnu : 404', (await aimer(db, { id: 999999, cleLecteur: 'bob' })).status === 404);
 ok('message retire : 404', (await aimer(db, { id: cible.id, cleLecteur: 'bob' })).status === 404);
+
+titre('prives lus');
+const lusDe = async k => (await lire(db, { cleLecteur: k, depuis: 1e9 })).lus;
+ok('rien de lu au depart', (await lusDe('bob')).length === 0);
+const recus = (await lu('bob')).messages.filter(m => m.prive && m.de === 'Carla');
+const dernierCarla = recus[recus.length - 1].id;
+r = await marquerLu(db, { cleLecteur: 'bob', avec: 'Carla', jusqua: dernierCarla });
+ok('Bob ouvre la conversation avec Carla : lue jusqu a son dernier prive', r.status === 200 && r.corps.avec === 'carla' && r.corps.id === dernierCarla, r.corps);
+let l = await lusDe('bob');
+ok('la lecture suivante rend la marque', l.length === 1 && l[0].avec === 'carla' && l[0].id === dernierCarla, l);
+r = await marquerLu(db, { cleLecteur: 'bob', avec: 'carla', jusqua: 1e9 });
+ok('un id invente ne marque que ce qui est arrive', r.corps.id === dernierCarla, r.corps);
+r = await marquerLu(db, { cleLecteur: 'bob', avec: 'carla', jusqua: 1 });
+ok('une marque ne recule pas', r.corps.id === dernierCarla, r.corps);
+r = await poster(db, { auteurKey: 'carla', auteurName: 'Carla', texte: 'encore moi', pour: 'Bob', prive: true, maintenant: pas() });
+l = await lusDe('bob');
+ok('un prive arrive apres : au-dela de la marque, donc non lu', r.corps.message.id > l[0].id);
+ok('Carla n a rien lu de Bob', (await lusDe('carla')).length === 0);
+ok('conversation avec soi-meme : refusee', (await marquerLu(db, { cleLecteur: 'bob', avec: 'Bob', jusqua: 5 })).status === 400);
+ok('id invalide : refuse', (await marquerLu(db, { cleLecteur: 'bob', avec: 'carla', jusqua: 'x' })).status === 400);
+ok('personne a qui on n a jamais parle : rien a marquer', (await marquerLu(db, { cleLecteur: 'bob', avec: 'zoe', jusqua: 5 })).corps.id === 0);
 
 console.log(e ? `\n   ${e} ECHEC(S)\n` : '\n   tout passe\n');
 process.exit(e ? 1 : 0);

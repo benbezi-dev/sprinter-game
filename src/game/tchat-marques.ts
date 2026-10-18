@@ -32,6 +32,8 @@ export type Message = {
 };
 /** Le compteur de j'aime d'un message, rendu a chaque lecture. */
 export type Aimes = { id: number; n: number; moi: boolean };
+/** Une conversation privee lue (18/10) : la cle de l'autre, le dernier prive recu de lui qu'on a vu. */
+export type Lu = { avec: string; id: number };
 export type Participant = { name: string; camp: Camp | 'joueur'; epreuve: Epreuve | null };
 export type Invitation = { de: string; camp: Camp | null; quand: number };
 export type Invitable = { name: string; invite: boolean };
@@ -82,6 +84,8 @@ export type Lecture = {
   participants?: Participant[]; invitations?: Invitation[];
   /** Les j'aime des derniers messages, deja recus ou non. */
   aimes?: Aimes[];
+  /** Ses conversations privees lues, rendues a chaque lecture. */
+  lus?: Lu[];
 };
 
 /**
@@ -137,6 +141,16 @@ export async function signalerMessage(id: number, motif: string): Promise<boolea
 export async function aimerMessage(id: number, aime: boolean): Promise<{ aimes: number; aime: boolean } | null> {
   const { status, d } = await appel('/marques/tchat/aimer', { id, aime });
   return status === 200 ? { aimes: d.aimes, aime: d.aime } : null;
+}
+
+/**
+ * Marquer lue la conversation privee avec `avec`, jusqu'au message `jusqua`.
+ * Rend ce que le serveur retient, ou null : le jeu garde alors sa marque
+ * locale, et la redemandera a la prochaine ouverture.
+ */
+export async function marquerLu(avec: string, jusqua: number): Promise<Lu | null> {
+  const { status, d } = await appel('/marques/tchat/lu', { avec, jusqua });
+  return status === 200 ? { avec: d.avec, id: d.id } : null;
 }
 
 /** Le top 500 des trois epreuves, moins les inscrits. */
