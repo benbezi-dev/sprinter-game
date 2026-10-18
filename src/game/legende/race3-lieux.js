@@ -5,7 +5,7 @@
 // en tete ». Un essai par ElevenLabs a ete juge trop loin de race3 ; on
 // repart donc de race3 lui-meme (fabriquerCourse, sprinter-app.js) : meme
 // batterie, meme basse en doubles-croches, meme arpege, meme bourdon, meme
-// stab, a 160 BPM. Ce qui fait le pays tient en quatre reglages :
+// stab, au tempo de race3, 150 BPM (160 essaye, ramene a 150 le 18/10). Ce qui fait le pays tient en quatre reglages :
 //   prog        l'harmonie (la cadence andalouse a Barcelone...) ;
 //   bassPat     le dessin de basse de race3, juste ses notes changees ;
 //   claps       les mains du public quand le lieu en a (palmas, qraqeb...) ;
@@ -26,7 +26,7 @@ export const RACE3 = {
   bassAmp: 0.52, padAmp: 0.10, arp: 16, arpAmp: 0.13, drone: 0.20, droneSemi: -5, stab: 0.20,
 };
 
-const BASE = { ...RACE3, bpm: 160 };
+const BASE = { ...RACE3 };
 // la basse de race3, sa quinte diminuee devenue juste (tonalites majeures et mineures)
 const BASSE_JUSTE = [0, 0, 7, 0, 0, 0, 7, 0, 12, 0, 7, 0, 0, 7, 0, 7];
 // la meme, avec la seconde mineure des modes orientaux et phrygiens
@@ -54,18 +54,33 @@ function enAvant(cfg, g) {
 const tr = (mesure, k) => mesure.map(([s, x, l]) => [s + k, x, l]);
 
 const LIEUX = {
-  // MENOLE — Kouassi « le Crabe », 12 ans, pieds nus. Le coupe-decale :
-  // majeur, guitare zouglou qui saute en pentatonique, claps sur les
-  // contretemps comme a la plage.
+  // MENOLE — Kouassi « le Crabe », 12 ans, pieds nus. Le coupe-decale
+  // d'Abidjan : grosse caisse sur chaque temps, mains sur les contretemps,
+  // basse qui saute d'octave ; devant, la guitare « sebene » qui roule en
+  // doubles-croches sur les accords (I, IV, V, IV, majeur), une 2e guitare
+  // tient le refrain dessous, et le sifflet de l'atalaku lance chaque tour.
   menole: {
-    ...BASE, prog: [[0, MAJ], [5, MAJ], [7, MAJ], [5, MAJ]], bassPat: BASSE_JUSTE,
+    ...BASE, prog: [[0, MAJ], [5, MAJ], [7, MAJ], [5, MAJ]],
+    kick: [0, 1, 2, 3], snare: [1, 3, 3.75],
+    bassPat: [0, 0, 12, 0, 7, 0, 12, 0, 0, 0, 12, 0, 7, 0, 4, 7],
     stabSemi: 7, claps: [0.5, 1.5, 2.5, 3.5], clapAmp: 1.1,
-    couches: [{ instrument: 'pincee', octave: 3, amp: 0.24, melodie: [
-      [[12, 0, .25], [9, .25, .25], [7, .5, .25], [9, .75, .25], [12, 1, .5], [9, 1.5, .25], [7, 1.75, .25], [4, 2, .5], [7, 2.5, .5], [9, 3, .5], [7, 3.5, .5]],
-      [[14, 0, .25], [12, .25, .25], [9, .5, .25], [12, .75, .25], [14, 1, .5], [12, 1.5, .25], [9, 1.75, .25], [5, 2, .5], [9, 2.5, .5], [12, 3, .5], [9, 3.5, .5]],
-      [[16, 0, .25], [14, .25, .25], [11, .5, .25], [14, .75, .25], [16, 1, .5], [14, 1.5, .25], [11, 1.75, .25], [7, 2, .5], [11, 2.5, .5], [14, 3, .5], [11, 3.5, .5]],
-      [[14, 0, .5], [12, .5, .5], [9, 1, .5], [7, 1.5, .5], [4, 2, .5], [2, 2.5, .5], [0, 3, 1]],
-    ] }],
+    couches: [
+      { instrument: 'pincee', octave: 3, amp: 0.15, melodie: (() => {
+        const sebene = (r) => [12, 16, 19, 16, 24, 19, 16, 12, 14, 16, 19, 21, 19, 16, 14, 12]
+          .map((n, i) => [r + n, i * 0.25, 0.25]);
+        return [sebene(0), sebene(5), sebene(7), sebene(5)];
+      })() },
+      { instrument: 'pincee', octave: 2, amp: 0.20, melodie: [
+        [[12, 0, .25], [9, .25, .25], [7, .5, .25], [9, .75, .25], [12, 1, .5], [9, 1.5, .25], [7, 1.75, .25], [4, 2, .5], [7, 2.5, .5], [9, 3, .5], [7, 3.5, .5]],
+        [[14, 0, .25], [12, .25, .25], [9, .5, .25], [12, .75, .25], [14, 1, .5], [12, 1.5, .25], [9, 1.75, .25], [5, 2, .5], [9, 2.5, .5], [12, 3, .5], [9, 3.5, .5]],
+        [[16, 0, .25], [14, .25, .25], [11, .5, .25], [14, .75, .25], [16, 1, .5], [14, 1.5, .25], [11, 1.75, .25], [7, 2, .5], [11, 2.5, .5], [14, 3, .5], [11, 3.5, .5]],
+        [[14, 0, .5], [12, .5, .5], [9, 1, .5], [7, 1.5, .5], [4, 2, .5], [2, 2.5, .5], [0, 3, 1]],
+      ] },
+      // le sifflet : deux coups secs, puis un long, au debut du tour
+      { instrument: 'souffle', octave: 6, amp: 0.10, melodie: [
+        [[7, 0, .2], [7, .5, .2], [7, 1, .9]], [], [], [],
+      ] },
+    ],
   },
 
   // KYOTO — Sora Kanzaki « Kitsune », l'aube sur les marches de Fushimi Inari.

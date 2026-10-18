@@ -10,7 +10,7 @@
 //   - les mains du public quand le lieu en a (palmas...) ;
 //   - UN REFRAIN, joue par un instrument du pays synthetise avec les memes
 //     briques (`tone`) : guitare pincee, flute, anche, cloche.
-// Le tempo passe a 160 (demande du 18/10).
+// Au tempo de race3, 150 (160 essaye puis ecarte le 18/10).
 //
 //   node tools/musique/legende-race3.mjs <dossier> [lieu...]
 // ecrit <lieu>.wav (cinq boucles, pour l'ecoute) ; `race3-150` et
