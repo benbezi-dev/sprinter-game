@@ -1,0 +1,823 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — monteur du reel « la barre d'adresse »</title>
+<!-- ===========================================================================
+     LE REEL QUI SE TOURNE ET QUI NE SE MONTE PAS.
+
+     « Le temps de lire cette phrase, la course est deja finie. » La phrase est
+     une affirmation verifiable, donc le film doit etre une preuve et pas une
+     demonstration montee : un seul plan, de bout en bout, un telephone filme
+     de haut, l'adresse tapee a la main, la course jouee, la ligne franchie.
+     Une coupe — une seule, meme invisible — et il ne reste qu'une publicite.
+
+     CETTE PAGE NE COUPE DONC RIEN. Elle ne sait pas couper : le montage tient
+     en UN plan qui part a zero et va jusqu'au bout du fichier, et un garde-fou
+     refuse d'enregistrer si on essaie de lui en donner deux, ou de faire partir
+     le plan ailleurs qu'a zero. Ce qu'elle ajoute par-dessus la prise tient en
+     trois choses, et c'est tout :
+
+       - le CHRONOMETRE INCRUSTE, qui part au premier caractere tape et s'arrete
+         a la ligne d'arrivee. Il ne s'invente pas : il se calcule sur deux
+         images relevees dans le rush. C'est lui, l'argument du reel ;
+       - les DEUX CARTONS, la phrase coupee en deux moities ;
+       - la signature du compte.
+
+     LE SON DE LA PRISE EST GARDE. Une respiration suffit a dire que c'est vrai.
+     La piste audio du fichier est donc branchee dans le flux enregistre — ce
+     reel est le seul du lot a ne pas etre muet, et c'est voulu.
+
+     POURQUOI UN CANVAS ET MEDIARECORDER. ffmpeg n'est pas sur la machine de
+     montage, Media Encoder non plus : pas de decoupe hors ligne, pas de
+     concatenation, pas de mux audio en ligne de commande. Tout se joue dans le
+     navigateur, sur un canvas, et s'enregistre avec MediaRecorder — le
+     mecanisme que src/game/review.ts emploie deja pour filmer la course chez
+     le joueur.
+
+     ET POURQUOI `avancer()` PLUTOT QU'UN `currentTime =`. Les WebM que produit
+     Playwright n'ont aucun index de recherche : dans Chromium,
+     `video.currentTime = 32.6` ne fait RIEN, l'evenement `seeked` arrive avec
+     la video toujours a zero, sans la moindre erreur, et le film montre
+     l'ecran-titre en croyant filmer la course. Une prise tournee au telephone
+     est un MP4 indexe et se deplace normalement — mais la page ne le SUPPOSE
+     pas : elle mesure la fiabilite du deplacement au chargement, et retombe
+     sur la lecture a seize fois la vitesse quand le fichier ne se laisse pas
+     atteindre. L'ecart de calage est affiche avant de filmer, toujours.
+
+     Ce qui se dessine vient de src/game/trace-affiche.js et de nulle part
+     ailleurs : `morceauxChrono` et `poserMorceaux` composent le chrono en trois
+     morceaux pour que la virgule ne danse pas, `s2` convertit les millisecondes
+     a la virgule et a deux decimales. La composition, elle, est locale : les
+     internes de la charte ne sont pas exportes, et les exporter pour recomposer
+     dehors est exactement la divergence que l'en-tete de trace-affiche.js
+     interdit.
+=========================================================================== -->
+<!-- LES POLICES. Google Fonts par defaut, comme src/index.css. `?polices=`
+     detourne le lien vers une copie locale : c'est ce qui permet de monter
+     sans reseau, et de ne pas dependre d'un service exterieur le jour ou l'on
+     poste. Meme mecanisme que SPRINTER_POLICES dans tools/chrome.mjs. -->
+<link id="polices" rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;700;800;900&family=Space+Mono:wght@400;700&display=swap">
+<style>
+  :root { --or:#F8CD4A; --encre:#EEF0F8; --bord:#1E293B; --nuit:#060913; }
+  * { box-sizing:border-box }
+  body { margin:0; background:var(--nuit); color:var(--encre);
+         font:14px/1.5 Outfit, ui-sans-serif, system-ui, sans-serif; }
+  main { display:flex; gap:24px; padding:20px; align-items:flex-start; flex-wrap:wrap }
+  #cv { width:324px; height:576px; background:#000; border:1px solid var(--bord); border-radius:8px }
+  .panneau { flex:1; min-width:380px; max-width:620px }
+  h1 { font:800 20px Outfit; letter-spacing:-0.02em; margin:0 0 4px }
+  h1 + p { margin:0 0 18px; color:#94a3b8; font-size:13px }
+  fieldset { border:1px solid var(--bord); border-radius:8px; padding:12px 14px; margin:0 0 14px }
+  legend { font:700 11px Outfit; letter-spacing:.14em; text-transform:uppercase; color:var(--or); padding:0 6px }
+  button { font:700 13px Outfit; background:#131a2c; color:var(--encre); border:1px solid var(--bord);
+           border-radius:6px; padding:8px 12px; cursor:pointer }
+  button:hover:not(:disabled) { border-color:var(--or); color:var(--or) }
+  button:disabled { opacity:.4; cursor:not-allowed }
+  button.fort { background:var(--or); color:#060913; border-color:var(--or) }
+  .rang { display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 }
+  code, .mono { font:700 13px 'Space Mono', ui-monospace, monospace }
+  table { width:100%; border-collapse:collapse; font-size:13px }
+  td { padding:3px 0; vertical-align:top }
+  td:first-child { color:#94a3b8; width:46% }
+  td:last-child { font:700 13px 'Space Mono', monospace; color:var(--encre) }
+  .alerte { border-color:#7f1d1d; background:#1a0f12 }
+  .alerte legend { color:#f87171 }
+  #journal { font:12px/1.6 'Space Mono', monospace; white-space:pre-wrap; color:#94a3b8;
+             max-height:200px; overflow:auto }
+  textarea { width:100%; min-height:64px; background:#0b1020; color:var(--encre);
+             border:1px solid var(--bord); border-radius:6px; padding:8px; font:13px Outfit }
+  .note { color:#64748b; font-size:12px; margin:6px 0 0 }
+  video { display:none }
+</style>
+
+<main>
+  <canvas id="cv" width="1080" height="1920"></canvas>
+
+  <div class="panneau">
+    <h1>Le temps de lire cette phrase</h1>
+    <p>Un seul plan, jamais coupe. Le chronometre se calcule sur la prise.</p>
+
+    <fieldset>
+      <legend>1 · la prise</legend>
+      <div class="rang">
+        <input type="file" id="fichier" accept="video/*">
+      </div>
+      <table id="infos"><tr><td>aucun fichier</td><td>—</td></tr></table>
+      <p class="note">Un seul fichier, jamais deux. La prise entre entiere : elle
+        part a zero et va jusqu'au bout.</p>
+    </fieldset>
+
+    <fieldset>
+      <legend>2 · le reperage, image par image</legend>
+      <div class="rang">
+        <button id="recul10">&laquo; 10</button>
+        <button id="recul1">&lsaquo; 1</button>
+        <span class="mono" id="position">0,000 s · image 0</span>
+        <button id="avance1">1 &rsaquo;</button>
+        <button id="avance10">10 &raquo;</button>
+      </div>
+      <div class="rang">
+        <button id="posA">A · premier caractere tape</button>
+        <button id="posB">B · ligne d'arrivee</button>
+      </div>
+      <table id="reperes">
+        <tr><td>A — depart du chronometre</td><td id="valA">—</td></tr>
+        <tr><td>B — arret du chronometre</td><td id="valB">—</td></tr>
+        <tr><td>total affiche</td><td id="valTotal">—</td></tr>
+        <tr><td>images par seconde</td><td><input id="fps" type="number" value="30" min="1" max="120"
+            style="width:64px;background:#0b1020;color:#EEF0F8;border:1px solid #1E293B;border-radius:4px;
+                   padding:2px 4px;font:700 13px 'Space Mono',monospace"></td></tr>
+      </table>
+    </fieldset>
+
+    <fieldset id="cadreSon">
+      <legend>3 · le son, l'image, le tournage</legend>
+      <table>
+        <tr><td>piste audio de la prise</td><td id="valSon">—</td></tr>
+        <tr><td>deplacement dans le fichier</td><td id="valSeek">—</td></tr>
+        <tr><td>ecart de calage max.</td><td id="valCalage">—</td></tr>
+        <tr><td>format d'encodage retenu</td><td id="valMime">—</td></tr>
+      </table>
+      <div class="rang" style="margin-top:8px">
+        <label><input type="checkbox" id="sig" checked> poser la signature</label>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>4 · filmer, et livrer</legend>
+      <div class="rang">
+        <button id="apercu">apercu</button>
+        <button id="filmer" class="fort" disabled>filmer le plan</button>
+      </div>
+      <div class="rang">
+        <button id="dlVideo" disabled>video</button>
+        <button id="dlCouv" disabled>couverture.png</button>
+        <button id="dlSrt" disabled>sous-titres.srt</button>
+        <button id="dlLeg" disabled>legende.txt</button>
+      </div>
+      <p class="note">Paroles prononcees pendant la prise, une par ligne
+        <code>debut&nbsp;fin&nbsp;texte</code> en secondes — elles entrent dans le SRT :</p>
+      <textarea id="paroles" placeholder="4.2 6.0 voila, sprinter-game.com"></textarea>
+    </fieldset>
+
+    <fieldset>
+      <legend>le journal</legend>
+      <div id="journal"></div>
+    </fieldset>
+  </div>
+</main>
+
+<video id="prise" playsinline preload="auto"></video>
+
+<script type="module">
+/* --------------------------------------------------------------- la charte */
+/* Servie a la racine par vite, ou ouverte a plat depuis le dossier livre. */
+let charte;
+try { charte = await import('/src/game/trace-affiche.js'); }
+catch { charte = await import('../../../src/game/trace-affiche.js'); }
+const { s2, morceauxChrono, poserMorceaux } = charte;
+
+const L = 1080, H = 1920;
+
+/* LA ZONE SURE. Instagram mange les 250 px du haut (barre de progression et
+   avatar) et les 250 px du bas (sticker et pouce). Tout ce qui porte du sens
+   tient dans le rectangle central 1080 x 1420 — un chrono pose a 1750 px est
+   un chrono que personne ne lit. */
+const SUR_HAUT = 250, SUR_BAS = H - 250;
+
+/* Le chronometre : 480 px du haut, et c'est le MILIEU DES CHIFFRES, pas leur
+   ligne de pied. C'est ce que l'oeil centre, et les chiffres n'ont pas de
+   jambage qui le decale — meme convention que chronoPleinCadre dans la charte. */
+const CHRONO_Y = 480, CHRONO_TAILLE = 156;
+const CARTON_Y = 660;          // le haut du bloc de carton, juste sous le chrono
+const MARGE = 80;
+
+const cv = document.getElementById('cv');
+const c = cv.getContext('2d');
+const prise = document.getElementById('prise');
+const P = new URLSearchParams(location.search);
+
+const E = id => document.getElementById(id);
+const journal = [];
+function dire(t) {
+  journal.push(t);
+  console.log(t);              // le pilote du banc d'essai lit la console
+
+  E('journal').textContent = journal.slice(-40).join('\n');
+  E('journal').scrollTop = 1e6;
+}
+
+/* --------------------------------------------------- l'etat du montage */
+const etat = {
+  A: null, B: null, fps: 30,
+  seekFiable: null, calageMax: 0,
+  son: false, mime: null,
+  video: null, couverture: null,
+};
+
+/* ===========================================================================
+   LE MONTAGE — un plan, et un seul.
+
+   La structure est celle du monteur du depot : une liste de plans qui portent
+   chacun leur source, leur point d'entree, leur duree et leur facon de se
+   dessiner. Ici la liste a exactement une entree, `debut` vaut zero et `duree`
+   vaut la duree entiere du fichier. Ce n'est pas une coincidence a preserver a
+   la main : `verifierCoupe()` plus bas refuse de filmer si l'une de ces trois
+   choses cesse d'etre vraie.
+   =========================================================================== */
+const MONTAGE = [
+  { nom: 'la prise, entiere', source: prise, debut: 0, duree: null, dessine: a => fond(a) },
+];
+
+function verifierCoupe() {
+  if (MONTAGE.length !== 1) return 'le montage porte ' + MONTAGE.length + ' plans : ce reel en admet un seul';
+  const p = MONTAGE[0];
+  if (p.debut !== 0) return 'le plan ne part pas a zero (' + p.debut + ' s) : ce serait une coupe a l\'entree';
+  if (Math.abs((p.duree ?? 0) - prise.duration) > 0.02)
+    return 'le plan ne va pas jusqu\'au bout du fichier : ce serait une coupe a la sortie';
+  return null;
+}
+
+/* ------------------------------------------------------------ les outils */
+
+/** Recadre une source en REMPLISSANT le cadre. `ancre` 0 = le haut, 1 = le bas. */
+function poser(src, zoom = 1, ancre = 0.5) {
+  const sw = src.videoWidth || src.width, sh = src.videoHeight || src.height;
+  if (!sw || !sh) return;
+  const e = Math.max(L / sw, H / sh) * zoom;
+  const w = sw * e, h = sh * e;
+  c.drawImage(src, (L - w) / 2, (H - h) * ancre, w, h);
+}
+
+/**
+ * Surveiller l'avancee A L'IMAGE.
+ *
+ * `requestAnimationFrame`, et rien d'autre. `timeupdate` ne bat que quatre fois
+ * par seconde : a seize fois la vitesse il fait depasser de plusieurs secondes,
+ * et c'est pour cela qu'il n'apparait nulle part ici.
+ *
+ * `requestVideoFrameCallback` donnerait l'horodatage exact de l'image decodee,
+ * et il a ete essaye : il ne bat QUE si des images sont presentees a un ecran.
+ * Un navigateur sans tete n'en presente aucune, l'attente y reste suspendue
+ * pour toujours, et le banc d'essai s'arrete sans rien dire. Une fonction qui
+ * ne marche pas partout ou le montage tourne n'est pas une fonction qu'on
+ * garde.
+ */
+const surImage = (v, cb) => requestAnimationFrame(() => cb(v.currentTime));
+
+const unSeek = v => new Promise(ok => {
+  v.addEventListener('seeked', ok, { once: true });
+  setTimeout(ok, 1500);           // un fichier sans index ne repondra jamais
+});
+
+/** Le deplacement direct tient-il ses promesses sur CE fichier ? */
+async function mesurerSeek(v) {
+  const cible = Math.min(1, v.duration / 2);
+  v.currentTime = cible;
+  await unSeek(v);
+  const ecart = Math.abs(v.currentTime - cible);
+  v.currentTime = 0; await unSeek(v);
+  return { fiable: ecart < 0.12, ecart };
+}
+
+/**
+ * Atteindre un point de la prise, et savoir de combien on l'a manque.
+ *
+ * Quand le fichier s'indexe, on se deplace et on verifie. Quand il ne s'indexe
+ * pas — le cas des WebM de Playwright —, on LIT a seize fois la vitesse en
+ * surveillant a l'image. Jamais `timeupdate` : il ne bat que quatre fois par
+ * seconde, et a seize fois la vitesse cela fait depasser de plusieurs secondes.
+ * On repasse a vitesse normale a l'approche, sinon on depasse quand meme.
+ */
+async function avancer(v, cible, compter = true) {
+  cible = Math.max(0, Math.min(cible, (v.duration || 0) - 1e-3));
+
+  if (etat.seekFiable) {
+    v.currentTime = cible;
+    await unSeek(v);
+  } else {
+    if (v.currentTime > cible + 1e-3) { v.currentTime = 0; await unSeek(v); }
+    v.muted = true;
+    await v.play().catch(() => {});
+    await new Promise(ok => {
+      /* ON RALENTIT PAR PALIERS. A seize fois la vitesse, une seule image de
+         retard a la decision vaut plus d'une demi-seconde de depassement — et
+         un depassement ne se rattrape pas sur un fichier qui refuse de reculer.
+         On freine donc avant d'arriver, pas en arrivant. */
+      let fini = false;
+      const stop = () => { if (!fini) { fini = true; ok(); } };
+      const tic = t => {
+        if (fini) return;
+        const reste = cible - t;
+        if (v.ended || reste <= 0.004) return stop();
+        const rythme = reste > 6 ? 16 : reste > 2 ? 4 : 1;
+        if (v.playbackRate !== rythme) v.playbackRate = rythme;
+        surImage(v, tic);
+      };
+      surImage(v, tic);
+      /* Un filet. Une video qui se termine ou qui cale ne rappelle plus, et
+         l'attente ne se terminerait jamais — un montage suspendu est pire
+         qu'un montage faux, parce qu'il ne dit rien. */
+      const veille = setInterval(() => {
+        if (fini || v.ended || v.paused || v.currentTime >= cible - 0.004) {
+          clearInterval(veille); stop();
+        }
+      }, 120);
+    });
+    v.pause(); v.playbackRate = 1; v.muted = false;
+  }
+
+  const ecart = Math.abs(v.currentTime - cible);
+  // Le sondage de duree vise 1e7 : le compter fausserait le releve de calage
+  // de dix millions de secondes, et masquerait le seul ecart qui compte.
+  if (compter) etat.calageMax = Math.max(etat.calageMax, ecart);
+  E('valCalage').textContent = etat.calageMax.toFixed(3).replace('.', ',') + ' s';
+  return ecart;
+}
+
+/* ------------------------------------------------------------- le dessin */
+
+function fond(a) {
+  c.fillStyle = '#060913'; c.fillRect(0, 0, L, H);
+  poser(a.source, 1, 0.5);        // cadre FIXE : aucune poussee, elle dirait « montage »
+}
+
+/** Un voile sombre en haut, pour que l'or se lise sur un ecran de telephone
+ *  allume. Sans lui, un chrono dore sur un fond blanc de barre d'adresse
+ *  disparait — et le chrono est le sujet. */
+function voile() {
+  const g = c.createLinearGradient(0, 240, 0, 900);
+  g.addColorStop(0, 'rgba(6,9,19,0)');
+  g.addColorStop(0.18, 'rgba(6,9,19,0.78)');
+  g.addColorStop(0.72, 'rgba(6,9,19,0.66)');
+  g.addColorStop(1, 'rgba(6,9,19,0)');
+  c.fillStyle = g; c.fillRect(0, 240, L, 660);
+}
+
+/**
+ * Le chrono, compose en trois morceaux.
+ *
+ * Space Mono est a chasse fixe, mais sa virgule occupe une chasse pleine : a
+ * 156 px un « 19,42 » se lit « 19 , 42 ». `morceauxChrono` mesure les trois
+ * morceaux et `poserMorceaux` les trace avec la virgule centree dans une fente
+ * de deux cinquiemes de chasse. Les deux viennent de la charte, et c'est la
+ * seule facon d'ecrire un chrono ici.
+ */
+function chronoA(texte, unite, cx, yCentre, taille, couleur) {
+  c.save();
+  c.fillStyle = couleur; c.textBaseline = 'alphabetic';
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  const m = morceauxChrono(c, texte);
+  const hautChiffre = c.measureText('8').actualBoundingBoxAscent || taille * 0.70;
+  const tUnite = Math.round(taille * 0.19), blanc = unite ? taille * 0.10 : 0;
+  let wUnite = 0;
+  if (unite) { c.font = `700 ${tUnite}px 'Space Mono', monospace`; wUnite = c.measureText(unite).width; }
+
+  const gauche = cx - (m.largeur + blanc + wUnite) / 2;
+  const base = yCentre + hautChiffre / 2;
+
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  poserMorceaux(c, m, gauche, base);
+  if (unite) {
+    c.font = `700 ${tUnite}px 'Space Mono', monospace`;
+    c.textAlign = 'left';
+    c.fillText(unite, gauche + m.largeur + blanc, base);
+  }
+  c.restore();
+}
+
+/** Le chronometre incruste. Il mesure ce que la video montre : rien d'autre. */
+function chronometre(ms) {
+  etat.dernierChrono = s2(ms);   // relu par le banc d'essai : le chrono suit-il la prise ?
+  chronoA(s2(ms), 's', L / 2, CHRONO_Y, CHRONO_TAILLE, '#F8CD4A');
+}
+
+/** Un carton : Outfit 800, capitales, interlettrage serre, coupe aux mots. */
+function carton(texte, haut, alpha) {
+  if (alpha <= 0) return;
+  const largeurMax = L - MARGE * 2;
+  let taille = 74;
+  let lignes = [];
+  for (; taille >= 46; taille -= 2) {
+    c.font = `800 ${taille}px Outfit, sans-serif`;
+    c.letterSpacing = `${-taille * 0.018}px`;
+    lignes = couper(texte.toUpperCase(), largeurMax);
+    if (lignes.length <= 2) break;
+  }
+  const interligne = taille * 1.14;
+  c.save();
+  c.globalAlpha = alpha;
+  c.fillStyle = '#F8CD4A';
+  c.font = `800 ${taille}px Outfit, sans-serif`;
+  c.letterSpacing = `${-taille * 0.018}px`;
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  lignes.forEach((l, i) => c.fillText(l, L / 2, haut + i * interligne));
+  c.restore();
+  c.letterSpacing = '0px';
+}
+
+function couper(texte, largeurMax) {
+  const mots = texte.split(/\s+/);
+  const out = []; let cur = '';
+  for (const mot of mots) {
+    const essai = cur ? cur + ' ' + mot : mot;
+    if (c.measureText(essai).width > largeurMax && cur) { out.push(cur); cur = mot; }
+    else cur = essai;
+  }
+  if (cur) out.push(cur);
+  return out;
+}
+
+/**
+ * La signature du compte.
+ *
+ * LA CHARTE LA POSE A 8,8 % DU BAS, ET ELLE N'Y EST PAS ICI. 8,8 % de 1920
+ * tombe a 1751 px, hors du rectangle central 1080 x 1420 : sur une story ce
+ * sont les 250 px que le sticker et le pouce recouvrent, et un texte pose la
+ * fait refuser le montage. Elle est donc remontee au bas de la zone sure. La
+ * regle qui compte — le nom du compte et non l'adresse du site, parce qu'une
+ * story se regarde dans Instagram ou une adresse ne se clique pas — est
+ * intacte, comme le blanc a 30 % et le filet de 1 px au-dessus.
+ */
+function signature() {
+  if (!E('sig').checked) return;
+  const y = SUR_BAS - 30;
+  c.save();
+  c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(MARGE, y - 44); c.lineTo(L - MARGE, y - 44); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,0.30)';
+  c.font = '500 30px Outfit, sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.letterSpacing = '2px';
+  c.fillText('@sprintergame', L / 2, y);
+  c.restore();
+  c.letterSpacing = '0px';
+}
+
+const fondu = (t, d, f, duree = 0.22) =>
+  Math.max(0, Math.min(1, Math.min((t - d) / duree, (f - t) / duree)));
+
+/**
+ * UNE image du film, a l'instant `t` de la prise.
+ *
+ * Preview, enregistrement et couverture passent tous par ici : deux fonctions
+ * de dessin finiraient par ne plus dessiner la meme chose, et c'est la
+ * couverture — celle qu'on regarde avant de cliquer — qui mentirait.
+ */
+function dessiner(t) {
+  MONTAGE[0].dessine(MONTAGE[0]);
+
+  const A = etat.A, B = etat.B;
+  if (A != null) {
+    voile();
+    const fin = (B != null) ? Math.min(t, B) : t;
+    chronometre(Math.max(0, fin - A) * 1000);
+  }
+
+  // Carton d'ouverture : 0,2 → 2,5 s, cale sur le DEBUT DE LA PRISE.
+  carton('Le temps de lire cette phrase', CARTON_Y, fondu(t, 0.2, 2.5));
+  // Carton de sortie : a l'arrivee, deux secondes, meme place.
+  if (B != null) carton('… la course est déjà finie.', CARTON_Y, fondu(t, B, B + 2));
+
+  signature();
+}
+
+/* ------------------------------------------------------- le reperage */
+
+function majReperes() {
+  const f = etat.fps;
+  const img = t => Math.round(t * f);
+  E('valA').textContent = etat.A == null ? '—'
+    : etat.A.toFixed(3).replace('.', ',') + ' s · image ' + img(etat.A);
+  E('valB').textContent = etat.B == null ? '—'
+    : etat.B.toFixed(3).replace('.', ',') + ' s · image ' + img(etat.B);
+
+  if (etat.A != null && etat.B != null) {
+    const tot = etat.B - etat.A;
+    E('valTotal').textContent = s2(tot * 1000) + ' s';
+    const cadre = E('cadreSon');
+    if (tot > 25) {
+      cadre.classList.add('alerte');
+      dire('⚠ ' + s2(tot * 1000) + ' s — au-dela de 25 s la demonstration s\'affaiblit.');
+      dire('  La coupe est interdite ici : on refait la prise sur une connexion normale.');
+    } else cadre.classList.remove('alerte');
+  } else E('valTotal').textContent = '—';
+
+  E('filmer').disabled = !(etat.A != null && etat.B != null && prise.duration > 0);
+  E('dlSrt').disabled = E('dlLeg').disabled = !(etat.A != null && etat.B != null);
+  E('dlCouv').disabled = etat.B == null;
+}
+
+async function pas(images) {
+  await avancer(prise, prise.currentTime + images / etat.fps);
+  dessiner(prise.currentTime);
+  E('position').textContent =
+    prise.currentTime.toFixed(3).replace('.', ',') + ' s · image ' +
+    Math.round(prise.currentTime * etat.fps);
+}
+
+E('recul10').onclick = () => pas(-10);
+E('recul1').onclick  = () => pas(-1);
+E('avance1').onclick = () => pas(1);
+E('avance10').onclick= () => pas(10);
+E('fps').onchange = () => { etat.fps = Math.max(1, +E('fps').value || 30); majReperes(); };
+E('posA').onclick = () => { etat.A = prise.currentTime; majReperes(); dire('A pose a ' + etat.A.toFixed(3) + ' s'); };
+E('posB').onclick = () => { etat.B = prise.currentTime; majReperes(); dire('B pose a ' + etat.B.toFixed(3) + ' s'); };
+
+/* --------------------------------------------------------- le son */
+
+let audioPret = null;
+/** `createMediaElementSource` ne s'appelle qu'UNE fois par element : au
+ *  deuxieme appel Chromium jette, et l'enregistrement part sans son. */
+function brancherSon() {
+  if (audioPret) return audioPret;
+  const actx = new AudioContext();
+  const src = actx.createMediaElementSource(prise);
+  const dest = actx.createMediaStreamDestination();
+  src.connect(dest);
+  src.connect(actx.destination);   // pour s'entendre pendant la prise
+  audioPret = { actx, dest };
+  return audioPret;
+}
+
+/* ----------------------------------------------------------- filmer */
+
+const FORMATS = [
+  'video/mp4;codecs=avc1',   // le seul qu'un appareil Apple relira une fois telecharge
+  'video/mp4',
+  'video/webm;codecs=vp9',
+  'video/webm;codecs=vp8',
+  'video/webm',
+];
+
+async function filmer(opt = {}) {
+  const refus = verifierCoupe();
+  if (refus) { dire('REFUS — ' + refus); return; }
+
+  const mime = FORMATS.find(f => MediaRecorder.isTypeSupported(f));
+  if (!mime) { dire('REFUS — aucun format d\'encodage disponible.'); return; }
+  etat.mime = mime;
+  E('valMime').textContent = mime;
+
+  // On repart a zero, et on DIT de combien on a manque le zero.
+  const ecart = await avancer(prise, 0);
+  dire('calage au demarrage : ' + ecart.toFixed(3).replace('.', ',') + ' s');
+  if (ecart > 0.08) dire('⚠ calage superieur a 80 ms — le chronometre serait decale d\'autant.');
+
+  const { actx, dest } = brancherSon();
+  if (actx.state === 'suspended') await actx.resume();
+
+  /* Flux continu, et pas captureStream(0) + requestFrame : MediaRecorder
+     horodate a l'heure du mur, et un montage assemble hors du temps reel sort
+     avec une ligne de temps qui ne veut rien dire. */
+  const flux = new MediaStream([
+    ...cv.captureStream(30).getVideoTracks(),
+    ...dest.stream.getAudioTracks(),
+  ]);
+
+  const morceaux = [];
+  const rec = new MediaRecorder(flux, { mimeType: mime, videoBitsPerSecond: opt.bitrate || 12_000_000 });
+  rec.ondataavailable = ev => { if (ev.data.size) morceaux.push(ev.data); };
+
+  const fini = new Promise(ok => { rec.onstop = ok; });
+  const t0 = performance.now();
+  const mediaDebut = prise.currentTime;
+  rec.start(250);
+  prise.muted = false;
+  await prise.play();
+
+  let images = 0, dernier = -1;
+  await new Promise(ok => {
+    const tic = () => {
+      dessiner(prise.currentTime);
+      images++;
+      if (Math.floor(prise.currentTime) !== dernier) {
+        dernier = Math.floor(prise.currentTime);
+        if (dernier % 5 === 0)
+          dire('  ' + dernier + ' s — lu ' + prise.currentTime.toFixed(2) +
+               '/' + prise.duration.toFixed(2) + ' (etat ' + prise.readyState + ')');
+      }
+      if (prise.ended || prise.currentTime >= prise.duration - 1e-3) return ok();
+      requestAnimationFrame(tic);
+    };
+    requestAnimationFrame(tic);
+  });
+  const murBoucle = (performance.now() - t0) / 1000;
+  dire('sortie de boucle : t=' + prise.currentTime.toFixed(3) +
+       ' duree=' + prise.duration.toFixed(3) + ' fini=' + prise.ended +
+       ' pause=' + prise.paused + ' etat=' + prise.readyState +
+       ' images=' + images);
+
+  // Une derniere image tenue, sinon la toute fin du plan manque a l'encodeur.
+  dessiner(prise.duration);
+  await new Promise(ok => setTimeout(ok, 350));
+  rec.stop();
+  await fini;
+
+  const mur = (performance.now() - t0) / 1000;
+
+  /* LE MONTAGE SE DEROULE EN TEMPS REEL, ET ON LE VERIFIE.
+     MediaRecorder horodate a l'heure du mur : si la prise a defile plus vite ou
+     plus lentement que la pendule, le fichier sort avec une ligne de temps qui
+     ne veut rien dire — trente-deux megaoctets annoncant deux secondes, c'est
+     arrive. La cadence est donc mesuree et dite, plutot que supposee. Un
+     navigateur sans peripherique audio reel est le cas qui la fait deriver : la
+     lecture s'y clocke sur un puits qui ne freine rien. */
+  const media = prise.currentTime - mediaDebut;
+  const cadence = media / murBoucle;
+  const blob = new Blob(morceaux, { type: mime });
+  etat.video = blob;
+  E('dlVideo').disabled = false;
+
+  dire('---');
+  dire('filme : ' + mur.toFixed(2).replace('.', ',') + ' s au mur');
+  dire('poids  : ' + (blob.size / 1048576).toFixed(2).replace('.', ',') + ' Mo');
+  dire('format : ' + mime);
+  dire('cadence : ' + cadence.toFixed(3).replace('.', ',') + ' × le temps reel' +
+       ' (' + media.toFixed(2) + ' s de prise en ' + murBoucle.toFixed(2) + ' s)');
+  if (Math.abs(cadence - 1) > 0.03)
+    dire('⚠ LA PRISE N\'A PAS DEFILE EN TEMPS REEL. Le fichier sortira avec une ' +
+         'ligne de temps fausse. Sur une machine sans sortie audio reelle, la ' +
+         'lecture n\'est plus freinee : monte sur une machine qui en a une.');
+  dire('piste audio : ' + (dest.stream.getAudioTracks().length ? 'oui' : 'NON'));
+  return { blob, mime, mur, murBoucle, media, cadence, poids: blob.size };
+}
+E('filmer').onclick = () => filmer().catch(e => dire('ERREUR — ' + e.message));
+
+E('apercu').onclick = async () => {
+  await avancer(prise, 0);
+  prise.muted = true;
+  await prise.play();
+  const tic = () => {
+    dessiner(prise.currentTime);
+    if (!prise.ended && !prise.paused) requestAnimationFrame(tic);
+  };
+  requestAnimationFrame(tic);
+};
+
+/* -------------------------------------------------- ce qu'on livre */
+
+function telecharger(blob, nom) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = nom; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+E('dlVideo').onclick = () =>
+  telecharger(etat.video, 'video.' + (etat.mime.includes('mp4') ? 'mp4' : 'webm'));
+
+/**
+ * La couverture : le chronometre arrete, et le chiffre final en grand.
+ *
+ * L'image vient de la prise elle-meme, un quart de seconde apres la ligne —
+ * le coureur est passe, le chiffre ne bouge plus. Le nombre y est le plus gros
+ * element de l'image, comme la charte l'exige : une jolie piste sans chrono ne
+ * raconte rien.
+ */
+async function couverture() {
+  await avancer(prise, Math.min(etat.B + 0.25, prise.duration - 0.02));
+  MONTAGE[0].dessine(MONTAGE[0]);
+  c.fillStyle = 'rgba(6,9,19,0.58)'; c.fillRect(0, 0, L, H);
+
+  const total = (etat.B - etat.A) * 1000;
+  c.save();
+  c.fillStyle = 'rgba(255,255,255,0.46)';
+  c.font = '700 34px Outfit, sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.letterSpacing = '12px';
+  c.fillText('DU PREMIER CARACTÈRE À LA LIGNE', L / 2 + 6, 700);
+  c.restore();
+  c.letterSpacing = '0px';
+
+  // Le chiffre, ajuste pour occuper 820 px de large, unite comprise.
+  const mesure = 820;
+  c.font = `700 100px 'Space Mono', monospace`;
+  const k = morceauxChrono(c, s2(total)).largeur / 100;
+  const taille = Math.floor(mesure / (k + 0.10 + (c.measureText('s').width / 100) * 0.19));
+  chronoA(s2(total), 's', L / 2, 940, taille, '#F8CD4A');
+
+  /* PAS DE CARTON ICI. La couverture est ce qu'on voit avant de cliquer, et la
+     charte y demande un chiffre qui soit le plus gros element de l'image — il
+     l'est d'autant mieux qu'il est seul. La phrase, elle, est dans le film et
+     dans la legende ; la redire sur la vignette la rendrait plus petite. */
+  signature();
+
+  return new Promise(ok => cv.toBlob(b => { etat.couverture = b; ok(b); }, 'image/png'));
+}
+E('dlCouv').onclick = () => couverture().then(b => telecharger(b, 'couverture.png'));
+
+const hms = t => {
+  const ms = Math.round(t * 1000);
+  const h = String(Math.floor(ms / 3600000)).padStart(2, '0');
+  const m = String(Math.floor(ms / 60000) % 60).padStart(2, '0');
+  const s = String(Math.floor(ms / 1000) % 60).padStart(2, '0');
+  return `${h}:${m}:${s},${String(ms % 1000).padStart(3, '0')}`;
+};
+
+function srt() {
+  const l = [
+    [0.2, 2.5, 'Le temps de lire cette phrase…'],
+    [etat.B, etat.B + 2, '… la course est déjà finie.'],
+  ];
+  for (const ligne of E('paroles').value.split('\n')) {
+    const m = ligne.trim().match(/^([\d.,]+)\s+([\d.,]+)\s+(.+)$/);
+    if (m) l.push([parseFloat(m[1].replace(',', '.')), parseFloat(m[2].replace(',', '.')), m[3]]);
+  }
+  l.sort((a, b) => a[0] - b[0]);
+  return l.map((x, i) => `${i + 1}\n${hms(x[0])} --> ${hms(x[1])}\n${x[2]}\n`).join('\n');
+}
+E('dlSrt').onclick = () => telecharger(new Blob([srt()], { type: 'text/plain' }), 'sous-titres.srt');
+
+/** La legende, avec le chiffre mesure dedans. LE CHIFFRE COMMANDE, LE TEXTE
+ *  SUIT : si la prise donne dix-neuf secondes, c'est dix-neuf qui s'ecrit. */
+function legende() {
+  const total = s2((etat.B - etat.A) * 1000);
+  return [
+    `Tu tapes sprinter-game.com. La course est finie avant la fin de cette phrase.`,
+    ``,
+    `Le chronomètre en haut de l'image est réel : il part au premier caractère tapé`,
+    `et s'arrête sur la ligne d'arrivée. ${total} s du clavier à la ligne, une seule`,
+    `prise, sans coupe.`,
+    ``,
+    `Le 100 m se court en deux touches alternées, avec une cadence à tenir et une`,
+    `réaction au coup de pistolet. Pas d'installation, pas de compte, pas de`,
+    `publicité.`,
+    ``,
+    `Chrono de la course dans la vidéo : _,__ s.`,
+    ``,
+    `@sprintergame`,
+    ``,
+    `-- le seul trou restant se lit à l'écran du jeu à l'arrivée, et ne s'invente pas.`,
+  ].join('\n');
+}
+E('dlLeg').onclick = () => telecharger(new Blob([legende()], { type: 'text/plain' }), 'legende.txt');
+
+/* ------------------------------------------------- charger une prise */
+
+async function charger(url) {
+  prise.src = url;
+  await new Promise((ok, ko) => {
+    prise.addEventListener('loadedmetadata', ok, { once: true });
+    prise.addEventListener('error', () => ko(new Error('fichier illisible')), { once: true });
+  });
+  // Chromium annonce parfois une duree infinie tant qu'il n'a pas vu la fin.
+  if (!isFinite(prise.duration)) { await avancer(prise, 1e7, false); await avancer(prise, 0, false); }
+
+  MONTAGE[0].duree = prise.duration;
+
+  const seek = await mesurerSeek(prise);
+  etat.seekFiable = seek.fiable;
+  E('valSeek').textContent = seek.fiable ? 'indexe — direct' : 'SANS INDEX — lecture a 16x';
+  dire(seek.fiable
+    ? 'fichier indexe : le deplacement direct tient (ecart ' + seek.ecart.toFixed(3) + ' s).'
+    : '⚠ fichier SANS index : currentTime ne fait rien. On lira a 16x.');
+
+  etat.son = !!(prise.mozHasAudio || prise.webkitAudioDecodedByteCount > 0
+                || (prise.audioTracks && prise.audioTracks.length));
+  E('valSon').textContent = etat.son ? 'oui' : 'a verifier a l\'oreille';
+
+  E('infos').innerHTML =
+    `<tr><td>duree</td><td>${prise.duration.toFixed(3).replace('.', ',')} s</td></tr>` +
+    `<tr><td>image</td><td>${prise.videoWidth} × ${prise.videoHeight}</td></tr>`;
+
+  const attendu = prise.duration >= 18 && prise.duration <= 25;
+  dire('prise chargee : ' + prise.duration.toFixed(2).replace('.', ',') + ' s' +
+       (attendu ? '' : ' — hors de la fourchette 18–25 s attendue'));
+
+  await avancer(prise, 0);
+  dessiner(0);
+  majReperes();
+}
+
+E('fichier').onchange = e => {
+  const f = e.target.files[0];
+  if (f) charger(URL.createObjectURL(f)).catch(x => dire('ERREUR — ' + x.message));
+};
+
+/* ------------------------------------------------ les polices, pour de bon */
+/* `document.fonts.ready` ne suffit pas a un canvas : une police jamais employee
+   dans le DOM n'est pas chargee quand il repond. On la demande donc nommement,
+   au poids et au corps ou elle servira. Un chrono rendu en police de repli est
+   un chrono a refaire. */
+if (P.get('polices')) document.getElementById('polices').href = P.get('polices');
+await Promise.all([
+  document.fonts.load(`700 ${CHRONO_TAILLE}px 'Space Mono'`),
+  document.fonts.load(`700 100px 'Space Mono'`),
+  document.fonts.load(`800 74px Outfit`),
+  document.fonts.load(`500 30px Outfit`),
+  document.fonts.load(`700 34px Outfit`),
+]);
+await document.fonts.ready;
+const policesOk = document.fonts.check(`700 ${CHRONO_TAILLE}px 'Space Mono'`)
+               && document.fonts.check(`800 74px Outfit`);
+dire(policesOk ? 'polices : Outfit et Space Mono chargees.'
+               : '⚠ POLICES DE REPLI — le rendu est a refaire.');
+
+dessiner(0);
+if (P.get('src')) await charger(P.get('src')).catch(e => dire('ERREUR — ' + e.message));
+
+/* Le banc d'essai vit a cote, et n'entre pas dans le film. */
+window.__monteur = { etat, charger, avancer, filmer, couverture, srt, legende,
+                     dessiner, prise, cv, policesOk, verifierCoupe, majReperes, FORMATS };
+if (P.get('banc')) (await import('./banc-essai.mjs')).lancer(window.__monteur);
+</script>
