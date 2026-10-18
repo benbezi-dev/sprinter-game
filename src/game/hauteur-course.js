@@ -30,7 +30,7 @@
 import { SprinterApp, SprinterCore, resetInputRhythm } from './engine';
 import './sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { poserLeTempo, rendreLeTempo } from './tempo';
-import { stadeDuSaut, ambianceDuSaut } from './sauts-stades.js';
+import { stadeDuSaut } from './sauts-stades.js';
 import { TAPIS, MONTANTS, BARRE } from './hauteur.js';
 import {
   AVANCE_PIED, APPEL_MAXI, APPEL_MINI, BIAIS, angleDe, TENUE_MAXI, ANGLE_MIN, ANGLE_PAR_S, RALENTI,
@@ -146,14 +146,13 @@ export function armerConcoursHauteur(etape) {
   G.race = EPREUVE;
   // Chaque etape a son stade (sauts-stades.js) ; le 100 m garde les siens.
   A.buildLevel(stadeDuSaut(etape));
-  G.ambianceSaut = ambianceDuSaut(etape);
   e = {
     epreuve: 'hauteur', etape, g: pesanteurDe(etape),
     phase: 'repos', t: 0, horlogeT: 0, horloge: 60,
     s: 0, vHist: [], appel: null, vol: null, reception: null,
     hauteur: 1.5, barre: { chute: null, tremble: null }, impact: null,
     resultat: null, drapeau: null, posture: null, juge: null, pieces: [],
-    roulis: 0, theme: A.themeBrut(),  // l'heure du concours, pas celle de la pendule
+    roulis: 0, theme: A.theme(),  // a l'heure du joueur (heure-du-jour.js)
     // Ce que le rendu doit savoir du sautoir, sans revenir chercher ce module.
     sautoir: {
       x: BARRE_X, y: BARRE_Y, dir: DIR, cap: CAP_FINAL, marque: MARQUE, courbe: DEBUT_COURBE,
@@ -267,7 +266,6 @@ function nettoyer() {
   rendreLeTempo();
   if (!sauvegarde && !e) return;
   G.sautEnCours = false;
-  G.ambianceSaut = null;
   G.pasSauteur = null;
   G.appuiSaut = null;
   G.relacheSaut = null;

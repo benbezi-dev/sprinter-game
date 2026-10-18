@@ -174,6 +174,8 @@
       tourbillons: true, arbres: 'cypres', pinceau: true,
       horizon: 6, lointain: [28, 52, 96], toiture: false, gradins: 2,
       village: true, villageSombre: [12, 24, 56], musique: 'nuit',
+      // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
+      heure: 'nuit',
       cypresSombre: [16, 38, 34], cypresClair: [48, 88, 58]
     },
     // Stade des Trois Soleils : la planete verte des mangas de combat, peinte
@@ -215,6 +217,8 @@
       // pelouse. Un theme qui ne les porte pas ne paie rien — le test se fait
       // sur le theme, pas sur le niveau.
       soleils: true, rochers: true, arbres: 'namek',
+      // l'heure du jour (heure-du-jour.js) ; la nuit, le ciel reste vert
+      heure: true, cielNuit: [[8, 30, 22], [30, 72, 52]],
       eau: [96, 214, 176], eauFond: [22, 150, 132],
       roche: [122, 176, 168], rocheSombre: [56, 110, 116],
       namekTronc: [206, 186, 142], namekChapeau: [34, 148, 118]
@@ -250,6 +254,8 @@
     // nom, aucun embleme, aucune typographie n'entre dans ce theme — voir
     // juridique/edition-danube.md.
     danube: {
+      // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
+      heure: 'nuit',
       // LE CIEL EST PLUS CLAIR QUE LE TOIT, et c'est ce qui donne au stade sa
       // silhouette. Peints tous les deux dans le meme violet sombre, la
       // toiture disparaissait purement et simplement : il ne restait qu'une
@@ -300,6 +306,8 @@
     // bordure de dix centimetres il ne fait plus qu'une chose, mais il la fait
     // bien : dire que ce qui est peint la n'est pas normal.
     halloween: {
+      // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
+      heure: 'nuit',
       // Un ciel de pleine lune : noir-violet en haut, un peu moins bas, et
       // beaucoup d'etoiles. La lune elle-meme est dessinee par le molosse
       // (halloween-molosse.js) et non par le theme : elle doit passer DEVANT
@@ -8606,22 +8614,19 @@
     return eclaire(themeBrut());
   }
 
-  /**
-   * Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. Les
-   * sauts le prennent : chaque etape y a deja son heure (sauts-stades.js).
-   */
+  /** Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. */
   function themeBrut() {
     const lvl = LEVELS[G.levelIdx];
     return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
   }
 
   /**
-   * `th` a l'heure ou l'on joue (heure-du-jour.js), sauf pendant un saut.
-   * Rend `th` tel quel tant que le module n'est pas charge.
+   * `th` a l'heure ou l'on joue (heure-du-jour.js) — les sauts aussi depuis
+   * le 18/10. Rend `th` tel quel tant que le module n'est pas charge.
    */
   function eclaire(th) {
     const H = HEURE();
-    return H && !G.sautEnCours ? H.eclairer(th, G) : th;
+    return H ? H.eclairer(th, G) : th;
   }
 
   /**
