@@ -50,8 +50,8 @@ type Peintre = (ctx: CanvasRenderingContext2D, W: number, H: number, t: number) 
  * taille de l'ecran, le fondu d'entree et de sortie, « touche pour passer ».
  * `creer` est appele une fois, au montage, et rend le peintre.
  */
-function Cinematique({ nom, duree, creer, onFin }:
-  { nom: string; duree: number; creer: () => Peintre; onFin: () => void }) {
+function Cinematique({ nom, duree, creer, onFin, voile: avecVoile = true }:
+  { nom: string; duree: number; creer: () => Peintre; onFin: () => void; voile?: boolean }) {
   const toile = useRef<HTMLCanvasElement | null>(null);
   const fini = useRef(false);
   // le parent passe des fonctions neuves a chaque rendu : dans les
@@ -82,13 +82,14 @@ function Cinematique({ nom, duree, creer, onFin }:
       ctx.font = `600 ${Math.round(Math.max(10, H * 0.014))}px system-ui, sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fillText(mot('passer'), W / 2, H - 22);
-      const voile = Math.max(1 - fenetre(t, 0, 0.35), fenetre(t, duree - 0.6, duree));
+      // les voyages ouvrent et ferment eux-memes l'image (le fil de l'etape)
+      const voile = avecVoile ? Math.max(1 - fenetre(t, 0, 0.35), fenetre(t, duree - 0.6, duree)) : 0;
       if (voile > 0) { ctx.fillStyle = `rgba(0,0,0,${voile})`; ctx.fillRect(0, 0, W, H); }
       raf = requestAnimationFrame(image);
     };
     raf = requestAnimationFrame(image);
     return () => cancelAnimationFrame(raf);
-  }, [duree]);
+  }, [duree, avecVoile]);
 
   return createPortal(
     <div data-legende={nom} className="fixed inset-0 z-[60] bg-black"
@@ -126,7 +127,8 @@ function distanceKm(a: [number, number], b: [number, number]) {
    ne sert plus que tant que l'image n'est pas chargee. Par-dessus chaque
    voyage, un habillage : bandes cinema qui entrent avec un filet de la
    couleur de l'etape, balayage de lumiere a l'ouverture, vignette ; entre le
-   vol et le trajet au sol, un volet en diagonale.
+   vol et le trajet au sol, un panoramique vertical (LE FIL DE L'ETAPE, 18/10 ;
+   avant, un volet en diagonale).
    =========================================================================== */
 
 /** Le vehicule de profil, roues a yPied, haut de hPx ; false s'il n'est pas encore la. */
@@ -231,17 +233,77 @@ function habillage(ctx: CanvasRenderingContext2D, W: number, H: number, t: numbe
   }
 }
 
-/** Le volet entre deux plans : une diagonale de la teinte couvre (u de 0 a 0,5) puis decouvre. */
-function volet(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
-  const a = lisse(Math.min(1, u * 2)), b = lisse(Math.max(0, u * 2 - 1));
-  const pente = W * 0.45;
-  const x1 = -pente + (W + pente * 2) * a, x0 = -pente + (W + pente * 2) * b;
+/* ===========================================================================
+   LE FIL DE L'ETAPE (18/10) — les transitions des voyages
+   ===========================================================================
+   L'auteur, 18/10 : « des transitions propres et originales ». Un seul motif,
+   tire de la couleur de l'etape, relie tout le voyage :
+     - l'ouverture : sur le noir, un fil se tire de gauche a droite, puis
+       s'ouvre comme une fente sur la scene ;
+     - de l'avion au sol : un panoramique vertical, du ciel vers la route ;
+       la couture entre les deux scenes est le fil ;
+     - l'arrivee : l'image se referme sur le fil, qui se retracte en un point
+       a droite — vers le stade — et s'eteint.
+   Les voyages eux-memes ne changent pas.
+   =========================================================================== */
+
+const doux = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+
+/** Le fil : un trait de la teinte, avec un halo et une tete lumineuse en x1. */
+function fil(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, teinte: string, ep: number, tete = true) {
+  if (x1 - x0 < 0.5) return;
   ctx.save();
-  ctx.fillStyle = teinte;
-  ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x1, 0); ctx.lineTo(x1 - pente, H); ctx.lineTo(x0 - pente, H); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1 + 5, 0); ctx.lineTo(x1 + 5 - pente, H); ctx.lineTo(x1 - pente, H); ctx.closePath(); ctx.fill();
+  ctx.shadowColor = teinte; ctx.shadowBlur = ep * 6;
+  ctx.fillStyle = teinte; ctx.fillRect(x0, y - ep / 2, x1 - x0, ep);
+  ctx.shadowBlur = 0;
+  if (tete) {
+    const g = ctx.createRadialGradient(x1, y, 0, x1, y, ep * 7);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.25, teinte); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(x1 - ep * 7, y - ep * 7, ep * 14, ep * 14);
+  }
   ctx.restore();
+}
+
+/**
+ * L'ouverture (u : 0 -> 1) : le fil se tire sur le noir (0 -> 0,45), puis
+ * l'image s'ouvre en fente de part et d'autre (0,45 -> 1), le fil se
+ * dedoublant sur les deux levres.
+ */
+function ouvrirLeFil(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
+  if (u >= 1) return;
+  const y = H * 0.5, ep = Math.max(2, Math.min(W, H) * 0.005);
+  const tire = doux(u / 0.45), ouvre = doux((u - 0.45) / 0.55);
+  const demi = (H / 2 + ep) * ouvre;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, y - demi); ctx.fillRect(0, y + demi, W, H - y - demi);
+  if (ouvre <= 0) fil(ctx, 0, W * tire, y, teinte, ep);
+  else {
+    ctx.save(); ctx.globalAlpha = 1 - ouvre;
+    fil(ctx, 0, W, y - demi, teinte, ep, false); fil(ctx, 0, W, y + demi, teinte, ep, false);
+    ctx.restore();
+  }
+}
+
+/**
+ * La fermeture (u : 0 -> 1), le geste inverse : l'image se referme en fente
+ * sur le fil (0 -> 0,5), puis le fil se retracte vers la droite en un point
+ * qui s'eteint (0,5 -> 1).
+ */
+function fermerLeFil(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
+  if (u <= 0) return;
+  const y = H * 0.5, ep = Math.max(2, Math.min(W, H) * 0.005);
+  const ferme = doux(u / 0.5), retire = doux((u - 0.5) / 0.5);
+  const demi = (H / 2 + ep) * (1 - ferme);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W, y - demi); ctx.fillRect(0, y + demi, W, H - y - demi);
+  if (ferme < 1) {
+    fil(ctx, 0, W, y - demi, teinte, ep, false); fil(ctx, 0, W, y + demi, teinte, ep, false);
+  } else {
+    const x0 = W * retire;
+    ctx.save(); ctx.globalAlpha = 1 - doux((u - 0.88) / 0.12);
+    fil(ctx, Math.min(x0, W * 0.999), W, y, teinte, ep * (1 + retire), true);
+    ctx.restore();
+  }
 }
 
 /* ===========================================================================
@@ -630,12 +692,20 @@ const DUREES = [8.2, 11.0, 11.0, 8.6];
 
 export function CinematiqueVoyage({ rang, onFin }: { rang: number; onFin: () => void }) {
   const duree = DUREES[rang] ?? 8.2;
-  return <Cinematique nom={`voyage-${rang}`} duree={duree} onFin={onFin}
+  return <Cinematique nom={`voyage-${rang}`} duree={duree} onFin={onFin} voile={false}
                       creer={() => {
                         prechargerVehicules(['velo', 'avion', 'voiture', 'car', 'jet', 'fusee']);
                         const p = rang === 3 ? peintreAvion(rang, { nom: 'jet', mode: mot('vol_jet') })
                           : rang === 0 ? peintreRoute(0) : peintreVolPuisSol(rang);
-                        return (ctx, W, H, t) => { p(ctx, W, H, t); habillage(ctx, W, H, t, duree, TEINTES[rang]); };
+                        const teinte = TEINTES[rang];
+                        return (ctx, W, H, t) => {
+                          hudDiffere = null;
+                          p(ctx, W, H, t);
+                          habillage(ctx, W, H, t, duree, teinte);
+                          if (hudDiffere) (hudDiffere as () => void)();
+                          ouvrirLeFil(ctx, W, H, fenetre(t, 0, 1.15), teinte);
+                          fermerLeFil(ctx, W, H, fenetre(t, duree - 1.05, duree), teinte);
+                        };
                       }} />;
 }
 
@@ -645,15 +715,47 @@ function peintreVolPuisSol(rang: number): Peintre {
   const sol = peintreRoute(rang, { local: true, duree: (DUREES[rang] ?? 11) - VOL_ARRIVEE,
                                    departNom: dans(['Aéroport', 'Airport']), km: 22 + rang * 4 });
   const teinte = TEINTES[rang];
+  // du ciel a la route : un panoramique vertical d'une seconde, centre sur
+  // VOL_ARRIVEE ; le ciel monte et sort par le haut, le sol arrive par le
+  // bas, et le fil de l'etape court sur la couture
+  const PAN = 1.0;
   return (ctx, W, H, t) => {
-    if (t < VOL_ARRIVEE) vol(ctx, W, H, t); else sol(ctx, W, H, t - VOL_ARRIVEE);
-    const u = (t - (VOL_ARRIVEE - 0.38)) / 0.76;
-    if (u > 0 && u < 1) volet(ctx, W, H, u, teinte);
+    const k = doux((t - (VOL_ARRIVEE - PAN / 2)) / PAN);
+    if (k <= 0) { vol(ctx, W, H, t); return; }
+    if (k >= 1) { sol(ctx, W, H, t - VOL_ARRIVEE); return; }
+    const couture = H * (1 - k);
+    // le sol d'abord, le ciel ensuite : c'est le texte du dernier peint qui
+    // reste, celui du vol tant que la couture n'a pas passe le milieu
+    // le sol entre par son horizon (a 60 % de sa hauteur, voir peintreRoute) :
+    // la couture EST la ligne d'horizon, et son ciel se decouvre au-dessus a
+    // mesure que la camera descend — un vrai basculement, pas deux images
+    // empilees
+    const parts: [Peintre, number, number][] = [[sol, Math.max(0, t - VOL_ARRIVEE), couture - H * 0.6 * (1 - k)], [vol, t, couture - H]];
+    if (k >= 0.5) parts.reverse();
+    for (const [peindre, tt, dy] of parts) {
+      ctx.save();
+      // chaque scene reste de son cote de la couture
+      const haut = peindre === vol ? 0 : couture, bas = peindre === vol ? couture : H;
+      ctx.beginPath(); ctx.rect(0, haut, W, bas - haut); ctx.clip();
+      ctx.translate(0, dy);
+      peindre(ctx, W, H, tt);
+      ctx.restore();
+    }
+    fil(ctx, 0, W, couture, teinte, Math.max(2, Math.min(W, H) * 0.005), false);
   };
 }
 
+// Pendant les transitions l'image glisse ; le texte, lui, reste en place.
+// Le peintre ne l'ecrit donc pas tout de suite : il le confie a
+// `hudDiffere`, que CinematiqueVoyage ecrit par-dessus.
+let hudDiffere: (() => void) | null = null;
+
+function hudVoyage(...a: Parameters<typeof hudVoyageEcrit>) {
+  hudDiffere = () => hudVoyageEcrit(...a);
+}
+
 /** Ce qui s'ecrit en haut : l'etape, d'ou vers ou, la distance, puis le lieu. */
-function hudVoyage(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, duree: number,
+function hudVoyageEcrit(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, duree: number,
                    rang: number, depart: Lieu, arrivee: Lieu, km: number, mode?: string) {
   const e = ETAPES[rang];
   ctx.save();
