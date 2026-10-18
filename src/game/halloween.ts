@@ -156,7 +156,17 @@ type Chasse = {
   yeux?: number;
   /** L'ecran peut-il trembler ? Non pour qui a demande moins d'animations. */
   secousses: boolean;
+  /**
+   * LA MEUTE (18/10) : la nuit se court a plusieurs, dans une salle du direct.
+   * Elle ne range rien au carnet — le recit se gagne seul — et sa morsure se
+   * dit a la salle, qui classe la meute (voir halloween-meute.ts).
+   */
+  aPlusieurs: boolean;
+  surMorsure: ((d: number) => void) | null;
 };
+
+/** Ce que la meute demande en armant une nuit. */
+export type OptionsDeNuit = { aPlusieurs?: boolean; surMorsure?: (d: number) => void };
 
 /**
  * L'ECRAN PEUT-IL TREMBLER ?
@@ -179,6 +189,9 @@ export function nuitEnCours(): boolean { return chasse !== null; }
 
 /** La nuit qu'on court, ou null. */
 export function nuitCourante(): Nuit | null { return chasse ? chasse.nuit : null; }
+
+/** La nuit en cours se court-elle a plusieurs ? */
+export function nuitAPlusieurs(): boolean { return !!chasse && chasse.aPlusieurs; }
 
 /**
  * Ce que le HUD, le rendu et le son ont besoin de savoir.
@@ -212,7 +225,7 @@ export function resteAuChrono(): number {
  * a deja pose la piste et les huit couloirs, on n'ajoute que ce qui court
  * derriere.
  */
-export function armerLaNuit(n: number) {
+export function armerLaNuit(n: number, opts: OptionsDeNuit = {}) {
   if (!HALLOWEEN_OUVERT) return;
   const nuit = nuitDe(n);
   const G = SprinterApp.G;
@@ -231,6 +244,7 @@ export function armerLaNuit(n: number) {
     ecart: nuit.retard, ecartMin: nuit.retard,
     verdict: 'court', chrono: 0, morsure: 0,
     secousses: secoussesPermises(),
+    aPlusieurs: !!opts.aPlusieurs, surMorsure: opts.surMorsure || null,
   };
 
   if (G) {
@@ -242,7 +256,11 @@ export function armerLaNuit(n: number) {
     // plat, et le rangement des haies l'a videe a la construction.
     G.obstacles = molosseDe(chasse);
     poserLaCamera(n);
-    poserLeDepart(nuit);
+    // A PLUSIEURS, TOUT LE MONDE PART DES BLOCS. Le depart surpris attend un
+    // temps tire au hasard sur chaque telephone, et l'elan se cale sur un
+    // decompte local : huit coureurs partiraient a huit instants differents.
+    // Les blocs, eux, partent au pistolet de la salle, le meme pour tous.
+    poserLeDepart(chasse.aPlusieurs ? { ...nuit, depart: 'blocs' } : nuit);
     // Le corps sonore de la bete (halloween-traque.ts) : muet jusqu'au
     // premier pas de la course, puis il suit l'ecart.
     armerLaTraque();
@@ -366,6 +384,8 @@ export function rangerLaNuit() {
     if (G.obstacles && G.obstacles.molosse) G.obstacles = null;
     if (G.surRetourAccueil === rangerLaNuit) G.surRetourAccueil = null;
     G.departDebout = null;
+    // Le mordu de la meute regardait : il ne regarde plus.
+    G.spectateur = false; G.suivi = null;
     // LE TRACE DE LA NUIT NE SURVIT PAS A LA NUIT (18/10). Le retour a
     // l'accueil reconstruit l'etape 0 avec `G.race`, et lit ses plages de
     // chronos (`R.ranges`) — qu'un trace `nuit-*` n'a pas : SORTIR jetait une
@@ -390,7 +410,10 @@ export function rangerLaNuit() {
  * derive se serait vue la ou elle coute le plus cher : sur la derniere foulee.
  */
 export function pasDuMolosse(joueur: any) {
-  if (!chasse || chasse.verdict !== 'court') return;
+  if (!chasse) return;
+  // En meute, le mordu regarde la suite : la bete repart vers les autres.
+  if (chasse.verdict === 'mordu' && chasse.aPlusieurs) { poursuivreLaMeute(chasse); return; }
+  if (chasse.verdict !== 'court') return;
   const G = SprinterApp.G;
   const t = G.elapsed || 0;
   const c = chasse;
@@ -467,10 +490,57 @@ export function pasDuMolosse(joueur: any) {
     // devorer. On le gele, et la cinematique prend la suite.
     joueur.v = 0;
     joueur.freeze = 9;
+    // A plusieurs, la salle attend notre arrivee pour trancher : on lui dit
+    // ou la bete nous a pris.
+    if (c.surMorsure) { try { c.surMorsure(joueur.d); } catch { /* salle fermee */ } }
+    if (c.aPlusieurs) {
+      // EN MEUTE, LE MORDU RESTE ET REGARDE LA POURSUITE (consigne du 18/10).
+      // Il passe spectateur — ses appuis ne font plus rien, il n'envoie plus
+      // de position (padPress, pousserPosition) — et la course ne s'arrete
+      // pas pour lui : elle s'arretera au verdict de la salle, quand le
+      // dernier sera passe ou pris (halloween-meute.ts).
+      G.spectateur = true;
+      G.suivi = proieDeLaBete(c) || null;
+      return;
+    }
     // Et l'on previent la boucle de course, qui attend sinon une ligne que ce
     // coureur-la ne franchira plus (voir updateLogic dans engine.ts).
     G.molosseMord = true;
   }
+}
+
+/**
+ * LA PROIE : le coureur de la meute que la bete chasse maintenant — le plus
+ * proche devant elle parmi ceux qui courent encore. Ni ceux qui sont passes,
+ * ni ceux qu'elle a deja pris (la salle les a annonces : `fin`, `abandon`).
+ */
+function proieDeLaBete(c: Chasse): any {
+  const G = SprinterApp.G;
+  let proie: any = null;
+  for (const g of (G.lives || new Map()).values()) {
+    const r = g && g.runner;
+    if (!r || g.abandon || g.fin != null || r.finished) continue;
+    if (!proie || r.d < proie.d) proie = r;
+  }
+  // Tout le monde est passe ou pris : on garde le dernier regarde.
+  return proie || G.suivi || null;
+}
+
+/**
+ * La bete apres la morsure, en meute : elle court toujours au meme pas (la
+ * loi ne depend que du chrono), et la camera suit celui qu'elle chasse.
+ */
+function poursuivreLaMeute(c: Chasse) {
+  const G = SprinterApp.G;
+  const t = G.elapsed || 0;
+  const avant = c.d;
+  c.d = positionDe(c.nuit, t, c.tau, c.vmax);
+  c.v = Math.max(0, (c.d - avant) * 240);
+  const proie = proieDeLaBete(c);
+  if (proie) G.suivi = proie;
+  // Le souffle et le galop suivent la proie : c'est elle qu'on regarde.
+  c.ecart = proie ? proie.d - c.d : 99;
+  suivreLaTraque(Math.max(0, c.ecart), t);
 }
 
 /* ---------------------------------------------------------------------------

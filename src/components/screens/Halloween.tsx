@@ -25,6 +25,8 @@ import {
 import { mot, chrono } from '@/game/halloween-mots';
 import { COURSES, distanceDe } from '@/game/halloween-courses.js';
 import { chargerLaMusique } from '@/game/halloween-musique';
+import { SalonDeLaMeute } from './MeuteMolosse';
+import { codeMeuteUrl, nettoyerUrlMeute, dansLaMeute } from '@/game/halloween-meute';
 
 /* ---------------------------------------------------------------------------
    LA NUIT DU MOLOSSE — les trois ecrans du mode
@@ -614,6 +616,23 @@ export function PanneauMolosse() {
   // Le chapitre relu, ou null. Les chapitres gagnes se relisent depuis le
   // tableau : on y revient avant d'aller chercher le suivant.
   const [lu, lire] = useState<number | null>(null);
+  // LA MEUTE (18/10) : le salon a plusieurs, par-dessus le tableau. Ouvert
+  // d'un bouton, ou d'un lien `?meute=CODE` qu'un ami a envoye — on le lit
+  // une fois, au chargement, et on le retire de l'adresse.
+  const [meute, poserMeute] = useState<{ code: string } | null>(null);
+  useEffect(() => {
+    const code = codeMeuteUrl();
+    if (!code) return;
+    nettoyerUrlMeute();
+    if (!EST_TEST && !editionActive(EDITION_HALLOWEEN)) return;
+    poserOuvert(true);
+    poserMeute({ code });
+  }, []);
+  // De retour d'une nuit courue en meute, le salon se rouvre de lui-meme
+  // tant qu'on n'a pas quitte la meute.
+  useEffect(() => {
+    if (affiche && dansLaMeute() && !meute) poserMeute({ code: '' });
+  }, [affiche]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* L'HORLOGE SE REGLE A L'OUVERTURE DU PANNEAU, PAS AU CHARGEMENT DU JEU.
      Un joueur qui n'entre jamais dans le mode n'a aucune raison d'appeler le
@@ -877,6 +896,25 @@ export function PanneauMolosse() {
             })}
           </div>
 
+          {/* LA MEUTE : la nuit a plusieurs, jusqu'a huit. Elle ne s'ouvre que
+              sur une nuit deja ouverte — et ceux qu'on invite courent celle-la. */}
+          {ouverte >= 1 && (
+            <button
+              onClick={() => poserMeute({ code: '' })}
+              className="relative w-full mt-4 rounded-xl border-2 border-[#E86826]/60 bg-[#22101C] px-3 py-2.5
+                         flex items-center gap-3 text-left active:scale-[0.98] transition-transform"
+            >
+              <span className="shrink-0 font-black font-display text-xl text-[#F8A02E]">×8</span>
+              <span className="flex-1 min-w-0 flex flex-col leading-tight">
+                <span className="font-black text-xs tracking-widest uppercase text-foreground">{mot('hw_m_titre')}</span>
+                <span className="text-[10px] text-foreground/55">{mot('hw_m_sous')}</span>
+              </span>
+              <span className="shrink-0 px-2.5 py-1 rounded-lg bg-[#E86826] text-black text-[10px] font-black tracking-widest">
+                {mot('hw_m_entrer')}
+              </span>
+            </button>
+          )}
+
           <button
             onClick={() => poserOuvert(false)}
             className="w-full mt-4 py-2.5 rounded-xl border border-white/10 text-foreground/60
@@ -889,6 +927,11 @@ export function PanneauMolosse() {
 
       {lu !== null && lu <= c.tenues && (
         <LecteurDuRecit key={lu} n={lu} dernier={c.tenues} aller={lire} />
+      )}
+
+      {meute && (
+        <SalonDeLaMeute ouvertes={Math.max(1, Math.min(CAL_NB, ouverte))}
+                        codeInitial={meute.code} fermer={() => poserMeute(null)} />
       )}
     </motion.div>
   );

@@ -4169,7 +4169,11 @@
     // Sorti au faux depart, on regarde : la camera accompagne le coureur
     // choisi, plus le joueur qui n'est plus sur la piste.
     const vise = (G.spectateur && G.suivi) || G.player;
-    const T = G.track, s = vise ? vise.d : 0, lane = 3;
+    // LA MEUTE DE LA NUIT (halloween.ts) : le mordu regarde celui que la bete
+    // chasse, et la camera va dans SON couloir. Au couloir 3, une camera aussi
+    // basse le laissait au bord de l'ecran, a moitie dehors.
+    const lane = G.spectateur && G.suivi && G.pasMolosse ? G.suivi.lane : 3;
+    const T = G.track, s = vise ? vise.d : 0;
     // La camera vise la position exacte du joueur (pas de decalage vers
     // l'avant) : combine a l'origine centree, il reste au milieu de l'ecran.
     //

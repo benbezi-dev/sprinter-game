@@ -185,6 +185,8 @@ export type EtatSalle = {
   mot?: MotDirect | null;
   /** Le tournoi a elimination, sur une piste ouverte en tournoi. */
   tournoi?: EtatTournoi | null;
+  /** La meute : le rang de la nuit que la salle court. */
+  nuit?: number;
 };
 
 export type Arrivee = {
@@ -195,6 +197,8 @@ export type Arrivee = {
   couloir?: number;
   /** Tournoi : ce coureur sort a l'issue de cette manche. */
   elimine?: boolean;
+  /** La meute : mordu a tant de metres du depart. */
+  mordu?: number;
 };
 
 /** Ce que le verdict d'une manche de tournoi ajoute a celui d'une course. */
@@ -290,7 +294,8 @@ type Ecouteurs = {
   onPos?: (id: string, d: number, c?: number) => void;
   /** Un chrono d'arrivee. `id` dit a qui il appartient : c'est lui qui permet
    *  de poser CE coureur sur la ligne a son vrai temps. Voir liveFiniDe. */
-  onFini?: (nom: string, ms: number, abandon: boolean, id?: string) => void;
+  /** `mordu` : la meute de la nuit du molosse — ou la bete l'a pris, en metres. */
+  onFini?: (nom: string, ms: number, abandon: boolean, id?: string, mordu?: number) => void;
   onResultat?: (r: ResultatDirect) => void;
   /** Les points de la course, juste apres le resultat. Absent s'il n'y en a pas. */
   onDuel?: (d: DuelDirect) => void;
@@ -371,6 +376,8 @@ export class Salle {
   private places = 2;
   /** Une piste ouverte en tournoi a elimination se rouvre en tournoi. */
   private tournoi = false;
+  /** Ce que la piste demande en plus a son ouverture — la nuit de la meute. */
+  private extra: Record<string, string> = {};
   /**
    * La salle a coupe la liaison d'elle-meme — fin de course, inactivite,
    * reseau. Pas quand on la quitte : fermer() la coupe aussi, mais il n'y a
@@ -467,7 +474,7 @@ export class Salle {
     // une a l'arrivee. Garder l'ancienne ferait croire qu'on y est deja.
     this.moi = '';
     this.suisHote = false;
-    this.connecter(epreuves, niveau, places, tournoi);
+    this.connecter(epreuves, niveau, places, tournoi, this.extra);
   }
 
   /**
@@ -475,7 +482,9 @@ export class Salle {
    *   seul le premier arrive le decide, et la salle l'ignore sous trois
    *   couloirs.
    */
-  connecter(epreuves: string[], niveau: number, places = 2, tournoi = false) {
+  connecter(epreuves: string[], niveau: number, places = 2, tournoi = false,
+            extra: Record<string, string> = {}) {
+    this.extra = { ...extra };
     this.epreuves = epreuves.slice();
     this.niveau = niveau;
     this.places = places;
@@ -493,6 +502,7 @@ export class Salle {
       max: String(Math.max(MIN_COULOIRS, Math.min(MAX_COULOIRS, Math.round(places) || 2))),
     });
     if (tournoi && places >= TOURNOI_MIN) q.set('tournoi', '1');
+    for (const k in extra) q.set(k, extra[k]);
     // Une WebSocket de navigateur n'accepte pas d'en-tetes : le code d'acces
     // passe donc par la requete.
     //
@@ -627,7 +637,8 @@ export class Salle {
         this.ec.onPos?.(m.id, m.d, Number.isFinite(m.c) ? m.c : undefined);
         return;
       case 'fini':
-        this.ec.onFini?.(m.nom, m.ms, !!m.abandon, m.id);
+        this.ec.onFini?.(m.nom, m.ms, !!m.abandon, m.id,
+                         Number.isFinite(m.mordu) ? m.mordu : undefined);
         return;
       case 'sorti':
         this.ec.onSorti?.(m.nom);
@@ -761,6 +772,8 @@ export class Salle {
     this.envoyer({ t: 'faux_depart', ms: Math.round(ms), n: this.departN });
   }
   abandon() { this.envoyer({ t: 'abandon' }); }
+  /** La meute : la bete m'a rattrape a `d` metres du depart. */
+  mordu(d: number) { this.envoyer({ t: 'mordu', d: Math.round(d * 10) / 10 }); }
   /** Une phrase du tchat rapide : son identifiant, jamais son texte. */
   rapide(q: string) { this.envoyer({ t: 'rapide', q }); }
 
