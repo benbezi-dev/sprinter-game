@@ -22,8 +22,12 @@ export type SurLaPiste =
       genre: 'confrontation';
       code: string;
       equipe: string;
-      /** Combien d'equipes au plus. Le premier arrive le fixe. */
-      max: number;
+      /**
+       * Combien d'equipes au plus, quand on a soi-meme ouvert le code. Celui
+       * qui rejoint n'en dit rien : la salle tient la taille choisie a
+       * l'ouverture.
+       */
+      max?: number;
       /** Les courses enregistrees a affronter, par identifiant de course. */
       fantomes: number[];
     };

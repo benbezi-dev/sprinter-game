@@ -38,7 +38,7 @@ function autresQue(e: EtatConfrontation | null, moi: string): EquipeEnCourse[] {
 }
 
 export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: {
-  code: string; equipe: string; max: number; fantomes: number[];
+  code: string; equipe: string; max?: number; fantomes: number[];
   onQuitter: () => void;
 }) {
   const { N } = SprinterApp;

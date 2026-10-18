@@ -156,6 +156,10 @@ await attendre(600);
 ok('les huit sont entres', cl.every(c => c.relais >= 1 && c.relais <= 4));
 ok('deux equipes sont formees', cl[0].etat?.equipes?.length === 2,
    String(cl[0].etat?.equipes?.length));
+// Un code ouvert sans taille, rejoint par des connexions qui n'en disent rien :
+// la piste reste ouverte a huit, elle ne se referme pas sur un chiffre par defaut.
+ok('sans taille annoncee, la piste reste a huit', cl[0].etat?.max === 8,
+   String(cl[0].etat?.max));
 
 console.log('\n── LE DEPART N EST PAS DONNE A UNE SEULE EQUIPE ────────────');
 for (const c of cl.filter(x => x.equipe === A.id)) c.envoyer({ t: 'pret', pret: true });
@@ -223,6 +227,36 @@ if (f) {
 }
 
 for (const c of cl) { clearInterval(c.boucle); c.ws.close(); }
+
+// --- La taille est celle du code ------------------------------------------
+//
+// L'hote ouvre a deux equipes et partage le code ; un ami l'entre AVANT lui,
+// avec le chiffre de son propre ecran. C'etait ce chiffre qui gagnait : la
+// salle prenait la taille de la premiere connexion, et une confrontation
+// ouverte a deux en acceptait huit — ou l'inverse, huit refermee a quatre.
+console.log('\n── LA TAILLE EST CELLE DU CODE, PAS DU PREMIER ARRIVE ───────');
+const petit = (await post('/relay/confrontation', { max: 2 })).id;
+const [H1, H2, H3] = [await monterEquipe('HH'), await monterEquipe('II'),
+                      await monterEquipe('JJ')];
+/** Une connexion, et ce qu'elle a vu de la salle. */
+const entrer = (code, eq, max) => new Promise(res => {
+  const q = max ? `&max=${max}` : '';
+  const ws = new WebSocket(`${WS}/relay/conf/${code}?acces=${ACCES}&team=${eq.id}` +
+                           `&name=${encodeURIComponent(eq.noms[0])}${q}`);
+  const x = { ws, ouvert: false, etat: null };
+  ws.addEventListener('message', ev => { const m = JSON.parse(ev.data); if (m.equipes) x.etat = m; });
+  ws.addEventListener('open', () => { x.ouvert = true; setTimeout(() => res(x), 300); });
+  ws.addEventListener('error', () => res(x));
+});
+const ami = await entrer(petit, H2, 8);
+ok('l ami entre le premier, avec huit sur son ecran', ami.ouvert);
+ok('la salle garde les deux de l ouverture', ami.etat?.max === 2, String(ami.etat?.max));
+const hote = await entrer(petit, H1, 2);
+ok('l hote entre ensuite', hote.ouvert);
+const troisieme = await entrer(petit, H3);
+ok('une troisieme equipe est refusee', !troisieme.ouvert);
+for (const x of [ami, hote, troisieme]) { try { x.ws.close(); } catch { /* deja fermee */ } }
+
 console.log('\n' + '─'.repeat(62));
 console.log(e === 0 ? '   TOUT PASSE.' : `   ${e} VERIFICATION(S) EN ECHEC.`);
 process.exit(e ? 1 : 0);
