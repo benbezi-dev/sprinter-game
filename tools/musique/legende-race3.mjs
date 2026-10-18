@@ -15,6 +15,10 @@
 //   node tools/musique/legende-race3.mjs <dossier> [lieu...]
 // ecrit <lieu>.wav (cinq boucles, pour l'ecoute) ; `race3-150` et
 // `race3-160` sont la reference.
+//   node tools/musique/legende-race3.mjs --mesure [lieu...]
+// donne, avant normalisation, le niveau (dB RMS) de ce qui fait le pays
+// (refrain, contretemps, mains) et du socle race3 (batterie, basse, arpege,
+// bourdon, stab) : l'ecart dit lequel passe devant.
 
 import { Audio_, tampon, ecrireWav, SR } from './moteur.mjs';
 
@@ -104,14 +108,30 @@ function fabriquerCourse(cfg) {
       for (const [s, x, l] of m) jouer(d, t + x * beat, l * beat, F(s, c.octave), c.amp);
     }
   }
-  return Audio_.norm(d);
+  return brut ? d : Audio_.norm(d);
 }
+let brut = false;
 
 // --- les reglages : ceux du jeu (src/game/legende/race3-lieux.js) ---------
 import { RACE3, MUSIQUES_LEGENDE } from '../../src/game/legende/race3-lieux.js';
 const LIEUX = { 'race3-150': RACE3, 'race3-160': { ...RACE3, bpm: 160 }, ...MUSIQUES_LEGENDE };
 
 const [dossier, ...noms] = process.argv.slice(2);
+if (dossier === '--mesure') {
+  brut = true;
+  const db = (cfg) => {
+    const ch = fabriquerCourse(cfg).getChannelData(0);
+    let s = 0; for (let i = 0; i < ch.length; i++) s += ch[i] * ch[i];
+    return 10 * Math.log10(s / ch.length + 1e-12);
+  };
+  for (const nom of noms.length ? noms : Object.keys(MUSIQUES_LEGENDE)) {
+    const c = LIEUX[nom];
+    const pays = db({ ...c, kick: [], snare: [], hats: 0, bassAmp: 0, padAmp: 0, arpAmp: 0, drone: 0, stab: 0 });
+    const socle = db({ ...c, couches: [], contretemps: null, claps: [] });
+    console.log(nom.padEnd(14), 'pays', pays.toFixed(1), 'dB  socle', socle.toFixed(1), 'dB  ecart', (pays - socle).toFixed(1));
+  }
+  process.exit(0);
+}
 if (!dossier) { console.error('usage : node legende-race3.mjs <dossier> [lieu...]'); process.exit(1); }
 const fs = await import('node:fs');
 fs.mkdirSync(dossier, { recursive: true });

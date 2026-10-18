@@ -31,10 +31,29 @@ const BASE = { ...RACE3, bpm: 160 };
 const BASSE_JUSTE = [0, 0, 7, 0, 0, 0, 7, 0, 12, 0, 7, 0, 0, 7, 0, 7];
 // la meme, avec la seconde mineure des modes orientaux et phrygiens
 const BASSE_B2 = [0, 0, 7, 0, 0, 0, 7, 0, 12, 0, 7, 0, 1, 0, 7, 0];
+// LE PAYS DEVANT, race3 DERRIERE (18/10). L'auteur : « met plus en valeur le
+// son qui identifie le pays et le personnage et baisse celui du theme
+// ZEZE ». Mesure avant (legende-race3.mjs --mesure) : le refrain sortait
+// 5 a 12 dB SOUS le socle race3. On garde la batterie entiere (l'elan de la
+// course), on baisse ce qui chante race3 — l'arpege, le stab, le bourdon,
+// la nappe — et un peu la basse ; puis chaque lieu remonte son refrain, ses
+// contretemps et ses mains de `g` (calcule pour que le pays passe ~2 dB
+// devant le socle partout). Les mains montent moins : du bruit trop fort
+// fatigue.
+const SOCLE = { bassAmp: 0.36, padAmp: 0.06, arpAmp: 0.045, drone: 0.10, stab: 0.08 };
+function enAvant(cfg, g) {
+  return {
+    ...cfg, ...SOCLE,
+    clapAmp: cfg.clapAmp && cfg.clapAmp * Math.min(g, 1.5),
+    contretemps: cfg.contretemps && { ...cfg.contretemps, amp: cfg.contretemps.amp * g },
+    couches: (cfg.couches || []).map((c) => ({ ...c, amp: c.amp * g })),
+  };
+}
+
 /** Une mesure de refrain transposee de k demi-tons. */
 const tr = (mesure, k) => mesure.map(([s, x, l]) => [s + k, x, l]);
 
-export const MUSIQUES_LEGENDE = {
+const LIEUX = {
   // MENOLE — Kouassi « le Crabe », 12 ans, pieds nus. Le coupe-decale :
   // majeur, guitare zouglou qui saute en pentatonique, claps sur les
   // contretemps comme a la plage.
@@ -252,3 +271,12 @@ export const MUSIQUES_LEGENDE = {
     ] }],
   },
 };
+
+// le gain de chaque refrain (voir enAvant)
+const GAIN = {
+  menole: 3.0, kyoto: 1.8, kingston: 2.25, izmir: 2.15, barcelone: 3.3, casablanca: 1.8,
+  abuja: 3.5, paris: 2.2, newyork: 1.9, londres: 2.25, karman: 2.35, 'karman-wukong': 1.6,
+  'karman-anansi': 1.65, 'karman-inti': 1.6, apotheose: 3.2,
+};
+export const MUSIQUES_LEGENDE = Object.fromEntries(
+  Object.entries(LIEUX).map(([cle, cfg]) => [cle, enAvant(cfg, GAIN[cle] ?? 1)]));
