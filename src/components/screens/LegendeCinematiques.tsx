@@ -247,8 +247,6 @@ function habillage(ctx: CanvasRenderingContext2D, W: number, H: number, t: numbe
    Les voyages eux-memes ne changent pas.
    =========================================================================== */
 
-const doux = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
-
 /** Le fil : un trait de la teinte, avec un halo et une tete lumineuse en x1. */
 function fil(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, teinte: string, ep: number, tete = true) {
   if (x1 - x0 < 0.5) return;
@@ -264,46 +262,68 @@ function fil(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, t
   ctx.restore();
 }
 
+// Des gestes lents et sans arete (l'auteur, 18/10 : « trop seches ») :
+// une courbe en sinus, des fentes aux levres fondues, l'image qui monte du
+// noir au lieu d'y etre decoupee.
+const sinus = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : 0.5 - 0.5 * Math.cos(Math.PI * x));
+const sortieDouce = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : Math.sin(Math.PI * x / 2));
+
+/** Le noir au-dessus de `yh` et au-dessous de `yb`, fondu sur `flou` pixels vers l'interieur. */
+function fente(ctx: CanvasRenderingContext2D, W: number, H: number, yh: number, yb: number, flou: number) {
+  ctx.save();
+  ctx.fillStyle = '#000';
+  if (yh > 0) ctx.fillRect(0, 0, W, yh);
+  if (yb < H) ctx.fillRect(0, yb, W, H - yb);
+  const f = Math.max(1, Math.min(flou, (yb - yh) / 2));
+  let g = ctx.createLinearGradient(0, yh, 0, yh + f);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, yh, W, f);
+  g = ctx.createLinearGradient(0, yb - f, 0, yb);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.fillStyle = g; ctx.fillRect(0, yb - f, W, f);
+  ctx.restore();
+}
+
 /**
- * L'ouverture (u : 0 -> 1) : le fil se tire sur le noir (0 -> 0,45), puis
- * l'image s'ouvre en fente de part et d'autre (0,45 -> 1), le fil se
- * dedoublant sur les deux levres.
+ * L'ouverture (u : 0 -> 1) : le fil se tire sur le noir, puis l'image
+ * s'ouvre en fente aux levres fondues, en montant du noir ; le fil se
+ * dedouble sur les deux levres et s'efface en chemin.
  */
 function ouvrirLeFil(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
   if (u >= 1) return;
   const y = H * 0.5, ep = Math.max(2, Math.min(W, H) * 0.005);
-  const tire = doux(u / 0.45), ouvre = doux((u - 0.45) / 0.55);
-  const demi = (H / 2 + ep) * ouvre;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W, y - demi); ctx.fillRect(0, y + demi, W, H - y - demi);
-  if (ouvre <= 0) fil(ctx, 0, W * tire, y, teinte, ep);
+  const tire = sortieDouce(u / 0.38), ouvre = sinus((u - 0.28) / 0.72);
+  const demi = (H / 2 + H * 0.2) * ouvre;
+  if (ouvre <= 0) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
   else {
-    ctx.save(); ctx.globalAlpha = 1 - ouvre;
-    fil(ctx, 0, W, y - demi, teinte, ep, false); fil(ctx, 0, W, y + demi, teinte, ep, false);
-    ctx.restore();
+    // l'image monte du noir pendant que la fente s'ouvre
+    ctx.fillStyle = `rgba(0,0,0,${0.85 * (1 - sinus(ouvre * 1.25))})`; ctx.fillRect(0, 0, W, H);
+    fente(ctx, W, H, y - demi, y + demi, H * 0.2 * Math.min(1, ouvre * 3));
   }
+  ctx.save();
+  ctx.globalAlpha = 1 - sinus(ouvre * 1.4);
+  if (ouvre <= 0.02) fil(ctx, 0, W * tire, y, teinte, ep);
+  else { fil(ctx, 0, W, y - demi * 0.82, teinte, ep, false); fil(ctx, 0, W, y + demi * 0.82, teinte, ep, false); }
+  ctx.restore();
 }
 
 /**
- * La fermeture (u : 0 -> 1), le geste inverse : l'image se referme en fente
- * sur le fil (0 -> 0,5), puis le fil se retracte vers la droite en un point
- * qui s'eteint (0,5 -> 1).
+ * La fermeture (u : 0 -> 1), le geste inverse : l'image s'assombrit et se
+ * referme en fente fondue sur le fil, puis le fil glisse vers la droite et
+ * s'eteint en un point.
  */
 function fermerLeFil(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
   if (u <= 0) return;
   const y = H * 0.5, ep = Math.max(2, Math.min(W, H) * 0.005);
-  const ferme = doux(u / 0.5), retire = doux((u - 0.5) / 0.5);
-  const demi = (H / 2 + ep) * (1 - ferme);
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W, y - demi); ctx.fillRect(0, y + demi, W, H - y - demi);
-  if (ferme < 1) {
-    fil(ctx, 0, W, y - demi, teinte, ep, false); fil(ctx, 0, W, y + demi, teinte, ep, false);
-  } else {
-    const x0 = W * retire;
-    ctx.save(); ctx.globalAlpha = 1 - doux((u - 0.88) / 0.12);
-    fil(ctx, Math.min(x0, W * 0.999), W, y, teinte, ep * (1 + retire), true);
-    ctx.restore();
-  }
+  const ferme = sinus(u / 0.6), retire = sinus((u - 0.55) / 0.45);
+  const demi = (H / 2 + H * 0.2) * (1 - ferme);
+  ctx.fillStyle = `rgba(0,0,0,${0.85 * sinus(ferme * 1.1)})`; ctx.fillRect(0, 0, W, H);
+  fente(ctx, W, H, y - demi, y + demi, H * 0.2 * Math.min(1, (1 - ferme) * 3 + 0.05));
+  ctx.save();
+  ctx.globalAlpha = sinus(ferme * 1.6) * (1 - sinus((u - 0.85) / 0.15));
+  if (ferme < 0.98) { fil(ctx, 0, W, y - demi * 0.82, teinte, ep, false); fil(ctx, 0, W, y + demi * 0.82, teinte, ep, false); }
+  else fil(ctx, Math.min(W * retire, W * 0.999), W, y, teinte, ep * (1 + retire), true);
+  ctx.restore();
 }
 
 /* ===========================================================================
@@ -702,9 +722,9 @@ export function CinematiqueVoyage({ rang, onFin }: { rang: number; onFin: () => 
                           hudDiffere = null;
                           p(ctx, W, H, t);
                           habillage(ctx, W, H, t, duree, teinte);
-                          if (hudDiffere) (hudDiffere as () => void)();
-                          ouvrirLeFil(ctx, W, H, fenetre(t, 0, 1.15), teinte);
-                          fermerLeFil(ctx, W, H, fenetre(t, duree - 1.05, duree), teinte);
+                          if (hudDiffere) (hudDiffere as (c: CanvasRenderingContext2D) => void)(ctx);
+                          ouvrirLeFil(ctx, W, H, (t - 0.05) / 1.9, teinte);
+                          fermerLeFil(ctx, W, H, (t - (duree - 1.7)) / 1.7, teinte);
                         };
                       }} />;
 }
@@ -718,40 +738,52 @@ function peintreVolPuisSol(rang: number): Peintre {
   // du ciel a la route : un panoramique vertical d'une seconde, centre sur
   // VOL_ARRIVEE ; le ciel monte et sort par le haut, le sol arrive par le
   // bas, et le fil de l'etape court sur la couture
-  const PAN = 1.0;
+  const PAN = 1.7;
+  let ecran: HTMLCanvasElement | null = null;
   return (ctx, W, H, t) => {
-    const k = doux((t - (VOL_ARRIVEE - PAN / 2)) / PAN);
+    const k = sinus((t - (VOL_ARRIVEE - PAN / 2)) / PAN);
     if (k <= 0) { vol(ctx, W, H, t); return; }
     if (k >= 1) { sol(ctx, W, H, t - VOL_ARRIVEE); return; }
-    const couture = H * (1 - k);
-    // le sol d'abord, le ciel ensuite : c'est le texte du dernier peint qui
-    // reste, celui du vol tant que la couture n'a pas passe le milieu
-    // le sol entre par son horizon (a 60 % de sa hauteur, voir peintreRoute) :
-    // la couture EST la ligne d'horizon, et son ciel se decouvre au-dessus a
-    // mesure que la camera descend — un vrai basculement, pas deux images
-    // empilees
-    const parts: [Peintre, number, number][] = [[sol, Math.max(0, t - VOL_ARRIVEE), couture - H * 0.6 * (1 - k)], [vol, t, couture - H]];
-    if (k >= 0.5) parts.reverse();
-    for (const [peindre, tt, dy] of parts) {
-      ctx.save();
-      // chaque scene reste de son cote de la couture
-      const haut = peindre === vol ? 0 : couture, bas = peindre === vol ? couture : H;
-      ctx.beginPath(); ctx.rect(0, haut, W, bas - haut); ctx.clip();
-      ctx.translate(0, dy);
-      peindre(ctx, W, H, tt);
-      ctx.restore();
-    }
-    fil(ctx, 0, W, couture, teinte, Math.max(2, Math.min(W, H) * 0.005), false);
+    const couture = H * (1 - k), F = H * 0.14;
+    // LE SOL entre par le bas, son horizon (a 60 % de sa hauteur, voir
+    // peintreRoute) en tete, et son ciel se decouvre au-dessus a mesure que
+    // la camera descend — un basculement, pas deux images empilees
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, Math.max(0, couture - F), W, H); ctx.clip();
+    ctx.translate(0, couture - H * 0.6 * (1 - k));
+    sol(ctx, W, H, Math.max(0, t - VOL_ARRIVEE));
+    ctx.restore();
+    const texteSol = hudDiffere;
+    // LE CIEL, peint a part puis fondu dans le sol sur F pixels : pas d'arete
+    const cv = ctx.canvas;
+    if (!ecran) ecran = document.createElement('canvas');
+    if (ecran.width !== cv.width || ecran.height !== cv.height) { ecran.width = cv.width; ecran.height = cv.height; }
+    const o = ecran.getContext('2d')!;
+    o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, ecran.width, ecran.height);
+    o.setTransform(ctx.getTransform());
+    o.save(); o.translate(0, couture - H); vol(o, W, H, t); o.restore();
+    o.globalCompositeOperation = 'destination-out';
+    const g = o.createLinearGradient(0, couture - F, 0, couture + 2);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+    o.fillStyle = g; o.fillRect(0, couture - F, W, H);
+    o.globalCompositeOperation = 'source-over';
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(ecran, 0, 0); ctx.restore();
+    // le texte du vol tant que la couture n'a pas passe le milieu, puis celui du sol
+    if (k >= 0.5) hudDiffere = texteSol;
+    // le fil, sur l'horizon, s'allume au milieu du geste et s'eteint avec lui
+    ctx.save(); ctx.globalAlpha = 0.7 * Math.sin(Math.PI * k);
+    fil(ctx, 0, W, couture - F * 0.35, teinte, Math.max(2, Math.min(W, H) * 0.005), false);
+    ctx.restore();
   };
 }
 
 // Pendant les transitions l'image glisse ; le texte, lui, reste en place.
 // Le peintre ne l'ecrit donc pas tout de suite : il le confie a
 // `hudDiffere`, que CinematiqueVoyage ecrit par-dessus.
-let hudDiffere: (() => void) | null = null;
+let hudDiffere: ((c: CanvasRenderingContext2D) => void) | null = null;
 
-function hudVoyage(...a: Parameters<typeof hudVoyageEcrit>) {
-  hudDiffere = () => hudVoyageEcrit(...a);
+function hudVoyage(_ctx: CanvasRenderingContext2D, ...a: Parameters<typeof hudVoyageEcrit> extends [unknown, ...infer R] ? R : never) {
+  hudDiffere = (c) => hudVoyageEcrit(c, ...a);
 }
 
 /** Ce qui s'ecrit en haut : l'etape, d'ou vers ou, la distance, puis le lieu. */
