@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bike, Car, Bus, Plane, Rocket, Lock, Crown, Medal, ChevronRight, ChevronLeft } from 'lucide-react';
@@ -14,6 +14,7 @@ import {
 } from '@/game/legende/legende';
 import { mot, chrono, dans } from '@/game/legende/mots';
 import { GlobeDuVoyage } from './LegendeGlobe';
+import { chargerLaMusiqueDuLieu } from '@/game/legende/musiques';
 import { CinematiqueKarman } from './LegendeKarman';
 import { CinematiqueVoyage, CinematiqueApotheose, CinematiqueSacre } from './LegendeCinematiques';
 import { PORTRAITS, TEINTES } from './legende-commun';
@@ -229,7 +230,10 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
   // en avion (LegendeCinematiques.tsx), la montee vers Karman
   // (LegendeKarman.tsx), puis vers l'apotheose.
   const [voyage, setVoyage] = useState(false);
-  const partir = () => setVoyage(true);
+  // la musique du lieu se charge des l'affiche (et encore au depart, si le
+  // son n'etait pas pret) : elle doit etre la au pistolet
+  useEffect(() => { void chargerLaMusiqueDuLieu(lieu.cle); }, [lieu.cle]);
+  const partir = () => { void chargerLaMusiqueDuLieu(lieu.cle); setVoyage(true); };
 
   return (
     // OPAQUE : l'affiche est un ecran a part entiere, pas un voile sur

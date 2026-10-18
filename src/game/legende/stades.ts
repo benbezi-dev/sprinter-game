@@ -19,6 +19,7 @@
 // autre. Le leur, lui, n'est pas garanti d'une version a l'autre : on le
 // relit donc toujours par la clef (`indexDuLieu`), jamais en dur.
 
+import { nomDeLaMusique } from './musiques';
 import { ETAPES, type Lieu } from './etapes';
 // LES CORPS DES BOSS, faits dans Tripo et rigges par vedette_tripo.py. Sous
 // src/assets/legende/ et non dans public/ : hors du canal de test, le greffon
@@ -319,6 +320,8 @@ export function stadeDe(l: Lieu, rang: number): any {
   const names = [...l.plateau.slice(0, 3), l.boss, ...l.plateau.slice(3)];
   return {
     cle: CLE(l), name: l.nom, theme: l.theme,
+    // la musique du lieu (musiques.ts), chargee a l'affiche ; sans elle, celle de l'etape
+    musique: nomDeLaMusique(l.cle),
     pool: POOL_DU_LIEU[l.cle] || (rang >= 3 ? 'sprint' : 'divers'),
     horsSerie: true,
     // Ni ouvert ni choisissable : ces stades n'existent que pour la Legende,

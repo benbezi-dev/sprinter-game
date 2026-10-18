@@ -1142,13 +1142,56 @@
                     F(root + tri[i % tri.length], 5), cfg.arpAmp, 'pulse', 9);
           yield;
         }
-        // coups de tension : quinte diminuee sur le dernier temps
+        // coups de tension : quinte diminuee sur le dernier temps (ou la note
+        // que le morceau choisit : la seconde mineure du flamenco...)
         if (cfg.stab)
-          this.tone(d, t + beat * 3.5, beat * 0.45, F(root + 6, 4),
+          this.tone(d, t + beat * 3.5, beat * 0.45, F(root + (cfg.stabSemi ?? 6), 4),
                     cfg.stab, 'saw', 7);
+        // LES MUSIQUES DES DESTINATIONS DE LA LEGENDE (game/legende/race3-
+        // lieux.js) : race3 decline par pays. Des accords plaques sur les
+        // contretemps (le skank), et le refrain, couche par couche, joue par
+        // un instrument du pays fait des memes briques (`instrument`). Les
+        // morceaux qui n'en ont pas ne passent pas ici.
+        if (cfg.contretemps) {
+          const c = cfg.contretemps;
+          for (const x of c.temps) for (const n of tri)
+            this.instrument(c.instrument, d, t + x * beat, beat * 0.3, F(root + n, c.octave), c.amp);
+          yield;
+        }
+        for (const c of (cfg.couches || [])) {
+          for (const [s, x, l] of c.melodie[b % c.melodie.length]) {
+            this.instrument(c.instrument, d, t + x * beat, l * beat, F(s, c.octave), c.amp);
+            yield;
+          }
+        }
       }
       yield;
       return yield* this.normaliser(d);
+    },
+    /**
+     * Un instrument du refrain des destinations, rien que des `tone`
+     * superposes : `pincee` (guitare, koto, charango, guembri), `souffle`
+     * (flute, quena, shakuhachi, dizi), `anche` (zurna, accordeon, cuivres),
+     * `cloche` (kalimba, carillon, gong). Recopie dans
+     * tools/musique/legende-race3.mjs pour l'ecoute hors du navigateur.
+     */
+    instrument(nom, d, t, dur, f, a) {
+      if (nom === 'pincee') {
+        this.tone(d, t, dur * 1.6, f, a, 'saw', 7);
+        this.tone(d, t, dur * 0.8, f * 2, a * 0.35, 'pulse', 16);
+        this.tone(d, t, 0.03, f * 4, a * 0.25, 'saw', 60);
+      } else if (nom === 'souffle') {
+        this.tone(d, t, dur * 0.95, f, a, 'sin', 1.2);
+        this.tone(d, t, dur * 0.95, f * 2, a * 0.18, 'tri', 2.0);
+        this.tone(d, t, dur * 0.95, f * 1.004, a * 0.5, 'sin', 1.2);
+      } else if (nom === 'anche') {
+        this.tone(d, t, dur * 0.95, f, a * 0.8, 'pulse', 1.5);
+        this.tone(d, t, dur * 0.95, f * 1.003, a * 0.5, 'saw', 1.5);
+      } else if (nom === 'cloche') {
+        this.tone(d, t, dur * 2.5, f, a, 'sin', 4);
+        this.tone(d, t, dur * 1.2, f * 2.76, a * 0.4, 'sin', 9);
+        this.tone(d, t, dur * 0.6, f * 5.4, a * 0.2, 'sin', 16);
+      }
     },
 
     // HURDLERS A SA MUSIQUE, ET ELLE SE RECONNAIT A L'OREILLE.
