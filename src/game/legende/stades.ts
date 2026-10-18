@@ -201,12 +201,17 @@ const CLE = (l: Lieu) => `legende-${l.cle}`;
  * d'un seul gradin sans toit, et l'horizon pose a trois metres.
  *
  * Pas de `base` : les pieces de pelouse (decors-stades.js) sont rendues sous
- * l'angle ordinaire et glisseraient sous celui-ci. Et pas d'heure du jour :
- * la lumiere reste celle dans laquelle le monument a ete rendu.
+ * l'angle ordinaire et glisseraient sous celui-ci.
+ *
+ * L'HEURE DU JOUR (l'auteur, 18/10 : « applique le systeme jour, apres-midi,
+ * soir, nuit a tout le jeu ») : ces stades la suivent comme les autres
+ * (heure-du-jour.js, herite du theme de base). Le monument, rendu en plein
+ * soleil, passe par SprinterHeure.image en part `tour` : la nuit il est
+ * eclaire, dore, comme la Tour Eiffel du Champ-de-Mars (decors.ts).
  */
 // Ni platanes derriere la tribune (`feuillus`) : ils poussaient devant le
 // monument, a Abuja une couronne d'arbre cachait Zuma Rock.
-const TRIBUNE_BASSE = { gradins: 1, toiture: false, horizon: 2, angle: 15, heure: false, feuillus: false };
+const TRIBUNE_BASSE = { gradins: 1, toiture: false, horizon: 2, angle: 15, feuillus: false };
 // LE CIEL DES LIEUX DE JOUR. Sans l'heure du jour, les stades rouge et bleu
 // gardent le bleu plat de leur theme (#4451a7), un ciel de crepuscule ; le
 // monument, rendu sous un soleil franc, y paraissait colle. Un ciel de
@@ -227,6 +232,8 @@ const PALMIERS = {
 // d'or. La cite celeste — tours de marbre a croissant, porte d'or, iles
 // flottantes et leurs cascades — se dresse au loin sous des rais de lumiere.
 const OLYMPE = {
+  // au-dessus des nuages, l'Olympe a sa propre lumiere : pas d'heure du jour
+  heure: false,
   skyTop: [26, 30, 92], skyBot: [255, 202, 136], clouds: false, tonte: false, herbe: false,
   grass: [232, 230, 246], grassEdge: [218, 214, 238],
   trackA: [30, 32, 90], trackB: [24, 26, 80],
