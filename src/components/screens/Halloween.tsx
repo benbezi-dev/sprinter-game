@@ -140,6 +140,14 @@ function IntroDuMolosse({ fini }: { fini: () => void }) {
              src={`${base}halloween/intro-${langue}.mp4`}
              onPlaying={() => poserPret(true)}
              onEnded={fini} onError={fini} />
+      {/* L'AFFICHE, POSEE PAR NOUS. Safari iOS n'affiche pas `poster` des que
+          la lecture est demandee : on restait sur du noir pendant le
+          chargement (essai au simulateur, 19/10). Elle s'efface au premier
+          vrai photogramme. */}
+      {!pret && (
+        <img src={`${base}halloween/intro-affiche-${langue}.jpg`} alt=""
+             className="absolute inset-0 h-full w-full object-contain pointer-events-none" />
+      )}
       <div className="absolute top-0 inset-x-0 px-4 pt-[max(env(safe-area-inset-top),2.75rem)] flex justify-end gap-2">
         {muet && (
           <button onClick={sonner}
