@@ -106,8 +106,9 @@ export const EDITION_DANUBE: Edition = {
 export const EDITION_HALLOWEEN: Edition = {
   cle: 'halloween-2026-10',
   stade: 'cimetiere',
-  // lundi 19 octobre 2026, 00 h 00 a Paris (UTC+2) — la premiere nuit
-  debut: Date.UTC(2026, 9, 18, 22, 0, 0),
+  // lundi 19 octobre 2026, 22 h 00 a Paris (UTC+2) — la premiere nuit
+  // (consigne du 19/10 : « ce soir a 22 h, pas avant »)
+  debut: Date.UTC(2026, 9, 19, 20, 0, 0),
   // mardi 3 novembre 2026, 00 h 00 a Paris (UTC+1)
   fin: Date.UTC(2026, 10, 2, 23, 0, 0),
   mode: 'halloween',

@@ -1,7 +1,8 @@
 // LE CALENDRIER DES TREIZE NUITS — la seule source de vérité du temps.
 //
-// Treize courses, une par jour, du 19 au 31 octobre 2026. La treizième n'ouvre
-// qu'à 18 h le soir d'Halloween. Une course est jouable si SA DATE EST ATTEINTE
+// Treize courses, une par jour, du 19 au 31 octobre 2026, chacune à 22 h
+// (heure de Paris) — la première le lundi 19 au soir, pas à minuit (consigne
+// de l'auteur, 19/10). La treizième n'ouvre qu'à 18 h le soir d'Halloween. Une course est jouable si SA DATE EST ATTEINTE
 // et si LA PRÉCÉDENTE EST TENUE : deux verrous, et il faut les deux.
 //
 // UNE SEULE IMPLÉMENTATION, POUR LE JEU COMME POUR LES ESSAIS. Le voyageur
@@ -38,7 +39,7 @@ export const NB_NUITS = 13;
  * espacés d'exactement 86 400 000 ms : on ne peut pas les calculer par
  * multiplication. `ouvertureDe` passe par un calendrier réel.
  */
-export const PREMIER_JOUR_UTC = Date.UTC(2026, 9, 18, 22, 0, 0); // 19 oct., 00 h 00 à Paris
+export const PREMIER_JOUR_UTC = Date.UTC(2026, 9, 19, 20, 0, 0); // 19 oct., 22 h 00 à Paris
 
 /** Le dernier jour : la nuit d'Halloween. */
 export const DERNIER_JOUR_UTC = Date.UTC(2026, 9, 30, 23, 0, 0); // 31 oct., 00 h 00 à Paris (UTC+1)
@@ -51,6 +52,16 @@ export const DERNIER_JOUR_UTC = Date.UTC(2026, 9, 30, 23, 0, 0); // 31 oct., 00 
  * Montréal la joue à son heure, pas à minuit et demi.
  */
 export const HEURE_FINALE = 18;
+
+/**
+ * L'heure à laquelle les douze premières s'ouvrent, à Paris : 22 h.
+ *
+ * C'EST LA NUIT DU MOLOSSE, ET ELLE TOMBE LE SOIR. Elles s'ouvraient à minuit,
+ * si bien que l'édition est partie le 19 à 00 h 00 alors que l'auteur
+ * l'annonçait pour le soir, 22 h. Chaque nuit s'ouvre donc à 22 h de son
+ * jour — la nuit 2 le 20 à 22 h, et ainsi de suite.
+ */
+export const HEURE_DES_NUITS = 22;
 
 /** Le fuseau de Paris, en heures, avant et après le changement d'heure. */
 const PARIS_ETE = 2;
@@ -76,11 +87,16 @@ function decalageParis(ms: number): number {
  */
 export function ouvertureDe(n: number): number {
   const jour = 19 + (n - 1);           // 19 octobre pour la nuit 1
-  const minuitNaif = Date.UTC(2026, 9, jour, 0, 0, 0);
-  // On retire le décalage pour retomber sur minuit heure de Paris. Le décalage
-  // se lit sur l'instant approché, ce qui suffit : la bascule tombe à 3 h du
-  // matin, loin des minuits qu'on calcule.
-  return minuitNaif - decalageParis(minuitNaif) * 3600000;
+  // La treizième rend SON minuit de Paris : c'est l'ancre dont
+  // `instantDOuverture` part pour retrouver 18 h chez le joueur. Les douze
+  // autres s'ouvrent à 22 h, le soir de leur jour.
+  const heure = n >= NB_NUITS ? 0 : HEURE_DES_NUITS;
+  const naif = Date.UTC(2026, 9, jour, heure, 0, 0);
+  // On retire le décalage de Paris À CETTE HEURE-LÀ, lu sur l'instant approché.
+  // Pas celui de minuit : le 25 octobre, minuit est encore à UTC+2 et 22 h
+  // déjà à UTC+1 — prendre le premier ouvrait la nuit 7 à 21 h (le harnais
+  // l'a vu). La bascule tombe à 3 h du matin, loin de 22 h comme de minuit.
+  return naif - decalageParis(naif) * 3600000;
 }
 
 /**

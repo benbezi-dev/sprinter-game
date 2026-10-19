@@ -51,17 +51,19 @@ const iso = ms => new Date(ms).toISOString().replace('.000Z', 'Z');
 titre('LES TREIZE DATES');
 
 ok('treize nuits', NB_NUITS === 13, String(NB_NUITS));
-ok('la première ouvre le 19 octobre à minuit à Paris',
-   ouvertureDe(1) === PREMIER_JOUR_UTC && iso(ouvertureDe(1)) === '2026-10-18T22:00:00Z',
+ok('la première ouvre le 19 octobre à 22 h à Paris (consigne du 19/10)',
+   ouvertureDe(1) === PREMIER_JOUR_UTC && iso(ouvertureDe(1)) === '2026-10-19T20:00:00Z',
    iso(ouvertureDe(1)));
 ok('la treizième tombe le 31 octobre',
    new Date(ouvertureDe(13)).getUTCDate() === 30 &&
    new Date(ouvertureDe(13)).getUTCHours() === 23,
    iso(ouvertureDe(13)));
 
-ok('les treize s ouvrent dans l ordre, une par jour',
+// Les DOUZE premieres, a 22 h : la treizieme rend son minuit (l'ancre de 18 h
+// locale, verifiee plus bas), deux heures apres la douzieme.
+ok('les douze premières s ouvrent dans l ordre, une par jour, à 22 h',
    (() => {
-     for (let n = 2; n <= NB_NUITS; n++) {
+     for (let n = 2; n < NB_NUITS; n++) {
        const d = ouvertureDe(n) - ouvertureDe(n - 1);
        if (d < 23 * 3600000 || d > 25 * 3600000) return false;
      }
@@ -73,27 +75,28 @@ ok('les treize s ouvrent dans l ordre, une par jour',
 titre('LE CHANGEMENT D HEURE, AU MILIEU DE LA FENETRE');
 
 const ecarts = [];
-for (let n = 2; n <= NB_NUITS; n++) ecarts.push(ouvertureDe(n) - ouvertureDe(n - 1));
+for (let n = 2; n < NB_NUITS; n++) ecarts.push(ouvertureDe(n) - ouvertureDe(n - 1));
 const court = ecarts.filter(d => d !== JOUR);
 ok('exactement un jour de la fenêtre ne dure pas vingt-quatre heures',
    court.length === 1, ecarts.map(d => (d / 3600000) + 'h').join(' '));
-// ET C'EST ENTRE LA NUIT 7 ET LA NUIT 8, pas entre la 6 et la 7 — ce harnais me
-// l'a appris en échouant sur ma propre étiquette. La nuit 7 ouvre à minuit le
-// 25 octobre, soit TROIS HEURES AVANT la bascule de 3 h du matin : elle est
-// encore à UTC+2. C'est la nuit 8, le 26, qui est la première à UTC+1.
-ok('et il sépare la nuit 7 de la nuit 8 — la 7 ouvre AVANT la bascule de 3 h',
-   court.length === 1 && ecarts.indexOf(court[0]) === 6 && court[0] === 25 * 3600000,
+// DEPUIS LE PASSAGE A 22 H (19/10), C'EST ENTRE LA NUIT 6 ET LA NUIT 7. La
+// nuit 7 ouvre le 25 octobre a 22 h, DIX-NEUF HEURES APRES la bascule de 3 h
+// du matin : elle est deja a UTC+1. A minuit, c'etait entre la 7 et la 8.
+ok('et il sépare la nuit 6 de la nuit 7 — la 7 ouvre APRÈS la bascule de 3 h',
+   court.length === 1 && ecarts.indexOf(court[0]) === 5 && court[0] === 25 * 3600000,
    court.length ? (court[0] / 3600000) + 'h entre la nuit ' + (ecarts.indexOf(court[0]) + 1)
                   + ' et la ' + (ecarts.indexOf(court[0]) + 2) : '—');
 
 // La preuve par l'absurde : le calcul naïf qu'on aurait pu écrire.
 const naif = n => PREMIER_JOUR_UTC + (n - 1) * JOUR;
-ok('le calcul naïf tient encore pour la nuit 7', naif(7) === ouvertureDe(7));
-ok('et se décale d une heure à partir de la nuit 8 — la moitié de l édition',
-   naif(8) !== ouvertureDe(8) && ouvertureDe(8) - naif(8) === 3600000,
-   `naïf ${iso(naif(8))} contre ${iso(ouvertureDe(8))}`);
-ok('les six dernières nuits seraient toutes décalées',
-   [8, 9, 10, 11, 12, 13].every(n => ouvertureDe(n) - naif(n) === 3600000));
+ok('le calcul naïf tient encore pour la nuit 6', naif(6) === ouvertureDe(6));
+ok('et se décale d une heure à partir de la nuit 7 — plus de la moitié de l édition',
+   naif(7) !== ouvertureDe(7) && ouvertureDe(7) - naif(7) === 3600000,
+   `naïf ${iso(naif(7))} contre ${iso(ouvertureDe(7))}`);
+ok('les six nuits suivantes, de la 7 à la 12, seraient toutes décalées',
+   [7, 8, 9, 10, 11, 12].every(n => ouvertureDe(n) - naif(n) === 3600000));
+ok('la nuit 7 s ouvre bien à 22 h à Paris (21 h UTC, heure d hiver)',
+   iso(ouvertureDe(7)) === '2026-10-25T21:00:00Z', iso(ouvertureDe(7)));
 
 /* -------------------------------------------------- les bornes, à la ms */
 
