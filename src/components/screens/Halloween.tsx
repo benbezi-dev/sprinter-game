@@ -111,9 +111,17 @@ function IntroDuMolosse({ fini }: { fini: () => void }) {
   // Vue des qu'elle a commence : un joueur qui ferme le jeu au milieu ne la
   // subit pas une seconde fois — il peut toujours la revoir.
   useEffect(() => { noterIntroVue(); }, []);
+  // LA MUSIQUE DU MENU SE TAIT PENDANT TOUT LE FILM, et revient apres. Un
+  // simple Audio_.stop() ne suffisait pas : la boucle du jeu relance le morceau
+  // de l'accueil a chaque image (engine.ts), il revenait aussitot sous la voix
+  // du film. Le drapeau la fait taire tant qu'il est pose.
   useEffect(() => {
-    // La musique du menu se tait : le film a la sienne.
+    const G = SprinterApp.G as any;
+    G.silenceMenu = true;
     try { (SprinterApp as any).Audio_?.stop?.(); } catch { /* sans son */ }
+    return () => { G.silenceMenu = false; };
+  }, []);
+  useEffect(() => {
     const v = ref.current;
     if (!v) return;
     // AVEC LE SON si le navigateur le permet — l'ouverture vient d'un toucher.
