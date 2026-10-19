@@ -5,6 +5,7 @@ import { getSavedName, saveName, fetchTopPlayers, type TopPlayer, type RaceKey }
 import { canNativeShare } from '@/game/challenge';
 import { NUITS, nuitDe, rangerLaNuit, etatDeLaChasse, nuitAPlusieurs } from '@/game/halloween';
 import { mot, chrono } from '@/game/halloween-mots';
+import { usePresences } from '@/game/presence';
 import { COURSES, distanceDe } from '@/game/halloween-courses.js';
 import {
   abonnerMeute, etatDeLaMeute, ouvrirLaMeute, rejoindreLaMeute, basculerPret, suisPret,
@@ -178,6 +179,101 @@ function ChoixTop500({ fermer }: { fermer: () => void }) {
 }
 
 /**
+ * CHOISIR DES JOUEURS EN LIGNE.
+ *
+ * Ceux qui ont le jeu ouvert AU MENU, maintenant — ceux qui repondront dans la
+ * seconde (quoi === 'menu', game/presence.ts). Meme geste que le TOP 500 : un
+ * toucher les invite. On ne propose ni soi-meme, ni ceux qui sont deja dans le
+ * salon, et pas plus d'invitations qu'il ne reste de places. La liste se relit
+ * toute seule (usePresences, toutes les 20 s) ; soi-meme en est deja retire.
+ */
+function ChoixEnLigne({ fermer }: { fermer: () => void }) {
+  const m = useMeute();
+  const presences = usePresences();
+  const [cherche, poserCherche] = useState('');
+  const [message, poserMessage] = useState('');
+
+  const moi = (getSavedName() || '').trim().toLowerCase();
+  const presents = new Set((m.salon?.joueurs || []).map(j => j.nom.trim().toLowerCase()));
+  const q = cherche.trim().toLowerCase();
+  const vus = new Set<string>();
+  const lignes = (presences?.joueurs || []).filter(p => {
+    if (p.quoi !== 'menu') return false; // dispo seulement
+    const k = String(p.nom).trim().toLowerCase();
+    if (!k || k === moi || vus.has(k)) return false;
+    vus.add(k);
+    return !q || k.includes(q);
+  });
+  const max = m.salon?.max || MEUTE_MAX;
+  const engages = (m.salon?.joueurs || []).length
+    + Object.values(m.invites).filter(v => v !== 'injoignable').length;
+  const libres = Math.max(0, max - engages);
+
+  const inviter = async (nom: string) => {
+    poserMessage('');
+    const r = await inviterDansLaMeute(nom);
+    if (r === 'nom') poserMessage(mot('hw_m_top_nom'));
+    else if (r === 'plein') poserMessage(mot('hw_m_top_plein'));
+    else if (r === 'injoignable') poserMessage(mot('hw_m_top_injoignable', { n: nom }));
+  };
+
+  return (
+    <motion.div className="absolute inset-0 z-[62] flex items-end sm:items-center justify-center bg-black/80 p-0 sm:p-6"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="relative w-full sm:max-w-md h-[88dvh] flex flex-col rounded-t-3xl sm:rounded-3xl
+                      border-2 border-[#7CD04E]/50 bg-[#0D0814] px-4 pt-4
+                      pb-[max(env(safe-area-inset-bottom),1rem)]">
+        <div className="text-[9px] font-bold tracking-[0.22em] uppercase text-[#7CD04E]">{mot('hw_m_titre')} {m.code}</div>
+        <h3 className="font-black font-display text-xl uppercase leading-none text-[#7CD04E]">{mot('hw_m_enligne_titre')}</h3>
+        <p className="mt-1 text-[10px] text-foreground/55">
+          {libres > 0 ? mot('hw_m_top_places', { n: String(libres) }) : mot('hw_m_top_plein')}
+        </p>
+
+        <input value={cherche} onChange={e => poserCherche(e.target.value)} placeholder={mot('hw_m_top_chercher')}
+               className="mt-3 w-full rounded-lg bg-black/40 border border-white/15 px-3 py-2 text-sm text-foreground outline-none focus:border-[#7CD04E]" />
+        {message && <p className="mt-2 text-[11px] text-destructive">{message}</p>}
+
+        <div className="mt-2 flex-1 min-h-0 overflow-y-auto flex flex-col gap-1">
+          {presences === null && <p className="text-[11px] italic text-foreground/50 py-4 text-center">{mot('hw_m_connexion')}</p>}
+          {presences !== null && !lignes.length && <p className="text-[11px] italic text-foreground/50 py-4 text-center">{mot('hw_m_enligne_vide')}</p>}
+          {lignes.map(p => {
+            const k = String(p.nom).trim().toLowerCase();
+            const deja = presents.has(k);
+            const v = Object.entries(m.invites).find(([n]) => n.trim().toLowerCase() === k)?.[1];
+            return (
+              <div key={k} className="rounded-lg border border-white/10 bg-[#160D22] px-2.5 py-1.5 flex items-center gap-2">
+                <span className="relative inline-flex w-2 h-2 shrink-0" aria-hidden>
+                  <span className="absolute inset-0 rounded-full bg-emerald-400 opacity-60 animate-ping motion-reduce:hidden" />
+                  <span className="relative inline-flex w-2 h-2 rounded-full bg-emerald-400" />
+                </span>
+                <span className="flex-1 min-w-0 truncate text-xs font-bold text-foreground">{p.nom}</span>
+                {deja ? (
+                  <span className="w-20 text-center text-[9px] font-black tracking-widest text-[#7CD04E]">{mot('hw_m_top_dedans')}</span>
+                ) : v === 'invite' ? (
+                  <span className="w-20 text-center text-[9px] font-black tracking-widest text-[#7CD04E]">{mot('hw_m_top_invite')}</span>
+                ) : v === 'injoignable' ? (
+                  <span className="w-20 text-center text-[9px] font-black tracking-widest text-foreground/35">{mot('hw_m_top_hors')}</span>
+                ) : (
+                  <button onClick={() => inviter(p.nom)} disabled={v === 'envoi' || libres <= 0}
+                          className="w-20 py-1 rounded-md bg-[#E86826] text-black text-[9px] font-black tracking-widest disabled:opacity-35">
+                    {v === 'envoi' ? '…' : mot('hw_m_top_inviter')}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <button onClick={fermer}
+                className="mt-3 w-full py-2.5 rounded-xl border border-white/10 text-foreground/60 text-[11px] font-bold tracking-widest uppercase">
+          {mot('hw_m_top_fini')}
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+/**
  * LE SALON DE LA MEUTE.
  *
  * @param ouvertes la nuit la plus haute qu'on peut courir : on n'ouvre une
@@ -196,6 +292,7 @@ export function SalonDeLaMeute({ ouvertes, fermer, codeInitial = '' }: {
   const [besoinNom, poserBesoinNom] = useState(false);
   const [copie, poserCopie] = useState(false);
   const [top, poserTop] = useState(false);
+  const [enLigne, poserEnLigne] = useState(false);
 
   const avecUnNom = (suite: () => void) => {
     const v = nom.trim();
@@ -330,6 +427,14 @@ export function SalonDeLaMeute({ ouvertes, fermer, codeInitial = '' }: {
               {mot('hw_m_top_ouvrir')}
             </button>
           )}
+          {/* LES JOUEURS EN LIGNE : ceux qui ont le jeu ouvert au menu,
+              maintenant. Eux repondront tout de suite. */}
+          {joueurs.length < max && (
+            <button onClick={() => poserEnLigne(true)}
+                    className={`mt-2 w-full ${BOUTON} border border-[#7CD04E]/50 text-[#7CD04E]`}>
+              {mot('hw_m_enligne_ouvrir')}
+            </button>
+          )}
 
           <div className="mt-4 flex flex-col gap-1.5">
             {Array.from({ length: max }, (_, i) => {
@@ -385,6 +490,7 @@ export function SalonDeLaMeute({ ouvertes, fermer, codeInitial = '' }: {
         </button>
       </motion.div>
       {top && enSalon && <ChoixTop500 fermer={() => poserTop(false)} />}
+      {enLigne && enSalon && <ChoixEnLigne fermer={() => poserEnLigne(false)} />}
     </motion.div>
   );
 }

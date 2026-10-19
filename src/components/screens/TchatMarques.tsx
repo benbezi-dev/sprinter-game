@@ -16,6 +16,8 @@ import {
   ecrireOfficiel, aLaCleOfficielle, aimerMessage, marquerLu as marquerLuServeur,
   type Message, type Lu, type Participant, type Invitation, type Invitable, type Refus,
 } from '@/game/tchat-marques';
+import { usePresences, parNom, type Present } from '@/game/presence';
+import { PointPresence } from './PointPresence';
 
 /* ---------------------------------------------------------------------------
    LE TCHAT DU DUEL DES MARQUES (13/10/2026) — voir game/tchat-marques.ts et
@@ -182,7 +184,7 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
 }
 
 /** Une ligne du tchat. */
-function Ligne({ m, fr, onMenu, onAimer }: { m: Message; fr: boolean; onMenu: (m: Message) => void; onAimer: (m: Message) => void }) {
+function Ligne({ m, fr, present, onMenu, onAimer }: { m: Message; fr: boolean; present?: Present; onMenu: (m: Message) => void; onAimer: (m: Message) => void }) {
   const vise = m.pour_moi;
   // SprinterGame : on ne lui repond pas, on ne le signale ni ne le bloque —
   // mais on peut l'aimer
@@ -216,6 +218,7 @@ function Ligne({ m, fr, onMenu, onAimer }: { m: Message; fr: boolean; onMenu: (m
                 style={{ color: TEINTE[m.camp] ?? TEINTE.sprinter }}>
           {m.de}
         </button>
+        <PointPresence p={present} />
         {m.officiel && (
           <span className="self-center flex items-center gap-0.5 px-1.5 py-px rounded-full bg-[#5CC8FF] text-black text-[9px] font-black tracking-wider shrink-0">
             <BadgeCheck className="w-2.5 h-2.5" aria-hidden />{fr ? 'OFFICIEL' : 'OFFICIAL'}
@@ -262,8 +265,9 @@ function Ligne({ m, fr, onMenu, onAimer }: { m: Message; fr: boolean; onMenu: (m
 }
 
 /** La liste des inscrits, pour designer quelqu'un ou lui ecrire. */
-function ChoixPersonne({ participants, moi, fr, titre, onChoix, onClose }: {
+function ChoixPersonne({ participants, moi, fr, titre, presenceDe, onChoix, onClose }: {
   participants: Participant[]; moi: string; fr: boolean; titre: string;
+  presenceDe: (nom: string) => Present | undefined;
   onChoix: (p: Participant) => void; onClose: () => void;
 }) {
   const [q, setQ] = useState('');
@@ -291,6 +295,7 @@ function ChoixPersonne({ participants, moi, fr, titre, onChoix, onClose }: {
               <button onClick={() => onChoix(p)}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-left">
                 <span className="font-bold truncate" style={{ color: TEINTE[p.camp] }}>{p.name}</span>
+                <PointPresence p={presenceDe(p.name)} />
                 {p.camp !== 'joueur' && (
                   <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
                     {NOM_CAMP[p.camp]} · {p.epreuve} m
@@ -523,6 +528,11 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   useRetour(() => onDeplier(false), deplie);
   const reduit = useAnimationsReduites();
   const t = useTchat(deplie, duel ? RELIRE_REPLIE_MS : RELIRE_REPLIE_ACCUEIL_MS);
+  // Qui est en ligne — meme lecture partagee que l'accueil et le classement
+  // (usePresences ne sonde qu'une fois pour tous les ecrans qui la regardent).
+  const presences = usePresences();
+  const presents = parNom(presences);
+  const presenceDe = (nom: string) => presents.get(nom.trim().toLowerCase());
   const onglets: Onglet[] = duel ? ['tous', 'prives', 'inviter'] : ['tous', 'prives'];
   const [onglet, setOnglet] = useState<Onglet>(ouvrirSur);
   useEffect(() => { setOnglet(ouvrirSur); }, [ouvrirSur]);
@@ -678,6 +688,12 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
             <span className="font-black font-display text-xs tracking-widest">
               {duel ? (fr ? 'TCHAT DU DUEL' : 'DUEL CHAT') : (fr ? 'TCHAT' : 'CHAT')}
             </span>
+            {!!presences && presences.n > 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden />
+                {presences.n} {fr ? 'en ligne' : 'online'}
+              </span>
+            )}
             <button onClick={() => onDeplier(false)} onPointerDown={e => e.stopPropagation()}
                     aria-label={fr ? 'Replier le tchat' : 'Collapse the chat'}
                     className="ml-auto p-1.5 rounded-lg hover:bg-white/10 text-foreground/70">
@@ -752,7 +768,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                 </p>
               )}
               <ul className="flex flex-col gap-0.5">
-                {fil.map(m => <Ligne key={m.id} m={m} fr={fr} onMenu={setMenu} onAimer={t.aimer} />)}
+                {fil.map(m => <Ligne key={m.id} m={m} fr={fr} present={m.officiel ? undefined : presenceDe(m.de)} onMenu={setMenu} onAimer={t.aimer} />)}
               </ul>
               <div ref={fin} />
             </div>
@@ -825,7 +841,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
             onBloque={() => { t.oter(menu.de); setMenu(null); }} />
         )}
         {choix && (
-          <ChoixPersonne participants={t.participants} moi={cleMoi} fr={fr}
+          <ChoixPersonne participants={t.participants} moi={cleMoi} fr={fr} presenceDe={presenceDe}
             titre={choix === 'designer' ? (fr ? 'DÉSIGNER' : 'MENTION') : (fr ? 'ÉCRIRE À' : 'WRITE TO')}
             onClose={() => setChoix(null)}
             onChoix={p => {
