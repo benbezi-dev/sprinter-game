@@ -121,6 +121,11 @@ const PresentationBoss = /* @__PURE__ */ lazy(() => import('@/components/screens
 // (K.O., revanche), annonce par-dessus l'ecran de fin. Charge a la demande.
 const AnnonceDuelMarques = /* @__PURE__ */ lazy(() => import('@/components/screens/DuelMarques')
   .then(m => ({ default: m.AnnonceDuelMarques })));
+// L'habillage Halloween de l'accueil : charge a la demande derriere
+// HALLOWEEN_OUVERT, comme le reste du mode, pour qu'il sorte du build public
+// quand la saison est fermee (voir tools/molosse-canal-test.mjs).
+const DecorHalloween = /* @__PURE__ */ lazy(() => import('@/components/screens/HalloweenDecor')
+  .then(m => ({ default: m.HalloweenDecor })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { demarrerTunnel } from '@/game/tunnel';
 import { ouvrirBoite } from '@/game/boite';
@@ -130,6 +135,7 @@ import { reprendrePush } from '@/game/push';
 import { brancherRattrapage } from '@/game/record-attente';
 import { useFilmerLeOneShot } from '@/game/film-course';
 import { nuitEnCours, nuitAPlusieurs } from '@/game/halloween';
+import { estHalloween } from '@/game/theme-accueil';
 import { defiEnCours as defiVedetteEnCours } from '@/game/vedettes';
 // Un module sans import : demander « est-ce une etape de la Legende ? » ne
 // fait pas entrer la Legende dans le paquet public.
@@ -328,6 +334,12 @@ function MainGame() {
       {acces && (<>
       <GameCanvas />
       
+      {/* Habillage Halloween : un calque decoratif en fond d'accueil, sous le
+          menu (ouverture et titre seulement, jamais la course ni la ceremonie).
+          HALLOWEEN_OUVERT en tete permet au bundler de le retirer hors saison. */}
+      {HALLOWEEN_OUVERT && estHalloween() && !ceremonie && (state === 'open' || state === 'title') &&
+        <Suspense fallback={null}><DecorHalloween /></Suspense>}
+
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
         {state === 'open' && <OpenScreen />}
         {state === 'title' && !ceremonie && <TitleScreen />}
