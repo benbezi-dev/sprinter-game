@@ -232,8 +232,7 @@ function partir(n: number): boolean {
  * Le compte a rebours jusqu'a l'ouverture d'une nuit, ecrit court, dans la
  * langue du joueur. Vide si elle est deja ouverte par la date.
  *
- * La treizieme compte jusqu'a 18 h CHEZ LE JOUEUR (instantDOuverture) : elle
- * affichait « ouvre a 18 h » sans dire dans combien de temps.
+ * Toutes comptent jusqu'a 22 h, heure de Paris (instantDOuverture).
  */
 function resteAvant(n: number, ms: number): string {
   const d = instantDOuverture(n, decalageDeLAppareil()) - ms;
