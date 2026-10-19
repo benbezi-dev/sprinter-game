@@ -109,6 +109,12 @@ const MOTS: Record<string, Paire> = {
   hw_toutes_sous: ['La quatorzième n\'est pas sur le calendrier. Elle viendra quand même.',
                    'The fourteenth is not on the calendar. It will come anyway.'],
 
+  // --- le film d'intro, a la premiere ouverture (Halloween.tsx)
+  hw_intro_passer: ['PASSER', 'SKIP'],
+  hw_intro_son:    ['ACTIVER LE SON', 'SOUND ON'],
+  hw_intro_charge: ['chargement…', 'loading…'],
+  hw_intro_revoir: ['REVOIR L\'INTRO', 'WATCH THE INTRO AGAIN'],
+
   // --- la meute : la nuit a plusieurs, jusqu'a huit (halloween-meute.ts)
   hw_m_titre:     ['LA MEUTE', 'THE PACK'],
   hw_m_sous:      ['jusqu\'à 8 sur la même nuit, une seule bête', 'up to 8 on the same night, one beast'],

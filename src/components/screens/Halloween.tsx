@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { AnimatePresence, motion, useAnimate } from 'motion/react';
-import { SprinterApp, useGameStore } from '@/game/engine';
+import { SprinterApp, SprinterI18N, useGameStore } from '@/game/engine';
 import { MONTEE, COURBE, DUREE, useAnimationsReduites } from '@/lib/mouvement';
 import { editionActive, EDITION_HALLOWEEN } from '@/game/edition';
 import { EST_TEST, HALLOWEEN_2026_OUVERT } from '@/game/canal';
@@ -81,6 +81,83 @@ function usePanneau(): boolean {
   return useSyncExternalStore(
     (l) => { abonnes.add(l); return () => { abonnes.delete(l); }; },
     () => ouvert, () => ouvert,
+  );
+}
+
+/* --- LE FILM D'INTRO (19/10) ----------------------------------------------
+   « Le jeu s'ouvre trop vite » : le film de lancement du 18/10 (45 s, 9:16,
+   VF pour le francais, EN sinon) passe la PREMIERE fois que le joueur ouvre
+   l'evenement — donc avant sa premiere nuit — et plus jamais ensuite, sauf
+   s'il le redemande depuis le tableau (« REVOIR L'INTRO »).
+
+   Les fichiers sont dans public/halloween/ (720×1280, 8 Mo) : servis tels
+   quels, hors du paquet JS, et charges seulement quand le film se lance.
+   Retenu par appareil, sous une clef propre au canal — un testeur qui l'a vu
+   sur /test le reverra en jeu, comme un vrai joueur. */
+const CLE_INTRO = EST_TEST ? 'sprinter_halloween_intro_vue_test' : 'sprinter_halloween_intro_vue';
+function introVue(): boolean {
+  try { return localStorage.getItem(CLE_INTRO) === '1'; } catch { return true; }
+}
+function noterIntroVue() {
+  try { localStorage.setItem(CLE_INTRO, '1'); } catch { /* stockage refuse */ }
+}
+
+function IntroDuMolosse({ fini }: { fini: () => void }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  const [muet, poserMuet] = useState(false);
+  const [pret, poserPret] = useState(false);
+  const langue = SprinterI18N.index() === 0 ? 'fr' : 'en';
+  const base = (import.meta as any).env.BASE_URL || '/';
+  // Vue des qu'elle a commence : un joueur qui ferme le jeu au milieu ne la
+  // subit pas une seconde fois — il peut toujours la revoir.
+  useEffect(() => { noterIntroVue(); }, []);
+  useEffect(() => {
+    // La musique du menu se tait : le film a la sienne.
+    try { (SprinterApp as any).Audio_?.stop?.(); } catch { /* sans son */ }
+    const v = ref.current;
+    if (!v) return;
+    // AVEC LE SON si le navigateur le permet — l'ouverture vient d'un toucher.
+    // Sinon, sans le son, et un bouton pour le remettre : un film qui ne part
+    // pas du tout serait pire.
+    v.muted = false;
+    v.play().catch(() => {
+      v.muted = true; poserMuet(true);
+      v.play().catch(() => fini());
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sonner = () => {
+    const v = ref.current; if (!v) return;
+    v.muted = false; poserMuet(false);
+    v.play().catch(() => { /* reste muet */ });
+  };
+
+  return (
+    <motion.div className="absolute inset-0 z-[70] bg-black flex items-center justify-center pointer-events-auto"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <video ref={ref} className="h-full w-full object-contain" playsInline preload="auto"
+             poster={`${base}halloween/intro-affiche-${langue}.jpg`}
+             src={`${base}halloween/intro-${langue}.mp4`}
+             onPlaying={() => poserPret(true)}
+             onEnded={fini} onError={fini} />
+      <div className="absolute top-0 inset-x-0 px-4 pt-[max(env(safe-area-inset-top),2.75rem)] flex justify-end gap-2">
+        {muet && (
+          <button onClick={sonner}
+                  className="px-3 py-1.5 rounded-full bg-black/60 border border-white/25 text-white text-[11px] font-black tracking-widest">
+            {mot('hw_intro_son')}
+          </button>
+        )}
+        <button onClick={fini}
+                className="px-3 py-1.5 rounded-full bg-black/60 border border-white/25 text-white text-[11px] font-black tracking-widest">
+          {mot('hw_intro_passer')}
+        </button>
+      </div>
+      {!pret && (
+        <div className="absolute bottom-[max(env(safe-area-inset-bottom),2rem)] text-[11px] text-white/60 italic">
+          {mot('hw_intro_charge')}
+        </div>
+      )}
+    </motion.div>
   );
 }
 
@@ -620,6 +697,12 @@ export function PanneauMolosse() {
   // d'un bouton, ou d'un lien `?meute=CODE` qu'un ami a envoye — on le lit
   // une fois, au chargement, et on le retire de l'adresse.
   const [meute, poserMeute] = useState<{ code: string } | null>(null);
+  // LE FILM D'INTRO : a la premiere ouverture du tableau, avant tout le reste
+  // (la premiere nuit comme une meute rejointe par lien), puis a la demande.
+  const [intro, poserIntro] = useState(false);
+  useEffect(() => {
+    if (affiche && !introVue()) poserIntro(true);
+  }, [affiche]);
   useEffect(() => {
     const code = codeMeuteUrl();
     if (!code) return;
@@ -926,8 +1009,16 @@ export function PanneauMolosse() {
           )}
 
           <button
+            onClick={() => poserIntro(true)}
+            className="w-full mt-4 py-2.5 rounded-xl border border-[#E86826]/30 text-[#F8A02E]/80
+                       text-[11px] font-bold tracking-widest uppercase"
+          >
+            {mot('hw_intro_revoir')}
+          </button>
+
+          <button
             onClick={() => poserOuvert(false)}
-            className="w-full mt-4 py-2.5 rounded-xl border border-white/10 text-foreground/60
+            className="w-full mt-2 py-2.5 rounded-xl border border-white/10 text-foreground/60
                        text-[11px] font-bold tracking-widest uppercase"
           >
             {mot('hw_fermer')}
@@ -939,7 +1030,9 @@ export function PanneauMolosse() {
         <LecteurDuRecit key={lu} n={lu} dernier={c.tenues} aller={lire} />
       )}
 
-      {meute && (
+      {intro && <IntroDuMolosse fini={() => poserIntro(false)} />}
+
+      {meute && !intro && (
         <SalonDeLaMeute key={meute.code} ouvertes={Math.max(1, Math.min(CAL_NB, ouverte))}
                         codeInitial={meute.code} fermer={() => poserMeute(null)} />
       )}
