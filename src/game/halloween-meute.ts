@@ -25,6 +25,8 @@
 import { SprinterApp, brancherSalle, reinitialiserEnvoi } from './engine';
 import { Salle, ouvrirSalle, etatSalle, type EtatSalle, type ResultatDirect } from './live';
 import { getSavedName } from './leaderboard';
+import { inviterEnDirect } from './invitations-directes';
+import { nomPourLeDirect } from './identity';
 import { armerLaNuit, rangerLaNuit, nuitEnCours, nuitDe, etapeDuCimetiere } from './halloween';
 import { COURSES } from './halloween-courses.js';
 import { cameraDe } from './halloween-cameras.js';
@@ -61,11 +63,13 @@ export type EtatMeute = {
   erreur: string;
   /** La nuit qu'on a voulu courir sans l'avoir debloquee. */
   nuitRefusee: number | null;
+  /** Ceux du TOP 500 qu'on a invites dans cette meute, et ce qu'il en est. */
+  invites: Record<string, 'envoi' | 'invite' | 'injoignable'>;
 };
 
 const VIDE: EtatMeute = {
   etape: 'repos', code: '', salon: null, moi: '', hote: false,
-  arrivees: {}, positions: {}, resultat: null, erreur: '', nuitRefusee: null,
+  arrivees: {}, positions: {}, resultat: null, erreur: '', nuitRefusee: null, invites: {},
 };
 
 let etat: EtatMeute = VIDE;
@@ -263,6 +267,46 @@ export function quitterLaMeute() {
   brancherSalle(null);
   if (etat.etape !== 'repos' || etat.erreur) poser({ ...VIDE });
 }
+
+/**
+ * INVITER UN COUREUR DU TOP 500 DANS LA MEUTE.
+ *
+ * Le chemin du direct (game/invitations-directes.ts) : la salle ne connait que
+ * le pseudonyme, le serveur trouve l'appareil, le telephone de l'invite sonne
+ * et un bandeau lui propose de rejoindre. L'epreuve voyage avec — un trace
+ * `nuit-*` — et c'est ce qui fait ouvrir le salon de la meute chez lui plutot
+ * que celui du direct (InvitationDirecte.tsx).
+ *
+ * On n'invite qu'en son propre nom, et ce nom doit etre reserve (le serveur
+ * le verifie) : rend 'nom' quand il ne l'est pas encore.
+ */
+export async function inviterDansLaMeute(nom: string): Promise<'invite' | 'injoignable' | 'nom' | 'plein'> {
+  const n = nuitDeLaMeute();
+  if (!salle || !etat.code || n === null) return 'injoignable';
+  const max = etat.salon?.max || MEUTE_MAX;
+  const pris = (etat.salon?.joueurs || []).length
+    + Object.values(etat.invites).filter(v => v !== 'injoignable').length;
+  if (pris >= max) return 'plein';
+  if ((await nomPourLeDirect()) !== 'ok') return 'nom';
+  poser({ invites: { ...etat.invites, [nom]: 'envoi' } });
+  const r = await inviterEnDirect([nom], etat.code, nuitDe(n).epreuve);
+  const v = r.invites.length ? 'invite' : 'injoignable';
+  poser({ invites: { ...etat.invites, [nom]: v } });
+  return v;
+}
+
+/* --- une invitation acceptee ailleurs dans le jeu --------------------------
+   Le bandeau d'invitation vit a la racine de l'application ; le salon de la
+   meute, dans le tableau des nuits. La demande passe par ici et attend que le
+   tableau la prenne — comme `demanderRejoindre` pour le direct. */
+let demande = '';
+export function demanderLaMeute(code: string) {
+  demande = String(code || '').trim().toUpperCase();
+  for (const f of abonnes) { try { f(); } catch { /* idem */ } }
+}
+/** La demande en attente, retiree en la lisant. */
+export function prendreLaDemande(): string { const c = demande; demande = ''; return c; }
+export function demandeEnAttente(): string { return demande; }
 
 /** Le lien a envoyer : le jeu, avec `?meute=CODE`. */
 export function lienDeLaMeute(code: string): string {

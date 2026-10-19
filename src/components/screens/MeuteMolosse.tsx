@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useSyncExternalStore } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { SprinterApp, SprinterI18N, useGameStore } from '@/game/engine';
-import { getSavedName, saveName } from '@/game/leaderboard';
+import { getSavedName, saveName, fetchTopPlayers, type TopPlayer, type RaceKey } from '@/game/leaderboard';
 import { canNativeShare } from '@/game/challenge';
 import { NUITS, nuitDe, rangerLaNuit, etatDeLaChasse, nuitAPlusieurs } from '@/game/halloween';
 import { mot, chrono } from '@/game/halloween-mots';
 import { COURSES, distanceDe } from '@/game/halloween-courses.js';
 import {
   abonnerMeute, etatDeLaMeute, ouvrirLaMeute, rejoindreLaMeute, basculerPret, suisPret,
-  quitterLaMeute, lienDeLaMeute, nuitDeLaMeute, MEUTE_MIN, MEUTE_MAX,
+  quitterLaMeute, lienDeLaMeute, nuitDeLaMeute, inviterDansLaMeute, MEUTE_MIN, MEUTE_MAX,
   type EtatMeute, type ArriveeMeute,
 } from '@/game/halloween-meute';
 
@@ -62,6 +62,121 @@ function Pas({ libelle, valeur, moins, plus, peutMoins, peutPlus }: {
   );
 }
 
+/** Les tableaux ou l'on va chercher des adversaires : le sprint plat. */
+const TABLEAUX: RaceKey[] = ['100', '200', '400'];
+
+/**
+ * CHOISIR SES ADVERSAIRES DANS LE TOP 500.
+ *
+ * Le tableau d'une distance, un joueur par ligne, avec une recherche : un
+ * toucher l'invite (game/halloween-meute.ts, inviterDansLaMeute) — son
+ * telephone sonne et lui propose la meute. On ne propose ni soi-meme, ni ceux
+ * qui sont deja dans le salon, et pas plus d'invitations qu'il ne reste de
+ * places. Un nom que personne n'a reserve est injoignable : on le dit.
+ */
+function ChoixTop500({ fermer }: { fermer: () => void }) {
+  const m = useMeute();
+  const [tableau, poserTableau] = useState<RaceKey>('100');
+  const [liste, poserListe] = useState<TopPlayer[] | null>(null);
+  const [panne, poserPanne] = useState(false);
+  const [cherche, poserCherche] = useState('');
+  const [message, poserMessage] = useState('');
+
+  useEffect(() => {
+    let vivant = true;
+    poserListe(null); poserPanne(false);
+    fetchTopPlayers(tableau)
+      .then(l => { if (vivant) poserListe(l); })
+      .catch(() => { if (vivant) poserPanne(true); });
+    return () => { vivant = false; };
+  }, [tableau]);
+
+  const moi = (getSavedName() || '').trim().toLowerCase();
+  const presents = new Set((m.salon?.joueurs || []).map(j => j.nom.trim().toLowerCase()));
+  const q = cherche.trim().toLowerCase();
+  const vus = new Set<string>();
+  const lignes = (liste || []).filter(p => {
+    const k = p.name.trim().toLowerCase();
+    if (!k || k === moi || vus.has(k)) return false;
+    vus.add(k);
+    return !q || k.includes(q);
+  });
+  const max = m.salon?.max || MEUTE_MAX;
+  const engages = (m.salon?.joueurs || []).length
+    + Object.values(m.invites).filter(v => v !== 'injoignable').length;
+  const libres = Math.max(0, max - engages);
+
+  const inviter = async (nom: string) => {
+    poserMessage('');
+    const r = await inviterDansLaMeute(nom);
+    if (r === 'nom') poserMessage(mot('hw_m_top_nom'));
+    else if (r === 'plein') poserMessage(mot('hw_m_top_plein'));
+    else if (r === 'injoignable') poserMessage(mot('hw_m_top_injoignable', { n: nom }));
+  };
+
+  return (
+    <motion.div className="absolute inset-0 z-[62] flex items-end sm:items-center justify-center bg-black/80 p-0 sm:p-6"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <div className="relative w-full sm:max-w-md h-[88dvh] flex flex-col rounded-t-3xl sm:rounded-3xl
+                      border-2 border-[#E86826]/50 bg-[#0D0814] px-4 pt-4
+                      pb-[max(env(safe-area-inset-bottom),1rem)]">
+        <div className="text-[9px] font-bold tracking-[0.22em] uppercase text-[#7CD04E]">{mot('hw_m_titre')} {m.code}</div>
+        <h3 className="font-black font-display text-xl uppercase leading-none text-[#F8A02E]">{mot('hw_m_top_titre')}</h3>
+        <p className="mt-1 text-[10px] text-foreground/55">
+          {libres > 0 ? mot('hw_m_top_places', { n: String(libres) }) : mot('hw_m_top_plein')}
+        </p>
+
+        <div className="mt-3 flex gap-1.5">
+          {TABLEAUX.map(t => (
+            <button key={t} onClick={() => poserTableau(t)}
+                    className={`flex-1 py-1.5 rounded-lg text-[10px] font-black tracking-widest border
+                      ${tableau === t ? 'bg-[#E86826] text-black border-[#E86826]' : 'border-white/15 text-foreground/70'}`}>
+              {t} M
+            </button>
+          ))}
+        </div>
+        <input value={cherche} onChange={e => poserCherche(e.target.value)} placeholder={mot('hw_m_top_chercher')}
+               className="mt-2 w-full rounded-lg bg-black/40 border border-white/15 px-3 py-2 text-sm text-foreground outline-none focus:border-[#E86826]" />
+        {message && <p className="mt-2 text-[11px] text-destructive">{message}</p>}
+
+        <div className="mt-2 flex-1 min-h-0 overflow-y-auto flex flex-col gap-1">
+          {liste === null && !panne && <p className="text-[11px] italic text-foreground/50 py-4 text-center">{mot('hw_m_connexion')}</p>}
+          {panne && <p className="text-[11px] text-destructive py-4 text-center">{mot('hw_m_err_reseau')}</p>}
+          {lignes.map(p => {
+            const k = p.name.trim().toLowerCase();
+            const deja = presents.has(k);
+            const v = Object.entries(m.invites).find(([n]) => n.trim().toLowerCase() === k)?.[1];
+            return (
+              <div key={k} className="rounded-lg border border-white/10 bg-[#160D22] px-2.5 py-1.5 flex items-center gap-2">
+                <span className="w-9 text-right font-mono tabular-nums text-[10px] text-foreground/45">{p.rank}</span>
+                <span className="flex-1 min-w-0 truncate text-xs font-bold text-foreground">{p.name}</span>
+                <span className="font-mono tabular-nums text-[10px] text-foreground/50">{(p.ms / 1000).toFixed(2)}</span>
+                {deja ? (
+                  <span className="w-20 text-center text-[9px] font-black tracking-widest text-[#7CD04E]">{mot('hw_m_top_dedans')}</span>
+                ) : v === 'invite' ? (
+                  <span className="w-20 text-center text-[9px] font-black tracking-widest text-[#7CD04E]">{mot('hw_m_top_invite')}</span>
+                ) : v === 'injoignable' ? (
+                  <span className="w-20 text-center text-[9px] font-black tracking-widest text-foreground/35">{mot('hw_m_top_hors')}</span>
+                ) : (
+                  <button onClick={() => inviter(p.name)} disabled={v === 'envoi' || libres <= 0}
+                          className="w-20 py-1 rounded-md bg-[#E86826] text-black text-[9px] font-black tracking-widest disabled:opacity-35">
+                    {v === 'envoi' ? '…' : mot('hw_m_top_inviter')}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        <button onClick={fermer}
+                className="mt-3 w-full py-2.5 rounded-xl border border-white/10 text-foreground/60 text-[11px] font-bold tracking-widest uppercase">
+          {mot('hw_m_top_fini')}
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
 /**
  * LE SALON DE LA MEUTE.
  *
@@ -80,6 +195,7 @@ export function SalonDeLaMeute({ ouvertes, fermer, codeInitial = '' }: {
   const [nom, poserNom] = useState(getSavedName());
   const [besoinNom, poserBesoinNom] = useState(false);
   const [copie, poserCopie] = useState(false);
+  const [top, poserTop] = useState(false);
 
   const avecUnNom = (suite: () => void) => {
     const v = nom.trim();
@@ -206,9 +322,30 @@ export function SalonDeLaMeute({ ouvertes, fermer, codeInitial = '' }: {
             )}
           </div>
 
+          {/* LE TOP 500 : choisir ses adversaires parmi les meilleurs du jeu.
+              Leur telephone sonne ; ils rejoignent d'un toucher. */}
+          {joueurs.length < max && (
+            <button onClick={() => poserTop(true)}
+                    className={`mt-2 w-full ${BOUTON} border border-[#E86826]/60 text-[#F8A02E]`}>
+              {mot('hw_m_top_ouvrir')}
+            </button>
+          )}
+
           <div className="mt-4 flex flex-col gap-1.5">
             {Array.from({ length: max }, (_, i) => {
               const j = joueurs[i];
+              // Les invites du TOP 500 qu'on attend, dans les places libres.
+              const attendus = Object.entries(m.invites)
+                .filter(([n, v]) => v === 'invite' && !joueurs.some(x => x.nom.trim().toLowerCase() === n.trim().toLowerCase()))
+                .map(([n]) => n);
+              const attendu = !j ? attendus[i - joueurs.length] : undefined;
+              if (!j && attendu) return (
+                <div key={'a' + i} className="rounded-xl border border-dashed border-[#E86826]/40 px-3 py-2 flex items-center gap-2 text-[11px]">
+                  <span className="w-5 text-center font-black font-display text-[#F8A02E]/50">{i + 1}</span>
+                  <span className="flex-1 min-w-0 truncate text-foreground/70">{attendu}</span>
+                  <span className="text-[10px] font-black tracking-widest text-[#F8A02E]/70">{mot('hw_m_top_invite')}</span>
+                </div>
+              );
               if (!j) return (
                 <div key={'v' + i} className="rounded-xl border border-dashed border-white/10 px-3 py-2 text-[11px] text-foreground/30 italic">
                   {i + 1} · {mot('hw_m_place_vide')}
@@ -247,6 +384,7 @@ export function SalonDeLaMeute({ ouvertes, fermer, codeInitial = '' }: {
           {enSalon ? mot('hw_m_quitter') : mot('hw_fermer')}
         </button>
       </motion.div>
+      {top && enSalon && <ChoixTop500 fermer={() => poserTop(false)} />}
     </motion.div>
   );
 }

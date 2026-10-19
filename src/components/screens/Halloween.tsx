@@ -26,7 +26,7 @@ import { mot, chrono } from '@/game/halloween-mots';
 import { COURSES, distanceDe } from '@/game/halloween-courses.js';
 import { chargerLaMusique } from '@/game/halloween-musique';
 import { SalonDeLaMeute } from './MeuteMolosse';
-import { codeMeuteUrl, nettoyerUrlMeute, dansLaMeute } from '@/game/halloween-meute';
+import { codeMeuteUrl, nettoyerUrlMeute, dansLaMeute, abonnerMeute, prendreLaDemande, demandeEnAttente } from '@/game/halloween-meute';
 
 /* ---------------------------------------------------------------------------
    LA NUIT DU MOLOSSE — les trois ecrans du mode
@@ -628,6 +628,16 @@ export function PanneauMolosse() {
     poserOuvert(true);
     poserMeute({ code });
   }, []);
+  // UNE INVITATION ACCEPTEE (InvitationDirecte.tsx) : on ouvre le tableau, et
+  // le salon dessus, sur le code de la meute.
+  const demande = useSyncExternalStore(abonnerMeute, demandeEnAttente, demandeEnAttente);
+  useEffect(() => {
+    if (!demande) return;
+    const code = prendreLaDemande();
+    if (!code) return;
+    poserOuvert(true);
+    poserMeute({ code });
+  }, [demande]);
   // De retour d'une nuit courue en meute, le salon se rouvre de lui-meme
   // tant qu'on n'a pas quitte la meute.
   useEffect(() => {
@@ -930,7 +940,7 @@ export function PanneauMolosse() {
       )}
 
       {meute && (
-        <SalonDeLaMeute ouvertes={Math.max(1, Math.min(CAL_NB, ouverte))}
+        <SalonDeLaMeute key={meute.code} ouvertes={Math.max(1, Math.min(CAL_NB, ouverte))}
                         codeInitial={meute.code} fermer={() => poserMeute(null)} />
       )}
     </motion.div>

@@ -9,6 +9,9 @@ import { noterDefi } from '@/game/journal-defis';
 import { demanderRejoindre } from '@/game/salon-direct';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
+import { HALLOWEEN_OUVERT } from '@/game/canal';
+import { demanderLaMeute } from '@/game/halloween-meute';
+import { mot as motDeLaNuit } from '@/game/halloween-mots';
 
 /**
  * Quelqu'un vous invite a courir, maintenant.
@@ -89,6 +92,7 @@ export function InvitationDirecte() {
   // l'ecran ne se lisent pas : on prend la derniere arrivee, les autres
   // restent en attente derriere.
   const inv = vivantes[0];
+  const meute = String(inv.epreuve || '').startsWith('nuit-');
   const reste = Math.ceil(resteDe(inv) / 1000);
 
   const rejoindre = () => {
@@ -100,7 +104,10 @@ export function InvitationDirecte() {
     setInvitations(l => l.filter(x => x.id !== inv.id));
     // Le panneau du direct sait rejoindre ; nous, non. On depose la demande,
     // il la ramasse — qu'il soit deja monte ou qu'il arrive apres.
-    demanderRejoindre(inv.code);
+    // Une invitation dans une meute de la nuit du molosse ouvre SON salon :
+    // c'est l'epreuve (un trace `nuit-*`) qui le dit.
+    if (HALLOWEEN_OUVERT && meute) demanderLaMeute(inv.code);
+    else demanderRejoindre(inv.code);
   };
 
   const plusTard = () => {
@@ -140,7 +147,8 @@ export function InvitationDirecte() {
             {N.t('live_invit_recue', { n: inv.de })}
           </p>
           <p className="text-[10px] md:text-xs text-muted-foreground font-mono">
-            {inv.epreuve ? `${nomEnLigne(inv.epreuve)} · ` : ''}{reste} s
+            {meute ? `${motDeLaNuit('hw_m_titre')} · ${motDeLaNuit('hw_titre')} · `
+              : inv.epreuve ? `${nomEnLigne(inv.epreuve)} · ` : ''}{reste} s
           </p>
         </div>
 
