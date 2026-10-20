@@ -114,6 +114,8 @@ const MOTS: Record<string, Paire> = {
   hw_intro_son:    ['ACTIVER LE SON', 'SOUND ON'],
   hw_intro_charge: ['chargement…', 'loading…'],
   hw_intro_revoir: ['REVOIR L\'INTRO', 'WATCH THE INTRO AGAIN'],
+  // --- les pieces du dossier, une par nuit (Halloween.tsx, PieceDuDossier)
+  hw_piece_revoir: ['revoir la pièce n° {n} du dossier', 'watch exhibit {n} again'],
 
   // --- la meute : la nuit a plusieurs, jusqu'a huit (halloween-meute.ts)
   hw_m_titre:     ['LA MEUTE', 'THE PACK'],

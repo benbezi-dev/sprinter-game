@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useAnimate } from 'motion/react';
 import { SprinterApp, SprinterI18N, useGameStore } from '@/game/engine';
 import { MONTEE, COURBE, DUREE, useAnimationsReduites } from '@/lib/mouvement';
@@ -103,14 +104,65 @@ function noterIntroVue() {
 }
 
 function IntroDuMolosse({ fini }: { fini: () => void }) {
+  // Vue des qu'elle a commence : un joueur qui ferme le jeu au milieu ne la
+  // subit pas une seconde fois — il peut toujours la revoir.
+  useEffect(() => { noterIntroVue(); }, []);
+  return <FilmPlein nom="intro" fini={fini} />;
+}
+
+/* --- LES PIECES DU DOSSIER (20/10) -----------------------------------------
+   « Une video par nuit, qui se debloque avec la nuit et passe avant la
+   course, une seule fois en automatique ; ensuite le joueur peut la revoir. »
+   Treize pieces de « l'affaire Marchal » (assets-sources/molosse-recit-videos) :
+   la bande qu'un temoin de 1913 a enregistree, une nuit a la fois. Elles
+   racontent ce que les chapitres ne disent pas — Lucien, le chien avant la
+   bete — sans jamais devancer le chapitre que le joueur n'a pas encore gagne.
+
+   LA PIECE N PASSE AU PREMIER DEPART DE LA NUIT N, quel que soit le bouton
+   (tableau, « NUIT SUIVANTE ») : c'est `partir` qui la demande. Vue des
+   qu'elle commence, comme l'intro. La meute part par son salon, sans piece :
+   huit joueurs ne s'attendent pas devant un film.
+
+   `PIECES_PRETES` : les pieces deja encodees dans public/halloween/
+   (piece-NN-fr|en.mp4 et leur affiche). Une nuit plus loin n'en a pas encore :
+   elle part sans film plutot que sur un fichier absent. */
+const PIECES_PRETES = 2;
+const clePiece = (n: number) => `sprinter_halloween_piece_${n}_vue${EST_TEST ? '_test' : ''}`;
+function pieceVue(n: number): boolean {
+  try { return localStorage.getItem(clePiece(n)) === '1'; } catch { return true; }
+}
+function noterPieceVue(n: number) {
+  try { localStorage.setItem(clePiece(n), '1'); } catch { /* stockage refuse */ }
+}
+/** La piece a l'ecran : son numero, et si la course part a la fin. */
+let piece: { n: number; course: boolean } | null = null;
+const abonnesPiece = new Set<() => void>();
+function poserPiece(p: typeof piece) { piece = p; for (const f of abonnesPiece) f(); }
+function usePiece() {
+  return useSyncExternalStore(
+    (l) => { abonnesPiece.add(l); return () => { abonnesPiece.delete(l); }; },
+    () => piece, () => piece,
+  );
+}
+const nomDePiece = (n: number) => `piece-${String(n).padStart(2, '0')}`;
+
+function PieceDuDossier({ p }: { p: { n: number; course: boolean } }) {
+  useEffect(() => { noterPieceVue(p.n); }, [p.n]);
+  const fini = () => {
+    poserPiece(null);
+    // la piece est notee vue : `partir` lance cette fois la course
+    if (p.course && !partir(p.n)) (SprinterApp as any).goHome();
+  };
+  return <FilmPlein key={p.n} nom={nomDePiece(p.n)} fini={fini} />;
+}
+
+/** Un film plein ecran, son et affiche compris : public/halloween/NOM-LANGUE.mp4. */
+function FilmPlein({ nom, fini }: { nom: string; fini: () => void }) {
   const ref = useRef<HTMLVideoElement | null>(null);
   const [muet, poserMuet] = useState(false);
   const [pret, poserPret] = useState(false);
   const langue = SprinterI18N.index() === 0 ? 'fr' : 'en';
   const base = (import.meta as any).env.BASE_URL || '/';
-  // Vue des qu'elle a commence : un joueur qui ferme le jeu au milieu ne la
-  // subit pas une seconde fois — il peut toujours la revoir.
-  useEffect(() => { noterIntroVue(); }, []);
   // LA MUSIQUE DU MENU SE TAIT PENDANT TOUT LE FILM, et revient apres. Un
   // simple Audio_.stop() ne suffisait pas : la boucle du jeu relance le morceau
   // de l'accueil a chaque image (engine.ts), il revenait aussitot sous la voix
@@ -140,12 +192,15 @@ function IntroDuMolosse({ fini }: { fini: () => void }) {
     v.play().catch(() => { /* reste muet */ });
   };
 
-  return (
-    <motion.div className="absolute inset-0 z-[70] bg-black flex items-center justify-center pointer-events-auto"
+  // SUR LE CORPS DE LA PAGE, PAS DANS LE PANNEAU : le panneau (z-56) plafonne
+  // tout ce qu'il contient, et le bandeau « installer le jeu » (z-57) passait
+  // par-dessus le film et ses sous-titres (vu le 20/10).
+  return createPortal(
+    <motion.div className="fixed inset-0 z-[80] bg-black flex items-center justify-center pointer-events-auto"
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <video ref={ref} className="h-full w-full object-contain" playsInline preload="auto"
-             poster={`${base}halloween/intro-affiche-${langue}.jpg`}
-             src={`${base}halloween/intro-${langue}.mp4`}
+             poster={`${base}halloween/${nom}-affiche-${langue}.jpg`}
+             src={`${base}halloween/${nom}-${langue}.mp4`}
              onPlaying={() => poserPret(true)}
              onEnded={fini} onError={fini} />
       {/* L'AFFICHE, POSEE PAR NOUS. Safari iOS n'affiche pas `poster` des que
@@ -153,7 +208,7 @@ function IntroDuMolosse({ fini }: { fini: () => void }) {
           chargement (essai au simulateur, 19/10). Elle s'efface au premier
           vrai photogramme. */}
       {!pret && (
-        <img src={`${base}halloween/intro-affiche-${langue}.jpg`} alt=""
+        <img src={`${base}halloween/${nom}-affiche-${langue}.jpg`} alt=""
              className="absolute inset-0 h-full w-full object-contain pointer-events-none" />
       )}
       <div className="absolute top-0 inset-x-0 px-4 pt-[max(env(safe-area-inset-top),2.75rem)] flex justify-end gap-2">
@@ -173,7 +228,8 @@ function IntroDuMolosse({ fini }: { fini: () => void }) {
           {mot('hw_intro_charge')}
         </div>
       )}
-    </motion.div>
+    </motion.div>,
+    document.body,
   );
 }
 
@@ -226,6 +282,8 @@ function jouableMaintenant(n: number): boolean {
  */
 function partir(n: number): boolean {
   if (!jouableMaintenant(n)) return false;
+  // la piece du dossier d'abord, la premiere fois : la course part a sa fin
+  if (n <= PIECES_PRETES && !pieceVue(n)) { poserPiece({ n, course: true }); return true; }
   poserOuvert(false);
   prechargerLaNuit(cameraDe(n).deg);
   // L'image du chapitre se charge pendant la course : elle est la recompense,
@@ -701,6 +759,8 @@ function Voyageur({ jour, poser }: { jour: number | null; poser: (n: number | nu
 
 export function PanneauMolosse() {
   const affiche = usePanneau();
+  // La piece du dossier se joue aussi panneau ferme (depuis l'ecran de fin).
+  const pieceAffichee = usePiece();
   const state = useGameStore(s => s.state);
   const c = carnet();
   const [jour, poserJour] = useVoyageur();
@@ -820,7 +880,9 @@ export function PanneauMolosse() {
 
   // Le panneau appartient a l'accueil : une course lancee le referme, et il ne
   // se rouvre pas par-dessus une piste montee.
-  if (!affiche || (state !== 'title' && state !== 'open')) return null;
+  if (!affiche || (state !== 'title' && state !== 'open')) {
+    return pieceAffichee ? <PieceDuDossier p={pieceAffichee} /> : null;
+  }
 
   return (
     // Au-dessus du bouton flottant du tchat (z-55, TchatMarques.tsx) : il se
@@ -972,6 +1034,18 @@ export function PanneauMolosse() {
                       </span>
                     )}
                   </span>
+                  {/* LA PIECE DU DOSSIER, a revoir des que la nuit est ouverte */}
+                  {(jouable || tenue) && nuit.n <= PIECES_PRETES && (
+                    <motion.button
+                      onClick={() => poserPiece({ n: nuit.n, course: false })}
+                      whileTap={{ scale: 0.92 }}
+                      aria-label={mot('hw_piece_revoir', { n: String(nuit.n) })}
+                      className="relative shrink-0 w-7 h-7 rounded-full border border-[#F8A02E]/50
+                                 text-[#F8A02E] text-[10px] flex items-center justify-center"
+                    >
+                      ▶
+                    </motion.button>
+                  )}
                   {tenue && (
                     <motion.button
                       onClick={() => lire(nuit.n)}
@@ -1046,6 +1120,8 @@ export function PanneauMolosse() {
       )}
 
       {intro && <IntroDuMolosse fini={() => poserIntro(false)} />}
+
+      {pieceAffichee && <PieceDuDossier p={pieceAffichee} />}
 
       {meute && !intro && (
         <SalonDeLaMeute key={meute.code} ouvertes={Math.max(1, Math.min(CAL_NB, ouverte))}
