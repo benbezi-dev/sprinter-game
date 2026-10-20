@@ -3,7 +3,7 @@ import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Download, Loader2, Film, Timer } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
-import { compteARebours, TTL_MS, type EtatReview, type Sortie } from '@/game/review';
+import { compteARebours, type EtatReview, type Sortie } from '@/game/review';
 
 /**
  * La video de la course, et son compte a rebours.
@@ -31,14 +31,13 @@ export function ReviewVideo({ etat, onPartager, titre }: {
   if (etat.phase === 'inactif') return null;
 
   const mo = etat.taille ? (etat.taille / 1_048_576).toFixed(1) + ' Mo' : '';
-  const part = etat.phase === 'prete' ? Math.max(0, etat.reste / TTL_MS) : 0;
   // Le rouge n'arrive que dans la derniere minute : avant, il crierait au loup.
   const urgent = etat.phase === 'prete' && etat.reste < 60_000;
 
   // COMPACTE (20/10/2026, « l'image de partage de la video prend trop
   // d'espace sur la page ») : le titre et le compte a rebours partagent une
-  // ligne, le bouton tient sur une seule, et la barre du temps s'amincit. La
-  // carte passe d'environ 182 a 91 points de haut sur un telephone.
+  // ligne, le bouton tient sur une seule, et la barre du temps est retiree. La
+  // carte passe d'environ 182 a 81 points de haut sur un telephone.
   return (
     <motion.div
       {...MONTEE}
@@ -97,14 +96,6 @@ export function ReviewVideo({ etat, onPartager, titre }: {
             <p className="text-center text-[11px] text-muted-foreground">{N.t('review_dl_encore')}</p>
           )}
 
-          {/* La barre se vide en meme temps que le temps restant. */}
-          <div className="h-0.5 rounded-full bg-white/10 overflow-hidden">
-            <div
-              className={`h-full transition-all duration-1000 ease-linear
-                ${urgent ? 'bg-red-400' : 'bg-emerald-400/70'}`}
-              style={{ width: `${part * 100}%` }}
-            />
-          </div>
         </>
       )}
 
