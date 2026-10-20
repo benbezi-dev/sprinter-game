@@ -83,6 +83,9 @@ function ecrire(e: Etat) {
   for (const f of abonnes) f();
 }
 
+/** Le stockage a change sous nos pieds (profil restaure, game/profil.ts) : relire. */
+export function relireVestiaire() { ecrire(lire()); }
+
 export function skinGagne(cle: string): boolean { return etatCourant().gagnes.includes(cle); }
 export function skinPorte(): string | null { return etatCourant().porte; }
 

@@ -133,6 +133,8 @@ import { ouvrirPresence } from '@/game/presence';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
 import { brancherRattrapage } from '@/game/record-attente';
+import { brancherProfil, PROFIL_REPRIS } from '@/game/profil';
+import { toast } from '@/hooks/use-toast';
 import { useFilmerLeOneShot } from '@/game/film-course';
 import { nuitEnCours, nuitAPlusieurs } from '@/game/halloween';
 import { estHalloween } from '@/game/theme-accueil';
@@ -269,7 +271,19 @@ function MainGame() {
   useEffect(() => {
     if (!acces) return;
     brancherRattrapage();
+    // Le profil garde sous le nom : envoye, et repris a la liaison (game/profil.ts).
+    brancherProfil();
   }, [acces]);
+
+  // La progression vient de revenir d'un autre appareil : le dire, une ligne.
+  useEffect(() => {
+    const dire = () => {
+      const { N } = SprinterApp;
+      toast({ title: N.t('profil_repris'), description: N.t('profil_repris_s') });
+    };
+    window.addEventListener(PROFIL_REPRIS, dire);
+    return () => window.removeEventListener(PROFIL_REPRIS, dire);
+  }, []);
 
   // La permission push se demande depuis un bouton, et depuis rien d'autre.
   //

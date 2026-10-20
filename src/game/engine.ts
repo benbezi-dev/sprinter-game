@@ -415,6 +415,9 @@ export function primeTopNames(races: readonly RaceKey[] = ['100', '200', '400'])
 export function pushFinishedRace(race: string, seconds: number, mode: string, level: number, contexte?: string) {
   import('./history').then(({ pushRace }) => pushRace(race as any, seconds, mode, level, contexte))
     .catch(() => { /* module ou reseau indisponible : le local suffit */ });
+  // Le profil garde sous le nom (profil.ts), une fois l'arrivee rangee par le
+  // moteur : la carriere ne s'ecrit qu'apres ce crochet.
+  setTimeout(() => { import('./profil').then(m => m.envoyerProfil()).catch(() => { /* reessaye au prochain envoi */ }); }, 1500);
   // Le record de l'appareil vient peut-etre de bouger, et l'ecran d'arrivee
   // s'affiche avant que le serveur en sache quoi que ce soit. Sans cette
   // ligne, il annoncerait « record 8,50 s » sous le 8,43 s qu'il vient

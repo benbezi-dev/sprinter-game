@@ -400,6 +400,13 @@
     coach_droite:    ['DROITE', 'RIGHT'],
     coach_faute:     ['ALTERNE !', 'ALTERNATE!'],
     coach_vite:      ['PLUS VITE !', 'FASTER!'],
+    // Un joueur qui a reinstalle le jeu n'a pas a refaire ses premiers pas.
+    coach_deja_joue: ['J’AI DÉJÀ JOUÉ', 'I’VE PLAYED BEFORE'],
+    profil_motif:    ['Tape ton nom, puis le code de récupération reçu en le réservant : ta progression revient avec.',
+                      'Type your name, then the recovery code you got when you claimed it: your progress comes back with it.'],
+    profil_repris:   ['Ta progression est revenue', 'Your progress is back'],
+    profil_repris_s: ['Carrière, Légende et vestiaire retrouvés depuis ton autre appareil.',
+                      'Career, Legend and locker restored from your other device.'],
     tuto_v_flat:     ['RYTHME PLAT', 'FLAT RHYTHM'],
     tuto_replay_demo:['revoir', 'watch again'],
     tuto_again:      ['ENCORE', 'AGAIN'],

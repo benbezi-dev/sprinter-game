@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { SprinterApp, useGameStore, dernierAppui } from '@/game/engine';
+import { premiersPasFaits } from '@/game/premiers-pas';
+import { PanneauIdentite } from './NameChip';
 
 /**
  * LE GESTE S'APPREND DANS LA COURSE (game/premiers-pas.ts).
@@ -18,6 +20,12 @@ import { SprinterApp, useGameStore, dernierAppui } from '@/game/engine';
  *
  * Il ne vit que pendant la premiere course (`G.premiereCourse`, efface a
  * l'arrivee par engine.ts) et ne prend aucun toucher : les paves sont dessous.
+ *
+ * SAUF UN : « J'AI DEJA JOUE ». Le premier lancement se reconnait a un
+ * stockage vide, et une reinstallation le vide aussi (21/10/2026) : le joueur
+ * de longue date se retrouvait dans l'initiation, sans rien pour en sortir.
+ * Le bouton quitte la course, clot les premiers pas et ouvre le panneau du
+ * nom : le nom, puis le code, et le profil revient (game/profil.ts).
  */
 
 /** Combien d'alternances justes avant de laisser le joueur seul. */
@@ -32,6 +40,14 @@ export function CoachPremiereCourse() {
   const vu = useRef({ a: 0, cote: null as 'left' | 'right' | null, justes: 0, fauteA: 0, viteA: 0, fini: false });
 
   const actif = !!G.premiereCourse && (etat === 'count' || etat === 'race');
+  const [retrouver, setRetrouver] = useState(false);
+
+  const dejaJoue = () => {
+    G.premiereCourse = false;
+    premiersPasFaits();
+    SprinterApp.goHome();
+    setRetrouver(true);
+  };
 
   useEffect(() => {
     if (!actif) return;
@@ -51,6 +67,9 @@ export function CoachPremiereCourse() {
     return () => clearInterval(id);
   }, [actif, etat]);
 
+  if (retrouver) {
+    return <PanneauIdentite motif={N.t('profil_motif')} onFermer={() => setRetrouver(false)} />;
+  }
   if (!actif || G.paused) return null;
   const v = vu.current;
   const maintenant = performance.now();
@@ -63,6 +82,19 @@ export function CoachPremiereCourse() {
 
   return (
     <div className="absolute inset-0 z-[45] pointer-events-none select-none" aria-live="polite">
+      {/* En haut, au milieu : le coin gauche porte la pause (QuitRace.tsx), le
+          bas les paves. */}
+      <div className="absolute inset-x-0 flex justify-center"
+           style={{ top: 'calc(max(env(safe-area-inset-top), 0.5rem) + 4.6rem)' }}>
+        <button
+          onClick={dejaJoue}
+          className="pointer-events-auto px-3 py-1.5 rounded-full bg-black/45 hover:bg-black/60
+                     border border-white/15 backdrop-blur-sm text-[10px] md:text-xs font-bold
+                     tracking-widest text-white/85 hover:text-primary transition-colors"
+        >
+          {N.t('coach_deja_joue')}
+        </button>
+      </div>
       <AnimatePresence mode="wait">
         {etat === 'count' && (
           <motion.div key="attends" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}

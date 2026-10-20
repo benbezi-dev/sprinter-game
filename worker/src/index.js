@@ -91,6 +91,7 @@ import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
 import { etapeConnue, noterEtape, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
+import { PROFIL_MAX_OCTETS, donneesValides, appareilRelie, lireProfil, ecrireProfil } from './profil.js';
 import {
   ensureComptage, compterCourse, sourceDeLaVisite, compterArrivee,
   lireComptage, lireSessions, lireArrivees,
@@ -4066,6 +4067,32 @@ async function servir(request, env, ctx, porteur) {
         `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
       ).bind(key, device_id, Date.now()).run();
       return json({ ok: true, name: p.name });
+    }
+
+    // ------------------------------------------------ le profil du joueur
+    // La progression gardee sous le nom, pour la rendre a un appareil neuf
+    // (profil.js). Lecture et ecriture en POST : l'identifiant d'appareil
+    // n'a rien a faire dans une adresse. Seul un appareil relie au nom y a
+    // acces — un nom libre n'a pas de profil.
+    if ((url.pathname === '/profil/lire' || url.pathname === '/profil/ecrire')
+        && request.method === 'POST') {
+      const brut = await request.text();
+      if (brut.length > PROFIL_MAX_OCTETS + 1024) return json({ error: 'profil trop lourd' }, 413);
+      let body;
+      try { body = JSON.parse(brut); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const { device_id, name } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const key = cleanName(name).trim().toLowerCase();
+      if (!key || key === 'anonyme') return json({ error: 'nom requis' }, 400);
+      await ensurePlayerTables(env.DB);
+      if (!(await appareilRelie(env.DB, key, device_id))) return json({ ok: false, non_relie: true });
+      if (url.pathname === '/profil/lire') return json({ ok: true, ...(await lireProfil(env.DB, key)) });
+      const base = Number(body.rev);
+      if (!Number.isInteger(base) || base < 0) return json({ error: 'rev invalide' }, 400);
+      if (!donneesValides(body.donnees)) return json({ error: 'donnees invalides' }, 400);
+      if (JSON.stringify(body.donnees).length > PROFIL_MAX_OCTETS) return json({ error: 'profil trop lourd' }, 413);
+      const r = await ecrireProfil(env.DB, { nameKey: key, deviceId: device_id, base, donnees: body.donnees });
+      return json(r.ok ? { ok: true, rev: r.rev } : { ok: false, ...r });
     }
 
     // ------------------------------------------------ historique personnel

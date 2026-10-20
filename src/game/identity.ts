@@ -14,9 +14,18 @@ const CODE_KEY = 'sprinter_recovery_code';
 export function savedCode(): string {
   try { return localStorage.getItem(CODE_KEY) || ''; } catch { return ''; }
 }
-function keepCode(code: string) {
+function keepCode(code: string, name: string) {
+  // Le meme code, redonne (une reservation « deja a toi » avant chaque direct) :
+  // rien de neuf, le profil n'est pas a reprendre.
+  if (savedCode() === code) return;
   try { localStorage.setItem(CODE_KEY, code); } catch { /* sans memoire */ }
+  // Reserve, relie, transfere ou rendu : l'appareil a desormais droit au
+  // profil garde sous ce nom (game/profil.ts le reprend).
+  try { window.dispatchEvent(new CustomEvent(APPAREIL_RELIE, { detail: { name } })); } catch { /* hors navigateur */ }
 }
+
+/** Cet appareil vient de recevoir le code d'un nom (`detail.name`). */
+export const APPAREIL_RELIE = 'sprinter:appareil-relie';
 
 /* ---------------------------------------------------------------------------
    LE NOM QUI N'EST PLUS LE SIEN, ICI
@@ -89,7 +98,7 @@ export async function claimName(name: string): Promise<ClaimResult> {
     });
     if (!res.ok) return { etat: 'reseau' };
     const d = await res.json();
-    if (d.ok) { keepCode(d.code); return { etat: 'reserve', name: d.name, code: d.code, deja: !!d.deja }; }
+    if (d.ok) { keepCode(d.code, d.name || name); return { etat: 'reserve', name: d.name, code: d.code, deja: !!d.deja }; }
     if (d.est_un_code) return { etat: 'est_un_code', nom: d.nom };
     if (d.pris) return { etat: 'pris' };
     return { etat: 'reseau' };
@@ -143,7 +152,7 @@ export async function linkDevice(name: string, code: string): Promise<LinkResult
     });
     if (!res.ok) return 'reseau';
     const d = await res.json();
-    if (d.ok) { keepCode(code.trim().toUpperCase()); return 'lie'; }
+    if (d.ok) { keepCode(code.trim().toUpperCase(), d.name || name); return 'lie'; }
     if (d.mauvais_code) return 'mauvais_code';
     if (d.inconnu) return 'inconnu';
     return 'reseau';
@@ -297,7 +306,7 @@ export async function utiliserTransfert(jeton: string): Promise<LiaisonResult> {
     });
     if (!res.ok) return { etat: 'reseau' };
     const d = await res.json();
-    if (d.ok) { keepCode(d.code); return { etat: 'lie', name: d.name, code: d.code }; }
+    if (d.ok) { keepCode(d.code, d.name); return { etat: 'lie', name: d.name, code: d.code }; }
     if (d.deja_utilise) return { etat: 'deja_utilise' };
     if (d.perime) return { etat: 'perime' };
     return { etat: 'inconnu' };
@@ -339,7 +348,7 @@ export async function demanderRecuperation(nom: string, indice?: string): Promis
     if (!res.ok) return { etat: 'reseau' };
     const d = await res.json();
     if (d.inconnu) return { etat: 'inconnu' };
-    if (d.direct) { keepCode(d.code); return { etat: 'rendu', name: d.name, code: d.code }; }
+    if (d.direct) { keepCode(d.code, d.name); return { etat: 'rendu', name: d.name, code: d.code }; }
     return {
       etat: 'attente', depuis: d.cree_le,
       insta: d.insta ?? null, phrase: d.phrase ?? null, compte: d.compte,
@@ -356,7 +365,7 @@ export async function etatRecuperation(nom: string): Promise<Recuperation> {
     const res = await fetch(`${API_BASE}/recuperation?${q}`);
     if (!res.ok) return { etat: 'reseau' };
     const d = await res.json();
-    if (d.etat === 'accepte') { keepCode(d.code); return { etat: 'rendu', name: d.name, code: d.code }; }
+    if (d.etat === 'accepte') { keepCode(d.code, d.name); return { etat: 'rendu', name: d.name, code: d.code }; }
     if (d.etat === 'attente') {
       return {
         etat: 'attente', depuis: d.depuis,
