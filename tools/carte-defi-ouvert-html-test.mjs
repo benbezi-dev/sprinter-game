@@ -101,8 +101,14 @@ function lirePage() {
     set: () => true,
   });
   const contexte = vm.createContext({
-    document: { getElementById: element, createElement: element,
+    // `head` est la pour que la pose de la barre du tableau, si sa condition de
+    // protocole disparaissait, ne fasse pas planter la lecture avant la section
+    // qui la verifie. Un plantage a la place d'une phrase, c'est ce qu'on
+    // cherche a ne plus avoir.
+    document: { getElementById: element, createElement: element, head: element(),
                 querySelector: element, fonts: { load: async () => [], ready: Promise.resolve() } },
+    // `protocol` absent : en lisant la page hors d'un navigateur, la condition
+    // est fausse et la barre ne se pose pas. C'est bien ce qu'on veut mesurer.
     location: { search: '' },
     URLSearchParams, fetch, setTimeout, console, URL,
   });
@@ -398,7 +404,22 @@ titre('LA PAGE RESTE OUVRABLE PAR UN DOUBLE-CLIC');
   // travers un serveur — c'est-a-dire plus du tout, le soir ou l'on poste.
   ok('aucun import de module', !/^\s*import\s/m.test(script));
   ok('aucun require', !/\brequire\s*\(/.test(script));
-  ok('aucun script exterieur', !/<script[^>]+src=/i.test(html));
+  // On regarde le BALISAGE, pas le script. Le bloc <script> est du JavaScript :
+  // il a le droit de citer `<script src="nav.js">` dans un commentaire pour
+  // expliquer ce que font les autres pages du tableau, et cette citation n'est
+  // pas une balise. Le test portait sur le fichier entier et tombait donc sur
+  // le commentaire — un garde-fou qui crie sur une explication.
+  const balisage = html.replace(/<script>[\s\S]*?<\/script>/g, '');
+  ok('aucune balise de script exterieure', !/<script[^>]+src=/i.test(balisage));
+
+  // ...ET LA BARRE DU TABLEAU EST POSEE A L'EXECUTION, SOUS CONDITION. C'est la
+  // seule facon d'avoir les deux : le double-clic, qui ne doit faire aucune
+  // requete, et le retour vers les autres pages quand la page est servie.
+  ok('la barre du tableau est posee en JavaScript',
+     /barre\.src = 'nav\.js';/.test(script));
+  ok('...et seulement quand la page est servie',
+     /if \(location\.protocol === 'http:' \|\| location\.protocol === 'https:'\) \{/
+       .test(script));
   // La seule dependance exterieure tolérée, et elle a un repli : sans reseau
   // la page le DIT au lieu de rendre une carte en Arial sans prevenir.
   ok('les polices viennent de Google Fonts', /fonts\.googleapis\.com/.test(html));
