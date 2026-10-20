@@ -518,8 +518,11 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
                   </button>
                 </div>
               )}
-              {/* layout anime : une ligne qui change de rang glisse a sa place */}
-              <div className="flex flex-col gap-1.5 max-h-[calc(100dvh-24rem)] min-h-[36vh] overflow-y-auto overscroll-contain pr-1">
+              {/* layout anime : une ligne qui change de rang glisse a sa place.
+                  Pas de hauteur minimale sous le filtre EN LIGNE : la liste y
+                  tient souvent en une ligne, et ce vide repoussait sous le bord
+                  de l'ecran les joueurs en ligne pas encore classes (21/10). */}
+              <div className={`flex flex-col gap-1.5 max-h-[calc(100dvh-24rem)] ${seulEnLigne ? '' : 'min-h-[36vh]'} overflow-y-auto overscroll-contain pr-1`}>
                 <AnimatePresence initial={false}>
                   {(seulEnLigne && autresEnLigne === 0 ? [] : lignes).map((r: DuelRow) => {
                     const moi = r.name.trim().toLowerCase() === moiKey;
