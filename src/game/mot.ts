@@ -28,7 +28,7 @@ export async function poserMot(
   id: string, m: { texte?: string; voix?: Blob | null },
 ): Promise<MotPose> {
   try {
-    const corps: any = { id, name: getSavedName() || '' };
+    const corps: any = { id, name: getSavedName() || '', device_id: getDeviceId() };
     if (m.texte) corps.texte = m.texte.slice(0, MAX_TEXTE);
     if (m.voix) {
       corps.voix = await enBase64(m.voix);
@@ -60,7 +60,8 @@ export async function motDuDirect(id: string): Promise<{
   texte: string | null; voix: string | null; voix_type: string | null;
 } | null> {
   try {
-    const q = `id=${encodeURIComponent(id)}&name=${encodeURIComponent(getSavedName() || '')}`;
+    const q = `id=${encodeURIComponent(id)}&name=${encodeURIComponent(getSavedName() || '')}` +
+              `&device_id=${encodeURIComponent(getDeviceId())}`;
     const r = await fetch(`${API_BASE}/duel/mot?${q}`);
     if (!r.ok) return null;
     const d = await r.json();

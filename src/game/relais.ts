@@ -10,7 +10,7 @@
 // courir. C'est voulu — on ne se retrouve pas inscrit a une competition parce
 // qu'un ami a tape son nom.
 
-import { getSavedName } from './leaderboard';
+import { getSavedName, getDeviceId } from './leaderboard';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
@@ -91,16 +91,16 @@ export const uneEquipe = (id: string) =>
  */
 export const creerEquipe = (nom: string, coequipiers: string[]) =>
   poster<{ equipe: EquipeRelais }>('/relay/team', {
-    name: nom, creator: getSavedName(), members: coequipiers,
+    name: nom, creator: getSavedName(), members: coequipiers, device_id: getDeviceId(),
   });
 
 /** Accepter ou refuser une invitation. */
 export const repondre = (id: string, accepte: boolean) =>
-  poster<{ ok: true }>('/relay/answer', { id, name: getSavedName(), accept: accepte });
+  poster<{ ok: true }>('/relay/answer', { id, name: getSavedName(), accept: accepte, device_id: getDeviceId() });
 
 /** Fixer l'ordre des relayeurs : quatre cles, du premier au dernier. */
 export const ordonner = (id: string, ordre: string[]) =>
-  poster<{ ok: true }>('/relay/order', { id, order: ordre });
+  poster<{ ok: true }>('/relay/order', { id, order: ordre, name: getSavedName(), device_id: getDeviceId() });
 
 export const classementRelais = (race = '4x100') =>
   lire<{ race: string; classement: LigneRelais[] }>(

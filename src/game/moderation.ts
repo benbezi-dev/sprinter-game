@@ -81,7 +81,7 @@ export async function bloquer(nom: string): Promise<boolean> {
     const r = await fetch(`${API_BASE}/moderation/bloquer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: getSavedName() || '', cible: cle }),
+      body: JSON.stringify({ name: getSavedName() || '', device_id: getDeviceId(), cible: cle }),
     });
     return r.ok;
   } catch { return false; }
@@ -94,7 +94,7 @@ export async function debloquer(nom: string): Promise<boolean> {
     const r = await fetch(`${API_BASE}/moderation/debloquer`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: getSavedName() || '', cible: cle }),
+      body: JSON.stringify({ name: getSavedName() || '', device_id: getDeviceId(), cible: cle }),
     });
     return r.ok;
   } catch { return false; }

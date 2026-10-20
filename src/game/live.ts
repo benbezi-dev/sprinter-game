@@ -698,6 +698,11 @@ export class Salle {
   private presentationPose = false;
 
   private majEtat(m: any) {
+    // L'hote peut changer en cours de salle (il est parti) : on relit le role
+    // a chaque etat, pas seulement a la bienvenue.
+    if (Array.isArray(m.joueurs) && this.moi) {
+      this.suisHote = m.joueurs.some((j: JoueurSalle) => j.id === this.moi && j.hote);
+    }
     if (m.champ && Number.isFinite(m.champ.depart_n) && this.departN != null) {
       this.departN = Math.max(this.departN, m.champ.depart_n);
     }

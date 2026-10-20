@@ -561,6 +561,11 @@ export class SalleDirecte {
     if (this.tournoiLance()) {
       return new Response('tournoi en cours', { status: 409 });
     }
+    // Une meute deja partie : l'arrivant entrerait sans arrivee, et le verdict
+    // l'attendrait (le client le filtre, le serveur ne le faisait pas).
+    if (this.nuit && this.departA) {
+      return new Response('meute en course', { status: 409 });
+    }
     // LA MEUTE NE S'OUVRE QU'A CEUX QUI ONT DEBLOQUE LA NUIT (consigne du
     // 18/10). Les nuits s'ouvrent sur l'appareil — le calendrier et la
     // victoire de la veille — et le jeu dit ici jusqu'ou il en est
@@ -649,6 +654,10 @@ export class SalleDirecte {
     } else if (t && t.etat === 'pause' && t.en_lice.includes(j.id)) {
       this.forfaitEntreManches(j);
     }
+    // L'hote parti, le premier qui reste le devient : sans hote, un revenu
+    // entrait en simple invite et les deux clients lisaient mal le verdict
+    // (21/10).
+    if (j.id === this.hote) this.hote = this.joueurs.values().next().value?.id ?? null;
     // Un depart en pleine course laisse l'autre seul : on le lui dit plutot
     // que de le laisser courir contre un couloir vide.
     this.diffuser({ t: 'sorti', id: j.id, nom: j.nom, ...this.vue() });

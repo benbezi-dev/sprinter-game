@@ -41,10 +41,16 @@ export function InvitationDirecte() {
   const annule = useRef(false);
   useEffect(() => { annule.current = false; return () => { annule.current = true; }; }, []);
 
+  /** L'heure de la derniere reponse du serveur, par invitation. */
+  const recuLe = useRef<Map<number, number>>(new Map());
   const interroger = useRef(() => {});
   interroger.current = () => {
     mesInvitations().then(l => {
       if (annule.current) return;
+      // `reste_ms` arrive deja diminue par le serveur : le decompte repart de
+      // cette reponse-ci, sinon l'ecoule se retranche deux fois (21/10).
+      const t = Date.now();
+      for (const i of l) recuLe.current.set(i.id, t);
       setInvitations(l);
       // Une invitation en direct ne laissait rien derriere elle : elle expire
       // au bout de dix minutes, et celle qu'on rate pendant qu'on fait autre
@@ -76,7 +82,6 @@ export function InvitationDirecte() {
     const t = setInterval(() => setMaintenant(Date.now()), 1000);
     return () => clearInterval(t);
   }, []);
-  const recuLe = useRef<Map<number, number>>(new Map());
   for (const i of invitations) {
     if (!recuLe.current.has(i.id)) recuLe.current.set(i.id, Date.now());
   }

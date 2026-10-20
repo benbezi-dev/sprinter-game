@@ -149,7 +149,9 @@ function brancher() {
 
   s.onclose = () => {
     if (ws === s) ws = null;
-    arreterBattement();
+    // une socket remplacee (fermer(); brancher()) ne coupe pas le battement
+    // de celle qui l'a remplacee
+    if (!ws) arreterBattement();
     if (!voulue) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     echecs++;

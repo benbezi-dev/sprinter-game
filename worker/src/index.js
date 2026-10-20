@@ -655,6 +655,15 @@ async function ensurePlayerTables(db) {
 }
 
 /** Cet appareil a-t-il le droit d'ecrire sous ce nom ? */
+/** Les services de notification des navigateurs, et eux seuls. */
+const HOTES_PUSH = /^(fcm\.googleapis\.com|web\.push\.apple\.com|[a-z0-9-]+\.push\.apple\.com|updates\.push\.services\.mozilla\.com|[a-z0-9.-]+\.notify\.windows\.com)$/;
+function pointDePushValide(endpoint) {
+  try {
+    const u = new URL(String(endpoint));
+    return u.protocol === 'https:' && HOTES_PUSH.test(u.hostname);
+  } catch { return false; }
+}
+
 async function peutUtiliser(db, nameKey, deviceId) {
   if (!nameKey) return true;                       // anonyme : rien a proteger
   await ensurePlayerTables(db);
@@ -2506,6 +2515,9 @@ async function servir(request, env, ctx, porteur) {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { name, creator, members } = body || {};
+        if (!await peutUtiliser(env.DB, String(creator || '').trim().toLowerCase(), String(body.device_id || ''))) {
+          return json({ error: 'nom reserve', pris: true }, 403);
+        }
         const r = await creerEquipe(env.DB, {
           createur: creator,
           coequipiers: Array.isArray(members) ? members.slice(0, 8) : [],
@@ -2532,6 +2544,9 @@ async function servir(request, env, ctx, porteur) {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { id, name, accept } = body || {};
+        if (!await peutUtiliser(env.DB, String(name || '').trim().toLowerCase(), String(body.device_id || ''))) {
+          return json({ error: 'nom reserve', pris: true }, 403);
+        }
         const code = String(id || '').toUpperCase();
         if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
         const r = await repondre(env.DB, { id: code, joueur: name, accepte: !!accept });
@@ -2544,11 +2559,23 @@ async function servir(request, env, ctx, porteur) {
         const { id, order } = body || {};
         const code = String(id || '').toUpperCase();
         if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        if (!await peutUtiliser(env.DB, String(body.name || '').trim().toLowerCase(), String(body.device_id || ''))) {
+          return json({ error: 'nom reserve', pris: true }, 403);
+        }
+        // seul un relayeur de l'equipe en fixe l'ordre
+        const membre = await env.DB.prepare(
+          `SELECT 1 AS ok FROM relay_members WHERE team_id = ? AND name_key = ? AND state = 'in'`
+        ).bind(code, String(body.name || '').trim().toLowerCase()).first();
+        if (!membre) return json({ error: 'reserve a l equipe' }, 403);
         const r = await ordonner(env.DB, { id: code, ordre: order });
         return r.erreur ? json({ error: r.erreur }, 400) : json(r);
       }
 
+      // Aucune version du jeu n'ecrit ici : les salles de relais enregistrent
+      // elles-memes. Ouverte, la route acceptait 4 x 1 s au nom de n'importe
+      // quelle equipe (21/10) — elle reste pour l'administrateur.
       if (sous === 'score' && request.method === 'POST') {
+        if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { id, race_key, legs, traces } = body || {};
@@ -3212,12 +3239,17 @@ async function servir(request, env, ctx, porteur) {
       if (!motOuvert(canal)) return json({ error: 'reserve au canal de test' }, 403);
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const { id, name, texte, voix, voix_type } = body || {};
+      const { id, name, device_id, texte, voix, voix_type } = body || {};
       // Un defi differe, ou un duel en direct a deux (voir idDeDuel).
       const code = idDeDuel(id);
       if (!code) return json({ error: 'code invalide' }, 400);
       const cle = String(name || '').trim().toLowerCase();
       if (!cle) return json({ error: 'nom requis' }, 400);
+      // Le nom du vainqueur ne suffit plus : sans son appareil, n'importe qui
+      // deposait le mot a sa place, une fois pour toutes (21/10).
+      if (!await peutUtiliser(env.DB, cle, String(device_id || ''))) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
 
       // Un banni ne depose plus. La sanction porte sur la personne et pas sur
       // un message : on l'arrete donc a l'entree, avant meme de regarder si la
@@ -3322,6 +3354,8 @@ async function servir(request, env, ctx, porteur) {
       if (!code || !DUEL_DIRECT.test(code)) return json({ error: 'code invalide' }, 400);
       const cle = String(url.searchParams.get('name') || '').trim().toLowerCase();
       if (!cle) return json({ mot: null });
+      // le mot (et la voix) adresse a un nom ne se lit que depuis son appareil
+      if (!await peutUtiliser(env.DB, cle, url.searchParams.get('device_id') || '')) return json({ mot: null });
       await ensureDuelTables(env.DB);
       const d = await env.DB.prepare(
         `SELECT outcome, challenger_key, opponent_key, opponent_name, mot, voix, voix_type
@@ -3354,6 +3388,9 @@ async function servir(request, env, ctx, porteur) {
       const { id, name, device_id, reponse } = body || {};
       const code = String(id || '').toUpperCase();
       if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+      if (!await peutUtiliser(env.DB, String(name || '').trim().toLowerCase(), String(device_id || ''))) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
       await ensureDuelTables(env.DB);
       await ensureChallengeTables(env.DB);
       const r = await poserReponse(env.DB, {
@@ -3414,8 +3451,12 @@ async function servir(request, env, ctx, porteur) {
     // telephone quand on a reserve son identite.
     if (url.pathname === '/duel/results' && request.method === 'GET') {
       const device_id = url.searchParams.get('device_id') || '';
-      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+      let nom = (url.searchParams.get('name') || '').trim().toLowerCase();
       if (!isValidDeviceId(device_id) && !nom) return json({ results: [] });
+      // Un nom reserve ne se lit que depuis un appareil qui lui est relie :
+      // sans ca, n'importe qui lisait les mots et les voix adresses a un
+      // pseudo du TOP 500 (21/10).
+      if (nom && !(await peutUtiliser(env.DB, nom, device_id))) nom = '';
       await ensureDuelTables(env.DB);
       await ensureChallengeTables(env.DB);
 
@@ -3581,8 +3622,10 @@ async function servir(request, env, ctx, porteur) {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const { device_id, name, ids } = body || {};
-      const nom = String(name || '').trim().toLowerCase();
+      let nom = String(name || '').trim().toLowerCase();
       if (!Array.isArray(ids) || !ids.length) return json({ ok: true, n: 0 });
+      // meme garde qu'a la lecture : sinon on effacait la voix d'un autre
+      if (nom && !(await peutUtiliser(env.DB, nom, String(device_id || '')))) nom = '';
       await ensureDuelTables(env.DB);
       await ensureChallengeTables(env.DB);
       const propres = ids
@@ -3706,6 +3749,9 @@ async function servir(request, env, ctx, porteur) {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { duel, device_id, name, motif } = body || {};
+        if (!await peutUtiliser(env.DB, String(name || '').trim().toLowerCase(), String(device_id || ''))) {
+          return json({ error: 'nom reserve', pris: true }, 403);
+        }
         // La rencontre se lit avec son defi, en jointure : la table doit
         // exister meme sur une base qui n'a encore vu que des duels en direct.
         await ensureChallengeTables(env.DB);
@@ -3720,7 +3766,11 @@ async function servir(request, env, ctx, porteur) {
       if ((sous === 'bloquer' || sous === 'debloquer') && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-        const { name, cible } = body || {};
+        const { name, device_id, cible } = body || {};
+        // bloquer au nom d'un autre le privait en silence de ses mots (21/10)
+        if (!await peutUtiliser(env.DB, String(name || '').trim().toLowerCase(), String(device_id || ''))) {
+          return json({ error: 'nom reserve', pris: true }, 403);
+        }
         const r = sous === 'bloquer'
           ? await bloquer(env.DB, name, cible)
           : await debloquer(env.DB, name, cible);
@@ -4977,6 +5027,9 @@ async function servir(request, env, ctx, porteur) {
       const { device_id, target_score_id, revanche_de } = body || {};
       const c = courseDuDefi(body);
       if (c.erreur) return json({ error: c.erreur }, 400);
+      if (!await peutUtiliser(env.DB, c.nom.trim().toLowerCase(), c.deviceId)) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
       const t = c.t;
 
       await ensureChallengeTables(env.DB);
@@ -5042,6 +5095,9 @@ async function servir(request, env, ctx, porteur) {
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const c = courseDuDefi(body);
       if (c.erreur) return json({ error: c.erreur }, 400);
+      if (!await peutUtiliser(env.DB, c.nom.trim().toLowerCase(), c.deviceId)) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
 
       await ensureChallengeTables(env.DB);
       await ensureChallengeTarget(env.DB);
@@ -5212,9 +5268,10 @@ async function servir(request, env, ctx, porteur) {
     if (url.pathname === '/duel/fantome' && request.method === 'GET') {
       const id = (url.searchParams.get('id') || '').toUpperCase();
       const deviceId = url.searchParams.get('device_id') || '';
-      const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+      let nom = (url.searchParams.get('name') || '').trim().toLowerCase();
       if (!/^[A-Z0-9]{4,10}$/.test(id)) return json({ error: 'code invalide' }, 400);
       if (!isValidDeviceId(deviceId) && !nom) return json({ found: false });
+      if (nom && !(await peutUtiliser(env.DB, nom, deviceId))) nom = '';
       await ensureChallengeTables(env.DB);
       await ensureDuelTables(env.DB);
 
@@ -5276,6 +5333,10 @@ async function servir(request, env, ctx, porteur) {
       const code = String(id || '').toUpperCase();
       if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      // releve au nom d'un autre = LP et pieces au nom d'un autre (21/10)
+      if (!await peutUtiliser(env.DB, cleanName(name).trim().toLowerCase(), device_id)) {
+        return json({ error: 'nom reserve', pris: true }, 403);
+      }
       const t = Math.round(Number(total_ms));
       if (!Number.isFinite(t) || t < MIN_TIME_MS || t > MAX_TIME_MS) {
         return json({ error: 'temps invalide' }, 400);
@@ -5288,6 +5349,7 @@ async function servir(request, env, ctx, porteur) {
       if (!ch) return json({ found: false }, 404);
 
       const cleanSplits = (Array.isArray(splits) ? splits : [])
+        .slice(0, MAX_RACES)  // pas plus que d'epreuves dans un defi ; sinon stocke sans borne
         .map(v => Math.max(0, Math.round(Number(v)) || 0));
       // La trace de cette tentative, pour que le perdant du duel ait un
       // fantome a courir dans sa revanche. Facultative : une version plus
@@ -5387,6 +5449,11 @@ async function servir(request, env, ctx, porteur) {
       const { device_id, subscription, langue } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!subscription || !subscription.endpoint) return json({ error: 'subscription invalide' }, 400);
+      // Le worker POSTera vers cette adresse avec un jeton VAPID signe : on ne
+      // l'accepte que chez les vrais services de notification (21/10).
+      if (!pointDePushValide(subscription.endpoint) || JSON.stringify(subscription).length > 2000) {
+        return json({ error: 'subscription invalide' }, 400);
+      }
       await ensurePushTable(env.DB);
       await env.DB.prepare(
         `INSERT INTO push_subscriptions (device_id, subscription, langue) VALUES (?, ?, ?)
