@@ -126,7 +126,7 @@ function IntroDuMolosse({ fini }: { fini: () => void }) {
    `PIECES_PRETES` : les pieces deja encodees dans public/halloween/
    (piece-NN-fr|en.mp4 et leur affiche). Une nuit plus loin n'en a pas encore :
    elle part sans film plutot que sur un fichier absent. */
-const PIECES_PRETES = 2;
+const PIECES_PRETES = 13;
 const clePiece = (n: number) => `sprinter_halloween_piece_${n}_vue${EST_TEST ? '_test' : ''}`;
 function pieceVue(n: number): boolean {
   try { return localStorage.getItem(clePiece(n)) === '1'; } catch { return true; }
