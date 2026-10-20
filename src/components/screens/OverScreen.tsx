@@ -4,12 +4,19 @@ import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Coins } from 'lucide-react';
 import { rafraichirPieces, usePieces, coutDuContinue, acheterContinue } from '@/game/pieces';
+import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
+import { ReviewVideo } from './ReviewVideo';
 
 export function OverScreen() {
   const levelIdx = useGameStore(s => s.levelIdx);
   const player = useGameStore(s => s.player);
   const ranking = useGameStore(s => s.ranking);
   const { N } = SprinterApp;
+
+  // LA VIDEO DE L'ETAPE PERDUE (demande du 20/10/2026). Le crochet
+  // (film-course.ts) l'a gardee au lieu de la jeter : la course a bien eu lieu.
+  // `ReviewVideo` ne s'affiche que s'il y a un film a proposer.
+  const film = useFilmDeLaCourse();
 
   // LE CONTINUE. Seulement en carriere : un one shot n'a pas d'etape ou
   // reprendre. Le prix vient du serveur et monte a chaque Continue de la
@@ -144,6 +151,12 @@ export function OverScreen() {
 
           <div className="text-base sm:text-lg md:text-xl font-bold tracking-widest text-foreground uppercase mt-2">
             {N.t(cout != null ? 'pieces_zero' : 'race_again')}
+          </div>
+
+          {/* La video de l'etape perdue, sous le Continue : elle se partage,
+              comme sur les autres ecrans de fin. */}
+          <div className="w-full max-w-md">
+            <ReviewVideo etat={film} onPartager={partagerLeFilm} />
           </div>
 
           {/* Actions */}

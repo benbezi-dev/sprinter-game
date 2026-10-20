@@ -284,33 +284,38 @@ async function partagerEnNatif(blob: Blob, nom: string): Promise<Sortie | null> 
 }
 
 /**
- * LE CADRE DU FILM : 9:16 SUR UN TELEPHONE TENU DEBOUT (09/10/2026).
+ * LE CADRE DU FILM : 9:16 EN 2K SUR UN TELEPHONE TENU DEBOUT.
  *
- * Le film prenait la taille du canvas du jeu, donc celle de l'ecran : 1080 x
- * 2640 sur un Galaxy Z Flip6, 1170 x 2532 sur un iPhone. Instagram et TikTok
- * ne montrent que du 9:16 et rognent le reste a leur idee — le haut et le bas
- * partaient, avec la barre du chrono.
+ * Le film prend le MILIEU de l'ecran au 9:16 — Instagram et TikTok ne montrent
+ * que cela et rognent le reste a leur idee, le haut et le bas partaient avec la
+ * barre du chrono.
  *
- * On recadre donc au moment de la recopie : le milieu de l'image, au 9:16, et
- * au plus 1080 de large. Pour un telephone en portrait c'est MOINS de pixels a
- * recopier et a encoder qu'avant (1080 x 1920 contre 1080 x 2640) : aucun
- * appareil n'y perd une image pendant la course. On n'agrandit jamais : un
- * ecran de 720 de large donne un film de 720 x 1280.
+ * ON VISE LE 2K : 1440 x 2560 (demande du 20/10/2026). C'est une CIBLE FIXE,
+ * pas un plafond : le jeu dessine son canevas a `largeur x dpr`, dpr plafonne a
+ * 2 (3 a l'ULTRA, voir rendu-premium.js et GameCanvas), donc sa toile fait le
+ * plus souvent 800 a 1200 de large. On l'AGRANDIT jusqu'au 2K au moment de la
+ * recopie — le fichier sort toujours en 1440 x 2560, quitte a etaler le rendu
+ * du jeu. L'agrandissement se fait sur le canevas du MONTAGE, a part : le jeu,
+ * lui, continue de tourner a sa definition, sans rien y perdre. Seul l'encodeur
+ * du replay a plus de pixels a avaler ; sur le plus modeste des telephones
+ * c'est le replay qui peut sauter une image, jamais la course.
  *
  * Le HUD et le carton se mettent en page sur la partie VISIBLE, en points CSS :
  * ils raisonnent deja en `l` x `h` et ne s'accrochent a aucune position de la
- * piste (hud-film.ts, carton-film.ts).
+ * piste (hud-film.ts, carton-film.ts) ; `echelle` les met a la taille du 2K.
  *
  * Un ecran couche, un ordinateur ou un ecran presque carre (telephone plie
  * ouvert, tablette) garde son cadre : le rogner en 9:16 couperait la course.
  */
 const RATIO_PORTRAIT = 1.6;
+/** La largeur visee, en pixels : le 2K d'un portrait tenu debout (1440 x 2560). */
+const LARGEUR_2K = 1440;
 interface Cadre { l: number; h: number; sx: number; sy: number; sl: number; sh: number; ecran?: string }
 
 function cadreDuFilm(sw: number, sh: number): Cadre {
   const ecran = `${sw}x${sh}`;
   if (!sw || !sh || sh / sw < RATIO_PORTRAIT) return { l: sw, h: sh, sx: 0, sy: 0, sl: sw, sh, ecran };
-  const l = Math.min(1080, sw) & ~1;
+  const l = LARGEUR_2K & ~1;
   const h = Math.round(l * 16 / 9) & ~1;
   const k = Math.max(l / sw, h / sh);
   const sl = l / k, shv = h / k;
@@ -432,7 +437,11 @@ export class Review {
       this.morceaux = [];
       this.rec = new MediaRecorder(flux, {
         mimeType: format,
-        videoBitsPerSecond: 2_500_000,
+        // 5 Mbps pour le 2K (1440 x 2560) : 2,5 suffisaient en 1080, ils
+        // laisseraient des blocs sur deux fois plus de pixels. Le fichier
+        // grossit (~1 Mo la dizaine de secondes de course) — le poids reste
+        // affiche a cote du bouton de partage, voir OneShotEndScreen.
+        videoBitsPerSecond: 5_000_000,
         // De quoi rendre une foule et un coup de pistolet sans peser : le son
         // du jeu est synthetise, il n'a pas la matiere d'un enregistrement.
         audioBitsPerSecond: 128_000,

@@ -30,16 +30,21 @@ import { poserLeDefiDeLaCamera, oublierLeDefiDeLaCamera } from './defi-camera';
  *
  * Il n'y a qu'un enregistreur — on ne court qu'une course a la fois, et
  * encoder deux fois le meme canvas doublerait le travail au pire moment. Mais
- * trois modes s'en servent maintenant, et chacun a ses propres regles de
+ * quatre modes s'en servent maintenant, et chacun a ses propres regles de
  * debut, de fin et d'abandon. Sans nom sur la prise, celui qui range apres sa
- * course jetterait le film d'un autre : le one shot jette le sien a un faux
- * depart, et cette ligne-la passait aussi pendant un relais.
+ * course jetterait le film d'un autre : cette ligne-la passait aussi pendant
+ * un relais.
  *
  * Le genre sert aussi a l'ECRAN. L'ecran de fin du one shot, le salon du
- * direct et l'arrivee du relais lisent le meme etat ; chacun ne montre que ce
- * qui le concerne.
+ * direct, l'arrivee du relais et l'ecran de fin de carriere lisent le meme
+ * etat ; chacun ne montre que ce qui le concerne.
+ *
+ * `campaign` s'est ajoute le 20/10/2026 : la carriere est filmee a son tour,
+ * une course a la fois (pas le parcours entier — six etapes en 2K feraient un
+ * fichier qu'un telephone modeste ne tiendrait pas), et son replay se propose
+ * sur l'ecran de victoire comme sur l'ecran de defaite.
  */
-export type GenreFilm = 'oneshot' | 'direct' | 'relais';
+export type GenreFilm = 'oneshot' | 'direct' | 'relais' | 'campaign';
 
 /** L'etat du film, plus le nom de la course a qui il appartient. */
 export type VueFilm = EtatReview & { genre: GenreFilm | null };
@@ -260,29 +265,39 @@ export function jeterLeFilm(g: GenreFilm | null) {
 }
 
 /**
- * FILME LE ONE SHOT, D'UN BOUT A L'AUTRE.
+ * FILME LES COURSES PILOTEES PAR LE MOTEUR : LE ONE SHOT ET LA CARRIERE.
  *
  * Ce crochet se pose une seule fois, a la racine, et ne rend rien : il regarde
  * l'etat du jeu passer et decide quand la camera tourne. Le decoupage suit
  * exactement celui du moteur.
  *
- *   count   premiere epreuve  -> on demarre une prise neuve, son compris
- *   count   epreuve suivante  -> on REPREND la meme prise
- *   result                    -> on met en pause : l'attente entre deux
- *                                epreuves n'a rien a faire dans le film
+ *   count   premiere course   -> on demarre une prise neuve, son compris
+ *   count   epreuve suivante  -> one shot : on REPREND la meme prise
+ *                                carriere : on repart a neuf (voir plus bas)
+ *   result                    -> one shot : pause (l'attente entre deux
+ *                                epreuves n'a rien a faire dans le film)
  *   winall                    -> on arrete, et le compte a rebours part
- *   falseout / over           -> on jette : il n'y a pas de course a montrer
+ *   over                      -> defaite de carriere : on arrete AUSSI — la
+ *                                course a eu lieu, l'ecran de defaite la propose
+ *   falseout                  -> on arrete : le depart manque se partage lui
+ *                                aussi (demande du 20/10/2026)
  *   title                     -> on jette si l'on QUITTE une course
  *
- * LES DEUX AUTRES COURSES FILMEES NE PASSENT PAS PAR ICI. Le direct et le
- * relais partent sur une date annoncee par leur salle et s'arretent sur son
- * verdict, pas sur l'etat du moteur : ils posent leur camera eux-memes, avec
- * les fonctions ci-dessus. Ce crochet ne touche donc qu'aux films marques
- * « oneshot » — a une exception, le retour a l'ecran-titre, qui est le seul
- * chemin par lequel une course abandonnee passe quel que soit son mode.
+ * ONE SHOT ET CARRIERE SE FILMENT DIFFEREMMENT. Le one shot additionne les
+ * epreuves choisies dans UN seul film — son chrono les additionne aussi — donc
+ * on REPREND la prise d'une epreuve a la suivante, avec une pause entre les
+ * deux. La carriere, elle, filme chaque course A PART : six etapes d'affilee en
+ * 2K feraient un fichier qu'un telephone modeste ne tiendrait pas en memoire.
+ * Son replay est donc celui de la DERNIERE course — la finale sur l'ecran de
+ * victoire, l'etape perdue sur l'ecran de defaite. L'etape suivante repart a
+ * neuf : `demarrerLeFilm` jette la prise precedente avant d'en ouvrir une.
  *
- * La carriere, elle, reste la seule course qu'on ne filme pas : elle n'a pas
- * d'ecran ou proposer la video — c'est le one shot qui porte « LE REPLAY ».
+ * LE DIRECT ET LE RELAIS NE PASSENT PAS PAR ICI. Ils partent sur une date
+ * annoncee par leur salle et s'arretent sur son verdict, pas sur l'etat du
+ * moteur : ils posent leur camera eux-memes. Ce crochet ne touche donc qu'aux
+ * films marques « oneshot » ou « campaign » — a une exception, le retour a
+ * l'ecran-titre, seul chemin par lequel une course abandonnee passe quel que
+ * soit son mode.
  *
  * ET ON NE FILME PAS UN ECRAN QU'ON NE MONTRERA PAS. Un appareil qui ne sait
  * pas encoder le dit tout de suite ; on ne lui prend pas d'images pour rien.
@@ -324,35 +339,47 @@ export function useFilmerLeOneShot() {
 
     if (!Review.supporte()) return;
     const oneShot = mode === 'oneshot' && !liveOn;
+    const campagne = mode === 'campaign' && !liveOn;
+    if (!oneShot && !campagne) return;
+    const g: GenreFilm = oneShot ? 'oneshot' : 'campaign';
     const f = filmDeLaCourse();
 
     if (state === 'count') {
-      if (!oneShot) return;
-      // Reprendre plutot que recommencer : la prise en cours contient deja les
-      // epreuves precedentes, et la jeter ici ne laisserait au joueur que son
-      // 400 m alors que son chrono, lui, additionne les trois.
-      if (shotIdx > 0 && genreDuFilm() === 'oneshot' && f.filme()) f.reprendre();
-      else demarrerLeFilm('oneshot');
+      // One shot : reprendre plutot que recommencer, la prise en cours contient
+      // deja les epreuves precedentes et le chrono les additionne. Carriere :
+      // chaque course est un film a elle seule, donc toujours une prise neuve
+      // (demarrerLeFilm jette d'abord la precedente).
+      if (oneShot && shotIdx > 0 && genreDuFilm() === 'oneshot' && f.filme()) f.reprendre();
+      else demarrerLeFilm(g);
       return;
     }
 
     if (state === 'result') {
+      // L'attente entre deux epreuves d'un one shot n'entre pas dans le film.
+      // En carriere il n'y a rien a suspendre : la prise de l'etape suivante
+      // repartira a neuf, celle-ci n'ira nulle part.
       if (oneShot && genreDuFilm() === 'oneshot') f.pause();
       return;
     }
 
-    if (state === 'winall') { if (oneShot) void arreterLeFilm('oneshot'); return; }
+    if (state === 'winall') { void arreterLeFilm(g); return; }
 
-    // Un faux depart n'a pas de chrono, donc pas d'affiche et pas de video :
-    // l'ecran de fin cache les deux boutons, et garder le film en memoire
-    // reviendrait a stocker quelques mega-octets que personne ne verra.
-    if (state === 'falseout' || state === 'over') { jeterLeFilm('oneshot'); return; }
+    // La defaite d'une carriere garde son film : la course a bien eu lieu, et
+    // l'ecran de defaite (le Continue) la propose. Si le joueur reprend
+    // l'etape, le prochain `count` ouvrira une prise neuve.
+    if (state === 'over') { void arreterLeFilm(g); return; }
+
+    // LE FAUX DEPART GARDE SON FILM (demande du 20/10/2026). Il n'elimine qu'en
+    // one shot (falseStartOut) ; au lieu de jeter la prise, on l'arrete, et
+    // l'ecran de fin propose le replay du depart manque. Le carton sort sans
+    // chrono — il n'y en a pas (voir chronoDuCarton).
+    if (state === 'falseout') { void arreterLeFilm(g); return; }
 
     // Retour a l'ecran-titre, mais seulement en QUITTANT une course. La video
     // prete survit a tout le reste : le joueur peut ouvrir le classement, lire
     // sa boite, revenir — elle l'attend, jusqu'a ses deux heures.
     if (state === 'title' && (veille === 'count' || veille === 'race' || veille === 'result')) {
-      jeterLeFilm('oneshot');
+      jeterLeFilm(g);
     }
   }, [state, mode, liveOn, shotIdx]);
 }

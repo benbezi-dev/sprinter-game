@@ -757,17 +757,21 @@ export function OneShotEndScreen() {
   /**
    * L'IMAGE ET LE REPLAY, CHACUN A SES CONDITIONS.
    *
-   * L'image annonce un chrono : sans course terminee, elle n'a rien a montrer.
+   * L'image annonce un chrono : sans course terminee, elle n'a rien a montrer,
+   * et un faux depart n'en a pas — d'ou `!falseOut`.
+   *
    * Le replay, lui, n'a besoin que d'un film. Une course en direct en a
-   * toujours un — celui de TOUTE la course, la ou les autres ont couru — y
-   * compris apres un faux depart ou un abandon : il s'y est passe une course,
-   * et elle se partage. Le film doit etre celui du direct, pas celui d'une
-   * course d'avant.
+   * toujours un — celui de TOUTE la course, la ou les autres ont couru. Et
+   * depuis le 20/10/2026 un FAUX DEPART en garde un aussi : le depart manque se
+   * partage (le crochet l'arrete au lieu de le jeter, voir film-course.ts), et
+   * son carton sort sans chrono. On propose donc le replay des qu'il y a un
+   * film — course terminee OU faux depart. Le film doit etre celui de CETTE
+   * course : en direct, celui du direct, pas celui d'une course d'avant.
    */
   const aUnFilm = film.phase === 'enregistre' || film.phase === 'prete' ||
                   film.phase === 'rendue' || film.phase === 'expiree';
   const imageDispo = complete && !falseOut && runTime > 0;
-  const replayDispo = aUnFilm && (liveOn ? film.genre === 'direct' : imageDispo);
+  const replayDispo = aUnFilm && (liveOn ? film.genre === 'direct' : (imageDispo || falseOut));
 
   /**
    * LES POINTS D'UNE COURSE EN DIRECT, de deux a huit couloirs.
