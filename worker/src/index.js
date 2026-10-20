@@ -38,7 +38,8 @@ import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
          fantome as fantomeMarques, EPREUVES as EPREUVES_MARQUES } from './marques.js';
 import { poster as posterTchat, lire as lireTchat, participants as participantsTchat,
          invitables as invitablesTchat, inviter as inviterTchat, mesInvitations,
-         signalerMessage as signalerTchat, posterOfficiel, imiteOfficiel,
+         signalerMessage as signalerTchat, aimer as aimerTchat, marquerLu as marquerLuTchat,
+         posterOfficiel, imiteOfficiel,
          AUTEURS_OFFICIELS } from './tchat-marques.js';
 import {
   ensureRelayTables, creerEquipe, repondre, ordonner, mesEquipes,
@@ -75,6 +76,7 @@ import {
 import {
   deposerImage, lireImage, oublierImage, envoiPret, publierInstagram,
   ouvrirVideo, chargerVideo, etatConteneur, publierConteneur, FORMATS, diagnostiquer,
+  publicationsDuCompte,
 } from './instagram-envoi.js';
 import {
   inviterEnDirect, mesInvitationsDirectes, trancherInvitation,
@@ -88,7 +90,7 @@ import { empreinteIp, sousLimite, purgerLimites } from './limites.js';
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
-import { etapeConnue, noterEtape, noterAppareil, lireTunnel } from './tunnel.js';
+import { etapeConnue, noterEtape, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
 import {
   ensureComptage, compterCourse, sourceDeLaVisite, compterArrivee,
   lireComptage, lireSessions, lireArrivees,
@@ -245,7 +247,10 @@ function cors(resp) {
   // coherence non — et l'onglet reseau ne montrerait rien d'anormal, puisque
   // l'en-tete est bel et bien sur le fil. Qui ajoute un en-tete de reponse
   // ajoute une ligne ici.
-  resp.headers.set('Access-Control-Expose-Headers', 'X-D1-Bookmark');
+  // `Date` aussi : c'est le repli de l'heure de l'edition Halloween quand
+  // /now ne repond pas (src/game/halloween-horloge.ts). Sans cette ligne le
+  // navigateur la cachait, et le repli lisait `null` — hors ligne, toujours.
+  resp.headers.set('Access-Control-Expose-Headers', 'X-D1-Bookmark, Date');
   return resp;
 }
 
@@ -3051,6 +3056,14 @@ async function servir(request, env, ctx, porteur) {
           const r = await signalerTchat(env.DB, { id: body.id, cleLecteur: key, motif: body.motif });
           return json(r.corps, r.status);
         }
+        if (url.pathname === '/marques/tchat/aimer' && request.method === 'POST') {
+          const r = await aimerTchat(env.DB, { id: body.id, cleLecteur: key, aime: body.aime !== false });
+          return json(r.corps, r.status);
+        }
+        if (url.pathname === '/marques/tchat/lu' && request.method === 'POST') {
+          const r = await marquerLuTchat(env.DB, { cleLecteur: key, avec: body.avec, jusqua: body.jusqua });
+          return json(r.corps, r.status);
+        }
         if (url.pathname === '/marques/invitables' && request.method === 'GET') {
           return json({ joueurs: await invitablesTchat(env.DB, { deKey: key, top: await topMarques(env.DB) }) });
         }
@@ -4331,6 +4344,14 @@ async function servir(request, env, ctx, porteur) {
       // Les deux secrets, decrits sans etre montres : leur forme (longueur,
       // famille, blancs parasites) et l'avis de Meta. C'est la seule facon de
       // savoir ce qui est REELLEMENT pose, un secret ne se relisant pas.
+      // Ce que le compte Instagram montre vraiment : l'onglet « Publies » de
+      // l'atelier le lit ici, plutot que de se fier aux seuls moments marques.
+      if (quoi === 'instagram' && request.method === 'GET') {
+        const r = await publicationsDuCompte(env, url.searchParams.get('limite'));
+        if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, r.etape === 'configuration' ? 409 : 502);
+        return json({ publications: r.publications });
+      }
+
       if (quoi === 'diagnostic' && request.method === 'GET') {
         return json(await diagnostiquer(env));
       }
@@ -4775,6 +4796,8 @@ async function servir(request, env, ctx, porteur) {
 
       // --- le tunnel des premiers pas (table `tunnel`) --------------
       const tunnel = await bloc(() => lireTunnel(DB, 30, now), null);
+      // --- les treize nuits d'Halloween, tentees et tenues (tunnel.js) ---
+      const halloween = await bloc(() => lireHalloween(DB), null);
       // --- ce qui manquait : vrai mode, compte complet, retention sur le
       // jeu, sessions, provenance des visites (voir comptage.js) ---------
       const comptage = await bloc(() => lireComptage(DB, now), null);
@@ -4799,7 +4822,7 @@ async function servir(request, env, ctx, porteur) {
         defis: { ...(c || {}), ...defisPlus },
         // --- ajouts ---
         parties, reprises, retention, duels, joueurs, geo, relais, championnats, tunnel,
-        comptage, sessions, arrivees,
+        comptage, sessions, arrivees, halloween,
         signalements,
         releve_a: now,
       });

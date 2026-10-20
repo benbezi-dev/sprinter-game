@@ -292,6 +292,43 @@ export async function publierConteneur(env, creation) {
 }
 
 /**
+ * Ce qui est REELLEMENT sur le compte, du plus recent au plus ancien.
+ *
+ * Demande du 17 octobre 2026 : l'onglet « Publies » de l'atelier ne montrait
+ * que les moments de la file envoyes depuis l'atelier (trois, tous du 9
+ * septembre). Les cartes du classement, les images telechargees puis posees a
+ * la main, ce qui part du calendrier : rien de tout cela n'y arrivait. La
+ * seule liste qui ne vieillit pas est celle du compte lui-meme.
+ *
+ * Les stories expirent au bout de 24 h et ne sortent pas de `/media` : seuls
+ * le fil et les reels y figurent. `media_url` est une adresse signee de Meta,
+ * qui expire au bout de quelques jours — bonne pour une vignette, pas pour un
+ * lien a garder.
+ */
+export async function publicationsDuCompte(env, limite = 30) {
+  if (!envoiPret(env)) return nonPret();
+  const n = Math.min(Math.max(Number(limite) || 30, 1), 100);
+  try {
+    const champs = 'id,caption,media_type,media_product_type,media_url,thumbnail_url,permalink,timestamp';
+    const r = await fetch(`${hote(env)}/${compte(env)}/media?fields=${champs}&limit=${n}`
+                        + `&access_token=${encodeURIComponent(jeton(env))}`);
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !Array.isArray(d.data)) return echec('liste', messageMeta(d), r.status);
+    return {
+      ok: true,
+      publications: d.data.map(m => ({
+        id: String(m.id), legende: m.caption || '', type: m.media_type || null,
+        produit: m.media_product_type || null,
+        image: m.media_type === 'VIDEO' ? (m.thumbnail_url || null) : (m.media_url || null),
+        lien: m.permalink || null, le: m.timestamp ? Date.parse(m.timestamp) : null,
+      })),
+    };
+  } catch (e) {
+    return echec('liste', String(e && e.message || e));
+  }
+}
+
+/**
  * Publie une image sur Instagram — au fil, ou en story.
  *
  * Meta demande d'abord de creer un « conteneur » a partir de l'adresse de

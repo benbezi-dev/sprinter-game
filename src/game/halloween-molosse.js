@@ -172,6 +172,18 @@ const VOIE = 0.10;
  * le compte tombe juste : `amp` vaut exactement `0.5 / FOULEE` au maximum de
  * la vitesse, et le pied reste pose ou on le met.
  */
+/**
+ * LE COULOIR OU LA BETE COURT A L'ECRAN.
+ *
+ * Celui du joueur, qu'elle chasse. Sauf en meute, une fois qu'elle l'a pris :
+ * il regarde alors la suite de la poursuite, la camera suit le coureur qu'elle
+ * chasse maintenant (`G.suivi`, pose par halloween.ts), et elle court dans SON
+ * couloir — sans quoi on la verrait galoper a cote de sa proie.
+ */
+function couloirDeLaBete(G) {
+  return G.spectateur && G.suivi ? G.suivi.lane : G.player.lane;
+}
+
 export const FOULEE = 0.45;
 
 /** La course d'un pied au contact, quand rien ne patine. */
@@ -273,7 +285,7 @@ export function molosseDe(chasse) {
         // si elle est hors champ : on doit les voir.
         if (!(chasse.yeux > 0)) return vide;
         const T = G.track, m = scaleM();
-        const q0 = T.pos(0, G.player.lane), q1 = T.pos(4, G.player.lane);
+        const q0 = T.pos(0, couloirDeLaBete(G)), q1 = T.pos(4, couloirDeLaBete(G));
         const ux = (q1[0] - q0[0]) / 4, uy = (q1[1] - q0[1]) / 4;
         const recul = Math.min(chasse.ecart || 6, 7);
         const X = q0[0] - ux * recul, Y = q0[1] - uy * recul;
@@ -287,7 +299,7 @@ export function molosseDe(chasse) {
       }
 
       const T = G.track;
-      const q = T.pos(Math.min(d, T.total + 24), G.player.lane);
+      const q = T.pos(Math.min(d, T.total + 24), couloirDeLaBete(G));
       const g = ground(q[0], q[1]);
       const m = scaleM();
       // Le maillage, s'il est la, est plus grand que le trace : l'ombre et la
@@ -314,7 +326,7 @@ export function molosseDe(chasse) {
       // trajectoire : le signe de l'ecart horizontal dit de quel cote la bete
       // regarde. Quatre metres, parce qu'en virage un pas plus court donne un
       // ecart trop petit pour etre lu de facon stable.
-      const q2 = T.pos(Math.min(d + 4, T.total + 28), G.player.lane);
+      const q2 = T.pos(Math.min(d + 4, T.total + 28), couloirDeLaBete(G));
       const g2 = ground(q2[0], q2[1]);
 
       piece.profondeur = depthOf(q[0], q[1]);
@@ -352,7 +364,7 @@ export function molosseDe(chasse) {
       // 25° de l'horizontale a l'ecran — toutes les lignes droites, jusqu'a
       // la camera de 22° —, et on le quitte en douceur jusqu'a 50°.
       {
-        const qa = T.pos(Math.min(d + 0.5, T.total + 28.5), G.player.lane);
+        const qa = T.pos(Math.min(d + 0.5, T.total + 28.5), couloirDeLaBete(G));
         let tx = qa[0] - q[0], ty = qa[1] - q[1];
         const n = Math.hypot(tx, ty);
         if (n > 1e-6) {

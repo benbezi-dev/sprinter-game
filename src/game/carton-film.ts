@@ -206,9 +206,14 @@ function libelleEpreuves(G: any, N: any): string {
  * quand le cumul n'a pas ete tenu — un relais, par exemple, ou le verdict
  * appartient a l'equipe et pas au coureur.
  *
- * Un faux depart n'arrive jamais ici : `film-course.ts` jette la prise avant.
+ * UN FAUX DEPART N'A PAS DE CHRONO (20/10/2026). `film-course.ts` ne jette plus
+ * sa prise — on la garde pour la partager — mais la course n'a pas eu lieu :
+ * afficher le cumul des epreuves tenues AVANT le depart manque serait annoncer
+ * un temps que cette tentative n'a pas realise. On rend `null`, le carton sort
+ * sans chrono (juste l'epreuve, le nom et l'adresse).
  */
 function chronoDuCarton(G: any): number | null {
+  if (G?.falseOut) return null;
   const s = Number(G?.runTime) || Number(G?.player?.finishTime) || 0;
   return s > 0 && Number.isFinite(s) ? s * 1000 : null;
 }

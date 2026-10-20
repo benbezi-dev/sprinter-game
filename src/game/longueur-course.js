@@ -34,7 +34,7 @@
 import { SprinterApp, SprinterCore, resetInputRhythm } from './engine';
 import './sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { poserLeTempo, rendreLeTempo } from './tempo';
-import { stadeDuSaut, ambianceDuSaut } from './sauts-stades.js';
+import { stadeDuSaut } from './sauts-stades.js';
 import { ELAN, FOSSE, TEMPS_ESSAI } from './longueur.js';
 import {
   AVANCE_PIED, APPEL_MAXI, angleDe, TENUE_MAXI, ANGLE_MIN, ANGLE_PAR_S, RALENTI,
@@ -170,7 +170,6 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   G.race = EPREUVE;
   // Chaque etape a son stade (sauts-stades.js) ; le 100 m garde les siens.
   A.buildLevel(stadeDuSaut(etape));
-  G.ambianceSaut = ambianceDuSaut(etape);
   const lignetriple = FOSSE_X - plancheDe(etape);
   const ligne = epreuve === 'triple' ? lignetriple : LIGNE;
   e = {
@@ -183,7 +182,7 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
     angleEnvol: null, angleVise: [19, 24], resultat: null,
     empreinte: null, gerbe: null, mesure: null, drapeau: null, traceMordue: null,
     lignes: [], vent: 0, posture: null, juge: null, pieces: [],
-    theme: A.themeBrut(),  // l'heure du concours, pas celle de la pendule
+    theme: A.theme(),  // a l'heure du joueur (heure-du-jour.js)
   };
   prechargerSable(e.theme);
 
@@ -304,7 +303,6 @@ function nettoyer() {
   rendreLeTempo();
   if (!sauvegarde && !e) return;
   G.sautEnCours = false;
-  G.ambianceSaut = null;
   G.pasSauteur = null;
   G.appuiSaut = null;
   G.relacheSaut = null;

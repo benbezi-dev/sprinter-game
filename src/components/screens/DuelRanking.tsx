@@ -17,7 +17,8 @@ import { Nations } from './Nations';
 import { SERIE_OUVERTE } from '@/game/canal';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe } from '@/game/jeux';
 import { useRetour } from '@/hooks/use-retour';
-import { usePresences, parNom, type Present } from '@/game/presence';
+import { usePresences, parNom } from '@/game/presence';
+import { PointPresence } from './PointPresence';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -47,27 +48,6 @@ function Mouvement({ move, reduit }: { move: number; reduit: boolean }) {
         {N.t(monte ? 'duel_monte_a11y' : 'duel_descend_a11y', { n: String(Math.abs(move)) })}
       </span>
     </motion.span>
-  );
-}
-
-/**
- * Le point de presence, a cote du nom.
- *
- * Vert : au menu, disponible tout de suite. Ambre : la, mais occupe — en
- * course, en duel, en direct. Rien quand le joueur n'a pas le jeu ouvert : un
- * point gris sur cinq cents lignes serait cinq cents points qui ne disent rien,
- * et l'absence se lit d'elle-meme a cote de ceux qui brillent.
- */
-function PointPresence({ p }: { p: Present | undefined }) {
-  const { N } = SprinterApp;
-  if (!p) return null;
-  const dispo = p.quoi === 'menu';
-  return (
-    <span className="relative inline-flex w-2 h-2 shrink-0" title={N.t('pres_' + p.quoi)}>
-      {dispo && <span className="absolute inset-0 rounded-full bg-emerald-400 opacity-60 animate-ping motion-reduce:hidden" />}
-      <span className={`relative inline-flex w-2 h-2 rounded-full ${dispo ? 'bg-emerald-400' : 'bg-amber-400'}`} />
-      <span className="sr-only">{N.t('pres_a11y')} — {N.t('pres_' + p.quoi)}</span>
-    </span>
   );
 }
 

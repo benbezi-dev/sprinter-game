@@ -105,6 +105,10 @@ const PanneauMolosse = /* @__PURE__ */ lazy(() => import('@/components/screens/H
   .then(m => ({ default: m.PanneauMolosse })));
 const FinDeLaNuit = /* @__PURE__ */ lazy(() => import('@/components/screens/Halloween')
   .then(m => ({ default: m.FinDeLaNuit })));
+const FinDeLaMeute = /* @__PURE__ */ lazy(() => import('@/components/screens/MeuteMolosse')
+  .then(m => ({ default: m.FinDeLaMeute })));
+const BandeauDeLaMeute = /* @__PURE__ */ lazy(() => import('@/components/screens/MeuteMolosse')
+  .then(m => ({ default: m.BandeauDeLaMeute })));
 // Le verdict du defi Aurel Manga, charge de la meme facon et pour la meme
 // raison : l'evenement ferme (DEFI_VEDETTE_OUVERT), il ne part pas en public.
 const FinDuDefiVedette = /* @__PURE__ */ lazy(() => import('@/components/screens/DefiVedette')
@@ -117,6 +121,11 @@ const PresentationBoss = /* @__PURE__ */ lazy(() => import('@/components/screens
 // (K.O., revanche), annonce par-dessus l'ecran de fin. Charge a la demande.
 const AnnonceDuelMarques = /* @__PURE__ */ lazy(() => import('@/components/screens/DuelMarques')
   .then(m => ({ default: m.AnnonceDuelMarques })));
+// L'habillage Halloween de l'accueil : charge a la demande derriere
+// HALLOWEEN_OUVERT, comme le reste du mode, pour qu'il sorte du build public
+// quand la saison est fermee (voir tools/molosse-canal-test.mjs).
+const DecorHalloween = /* @__PURE__ */ lazy(() => import('@/components/screens/HalloweenDecor')
+  .then(m => ({ default: m.HalloweenDecor })));
 import { dashboardRequested, pingVisit } from '@/game/stats';
 import { demarrerTunnel } from '@/game/tunnel';
 import { ouvrirBoite } from '@/game/boite';
@@ -125,7 +134,8 @@ import { DUELS_OUVERTS } from '@/game/duels';
 import { reprendrePush } from '@/game/push';
 import { brancherRattrapage } from '@/game/record-attente';
 import { useFilmerLeOneShot } from '@/game/film-course';
-import { nuitEnCours } from '@/game/halloween';
+import { nuitEnCours, nuitAPlusieurs } from '@/game/halloween';
+import { estHalloween } from '@/game/theme-accueil';
 import { defiEnCours as defiVedetteEnCours } from '@/game/vedettes';
 // Un module sans import : demander « est-ce une etape de la Legende ? » ne
 // fait pas entrer la Legende dans le paquet public.
@@ -324,6 +334,12 @@ function MainGame() {
       {acces && (<>
       <GameCanvas />
       
+      {/* Habillage Halloween : un calque decoratif en fond d'accueil, sous le
+          menu (ouverture et titre seulement, jamais la course ni la ceremonie).
+          HALLOWEEN_OUVERT en tete permet au bundler de le retirer hors saison. */}
+      {HALLOWEEN_OUVERT && estHalloween() && !ceremonie && (state === 'open' || state === 'title') &&
+        <Suspense fallback={null}><DecorHalloween /></Suspense>}
+
       <div className="absolute inset-0 z-10 pointer-events-none flex flex-col">
         {state === 'open' && <OpenScreen />}
         {state === 'title' && !ceremonie && <TitleScreen />}
@@ -366,6 +382,7 @@ function MainGame() {
             depuis les tribunes : le bandeau dit qu'il est sorti, laisse
             choisir le coureur suivi, et annonce qui sort. Voir TournoiDirect. */}
         <BandeauTournoi />
+        {HALLOWEEN_OUVERT && <Suspense fallback={null}><BandeauDeLaMeute /></Suspense>}
         {/* Le defi de la demi : le couloir au depart. Son arrivee remplace
             l'ecran de fin du one shot, plus bas. */}
         {DUELS_OUVERTS && <BandeauDefi />}
@@ -397,7 +414,7 @@ function MainGame() {
             d'apres, ou la plage (game/legende/legende.ts). */}
         {state === 'winall' && (
           DUELS_OUVERTS && SprinterApp.G.defiDemie ? <FinDuDefi />
-            : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}><FinDeLaNuit /></Suspense>
+            : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}>{nuitAPlusieurs() ? <FinDeLaMeute /> : <FinDeLaNuit />}</Suspense>
             : DEFI_VEDETTE_OUVERT && defiVedetteEnCours() ? <Suspense fallback={null}><FinDuDefiVedette /></Suspense>
             : LEGENDE_OUVERTE && finDEtapeLegende(SprinterApp.G) ? <Suspense fallback={null}><FinDEtapeLegende /></Suspense>
             : defiEnCours && programmeDuDefi() ? <Revanche />

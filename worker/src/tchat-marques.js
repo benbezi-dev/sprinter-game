@@ -55,6 +55,21 @@
    tout nom reserve ecrit, et ses messages portent le camp « joueur ».
    L'appelant dit si le duel est ouvert (`duelOuvert`) ; tant qu'il l'est,
    rien ne change. Les invitations, elles, n'ont de sens que pendant le duel.
+
+   LES J'AIME (demande de l'auteur, 17/10/2026) : on aime un message qu'on a
+   pu lire — le commun, ou un prive de sa conversation —, pas le sien. Un
+   j'aime par personne et par message, qu'on retire du meme geste. Il ne
+   sonne chez personne : ce n'est pas une raison de reveiller un telephone.
+   La lecture rend les compteurs des derniers messages (`aimes`) a chaque
+   fois, puisqu'un j'aime arrive sur un message deja recu.
+
+   LES PRIVES LUS (signale par l'auteur, 18/10/2026) : une conversation privee
+   restait marquee non lue apres avoir ete ouverte. Le jeu la croyait non lue
+   tant que le dernier message n'etait pas le sien — ouvrir n'y changeait rien.
+   Ouvrir une conversation la marque lue ICI, par nom et non par appareil :
+   lue sur un telephone, elle l'est sur les autres, et au redemarrage. On
+   retient, par lecteur et par interlocuteur, le dernier message RECU qu'il a
+   vu (`marques_tchat_lus`) ; la lecture rend cette table a chaque fois.
 --------------------------------------------------------------------------- */
 import { EVENEMENT, inscriptionDe, ensureMarquesTables } from './marques.js';
 import { texteRecevable, TCHAT_MAX } from './mot.js';
@@ -65,6 +80,8 @@ export const PAR_MINUTE = 8;
 export const PAR_JOUR = 200;
 /** Ce qu'une lecture rend au plus, de chaque sorte (commun, prive). */
 export const LOT = 80;
+/** Les compteurs de j'aime rendus a chaque lecture : ceux des derniers messages. */
+export const FENETRE_AIMES = 300;
 export const SONNERIE_TCHAT_MS = 60_000;
 export const SONNERIE_INVIT_MS = 6 * 3600_000;
 export const INVITS_PAR_JOUR = 15;
@@ -131,6 +148,20 @@ export async function ensureTchatTables(db) {
       genre TEXT NOT NULL,
       quand INTEGER NOT NULL,
       PRIMARY KEY (pour_key, genre)
+    )`),
+    // Un j'aime par personne et par message.
+    db.prepare(`CREATE TABLE IF NOT EXISTS marques_tchat_aimes (
+      message_id INTEGER NOT NULL,
+      name_key TEXT NOT NULL,
+      quand INTEGER NOT NULL,
+      PRIMARY KEY (message_id, name_key)
+    )`),
+    // Le dernier prive recu de `avec_key` que `name_key` a vu.
+    db.prepare(`CREATE TABLE IF NOT EXISTS marques_tchat_lus (
+      name_key TEXT NOT NULL,
+      avec_key TEXT NOT NULL,
+      jusqua INTEGER NOT NULL,
+      PRIMARY KEY (name_key, avec_key)
     )`),
   ]);
   pret.add(db);
@@ -243,14 +274,14 @@ export async function poster(db, { auteurKey, auteurName, texte, pour = null, pr
 
 /**
  * Un message du compte SprinterGame, dans le tchat commun. L'appelant a deja
- * verifie la cle. Le texte n'est que nettoye et borne : pas de filtre, c'est
- * l'auteur qui ecrit — il peut donner un lien vers le site.
+ * verifie la cle. Le texte n'est que nettoye : pas de filtre ni de limite de
+ * longueur (17/10, demande de l'auteur), c'est l'auteur qui ecrit — il peut
+ * donner un lien vers le site.
  */
 export async function posterOfficiel(db, { texte, maintenant = Date.now() }) {
   await ensureTchatTables(db);
   const propre = typeof texte === 'string' ? texte.replace(/\s+/g, ' ').trim() : '';
   if (!propre) return { status: 422, corps: { error: 'texte refuse', raison: 'vide' } };
-  if (propre.length > TCHAT_MAX) return { status: 422, corps: { error: 'texte refuse', raison: 'long' } };
   const r = await db.prepare(
     `INSERT INTO marques_tchat (evenement, quand, auteur_key, auteur_name, camp, prive, texte)
      VALUES (?, ?, ?, ?, ?, 0, ?)`
@@ -269,6 +300,7 @@ function enLigne(m, moi) {
     id: m.id, quand: m.quand, de: m.auteur_name, camp: m.camp,
     pour: m.pour_name || null, prive: !!m.prive,
     texte: m.texte,
+    aimes: 0, aime: false,
     officiel: m.camp === OFFICIEL.camp,
     a_moi: !!moi && m.auteur_key === moi,
     pour_moi: !!moi && m.pour_key === moi,
@@ -303,7 +335,102 @@ export async function lire(db, { cleLecteur, depuis = 0 }) {
     .filter(m => !bloques.has(m.auteur_key))
     .sort((a, b) => a.id - b.id)
     .map(m => enLigne(m, cleLecteur));
-  return { messages, dernier: messages.length ? messages[messages.length - 1].id : d };
+  const aimes = await compteurs(db, cleLecteur);
+  const parId = new Map(aimes.map(a => [a.id, a]));
+  for (const m of messages) {
+    const a = parId.get(m.id);
+    if (a) { m.aimes = a.n; m.aime = a.moi; }
+  }
+  const lus = cleLecteur ? await mesLus(db, cleLecteur) : [];
+  return { messages, dernier: messages.length ? messages[messages.length - 1].id : d, aimes, lus };
+}
+
+/** Ses conversations privees lues : `{ avec, id }`, la cle de l'autre et le dernier prive recu vu. */
+async function mesLus(db, cleLecteur) {
+  const { results } = await db.prepare(
+    `SELECT avec_key, jusqua FROM marques_tchat_lus WHERE name_key = ? ORDER BY jusqua DESC LIMIT 500`
+  ).bind(cleLecteur).all();
+  return (results || []).map(r => ({ avec: r.avec_key, id: r.jusqua }));
+}
+
+/**
+ * Marquer lue la conversation avec `avec`, jusqu'au message `jusqua` (le
+ * dernier que l'ecran montre). On retient le dernier prive RECU de lui qui
+ * n'est pas plus loin : un id invente ne marque rien qui ne soit arrive, et
+ * un message arrive apres l'ouverture reste non lu. Ne recule jamais.
+ */
+export async function marquerLu(db, { cleLecteur, avec, jusqua }) {
+  await ensureTchatTables(db);
+  const avecKey = cle(avec);
+  const n = Number(jusqua);
+  if (!cleLecteur || !avecKey || avecKey === cleLecteur) return { status: 400, corps: { error: 'conversation invalide' } };
+  if (!Number.isInteger(n) || n <= 0) return { status: 400, corps: { error: 'message invalide' } };
+  const r = await db.prepare(
+    `SELECT MAX(id) AS id FROM marques_tchat
+      WHERE evenement = ? AND prive = 1 AND auteur_key = ? AND pour_key = ? AND id <= ?`
+  ).bind(EVENEMENT, avecKey, cleLecteur, n).first();
+  const id = r && r.id != null ? r.id : 0;
+  if (id) {
+    await db.prepare(
+      `INSERT INTO marques_tchat_lus (name_key, avec_key, jusqua) VALUES (?, ?, ?)
+       ON CONFLICT(name_key, avec_key) DO UPDATE SET jusqua = MAX(jusqua, excluded.jusqua)`
+    ).bind(cleLecteur, avecKey, id).run();
+  }
+  const l = await db.prepare(
+    `SELECT jusqua FROM marques_tchat_lus WHERE name_key = ? AND avec_key = ?`
+  ).bind(cleLecteur, avecKey).first();
+  return { status: 200, corps: { ok: true, avec: avecKey, id: (l && l.jusqua) || 0 } };
+}
+
+/**
+ * Les j'aime des derniers messages que ce lecteur peut lire : `{ id, n, moi }`,
+ * seulement ceux qui en ont. Le jeu les pose sur les messages qu'il a deja.
+ */
+async function compteurs(db, cleLecteur) {
+  const moi = cleLecteur || '';
+  const bas = await db.prepare(
+    `SELECT MIN(id) AS id FROM (SELECT id FROM marques_tchat
+       WHERE evenement = ? AND retire = 0 ORDER BY id DESC LIMIT ${FENETRE_AIMES})`
+  ).bind(EVENEMENT).first();
+  if (!bas || bas.id == null) return [];
+  const { results } = await db.prepare(
+    `SELECT a.message_id AS id, COUNT(*) AS n,
+            MAX(CASE WHEN a.name_key = ? THEN 1 ELSE 0 END) AS moi
+       FROM marques_tchat_aimes a
+       JOIN marques_tchat t ON t.id = a.message_id
+      WHERE a.message_id >= ? AND t.retire = 0
+        AND (t.prive = 0 OR t.auteur_key = ? OR t.pour_key = ?)
+      GROUP BY a.message_id`
+  ).bind(moi, bas.id, moi, moi).all();
+  return (results || []).map(r => ({ id: r.id, n: r.n, moi: !!r.moi }));
+}
+
+/**
+ * Aimer un message, ou ne plus l'aimer (`aime` faux). Rend le compteur a jour.
+ * Comme pour signaler : on n'aime que ce qu'on a pu lire, et pas le sien.
+ */
+export async function aimer(db, { id, cleLecteur, aime = true, maintenant = Date.now() }) {
+  await ensureTchatTables(db);
+  const n = Number(id);
+  if (!Number.isInteger(n) || n <= 0) return { status: 400, corps: { error: 'message invalide' } };
+  const m = await db.prepare(
+    `SELECT id, auteur_key, pour_key, prive FROM marques_tchat WHERE evenement = ? AND id = ? AND retire = 0`
+  ).bind(EVENEMENT, n).first();
+  if (!m) return { status: 404, corps: { error: 'message introuvable' } };
+  if (m.prive && m.pour_key !== cleLecteur && m.auteur_key !== cleLecteur) {
+    return { status: 403, corps: { error: 'ce message ne vous etait pas adresse' } };
+  }
+  if (m.auteur_key === cleLecteur) return { status: 400, corps: { error: 'son propre message' } };
+  if (await estBanni(db, cleLecteur)) return { status: 403, corps: { error: 'depot refuse' } };
+  if (aime) {
+    await db.prepare(
+      `INSERT OR IGNORE INTO marques_tchat_aimes (message_id, name_key, quand) VALUES (?, ?, ?)`
+    ).bind(n, cleLecteur, maintenant).run();
+  } else {
+    await db.prepare(`DELETE FROM marques_tchat_aimes WHERE message_id = ? AND name_key = ?`).bind(n, cleLecteur).run();
+  }
+  const c = await db.prepare(`SELECT COUNT(*) AS n FROM marques_tchat_aimes WHERE message_id = ?`).bind(n).first();
+  return { status: 200, corps: { ok: true, id: n, aimes: (c && c.n) || 0, aime: !!aime } };
 }
 
 /** Ce nom est-il reserve (une ligne dans `players`) ? */

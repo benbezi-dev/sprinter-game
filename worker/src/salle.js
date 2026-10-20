@@ -34,11 +34,40 @@ import { sousLePlancherTotal } from './plancher.js';
  * le 100 m quand rien n'est reconnaissable.
  */
 export function epreuvesDeSalle(demande) {
+  // LA MEUTE (18/10) : une salle de la nuit du molosse court UN trace de la
+  // nuit, et rien d'autre. Ces cles ne sont pas des epreuves du classement
+  // (EPREUVES) — elles n'ont ni record, ni duel, ni plancher — et c'est voulu :
+  // la nuit se court a plusieurs pour survivre, pas pour des points.
+  const premiere = String(demande || '').split(',')[0];
+  if (TRACES_DE_LA_NUIT.includes(premiere)) return [premiere];
   const connues = String(demande || '100').split(',')
     .filter(r => Object.prototype.hasOwnProperty.call(EPREUVES, r));
   const jeu = connues.length ? EPREUVES[connues[0]].jeu : 'sprinter';
   const eps = connues.filter(r => EPREUVES[r].jeu === jeu).slice(0, 3);
   return eps.length ? eps : ['100'];
+}
+
+/** Les cinq traces de la nuit du molosse (src/game/halloween-courses.js). */
+export const TRACES_DE_LA_NUIT = ['nuit-100', 'nuit-100v', 'nuit-200', 'nuit-300', 'nuit-400'];
+
+/** Cette salle court-elle une nuit du molosse ? */
+export function estUneNuit(epreuves) {
+  return Array.isArray(epreuves) && TRACES_DE_LA_NUIT.includes(epreuves[0]);
+}
+
+/**
+ * L'ORDRE D'ARRIVEE D'UNE NUIT A PLUSIEURS.
+ *
+ * Ceux qui ont passe la ligne d'abord, au chrono. Puis les mordus — et entre
+ * eux, celui qui est alle le plus loin avant que la bete ne le prenne passe
+ * devant : « mordu a 92 m » vaut mieux que « mordu a 31 m », et c'est ce
+ * que la meute veut savoir apres la course. Les abandons et les faux departs
+ * (sans distance) ferment la marche.
+ */
+export function cleDeNuit(x) {
+  if (x.fin < ABANDON_MS) return x.fin;
+  if (Number.isFinite(x.mordu)) return ABANDON_MS + 1 + (2000 - x.mordu);
+  return ABANDON_MS + 10000;
 }
 
 /**
@@ -349,6 +378,7 @@ export class SalleDirecte {
     this.joueurs = new Map();
     this.epreuves = null;      // fixees par le premier arrive
     this.niveau = 4;
+    this.nuit = null;          // la meute : le rang de la nuit courue, 1 a 13
     this.departA = null;       // date absolue du coup de pistolet, ms epoch
     this.presentationA = null; // date absolue du debut de la presentation
     this.ordre = [];           // les participants dans l'ordre des couloirs
@@ -389,6 +419,7 @@ export class SalleDirecte {
     }));
     return {
       joueurs, epreuves: this.epreuves, niveau: this.niveau, max: this.max,
+      ...(this.nuit ? { nuit: this.nuit } : {}),
       tournoi: t ? { ...t, en_lice: t.en_lice.slice(), elimines: t.elimines.slice() } : null,
       depart_a: this.departA, horloge: Date.now(), termine: this.termine,
       presentation: this.presentationA ? {
@@ -530,6 +561,16 @@ export class SalleDirecte {
     if (this.tournoiLance()) {
       return new Response('tournoi en cours', { status: 409 });
     }
+    // LA MEUTE NE S'OUVRE QU'A CEUX QUI ONT DEBLOQUE LA NUIT (consigne du
+    // 18/10). Les nuits s'ouvrent sur l'appareil — le calendrier et la
+    // victoire de la veille — et le jeu dit ici jusqu'ou il en est
+    // (`ouvertes`). Qui n'a pas encore tenu la nuit 1 ne court pas la 2 en
+    // meute : il la gagne seul d'abord. Le jeu le verifie avant de frapper ;
+    // la salle le reverifie pour tous ceux qui arrivent apres l'hote.
+    const ouvertes = parseInt(url.searchParams.get('ouvertes') || '0', 10);
+    if (this.nuit && this.joueurs.size > 0 && !(ouvertes >= this.nuit)) {
+      return new Response('nuit verrouillee', { status: 403 });
+    }
 
     const paire = new WebSocketPair();
     const [client, serveur] = Object.values(paire);
@@ -558,11 +599,22 @@ export class SalleDirecte {
       // trois couloirs (voir TOURNOI_MIN).
       this.tournoi = url.searchParams.get('tournoi') === '1' && this.max >= TOURNOI_MIN
         ? nouveauTournoi() : null;
+      // LA MEUTE : la nuit que l'hote a choisie. Pas de tournoi la-dedans —
+      // on n'elimine personne, c'est la bete qui s'en charge.
+      this.nuit = null;
+      if (estUneNuit(this.epreuves)) {
+        const k = parseInt(url.searchParams.get('nuit') || '1', 10);
+        const o = parseInt(url.searchParams.get('ouvertes') || '1', 10);
+        // l'hote non plus n'ouvre pas une nuit qu'il n'a pas debloquee
+        const plafond = Number.isFinite(o) && o >= 1 ? Math.min(13, o) : 1;
+        this.nuit = Number.isFinite(k) && k >= 1 ? Math.min(k, plafond) : 1;
+        this.tournoi = null;
+      }
     }
 
     this.joueurs.set(serveur, {
       id, nom, pret: false, d: 0, c: null, fin: null, parti: false,
-      couloir: null, forfait: false,
+      couloir: null, forfait: false, mordu: null,
     });
     this.vivante();
 
@@ -607,6 +659,9 @@ export class SalleDirecte {
       clearTimeout(this.minuteur); this.minuteur = null;
       return;
     }
+    // La meute : celui qui part en pleine course etait peut-etre le dernier
+    // qu'on attendait.
+    if (this.nuit && this.departA) { this.peutTrancher(); return; }
     // Le forfait a peut-etre ete la derniere arrivee qu'on attendait, ou le
     // dernier « pas pret » d'une pause.
     if (t && t.etat === 'manche') this.peutTrancher();
@@ -657,7 +712,9 @@ export class SalleDirecte {
           // faite pour qu'on se regarde avant de courir, et six secondes de
           // presentation face a des couloirs vides ne sont plus qu'une attente.
           // On passe directement au pistolet.
-          const seul = this.ordre.length < 2;
+          // La meute non plus : la presentation est un tour de parole, et
+          // l'ecran de la nuit n'en a pas — on part au pistolet.
+          const seul = this.ordre.length < 2 || !!this.nuit;
           this.presentationA = seul ? null : Date.now() + AVANT_PRESENTATION_MS;
           // Le pistolet tombe apres que tout le monde soit passe. Une seule
           // soustraction cote client suffit alors a savoir ou l'on en est.
@@ -668,7 +725,7 @@ export class SalleDirecte {
               + this.ordre.length * creneauPresentation()
               + attente;
           this.termine = false;
-          for (const x of this.joueurs.values()) { x.d = 0; x.c = null; x.fin = null; x.parti = false; }
+          for (const x of this.joueurs.values()) { x.d = 0; x.c = null; x.fin = null; x.parti = false; x.mordu = null; }
         }
         this.envoyerEtat();
         return;
@@ -738,6 +795,19 @@ export class SalleDirecte {
         return;
       }
 
+      // LA MEUTE : la bete l'a rattrape, a `d` metres du depart. C'est une
+      // fin de course comme un abandon, mais avec la distance tenue — c'est
+      // elle qui classe les mordus entre eux (cleDeNuit).
+      case 'mordu': {
+        if (!this.nuit || j.fin !== null) return;
+        const d = Number(m.d);
+        j.mordu = Number.isFinite(d) && d >= 0 && d <= 2000 ? Math.round(d * 10) / 10 : 0;
+        j.fin = ABANDON_MS;
+        this.diffuser({ t: 'fini', id: j.id, nom: j.nom, ms: j.fin, abandon: true, mordu: j.mordu });
+        this.peutTrancher();
+        return;
+      }
+
       // Abandon volontaire, ou faux depart eliminatoire.
       case 'abandon': {
         if (j.fin !== null) return;
@@ -772,7 +842,11 @@ export class SalleDirecte {
     if (this.tournoi) { this.trancherManche(); return; }
     if (this.termine) return;
     const tous = [...this.joueurs.values()];
-    if (tous.length < this.max || tous.some(x => x.fin === null)) return;
+    // LA MEUTE N'ATTEND PAS LES ABSENTS : un coureur qui ferme le jeu en
+    // pleine nuit ne passera jamais la ligne, et la salle attendrait sinon
+    // jusqu'a sa fermeture. Ceux qui restent suffisent a trancher.
+    const manque = this.nuit ? tous.length === 0 : tous.length < this.max;
+    if (manque || tous.some(x => x.fin === null)) return;
     this.termine = true;
     // De quelle course on parle : l'instant du pistolet, retenu avant d'etre
     // efface. Il ne sert qu'a nommer ce duel-la au classement, et il est le
@@ -805,16 +879,19 @@ export class SalleDirecte {
     // dans l'ordre du tri donnait « 1er » a l'un et « 2e » a l'autre pour le
     // meme temps, selon l'ordre ou les telephones s'etaient connectes — et
     // contredisait le tableau de course, qui donne deja la meme place aux deux.
-    const ordre = [...tous].sort((a, b) => a.fin - b.fin);
+    const cle = this.nuit ? cleDeNuit : (x => x.fin);
+    const ordre = [...tous].sort((a, b) => cle(a) - cle(b));
     const classement = ordre.map(x => ({
-      place: 1 + ordre.filter(y => y.fin < x.fin).length, id: x.id, nom: x.nom, ms: x.fin,
+      place: 1 + ordre.filter(y => cle(y) < cle(x)).length, id: x.id, nom: x.nom, ms: x.fin,
       abandon: x.fin >= ABANDON_MS,
+      ...(this.nuit && x.mordu != null ? { mordu: x.mordu } : {}),
     }));
 
     // `course` voyage avec le verdict : c'est l'instant du pistolet, le seul
     // nombre qui distingue une revanche de la course d'avant dans la meme
     // salle. Le jeu s'en sert pour tenir une ligne de journal par course.
-    const message = { t: 'resultat', classement, partants: tous.length, course };
+    const message = { t: 'resultat', classement, partants: tous.length, course,
+                      ...(this.nuit ? { nuit: this.nuit } : {}) };
 
     // A deux, on garde les champs historiques — l'issue, l'hote, l'invite —
     // pour que les versions du jeu qui ne lisent qu'eux continuent d'afficher
@@ -845,6 +922,9 @@ export class SalleDirecte {
     // Les series de championnat, elles, ont leur propre salle et leur propre
     // chemin d'enregistrement.
     if (tous.length < 2) return;
+    // LA MEUTE NE COMPTE PAS AUX DUELS : on y survit ensemble, on n'y prend
+    // de points a personne, et ses traces n'ont pas de classement.
+    if (this.nuit) return;
     const ecrire = this.ecrire(tous, course);
     if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
   }

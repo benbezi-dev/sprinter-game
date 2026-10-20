@@ -174,6 +174,8 @@
       tourbillons: true, arbres: 'cypres', pinceau: true,
       horizon: 6, lointain: [28, 52, 96], toiture: false, gradins: 2,
       village: true, villageSombre: [12, 24, 56], musique: 'nuit',
+      // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
+      heure: 'nuit',
       cypresSombre: [16, 38, 34], cypresClair: [48, 88, 58]
     },
     // Stade des Trois Soleils : la planete verte des mangas de combat, peinte
@@ -215,6 +217,8 @@
       // pelouse. Un theme qui ne les porte pas ne paie rien — le test se fait
       // sur le theme, pas sur le niveau.
       soleils: true, rochers: true, arbres: 'namek',
+      // l'heure du jour (heure-du-jour.js) ; la nuit, le ciel reste vert
+      heure: true, cielNuit: [[8, 30, 22], [30, 72, 52]],
       eau: [96, 214, 176], eauFond: [22, 150, 132],
       roche: [122, 176, 168], rocheSombre: [56, 110, 116],
       namekTronc: [206, 186, 142], namekChapeau: [34, 148, 118]
@@ -250,6 +254,8 @@
     // nom, aucun embleme, aucune typographie n'entre dans ce theme — voir
     // juridique/edition-danube.md.
     danube: {
+      // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
+      heure: 'nuit',
       // LE CIEL EST PLUS CLAIR QUE LE TOIT, et c'est ce qui donne au stade sa
       // silhouette. Peints tous les deux dans le meme violet sombre, la
       // toiture disparaissait purement et simplement : il ne restait qu'une
@@ -300,6 +306,8 @@
     // bordure de dix centimetres il ne fait plus qu'une chose, mais il la fait
     // bien : dire que ce qui est peint la n'est pas normal.
     halloween: {
+      // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
+      heure: 'nuit',
       // Un ciel de pleine lune : noir-violet en haut, un peu moins bas, et
       // beaucoup d'etoiles. La lune elle-meme est dessinee par le molosse
       // (halloween-molosse.js) et non par le theme : elle doit passer DEVANT
@@ -1134,13 +1142,56 @@
                     F(root + tri[i % tri.length], 5), cfg.arpAmp, 'pulse', 9);
           yield;
         }
-        // coups de tension : quinte diminuee sur le dernier temps
+        // coups de tension : quinte diminuee sur le dernier temps (ou la note
+        // que le morceau choisit : la seconde mineure du flamenco...)
         if (cfg.stab)
-          this.tone(d, t + beat * 3.5, beat * 0.45, F(root + 6, 4),
+          this.tone(d, t + beat * 3.5, beat * 0.45, F(root + (cfg.stabSemi ?? 6), 4),
                     cfg.stab, 'saw', 7);
+        // LES MUSIQUES DES DESTINATIONS DE LA LEGENDE (game/legende/race3-
+        // lieux.js) : race3 decline par pays. Des accords plaques sur les
+        // contretemps (le skank), et le refrain, couche par couche, joue par
+        // un instrument du pays fait des memes briques (`instrument`). Les
+        // morceaux qui n'en ont pas ne passent pas ici.
+        if (cfg.contretemps) {
+          const c = cfg.contretemps;
+          for (const x of c.temps) for (const n of tri)
+            this.instrument(c.instrument, d, t + x * beat, beat * 0.3, F(root + n, c.octave), c.amp);
+          yield;
+        }
+        for (const c of (cfg.couches || [])) {
+          for (const [s, x, l] of c.melodie[b % c.melodie.length]) {
+            this.instrument(c.instrument, d, t + x * beat, l * beat, F(s, c.octave), c.amp);
+            yield;
+          }
+        }
       }
       yield;
       return yield* this.normaliser(d);
+    },
+    /**
+     * Un instrument du refrain des destinations, rien que des `tone`
+     * superposes : `pincee` (guitare, koto, charango, guembri), `souffle`
+     * (flute, quena, shakuhachi, dizi), `anche` (zurna, accordeon, cuivres),
+     * `cloche` (kalimba, carillon, gong). Recopie dans
+     * tools/musique/legende-race3.mjs pour l'ecoute hors du navigateur.
+     */
+    instrument(nom, d, t, dur, f, a) {
+      if (nom === 'pincee') {
+        this.tone(d, t, dur * 1.6, f, a, 'saw', 7);
+        this.tone(d, t, dur * 0.8, f * 2, a * 0.35, 'pulse', 16);
+        this.tone(d, t, 0.03, f * 4, a * 0.25, 'saw', 60);
+      } else if (nom === 'souffle') {
+        this.tone(d, t, dur * 0.95, f, a, 'sin', 1.2);
+        this.tone(d, t, dur * 0.95, f * 2, a * 0.18, 'tri', 2.0);
+        this.tone(d, t, dur * 0.95, f * 1.004, a * 0.5, 'sin', 1.2);
+      } else if (nom === 'anche') {
+        this.tone(d, t, dur * 0.95, f, a * 0.8, 'pulse', 1.5);
+        this.tone(d, t, dur * 0.95, f * 1.003, a * 0.5, 'saw', 1.5);
+      } else if (nom === 'cloche') {
+        this.tone(d, t, dur * 2.5, f, a, 'sin', 4);
+        this.tone(d, t, dur * 1.2, f * 2.76, a * 0.4, 'sin', 9);
+        this.tone(d, t, dur * 0.6, f * 5.4, a * 0.2, 'sin', 16);
+      }
     },
 
     // HURDLERS A SA MUSIQUE, ET ELLE SE RECONNAIT A L'OREILLE.
@@ -4118,7 +4169,11 @@
     // Sorti au faux depart, on regarde : la camera accompagne le coureur
     // choisi, plus le joueur qui n'est plus sur la piste.
     const vise = (G.spectateur && G.suivi) || G.player;
-    const T = G.track, s = vise ? vise.d : 0, lane = 3;
+    // LA MEUTE DE LA NUIT (halloween.ts) : le mordu regarde celui que la bete
+    // chasse, et la camera va dans SON couloir. Au couloir 3, une camera aussi
+    // basse le laissait au bord de l'ecran, a moitie dehors.
+    const lane = G.spectateur && G.suivi && G.pasMolosse ? G.suivi.lane : 3;
+    const T = G.track, s = vise ? vise.d : 0;
     // La camera vise la position exacte du joueur (pas de decalage vers
     // l'avant) : combine a l'origine centree, il reste au milieu de l'ecran.
     //
@@ -8606,22 +8661,19 @@
     return eclaire(themeBrut());
   }
 
-  /**
-   * Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. Les
-   * sauts le prennent : chaque etape y a deja son heure (sauts-stades.js).
-   */
+  /** Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. */
   function themeBrut() {
     const lvl = LEVELS[G.levelIdx];
     return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
   }
 
   /**
-   * `th` a l'heure ou l'on joue (heure-du-jour.js), sauf pendant un saut.
-   * Rend `th` tel quel tant que le module n'est pas charge.
+   * `th` a l'heure ou l'on joue (heure-du-jour.js) — les sauts aussi depuis
+   * le 18/10. Rend `th` tel quel tant que le module n'est pas charge.
    */
   function eclaire(th) {
     const H = HEURE();
-    return H && !G.sautEnCours ? H.eclairer(th, G) : th;
+    return H ? H.eclairer(th, G) : th;
   }
 
   /**

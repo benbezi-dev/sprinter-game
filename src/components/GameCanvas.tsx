@@ -431,17 +431,15 @@ export function GameCanvas() {
         ctx.restore();
       }
 
-      // LA LUMIERE DE L'HEURE. Aux sauts, chaque etape a son stade et son
-      // heure (voir game/sauts-stades.js) ; ailleurs, c'est l'heure ou l'on
-      // joue (game/heure-du-jour.js) qui dore l'apres-midi et embrase le soir.
-      // Ni sur l'ouverture, ou il n'y a pas de stade, ni sur le generique, qui
-      // a sa propre nuit. Avant la vignette, qui ferme les bords de l'image
-      // deja etalonnee.
-      const ambiance = G.sautEnCours ? G.ambianceSaut
-        : (G.state === 'open' || accueilSansScene || (G.state === 'cut' && G.cut && G.cut.kind === 'ending'))
-          ? null : SprinterApp.theme().ambiance;
+      // LA LUMIERE DE L'HEURE. C'est l'heure ou l'on joue (game/heure-du-
+      // jour.js) qui dore l'apres-midi et embrase le soir — aux sauts aussi
+      // depuis le 18/10. Ni sur l'ouverture, ou il n'y a pas de stade, ni sur
+      // le generique, qui a sa propre nuit. Avant la vignette, qui ferme les
+      // bords de l'image deja etalonnee.
+      const ambiance = (G.state === 'open' || accueilSansScene || (G.state === 'cut' && G.cut && G.cut.kind === 'ending'))
+        ? null : SprinterApp.theme().ambiance;
       if (ambiance) appliquerAmbiance(ctx, ctx.canvas.width, ctx.canvas.height, ambiance,
-        G.sautEnCours ? 1 : (SprinterApp.theme().ambianceForce ?? 1));
+        SprinterApp.theme().ambianceForce ?? 1);
 
       if (Prem) {
         const enCourse = G.state === 'race';

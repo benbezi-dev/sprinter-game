@@ -69,7 +69,25 @@ export const navigateurValide = n => typeof n === 'string' && NAVIGATEURS_OK.has
 export const CHARGEMENT_MAX_MS = 120000;
 export const chargementValide = ms => Number.isInteger(ms) && ms >= 0 && ms <= CHARGEMENT_MAX_MS;
 
-const CONNUES = new Set([...ETAPES_TUNNEL, ...ETAPES_A_COTE]);
+/**
+ * LES TREIZE NUITS D'HALLOWEEN, nuit par nuit (16/10/2026).
+ *
+ * Trois marches par appareil : il a ouvert le mode, il a TENTE la nuit n, il
+ * l'a TENUE. Une premiere fois chacune, comme le reste du tunnel. C'est ce qui
+ * dit, pendant l'edition et pas apres, qu'une nuit bloque presque tout le
+ * monde — et les temps impartis sont des constantes du jeu
+ * (src/game/halloween-loi.js) : on les regle en un deploiement.
+ *
+ * A PART DU TUNNEL DES NOUVEAUX, et c'est voulu : ces marches se comptent sur
+ * TOUS les appareils (lireHalloween), pas sur la cohorte des appareils neufs.
+ */
+export const ETAPES_HALLOWEEN = [
+  'hw_entree',
+  ...Array.from({ length: 13 }, (_, i) => `hw_nuit_${i + 1}`),
+  ...Array.from({ length: 13 }, (_, i) => `hw_tenue_${i + 1}`),
+];
+
+const CONNUES = new Set([...ETAPES_TUNNEL, ...ETAPES_A_COTE, ...ETAPES_HALLOWEEN]);
 export const etapeConnue = e => typeof e === 'string' && CONNUES.has(e);
 
 const pret = new WeakSet();
@@ -242,5 +260,25 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
     par_navigateur: [...parNav.values()].sort((a, b) => b.n - a.n || a.navigateur.localeCompare(b.navigateur)),
     chargement: { n: chargements.length, mediane_ms: mediane(chargements), p90_ms: centile(chargements, 0.9) },
     sans_fiche: sansFiche,
+  };
+}
+
+/**
+ * Les treize nuits, sur tous les appareils : combien ont ouvert le mode, tente
+ * et tenu chaque nuit. `part` est la part des tentants qui ont tenu — la ou
+ * elle s'effondre, la nuit est trop dure.
+ */
+export async function lireHalloween(db) {
+  await ensureTunnel(db);
+  const { results } = await db.prepare(
+    `SELECT etape, COUNT(*) AS n FROM tunnel WHERE etape LIKE 'hw_%' GROUP BY etape`).all();
+  const n = new Map((results || []).map(r => [r.etape, r.n || 0]));
+  return {
+    entree: n.get('hw_entree') || 0,
+    nuits: Array.from({ length: 13 }, (_, i) => {
+      const tentee = n.get(`hw_nuit_${i + 1}`) || 0;
+      const tenue = n.get(`hw_tenue_${i + 1}`) || 0;
+      return { nuit: i + 1, tentee, tenue, part: tentee ? Math.round((tenue / tentee) * 1000) / 10 : null };
+    }),
   };
 }

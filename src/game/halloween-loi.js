@@ -60,8 +60,23 @@
  *     3 -> 11,0/s  100 m courbe  10 -> 13,0/s  200 m ligne
  *     4 -> 11,5/s  300 m ligne   11 -> 13,0/s  100 m
  *     5 -> 11,5/s  100 m         12 -> 14,25/s 400 m ligne
- *     6 -> 13,25/s 400 m ligne   13 -> 14,5/s  100 m en courbe
+ *     6 -> 12,25/s 400 m ligne   13 -> 14,5/s  100 m en courbe
  *     7 -> 10,25/s 200 m ligne
+ *
+ * UNE RETOUCHE LE 16/10, APRES AUDIT, FACILE A DEFAIRE :
+ *
+ *   — LA NUIT 1 RESTE A 9"10 (10,5 appuis/s). L'audit l'avait passee a 9"40
+ *     (9,25 appuis/s), pour que la porte de l'edition s'ouvre a tout le monde ;
+ *     l'auteur l'a jugee trop lente et l'a redescendue le 17/10 (« 9"40 c'est
+ *     trop lent »). Le tableau de bord dira combien la passent.
+ *   — LA NUIT 6 PASSE DE 36"20 A 36"35 (13,25 -> 12,25 appuis/s). Elle sautait
+ *     d'un appui trois quarts au-dessus de la 5, pendant trente-six secondes,
+ *     avant de redescendre a 10,25 sur la 7 : un mur au milieu du calendrier,
+ *     qui aurait arrete la plupart des joueurs le 24 octobre.
+ *
+ *   Le reste de l'echelle est celle de l'auteur, intacte. Le tableau de bord
+ *   compte maintenant les nuits tentees et tenues (game/halloween-mesure.ts) :
+ *   c'est lui qui dira s'il faut aller plus loin.
  *
  * LES DEUX TROIS CENTS METRES ONT ETE DES MURS, UNE HEURE. L'auteur les
  * voulait en 18"10 et 17"75 — des temps de deux cents metres, que le moteur
@@ -87,18 +102,22 @@
 // le buste qui bascule pour prendre de la vitesse (le pre-elan des
 // sprinteurs). Un cycle blocs / surpris / elan, la premiere nuit en blocs —
 // on decouvre le mode avec un depart connu — et la derniere surprise.
+//
+// LES NOMS SONT CEUX DES CHAPITRES DU RECIT (17/10, halloween-cinema.ts) :
+// tenir la nuit 4, c'est lire « La photo ». Les anciens noms (les cypres, le
+// caveau, le glas) etaient ceux d'un cimetiere que le decor n'a plus.
 export const NUITS = [
   { n: 1,  epreuve: 'nuit-100',  imparti: 9.10,  retard: 9, depart: 'blocs',  nom: ['La ruelle', 'The alley'] },
-  { n: 2,  epreuve: 'nuit-200',  imparti: 18.30, retard: 10, depart: 'surpris', nom: ['Le portail', 'The gate'] },
-  { n: 3,  epreuve: 'nuit-100v', imparti: 9.00,  retard: 8, depart: 'elan',  nom: ['Les cyprès', 'The cypresses'] },
-  { n: 4,  epreuve: 'nuit-300',  imparti: 26.85, retard: 11, depart: 'blocs', nom: ['La lune rousse', 'The blood moon'] },
-  { n: 5,  epreuve: 'nuit-100',  imparti: 8.95,  retard: 7, depart: 'surpris',  nom: ['Le caveau', 'The vault'] },
-  { n: 6,  epreuve: 'nuit-400',  imparti: 36.20, retard: 12, depart: 'elan', nom: ['Les corbeaux', 'The crows'] },
-  { n: 7,  epreuve: 'nuit-200',  imparti: 17.90, retard: 8, depart: 'blocs',  nom: ['La terre remuée', 'Turned earth'] },
-  { n: 8,  epreuve: 'nuit-100v', imparti: 8.90,  retard: 6, depart: 'surpris',  nom: ['Le glas', 'The knell'] },
-  { n: 9,  epreuve: 'nuit-300',  imparti: 26.70, retard: 9, depart: 'elan',  nom: ['Les cendres', 'The ashes'] },
-  { n: 10, epreuve: 'nuit-200',  imparti: 17.50, retard: 7, depart: 'blocs',  nom: ['Le souffle', 'The breath'] },
-  { n: 11, epreuve: 'nuit-100',  imparti: 8.80,  retard: 5, depart: 'surpris',  nom: ['La gueule', 'The jaws'] },
+  { n: 2,  epreuve: 'nuit-200',  imparti: 18.30, retard: 10, depart: 'surpris', nom: ['Le chrono', 'The watch'] },
+  { n: 3,  epreuve: 'nuit-100v', imparti: 9.00,  retard: 8, depart: 'elan',  nom: ['Le registre', 'The ledger'] },
+  { n: 4,  epreuve: 'nuit-300',  imparti: 26.85, retard: 11, depart: 'blocs', nom: ['La photo', 'The photograph'] },
+  { n: 5,  epreuve: 'nuit-100',  imparti: 8.95,  retard: 7, depart: 'surpris',  nom: ['Le reflet', 'The reflection'] },
+  { n: 6,  epreuve: 'nuit-400',  imparti: 36.35, retard: 12, depart: 'elan', nom: ['L’appel', 'The call'] },
+  { n: 7,  epreuve: 'nuit-200',  imparti: 17.90, retard: 8, depart: 'blocs',  nom: ['La porte murée', 'The bricked-up door'] },
+  { n: 8,  epreuve: 'nuit-100v', imparti: 8.90,  retard: 6, depart: 'surpris',  nom: ['Sous le lit', 'Under the bed'] },
+  { n: 9,  epreuve: 'nuit-300',  imparti: 26.70, retard: 9, depart: 'elan',  nom: ['Le nom', 'The name'] },
+  { n: 10, epreuve: 'nuit-200',  imparti: 17.50, retard: 7, depart: 'blocs',  nom: ['L’odeur', 'The scent'] },
+  { n: 11, epreuve: 'nuit-100',  imparti: 8.80,  retard: 5, depart: 'surpris',  nom: ['Le miroir', 'The mirror'] },
   { n: 12, epreuve: 'nuit-400',  imparti: 36.10, retard: 8, depart: 'elan',  nom: ['Minuit', 'Midnight'] },
   { n: 13, epreuve: 'nuit-100v', imparti: 8.70,  retard: 4, depart: 'surpris',  nom: ['La nuit du molosse', "The hound's night"] },
 ];

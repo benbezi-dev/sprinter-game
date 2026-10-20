@@ -26,7 +26,7 @@
   import { armerConcoursSaut, appelerSauteur } from '/src/game/longueur-course.js';
   import { appliquerAmbiance } from '/src/game/sauts-stades.js';
 
-  const { G, THEMES, LEVELS, drawWorld, drawAthletes } = SprinterApp;
+  const { G, LEVELS, drawWorld, drawAthletes } = SprinterApp;
   const cv = document.createElement('canvas');
   cv.width = 844 * 2; cv.height = 390 * 2;
   const ctx = cv.getContext('2d');
@@ -40,7 +40,8 @@
   for (let etape = 0; etape < 6; etape++) {
     armerConcoursSaut(etape, 'longueur');
     appelerSauteur({ vent: 0, lignes: [] });
-    const th = () => THEMES[LEVELS[G.levelIdx].theme];
+    // le stade a l'heure du joueur (heure-du-jour.js ; ?heure= pour forcer)
+    const th = () => SprinterApp.theme();
     // une image pour que le stade demande ses decors, puis le temps de les recevoir
     drawWorld(ctx, th());
     await new Promise(r => setTimeout(r, 1800));
@@ -50,13 +51,13 @@
     drawWorld(ctx, th());
     drawAthletes(ctx);
     // la lumiere de l'heure, comme GameCanvas la pose
-    appliquerAmbiance(ctx, G.VW, G.VH, G.ambianceSaut);
+    appliquerAmbiance(ctx, G.VW, G.VH, th().ambiance, th().ambianceForce ?? 1);
     const fig = document.createElement('figure');
     const img = document.createElement('canvas');
     img.width = cv.width; img.height = cv.height;
     img.getContext('2d').drawImage(cv, 0, 0);
     const cap = document.createElement('figcaption');
-    cap.textContent = `etape ${etape + 1} — ${NOMS[etape]} — ${LEVELS[G.levelIdx].name}${G.ambianceSaut ? ' — ' + G.ambianceSaut : ''}`;
+    cap.textContent = `etape ${etape + 1} — ${NOMS[etape]} — ${LEVELS[G.levelIdx].name}${SprinterApp.theme().moment ? ' — ' + SprinterApp.theme().moment : ''}`;
     fig.append(img, cap);
     grille.append(fig);
     etat.textContent = `etape ${etape + 1} faite`;

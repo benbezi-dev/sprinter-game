@@ -1,13 +1,13 @@
 // Le tchat du duel des marques (worker/src/tchat-marques.js), sur une base
 // SQLite en memoire : poster, designer, ecrire en prive, lire, bloquer,
-// signaler, retirer, inviter, et les cadences.
+// signaler, retirer, inviter, aimer, marquer lu, et les cadences.
 //
 //   node tools/tchat-marques-test.mjs
 import { DatabaseSync } from 'node:sqlite';
 import {
   poster, lire, participants, invitables, inviter, mesInvitations, signalerMessage,
   reserverSonnerie, ECART_MS, PAR_MINUTE, INVITS_PAR_JOUR, SONNERIE_TCHAT_MS,
-  posterOfficiel, imiteOfficiel,
+  posterOfficiel, imiteOfficiel, aimer, marquerLu,
 } from '../worker/src/tchat-marques.js';
 import { choisirCamp } from '../worker/src/marques.js';
 import { bloquer, trancher, listeSignalements } from '../worker/src/moderation.js';
@@ -143,10 +143,10 @@ ok('texte nettoye', r.corps.message.texte === 'Derniere ligne droite : le duel f
 r = await posterOfficiel(db, { texte: 'Tout sur sprinter-game.com', maintenant: pas(1) });
 ok('pas de filtre ni de cadence : un lien, une seconde apres', r.status === 200, r.corps);
 ok('vide refuse', (await posterOfficiel(db, { texte: '   ' })).status === 422);
-ok('141 caracteres refuses', (await posterOfficiel(db, { texte: 'x'.repeat(141) })).corps.raison === 'long');
+ok('sans limite de longueur (17/10)', (await posterOfficiel(db, { texte: 'x'.repeat(141) })).status === 200);
 a = await lu('alice'); b = await lu('bob');
 const off = m => m.officiel && m.de === 'SprinterGame' && m.camp === 'sprinter' && !m.a_moi && !m.prive;
-ok('Alice (adidas) et Bob (nike) le lisent, marque officiel', a.messages.filter(off).length === 2 && b.messages.filter(off).length === 2);
+ok('Alice (adidas) et Bob (nike) le lisent, marque officiel', a.messages.filter(off).length === 3 && b.messages.filter(off).length === 3);
 ok('les messages des joueurs ne sont pas officiels', a.messages.filter(m => m.de !== 'SprinterGame').every(m => m.officiel === false));
 for (const x of ['SprinterGame', 'Sprinter Game', 'sprinter_game', 'SPRINTER-GAME']) ok(`« ${x} » imite le compte`, imiteOfficiel(x));
 for (const x of ['Sprinter', 'SprinterGame2', 'Alice']) ok(`« ${x} » ne l imite pas`, !imiteOfficiel(x));
@@ -173,6 +173,52 @@ const apres = await participants(db, { duelOuvert: false, maintenant: t });
 ok('apres : participants = qui a ecrit (dont Dan), sans SprinterGame', apres.some(p => p.name === 'Dan') && !apres.some(p => p.name === 'SprinterGame') && apres.every(p => p.camp === 'joueur'), apres);
 a = await lu('bob');
 ok('les messages du duel restent lisibles apres', a.messages.some(m => m.camp === 'nike') && a.messages.some(m => m.camp === 'joueur'));
+
+titre('aimer');
+const msgDan = (await lu('alice')).messages.find(m => m.de === 'Dan' && !m.prive);
+r = await aimer(db, { id: msgDan.id, cleLecteur: 'alice' });
+ok('Alice aime le message de Dan', r.status === 200 && r.corps.aimes === 1 && r.corps.aime, r.corps);
+r = await aimer(db, { id: msgDan.id, cleLecteur: 'alice' });
+ok('deux fois : toujours un seul j aime', r.corps.aimes === 1);
+r = await aimer(db, { id: msgDan.id, cleLecteur: 'carla' });
+ok('Carla aussi : deux', r.corps.aimes === 2);
+r = await aimer(db, { id: msgDan.id, cleLecteur: 'dan' });
+ok('Dan ne peut pas aimer son message', r.status === 400);
+let vu = (await lu('alice')).messages.find(m => m.id === msgDan.id);
+ok('Alice lit : 2 j aime, dont le sien', vu.aimes === 2 && vu.aime === true, vu);
+vu = (await lu('dan')).messages.find(m => m.id === msgDan.id);
+ok('Dan lit : 2 j aime, pas le sien', vu.aimes === 2 && vu.aime === false, vu);
+let suiteA = await lire(db, { cleLecteur: 'dan', depuis: 1e9 });
+ok('une relecture sans message neuf rend quand meme les compteurs', suiteA.messages.length === 0 && suiteA.aimes.some(x => x.id === msgDan.id && x.n === 2), suiteA.aimes);
+r = await aimer(db, { id: msgDan.id, cleLecteur: 'alice', aime: false });
+ok('Alice retire son j aime : un', r.corps.aimes === 1 && r.corps.aime === false);
+const pv = (await lu('bob')).messages.find(m => m.prive && m.de === 'Carla');
+ok('aimer un prive qui ne vous est pas adresse : refuse', (await aimer(db, { id: pv.id, cleLecteur: 'dan' })).status === 403);
+ok('Bob aime le prive de Carla', (await aimer(db, { id: pv.id, cleLecteur: 'bob' })).status === 200);
+ok('Dan ne voit pas le compteur de ce prive', !(await lire(db, { cleLecteur: 'dan', depuis: 1e9 })).aimes.some(x => x.id === pv.id));
+ok('message inconnu : 404', (await aimer(db, { id: 999999, cleLecteur: 'bob' })).status === 404);
+ok('message retire : 404', (await aimer(db, { id: cible.id, cleLecteur: 'bob' })).status === 404);
+
+titre('prives lus');
+const lusDe = async k => (await lire(db, { cleLecteur: k, depuis: 1e9 })).lus;
+ok('rien de lu au depart', (await lusDe('bob')).length === 0);
+const recus = (await lu('bob')).messages.filter(m => m.prive && m.de === 'Carla');
+const dernierCarla = recus[recus.length - 1].id;
+r = await marquerLu(db, { cleLecteur: 'bob', avec: 'Carla', jusqua: dernierCarla });
+ok('Bob ouvre la conversation avec Carla : lue jusqu a son dernier prive', r.status === 200 && r.corps.avec === 'carla' && r.corps.id === dernierCarla, r.corps);
+let l = await lusDe('bob');
+ok('la lecture suivante rend la marque', l.length === 1 && l[0].avec === 'carla' && l[0].id === dernierCarla, l);
+r = await marquerLu(db, { cleLecteur: 'bob', avec: 'carla', jusqua: 1e9 });
+ok('un id invente ne marque que ce qui est arrive', r.corps.id === dernierCarla, r.corps);
+r = await marquerLu(db, { cleLecteur: 'bob', avec: 'carla', jusqua: 1 });
+ok('une marque ne recule pas', r.corps.id === dernierCarla, r.corps);
+r = await poster(db, { auteurKey: 'carla', auteurName: 'Carla', texte: 'encore moi', pour: 'Bob', prive: true, maintenant: pas() });
+l = await lusDe('bob');
+ok('un prive arrive apres : au-dela de la marque, donc non lu', r.corps.message.id > l[0].id);
+ok('Carla n a rien lu de Bob', (await lusDe('carla')).length === 0);
+ok('conversation avec soi-meme : refusee', (await marquerLu(db, { cleLecteur: 'bob', avec: 'Bob', jusqua: 5 })).status === 400);
+ok('id invalide : refuse', (await marquerLu(db, { cleLecteur: 'bob', avec: 'carla', jusqua: 'x' })).status === 400);
+ok('personne a qui on n a jamais parle : rien a marquer', (await marquerLu(db, { cleLecteur: 'bob', avec: 'zoe', jusqua: 5 })).corps.id === 0);
 
 console.log(e ? `\n   ${e} ECHEC(S)\n` : '\n   tout passe\n');
 process.exit(e ? 1 : 0);

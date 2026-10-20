@@ -22,9 +22,8 @@
 //     minuit le 25 octobre, soit trois heures AVANT la bascule — elle est
 //     encore à UTC+2. C'est la nuit 8, le 26, qui est la première à UTC+1.
 //
-//   — LA TREIZIÈME SUIT L'HEURE LOCALE DU JOUEUR, pas celle de Paris. Elle
-//     ouvre à 18 h chez lui. Un joueur à Tokyo et un joueur à Los Angeles ne
-//     la reçoivent pas au même instant absolu, et c'est voulu.
+//   — LA TREIZIÈME S'OUVRE COMME LES AUTRES, à 22 h de Paris (19/10). Elle
+//     suivait l'heure locale du joueur (18 h chez lui) ; plus maintenant.
 //
 //   — LE MODE HORS LIGNE EST LA PORTE DE DERRIÈRE ÉVIDENTE. Sans serveur, on
 //     ne doit jamais accorder un jour futur, et le cliquet doit tenir même
@@ -33,9 +32,10 @@
 //   node tools/halloween-calendrier-test.mjs
 
 import {
-  NB_NUITS, PREMIER_JOUR_UTC, HEURE_FINALE,
+  NB_NUITS, PREMIER_JOUR_UTC,
   ouvertureDe, ouverteAt, nuitsParLaDate, nuitsJouables, nuitJouable, blocageDe,
   horlogeRetenue, MEMOIRE_MUETTE,
+  poserHorloge, poserMonotone, maintenant, simuler,
 } from '../src/game/halloween-calendrier.ts';
 
 let e = 0;
@@ -50,15 +50,15 @@ const iso = ms => new Date(ms).toISOString().replace('.000Z', 'Z');
 titre('LES TREIZE DATES');
 
 ok('treize nuits', NB_NUITS === 13, String(NB_NUITS));
-ok('la première ouvre le 19 octobre à minuit à Paris',
-   ouvertureDe(1) === PREMIER_JOUR_UTC && iso(ouvertureDe(1)) === '2026-10-18T22:00:00Z',
+ok('la première ouvre le 19 octobre à 22 h à Paris (consigne du 19/10)',
+   ouvertureDe(1) === PREMIER_JOUR_UTC && iso(ouvertureDe(1)) === '2026-10-19T20:00:00Z',
    iso(ouvertureDe(1)));
-ok('la treizième tombe le 31 octobre',
-   new Date(ouvertureDe(13)).getUTCDate() === 30 &&
-   new Date(ouvertureDe(13)).getUTCHours() === 23,
+ok('la treizième tombe le 31 octobre au soir',
+   new Date(ouvertureDe(13)).getUTCDate() === 31 &&
+   new Date(ouvertureDe(13)).getUTCHours() === 21,
    iso(ouvertureDe(13)));
 
-ok('les treize s ouvrent dans l ordre, une par jour',
+ok('les treize s ouvrent dans l ordre, une par jour, à 22 h',
    (() => {
      for (let n = 2; n <= NB_NUITS; n++) {
        const d = ouvertureDe(n) - ouvertureDe(n - 1);
@@ -76,23 +76,24 @@ for (let n = 2; n <= NB_NUITS; n++) ecarts.push(ouvertureDe(n) - ouvertureDe(n -
 const court = ecarts.filter(d => d !== JOUR);
 ok('exactement un jour de la fenêtre ne dure pas vingt-quatre heures',
    court.length === 1, ecarts.map(d => (d / 3600000) + 'h').join(' '));
-// ET C'EST ENTRE LA NUIT 7 ET LA NUIT 8, pas entre la 6 et la 7 — ce harnais me
-// l'a appris en échouant sur ma propre étiquette. La nuit 7 ouvre à minuit le
-// 25 octobre, soit TROIS HEURES AVANT la bascule de 3 h du matin : elle est
-// encore à UTC+2. C'est la nuit 8, le 26, qui est la première à UTC+1.
-ok('et il sépare la nuit 7 de la nuit 8 — la 7 ouvre AVANT la bascule de 3 h',
-   court.length === 1 && ecarts.indexOf(court[0]) === 6 && court[0] === 25 * 3600000,
+// DEPUIS LE PASSAGE A 22 H (19/10), C'EST ENTRE LA NUIT 6 ET LA NUIT 7. La
+// nuit 7 ouvre le 25 octobre a 22 h, DIX-NEUF HEURES APRES la bascule de 3 h
+// du matin : elle est deja a UTC+1. A minuit, c'etait entre la 7 et la 8.
+ok('et il sépare la nuit 6 de la nuit 7 — la 7 ouvre APRÈS la bascule de 3 h',
+   court.length === 1 && ecarts.indexOf(court[0]) === 5 && court[0] === 25 * 3600000,
    court.length ? (court[0] / 3600000) + 'h entre la nuit ' + (ecarts.indexOf(court[0]) + 1)
                   + ' et la ' + (ecarts.indexOf(court[0]) + 2) : '—');
 
 // La preuve par l'absurde : le calcul naïf qu'on aurait pu écrire.
 const naif = n => PREMIER_JOUR_UTC + (n - 1) * JOUR;
-ok('le calcul naïf tient encore pour la nuit 7', naif(7) === ouvertureDe(7));
-ok('et se décale d une heure à partir de la nuit 8 — la moitié de l édition',
-   naif(8) !== ouvertureDe(8) && ouvertureDe(8) - naif(8) === 3600000,
-   `naïf ${iso(naif(8))} contre ${iso(ouvertureDe(8))}`);
-ok('les six dernières nuits seraient toutes décalées',
-   [8, 9, 10, 11, 12, 13].every(n => ouvertureDe(n) - naif(n) === 3600000));
+ok('le calcul naïf tient encore pour la nuit 6', naif(6) === ouvertureDe(6));
+ok('et se décale d une heure à partir de la nuit 7 — plus de la moitié de l édition',
+   naif(7) !== ouvertureDe(7) && ouvertureDe(7) - naif(7) === 3600000,
+   `naïf ${iso(naif(7))} contre ${iso(ouvertureDe(7))}`);
+ok('les sept nuits suivantes, de la 7 à la 13, seraient toutes décalées',
+   [7, 8, 9, 10, 11, 12, 13].every(n => ouvertureDe(n) - naif(n) === 3600000));
+ok('la nuit 7 s ouvre bien à 22 h à Paris (21 h UTC, heure d hiver)',
+   iso(ouvertureDe(7)) === '2026-10-25T21:00:00Z', iso(ouvertureDe(7)));
 
 /* -------------------------------------------------- les bornes, à la ms */
 
@@ -112,29 +113,21 @@ ok('rien au-delà de treize, même en décembre',
 
 /* ------------------------------------------- la treizième et l heure locale */
 
-titre('LA TREIZIEME SUIT L HEURE LOCALE DU JOUEUR');
+titre('LA TREIZIEME, A 22 H DE PARIS COMME LES AUTRES');
 
-// Paris (UTC+1 le 31 octobre) : 18 h locale = 17 h UTC.
-const parisMinuit31 = ouvertureDe(13);
-ok('à Paris, fermée à 17 h 59 locale',
-   ouverteAt(13, parisMinuit31 + (HEURE_FINALE * 3600000) - 60000, 60) === false);
-ok('à Paris, ouverte à 18 h 00 locale',
-   ouverteAt(13, parisMinuit31 + HEURE_FINALE * 3600000, 60) === true);
-
-// Un joueur à Tokyo (UTC+9) la reçoit huit heures plus tôt en absolu.
-const tokyo = ouverteAt(13, parisMinuit31 + (HEURE_FINALE - 8) * 3600000, 9 * 60);
-ok('à Tokyo, elle ouvre huit heures plus tôt en temps absolu', tokyo === true);
-
-// Los Angeles (UTC-7) : huit heures plus tard.
-ok('à Los Angeles, elle n est pas encore ouverte à la même seconde',
-   ouverteAt(13, parisMinuit31 + (HEURE_FINALE - 8) * 3600000, -7 * 60) === false);
-
-// LE FUSEAU EST UNE ENTRÉE DU JOUEUR, DONC IL EST BORNÉ. Sans plafond, se
-// déclarer à UTC+23 ouvrirait la finale la veille.
-const triche = ouverteAt(13, parisMinuit31, 23 * 60);
-const honnete = ouverteAt(13, parisMinuit31, 14 * 60);
-ok('un fuseau aberrant (UTC+23) n ouvre pas plus tôt que le plus avancé des vrais',
-   triche === honnete, `UTC+23 ${triche} / UTC+14 ${honnete}`);
+// Consigne du 19/10 : « mets-les tous a 22 h ». Le 31 octobre, Paris est a
+// UTC+1 : 22 h = 21 h UTC, et le meme instant pour tout le monde.
+const finale = ouvertureDe(13);
+ok('la treizième s ouvre le 31 octobre à 22 h à Paris',
+   iso(finale) === '2026-10-31T21:00:00Z', iso(finale));
+ok('fermée une minute avant', ouverteAt(13, finale - 60000) === false);
+ok('ouverte à 22 h 00', ouverteAt(13, finale) === true);
+ok('le fuseau de l appareil n y change rien (Tokyo, Los Angeles, UTC+23)',
+   [9 * 60, -7 * 60, 23 * 60].every(dec =>
+     ouverteAt(13, finale - 60000, dec) === false && ouverteAt(13, finale, dec) === true));
+ok('et toutes les nuits s ouvrent à 22 h à Paris',
+   Array.from({ length: NB_NUITS }, (_, i) => ouvertureDe(i + 1))
+     .every(t => new Date(t).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', hour: '2-digit' }).startsWith('22')));
 
 /* ----------------------------------------------------- le double verrou */
 
@@ -217,6 +210,36 @@ const memoireDePoche = () => { let v = null; return { lire: () => v, ecrire: x =
   ok('première visite hors ligne : on lit l appareil, faute de mieux',
      h.source === 'appareil');
   ok('un stockage refusé ne fait pas tomber le calcul', typeof h.ms === 'number');
+}
+
+/* ------------------------------------------------- l'horloge qui avance */
+
+titre('L HORLOGE AVANCE — LA NUIT S OUVRE A MINUIT SANS ROUVRIR LE PANNEAU');
+
+// LE BOGUE DU 16/10 : `maintenant()` rendait l'instant pose a l'ouverture du
+// panneau, fige. A 23 h 59 le soir du 19, la nuit 2 restait scellee pour qui
+// gardait le panneau ouvert, et le compte a rebours ne bougeait pas.
+{
+  let montre = 1000;
+  poserMonotone(() => montre);
+  const veille = ouvertureDe(2) - 60000;           // 23 h 59 a Paris, le 19
+  poserHorloge({ ms: veille, source: 'serveur' });
+  ok('a 23 h 59, la nuit 2 est encore scellee',
+     !nuitJouable(2, 1, maintenant()), new Date(maintenant()).toISOString());
+  montre += 90000;                                  // une minute et demie plus tard
+  ok('quatre-vingt-dix secondes plus tard, elle est ouverte',
+     nuitJouable(2, 1, maintenant()), new Date(maintenant()).toISOString());
+  ok('l heure a avance exactement du temps ecoule', maintenant() === veille + 90000);
+
+  // La montre monotone ne recule pas ; si elle le faisait, on ne recule pas.
+  montre -= 500000;
+  ok('une montre qui recule ne passe jamais sous l heure retenue', maintenant() === veille);
+
+  // Le voyageur temporel passe devant, et rend la main.
+  simuler(ouvertureDe(9));
+  ok('le jour simule remplace l horloge', maintenant() === ouvertureDe(9));
+  simuler(null);
+  ok('et la rend en partant', maintenant() === veille);
 }
 
 /* ------------------------------------------------------------- le fuseau */

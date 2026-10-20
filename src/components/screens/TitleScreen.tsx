@@ -57,6 +57,7 @@ import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
 import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT } from '@/game/canal';
+import { estHalloween } from '@/game/theme-accueil';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
 import { legendeAccessible, type ChoixCarriere } from '@/game/legende/compte';
@@ -349,6 +350,7 @@ export function TitleScreen() {
     <div style={efface
            ? { opacity: 0, pointerEvents: 'none' }
            : { opacity: 1, transition: 'opacity 240ms ease-out' }}
+         data-halloween={estHalloween() ? '' : undefined}
          className="w-full h-full flex flex-col pointer-events-auto overflow-hidden bg-black/20 px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),0.25rem)]">
       {/* Tout ce qui recoit le geste des mondes : l'accueil entier, le pied de
           page et les fenetres posees par-dessus exceptes. */}

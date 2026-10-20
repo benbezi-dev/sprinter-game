@@ -197,7 +197,7 @@ function image(url: string): HTMLImageElement | null {
 
 /** Pose une piece lointaine sur l'horizon, a l'abscisse et la taille de `pose`. */
 function poserAuLoin(ctx: CanvasRenderingContext2D, api: any, sm: any[], rOut: number, horizon: number,
-                     R: Image_, pose: Pose) {
+                     R: Image_, pose: Pose, nuit = false) {
   const { G } = api;
   // La derive d'un objet lointain : un metre couru le deplace d'un pixel
   // et demi, quand la piste en defile une vingtaine.
@@ -213,7 +213,20 @@ function poserAuLoin(ctx: CanvasRenderingContext2D, api: any, sm: any[], rOut: n
   // un monument large (temple, basilique) se borne en largeur
   const wMax = G.VW * pose.large;
   if (R.p.w * k > wMax) { k = wMax / R.p.w; h = R.p.ay * k; }
-  ctx.drawImage(R.im, pied[0] - R.p.ax * k, pied[1] - R.p.ay * k, R.p.w * k, R.p.h * k);
+  // l'heure du jour : la nuit le monument est eclaire (part `tour`, doree)
+  const Hr = (globalThis as any).SprinterHeure;
+  const im = Hr ? Hr.image(R.im, 'tour') : R.im;
+  const x0 = pied[0] - R.p.ax * k, y0 = pied[1] - R.p.ay * k;
+  if (nuit) {
+    // les projecteurs posent une lueur au pied du monument
+    const l = Math.max(R.p.w * k, h) * 0.6;
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(pied[0], pied[1], 0, pied[0], pied[1], l);
+    g.addColorStop(0, 'rgba(255,214,150,0.32)'); g.addColorStop(1, 'rgba(255,214,150,0)');
+    ctx.fillStyle = g; ctx.fillRect(pied[0] - l, pied[1] - l, l * 2, l * 2);
+    ctx.restore();
+  }
+  ctx.drawImage(im, x0, y0, R.p.w * k, R.p.h * k);
 }
 
 /**
@@ -259,7 +272,7 @@ export function lointainDe(lieu: string) {
   if (cle !== 'paris' && cle !== 'karman' && !IMAGES[cle]) return null;
   const pose: Pose = { ...POSE_PAR_DEFAUT, ...(POSES[cle] || {}) };
   const dieux = dieuxSpectateurs(lieu);
-  return function lointain(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rOut: number, horizon: number) {
+  return function lointain(ctx: CanvasRenderingContext2D, api: any, th: any, sm: any[], rOut: number, horizon: number) {
     // les colosses d'abord : ils sont plus loin que le temple
     if (dieux.length) {
       ctx.save();
@@ -273,7 +286,7 @@ export function lointainDe(lieu: string) {
     if (cle === 'karman') cielCeleste(ctx, api, pose);
     if (cle === 'apotheose') areneFlottante(ctx, api, sm, rOut, horizon);
     const R = piece(cle);
-    if (R) poserAuLoin(ctx, api, sm, rOut, horizon, R, pose);
+    if (R) poserAuLoin(ctx, api, sm, rOut, horizon, R, pose, !!th && th.moment === 'nuit');
   };
 }
 
@@ -599,7 +612,9 @@ function objetsDuLieu(ctx: CanvasRenderingContext2D, api: any, rIn: number, C: C
     poses.push([p[1], R.im, p[0], R.p.ax * kk, R.p.ay * kk, w, h, ((g >>> 5) & 1) === 1 && ob.img !== 'kiosque']);
   }
   poses.sort((a, b) => a[0] - b[0]);
-  for (const [y, im, x, ax, ay, w, h, retourne] of poses) {
+  const Hr = (globalThis as any).SprinterHeure;
+  for (const [y, im0, x, ax, ay, w, h, retourne] of poses) {
+    const im = Hr ? Hr.image(im0, 'proche') : im0;
     if (retourne) {
       ctx.save(); ctx.translate(x, 0); ctx.scale(-1, 1);
       ctx.drawImage(im, -ax, y - ay, w, h);
@@ -662,7 +677,7 @@ function guirlande(ctx: CanvasRenderingContext2D, api: any, rOut: number, C: Cul
         const pointe = api.scaleM() * 0.38;
         const bat = Math.sin(t * 3 + k * 0.8 + i0) * 0.12 * pointe;
         const c = coul[(k + i0) % coul.length];
-        ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+        ctx.fillStyle = vu(c as [number, number, number]);
         ctx.beginPath(); ctx.moveTo(q0[0], q0[1]); ctx.lineTo(q1[0], q1[1]);
         ctx.lineTo((q0[0] + q1[0]) / 2 + bat, (q0[1] + q1[1]) / 2 + pointe);
         ctx.closePath(); ctx.fill();
@@ -676,6 +691,13 @@ function guirlande(ctx: CanvasRenderingContext2D, api: any, rOut: number, C: Cul
  * paralleles a la piste, et quelques rochers mousseux, que les ratissages
  * contournent en cercles.
  */
+/** Une couleur ecrite en dur sous la lumiere de l'heure (heure-du-jour.js), part `proche`. */
+function vu(c: [number, number, number], a = 1): string {
+  const Hr = (globalThis as any).SprinterHeure;
+  const k = Hr ? Hr.couleur(c, 'proche') : c;
+  return a < 1 ? `rgba(${k[0]},${k[1]},${k[2]},${a})` : `rgb(${k[0]},${k[1]},${k[2]})`;
+}
+
 function karesansui(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: number) {
   const { G } = api;
   const u = api.ui(), m = api.scaleM();
@@ -684,11 +706,11 @@ function karesansui(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: num
   sm.forEach((s, i) => { const p = api.ground(...api.ptOf(s, rIn - 0.5)); i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]); });
   for (let i = sm.length - 1; i >= 0; i--) { const p = api.ground(...api.ptOf(sm[i], rIn - 60)); ctx.lineTo(p[0], p[1]); }
   ctx.closePath();
-  ctx.fillStyle = 'rgb(222,218,206)';
+  ctx.fillStyle = vu([222, 218, 206]);
   ctx.fill();
   ctx.clip();
   for (let k = 0; k < 70; k++) {
-    api.rail(ctx, sm, rIn - 0.9 - k * 0.32, k % 2 ? 'rgba(176,170,156,0.7)' : 'rgba(250,248,240,0.7)', 1 * u);
+    api.rail(ctx, sm, rIn - 0.9 - k * 0.32, k % 2 ? vu([176, 170, 156], 0.7) : vu([250, 248, 240], 0.7), 1 * u);
   }
   // les rochers, et leurs cercles ratisses
   const fin = api.samples(1);
@@ -706,18 +728,18 @@ function karesansui(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: num
       }
       ctx.stroke();
     };
-    ctx.fillStyle = 'rgb(222,218,206)';
+    ctx.fillStyle = vu([222, 218, 206]);
     ctx.beginPath();
     for (let a = 0; a <= 24; a++) {
       const q = api.ground(w0[0] + Math.cos(a / 24 * Math.PI * 2) * 2.6, w0[1] + Math.sin(a / 24 * Math.PI * 2) * 2.6);
       a ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
     }
     ctx.fill();
-    for (let k = 0; k < 5; k++) anneau(1.2 + k * 0.32, k % 2 ? 'rgba(176,170,156,0.8)' : 'rgba(250,248,240,0.8)', 1 * u);
-    anneau(0.95, 'rgba(96,124,82,0.95)', 5 * u);
+    for (let k = 0; k < 5; k++) anneau(1.2 + k * 0.32, k % 2 ? vu([176, 170, 156], 0.8) : vu([250, 248, 240], 0.8), 1 * u);
+    anneau(0.95, vu([96, 124, 82], 0.95), 5 * u);
     const r = (0.55 + (g % 40) / 100) * m;
     const roc = ctx.createRadialGradient(c[0] - r * 0.3, c[1] - r * 0.7, r * 0.1, c[0], c[1] - r * 0.3, r * 1.1);
-    roc.addColorStop(0, '#9C9A94'); roc.addColorStop(1, '#4E4C48');
+    roc.addColorStop(0, vu([156, 154, 148])); roc.addColorStop(1, vu([78, 76, 72]));
     ctx.fillStyle = roc;
     ctx.beginPath(); ctx.ellipse(c[0], c[1] - r * 0.35, r, r * 0.75, 0, 0, Math.PI * 2); ctx.fill();
   }
@@ -740,7 +762,7 @@ const MAILLOTS: [number, number, number][] = [
 ];
 const SHORTS: [number, number, number][] = [[30, 40, 80], [120, 96, 64], [40, 40, 46], [244, 244, 240]];
 const PEAUX_ENFANTS: [number, number, number][] = [[74, 46, 32], [92, 58, 40], [110, 70, 48], [128, 84, 58]];
-const rgbCss = (c: [number, number, number]) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const rgbCss = (c: [number, number, number]) => vu(c);
 
 function enfants(ctx: CanvasRenderingContext2D, api: any, sm: any[], rIn: number) {
   const { G } = api;
@@ -1146,6 +1168,8 @@ export function premierPlanDe(lieu: string) {
     const { G } = api;
     const k = (P.largeur * api.scaleM()) / R.p.w;
     const w = R.p.w * k, h = R.p.h * k;
+    const Hr = (globalThis as any).SprinterHeure;
+    const im = Hr ? Hr.image(R.im, 'proche') : R.im;
     for (let i = 1; i < sm.length; i += P.pas) {
       const p = api.solid(...api.ptOf(sm[i], rIn - P.recul), 0);
       const x = p[0] - R.p.ax * k, y = p[1] - R.p.ay * k;
@@ -1153,10 +1177,10 @@ export function premierPlanDe(lieu: string) {
       // une sur deux retournee : la plage n'aligne pas ses barques
       if (P.img === 'menole' && i % (2 * P.pas) === 1) {
         ctx.save(); ctx.translate(p[0], 0); ctx.scale(-1, 1);
-        ctx.drawImage(R.im, -R.p.ax * k, y, w, h);
+        ctx.drawImage(im, -R.p.ax * k, y, w, h);
         ctx.restore();
       } else {
-        ctx.drawImage(R.im, x, y, w, h);
+        ctx.drawImage(im, x, y, w, h);
       }
     }
   };

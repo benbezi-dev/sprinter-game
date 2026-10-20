@@ -1,7 +1,9 @@
 // LE CALENDRIER DES TREIZE NUITS — la seule source de vérité du temps.
 //
-// Treize courses, une par jour, du 19 au 31 octobre 2026. La treizième n'ouvre
-// qu'à 18 h le soir d'Halloween. Une course est jouable si SA DATE EST ATTEINTE
+// Treize courses, une par jour, du 19 au 31 octobre 2026, TOUTES à 22 h
+// (heure de Paris) — la première le lundi 19 au soir, pas à minuit, et la
+// treizième le soir d'Halloween à 22 h comme les autres (consignes de
+// l'auteur, 19/10 : « ce soir à 22 h », puis « mets-les tous à 22 h »). Une course est jouable si SA DATE EST ATTEINTE
 // et si LA PRÉCÉDENTE EST TENUE : deux verrous, et il faut les deux.
 //
 // UNE SEULE IMPLÉMENTATION, POUR LE JEU COMME POUR LES ESSAIS. Le voyageur
@@ -38,19 +40,26 @@ export const NB_NUITS = 13;
  * espacés d'exactement 86 400 000 ms : on ne peut pas les calculer par
  * multiplication. `ouvertureDe` passe par un calendrier réel.
  */
-export const PREMIER_JOUR_UTC = Date.UTC(2026, 9, 18, 22, 0, 0); // 19 oct., 00 h 00 à Paris
+export const PREMIER_JOUR_UTC = Date.UTC(2026, 9, 19, 20, 0, 0); // 19 oct., 22 h 00 à Paris
 
 /** Le dernier jour : la nuit d'Halloween. */
 export const DERNIER_JOUR_UTC = Date.UTC(2026, 9, 30, 23, 0, 0); // 31 oct., 00 h 00 à Paris (UTC+1)
 
 /**
- * L'heure à laquelle la treizième s'ouvre, le 31 octobre.
+ * L'heure à laquelle CHAQUE nuit s'ouvre, à Paris : 22 h.
  *
- * DIX-HUIT HEURES, HEURE LOCALE DU JOUEUR — c'est le brief, et c'est juste : la
- * nuit d'Halloween tombe le soir de chacun, pas le soir de Paris. Un joueur à
- * Montréal la joue à son heure, pas à minuit et demi.
+ * C'EST LA NUIT DU MOLOSSE, ET ELLE TOMBE LE SOIR. Elles s'ouvraient à minuit,
+ * si bien que l'édition est partie le 19 à 00 h 00 alors que l'auteur
+ * l'annonçait pour le soir, 22 h. Chaque nuit s'ouvre donc à 22 h de son
+ * jour — la nuit 2 le 20 à 22 h, et ainsi de suite jusqu'à la treizième, le
+ * 31 à 22 h.
+ *
+ * LA TREIZIÈME NE SUIT PLUS L'HEURE LOCALE. Elle s'ouvrait à 18 h chez chaque
+ * joueur ; l'auteur l'a remise à 22 h, Paris, avec les autres (19/10). Le même
+ * instant pour tout le monde, donc : le décalage du joueur n'entre plus dans
+ * aucun calcul, et changer le fuseau de son appareil n'ouvre rien.
  */
-export const HEURE_FINALE = 18;
+export const HEURE_DES_NUITS = 22;
 
 /** Le fuseau de Paris, en heures, avant et après le changement d'heure. */
 const PARIS_ETE = 2;
@@ -66,44 +75,42 @@ function decalageParis(ms: number): number {
 /**
  * L'instant où la nuit `n` s'ouvre, en UTC.
  *
- * Les douze premières s'ouvrent à minuit, heure de Paris ; la treizième à
- * 18 h — mais l'heure locale du joueur ne se connaît pas ici, où l'on ne parle
- * qu'en instants absolus. `ouverteAt` s'en charge, parce que lui reçoit le
- * décalage du joueur.
+ * Toutes à 22 h, heure de Paris, le soir de leur jour (HEURE_DES_NUITS).
  *
  * On passe par `Date.UTC` sur un jour de calendrier réel plutôt que par une
  * multiplication : le 25 octobre ne dure pas vingt-quatre heures à Paris.
  */
 export function ouvertureDe(n: number): number {
   const jour = 19 + (n - 1);           // 19 octobre pour la nuit 1
-  const minuitNaif = Date.UTC(2026, 9, jour, 0, 0, 0);
-  // On retire le décalage pour retomber sur minuit heure de Paris. Le décalage
-  // se lit sur l'instant approché, ce qui suffit : la bascule tombe à 3 h du
-  // matin, loin des minuits qu'on calcule.
-  return minuitNaif - decalageParis(minuitNaif) * 3600000;
+  const naif = Date.UTC(2026, 9, jour, HEURE_DES_NUITS, 0, 0);
+  // On retire le décalage de Paris À CETTE HEURE-LÀ, lu sur l'instant approché.
+  // Pas celui de minuit : le 25 octobre, minuit est encore à UTC+2 et 22 h
+  // déjà à UTC+1 — prendre le premier ouvrait la nuit 7 à 21 h (le harnais
+  // l'a vu). La bascule tombe à 3 h du matin, loin de 22 h comme de minuit.
+  return naif - decalageParis(naif) * 3600000;
 }
 
 /**
  * La nuit `n` est-elle ouverte par la DATE, à cet instant ?
  *
- * `decalageJoueur` est le décalage du joueur par rapport à UTC, en minutes,
- * tel que `-new Date().getTimezoneOffset()` le donne. Il ne sert qu'à la
- * treizième, qui suit l'heure locale.
- *
- * ET IL EST BORNÉ, PARCE QUE C'EST UNE ENTRÉE DU JOUEUR. Changer le fuseau de
- * son appareil est à la portée de tout le monde : sans borne, un joueur se
- * déclarant à UTC+23 ouvrirait la finale la veille. On plafonne donc à
- * l'éventail réel des fuseaux habités, de UTC-12 à UTC+14.
+ * `decalageJoueur` (le fuseau de l'appareil) n'a plus d'effet depuis que la
+ * treizième s'ouvre à 22 h de Paris comme les autres (19/10) : un fuseau
+ * trafiqué n'ouvre donc rien. Il reste dans la signature pour les appelants.
  */
 export function ouverteAt(n: number, maintenant: number, decalageJoueur = 0): boolean {
   if (n < 1 || n > NB_NUITS) return false;
-  const debut = ouvertureDe(n);
-  if (n < NB_NUITS) return maintenant >= debut;
+  return maintenant >= instantDOuverture(n, decalageJoueur);
+}
 
-  const dec = Math.max(-12 * 60, Math.min(14 * 60, decalageJoueur)) * 60000;
-  // 18 h chez le joueur, le 31 octobre de SON calendrier.
-  const localMinuit = ouvertureDe(NB_NUITS) + (decalageParis(debut) * 3600000) - dec;
-  return maintenant >= localMinuit + HEURE_FINALE * 3600000;
+/**
+ * L'instant exact où la nuit `n` s'ouvre POUR CE JOUEUR.
+ *
+ * Le même pour tous : 22 h à Paris, le soir de son jour.
+ */
+export function instantDOuverture(n: number, _decalageJoueur = 0): number {
+  // Toutes à 22 h de Paris (voir HEURE_DES_NUITS) : le décalage du joueur ne
+  // compte plus. Le paramètre reste pour les appelants.
+  return ouvertureDe(n);
 }
 
 /**
@@ -226,7 +233,7 @@ export function horlogeRetenue(duServeur: number | null, deLAppareil: number,
   //
   //    On accorde tout de même à l'appareil d'avancer DANS LA JOURNÉE déjà
   //    acquise : sans cela, un joueur hors ligne verrait le temps figé et la
-  //    finale ne s'ouvrirait jamais à 18 h pour lui.
+  //    nuit du jour ne s'ouvrirait jamais à 22 h pour lui.
   const plafond = plafondDuJour(hautEau);
   if (hautEau > 0 && deLAppareil > plafond) return { ms: plafond, source: 'cliquet' };
   if (hautEau > 0 && deLAppareil < hautEau) return { ms: hautEau, source: 'cliquet' };
@@ -266,6 +273,29 @@ function plafondDuJour(ms: number): number {
 let simule: number | null = null;
 let horlogeVraie: Horloge = { ms: 0, source: 'appareil' };
 
+/* L'HORLOGE AVANCE, ET C'EST LA MONTRE MONOTONE QUI LA FAIT AVANCER.
+
+   Elle ne le faisait pas (audit du 16/10) : `maintenant()` rendait l'instant
+   pose a l'ouverture du panneau, tel quel, pour toujours. Le « ouvre dans
+   14 h 20 min » ne bougeait pas, et a minuit — a 18 h pour la finale — la
+   nuit ne s'ouvrait pas tant qu'on n'avait pas ferme et rouvert le panneau.
+
+   On garde donc l'instant retenu ET le moment ou on l'a retenu, lu sur une
+   montre que le joueur ne regle pas : `performance.now()` part de zero au
+   chargement de la page et ne fait qu'avancer, quoi qu'on fasse a l'horloge
+   du telephone. L'instant courant est l'un plus le temps ecoule sur l'autre.
+
+   Ce que cette montre ne sait pas faire : avancer pendant que le telephone
+   dort (iOS la suspend). C'est l'ecran qui s'en charge — il redemande l'heure
+   au serveur quand la page revient au premier plan (voir PanneauMolosse). */
+let poseeA = 0;
+let monotone: () => number = () =>
+  (typeof performance !== 'undefined' && typeof performance.now === 'function')
+    ? performance.now() : Date.now();
+
+/** Remplacer la montre monotone — pour le harnais, qui fait passer le temps. */
+export function poserMonotone(f: () => number) { monotone = f; }
+
 /** Poser un instant simulé. `null` rend la main à l'horloge réelle. */
 export function simuler(ms: number | null) { simule = ms; }
 
@@ -273,12 +303,23 @@ export function simuler(ms: number | null) { simule = ms; }
 export function jourSimule(): number | null { return simule; }
 
 /** Ranger l'horloge réelle, telle que les garde-fous l'ont retenue. */
-export function poserHorloge(h: Horloge) { horlogeVraie = h; }
+export function poserHorloge(h: Horloge) { horlogeVraie = h; poseeA = monotone(); }
 
-/** L'instant que tout le jeu doit lire. */
+/** L'horloge a-t-elle déjà été réglée une fois ? */
+export function horlogeReglee(): boolean { return horlogeVraie.ms > 0; }
+
+/**
+ * L'instant que tout le jeu doit lire : celui qu'on a retenu, plus le temps
+ * réellement écoulé depuis.
+ *
+ * Avant tout réglage — personne n'a encore ouvert le mode — c'est l'horloge de
+ * l'appareil, faute de mieux. Les écrans qui décident d'une ouverture règlent
+ * l'horloge AVANT de lire (voir halloween-horloge.ts, horlogeImmediate).
+ */
 export function maintenant(): number {
   if (simule !== null) return simule;
-  return horlogeVraie.ms || Date.now();
+  if (!horlogeVraie.ms) return Date.now();
+  return horlogeVraie.ms + Math.max(0, monotone() - poseeA);
 }
 
 /** D'où vient l'instant courant. */

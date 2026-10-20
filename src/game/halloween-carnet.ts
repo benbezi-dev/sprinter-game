@@ -8,6 +8,11 @@
 // finie. Le §9 bis du brief l'exige, et c'est juste : sortir du mode test doit
 // rendre la progression réelle intacte, pas une progression contaminée.
 //
+// ET CE N'EST PAS THÉORIQUE : /test et le jeu partagent la même origine, donc
+// le même localStorage. Ce module a été écrit et éprouvé, puis laissé de côté
+// — le jeu écrivait toujours dans l'ancienne clé, commune aux deux. Il est
+// branché depuis le 16/10 (game/halloween.ts).
+//
 // AUCUN IMPORT ICI NON PLUS, même raison que game/halloween-calendrier.ts : le
 // harnais charge ce fichier nu sous node. Le stockage est donc passé en
 // paramètre, jamais appelé directement — ce qui a l'avantage de rendre les
@@ -20,7 +25,17 @@ export const VERSION = 1;
 export const CLE_JOUEUR = 'halloween2026.v1';
 export const CLE_TESTEUR = 'halloween2026.tester.v1';
 
-/** L'ancien carnet, celui de « La nuit du molosse ». */
+/**
+ * L'ancien carnet, celui de « La nuit du molosse ».
+ *
+ * IL APPARTIENT AUX TESTEURS, ET A EUX SEULS. Le mode n'a jamais ete ouvert en
+ * production avant l'edition : la seule copie du jeu qui ait jamais ecrit
+ * cette clef est celle de /test. Or /test et le jeu sont servis par la MEME
+ * ORIGINE (sprinter-game.com) et partagent donc le meme stockage — reprendre
+ * cette clef dans l'espace du joueur, c'etait y verser la progression des
+ * testeurs, voyageur temporel compris (audit du 16/10). Elle ne se reprend
+ * donc que dans l'espace testeur.
+ */
 export const CLE_ANCIENNE = 'sprinter_halloween';
 
 export type Carnet = {
@@ -109,8 +124,9 @@ export function sommeDe(c: Carnet): string {
  * Reprendre l'ancien carnet de « La nuit du molosse ».
  *
  * ON NE JETTE PAS CE QUI A ÉTÉ COURU. Le mode a vécu sur /test avant l'édition
- * datée ; des testeurs y ont des nuits tenues et des chronos. Les perdre à
- * l'ouverture serait leur reprendre quelque chose.
+ * datée ; des testeurs y ont des nuits tenues et des chronos. Les perdre serait
+ * leur reprendre quelque chose — on les reprend donc dans LEUR espace, jamais
+ * dans celui du joueur (voir CLE_ANCIENNE).
  *
  * Ce qui ne se reprend pas : `dernierJour`, qui n'existait pas. Il reste à zéro,
  * et le calendrier s'en accommode — la date ouvre ce qu'elle ouvre, la victoire
@@ -188,9 +204,10 @@ export function lire(r: Rangement, testeur: boolean): Lecture {
 
   if (!brut) {
     // Rien dans l'espace demandé. On ne reprend l'ancien carnet QUE pour le
-    // joueur : l'espace testeur doit naître vide, sinon il hériterait de la
-    // progression réelle et la contaminerait en retour.
-    if (testeur) return { carnet: carnetVide(), etat: 'neuf' };
+    // testeur : c'est /test, et lui seul, qui l'a écrit (voir CLE_ANCIENNE).
+    // Le joueur naît vide — sinon il hériterait, le 19 octobre, de l'édition
+    // que les testeurs ont finie au voyageur temporel.
+    if (!testeur) return { carnet: carnetVide(), etat: 'neuf' };
     let ancien: string | null = null;
     try { ancien = r.lire(CLE_ANCIENNE); } catch { ancien = null; }
     if (!ancien) return { carnet: carnetVide(), etat: 'neuf' };
@@ -214,7 +231,15 @@ export function lire(r: Rangement, testeur: boolean): Lecture {
 }
 
 export function ecrire(r: Rangement, testeur: boolean, c: Carnet): Carnet {
-  const scelle: Carnet = { ...c, v: VERSION };
+  // ON SCELLE CE QUE LA LECTURE RENDRA, PAS CE QU'ON NOUS DONNE (16/10). La
+  // lecture remet chaque champ dans ses bornes (normaliser) : un jour a la
+  // milliseconde fractionnaire y est arrondi, un chrono NaN y est jete. Scelle
+  // tel quel, le carnet se relisait donc DIFFERENT de ce qui avait ete scelle,
+  // le sceau ne correspondait plus, et la lecture le prenait pour une
+  // sauvegarde trafiquee : progression remise a zero apres la premiere nuit
+  // tenue. C'est l'essai en navigateur qui l'a montre, pas le harnais — d'ou
+  // le cas ajoute a tools/halloween-carnet-test.mjs.
+  const scelle: Carnet = normaliser({ ...c, v: VERSION } as unknown as Record<string, unknown>);
   delete scelle.sc;
   scelle.sc = sommeDe(scelle);
   try { r.ecrire(testeur ? CLE_TESTEUR : CLE_JOUEUR, JSON.stringify(scelle)); } catch { /* refusé */ }

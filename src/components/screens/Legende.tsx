@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bike, Car, Bus, Plane, Rocket, Lock, Crown, Medal, ChevronRight, ChevronLeft } from 'lucide-react';
@@ -14,9 +14,12 @@ import {
 } from '@/game/legende/legende';
 import { mot, chrono, dans } from '@/game/legende/mots';
 import { GlobeDuVoyage } from './LegendeGlobe';
+import { chargerLaMusiqueDuLieu } from '@/game/legende/musiques';
 import { CinematiqueKarman } from './LegendeKarman';
 import { CinematiqueVoyage, CinematiqueApotheose, CinematiqueSacre } from './LegendeCinematiques';
 import { PORTRAITS, TEINTES } from './legende-commun';
+import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
+import { ReviewVideo } from './ReviewVideo';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE LEGENDE — les ecrans du mode
@@ -229,7 +232,10 @@ function AfficheVS({ onPartir, onFermer }: { onPartir: () => void; onFermer: () 
   // en avion (LegendeCinematiques.tsx), la montee vers Karman
   // (LegendeKarman.tsx), puis vers l'apotheose.
   const [voyage, setVoyage] = useState(false);
-  const partir = () => setVoyage(true);
+  // la musique du lieu se charge des l'affiche (et encore au depart, si le
+  // son n'etait pas pret) : elle doit etre la au pistolet
+  useEffect(() => { void chargerLaMusiqueDuLieu(lieu.cle); }, [lieu.cle]);
+  const partir = () => { void chargerLaMusiqueDuLieu(lieu.cle); setVoyage(true); };
 
   return (
     // OPAQUE : l'affiche est un ecran a part entiere, pas un voile sur
@@ -375,6 +381,11 @@ export function FinDEtapeLegende() {
   const [annonce, setAnnonce] = useState(false);
   // la Legende accomplie : le sacre passe avant le verdict
   const [sacre, setSacre] = useState(() => v.accomplie);
+  // LA VIDEO DE L'ETAPE (demande du 20/10/2026). La Legende court en one shot,
+  // donc le crochet (film-course.ts) la filme deja ; il ne manquait qu'un
+  // endroit pour la proposer. `ReviewVideo` se montre pour une etape gagnee,
+  // perdue OU un faux depart — des qu'il y a un film.
+  const film = useFilmDeLaCourse();
   if (state !== 'winall') return null;
 
   const teinte = TEINTES[v.rang];
@@ -420,6 +431,12 @@ export function FinDEtapeLegende() {
           </span>
         )}
         {!v.gagne && <span className="text-[11px] text-white/55">{mot('regle_perte')}</span>}
+
+        {/* La video de l'etape, au-dessus des boutons : elle se partage comme
+            sur les autres ecrans de fin. */}
+        <div className="w-full">
+          <ReviewVideo etat={film} onPartager={partagerLeFilm} />
+        </div>
 
         <div className="w-full flex gap-2 mt-1">
           {v.gagne && !v.accomplie && (

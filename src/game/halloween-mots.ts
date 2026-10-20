@@ -13,6 +13,7 @@
 // anglais], dans cet ordre, comme UI dans sprinter-i18n.js.
 
 import { SprinterI18N } from './engine';
+import { EST_TEST } from './canal';
 
 type Paire = [string, string];
 
@@ -29,6 +30,12 @@ const MOTS: Record<string, Paire> = {
   hw_nuits:      ['LES TREIZE NUITS', 'THE THIRTEEN NIGHTS'],
   hw_nuit_n:     ['NUIT {n}', 'NIGHT {n}'],
   hw_imparti:    ['{s} s pour passer', '{s}s to get through'],
+  // les cinq traces (halloween-courses.js), dont le libelle n'existe qu'en francais
+  'hw_trace_nuit-100':  ['100 M', '100 M'],
+  'hw_trace_nuit-100v': ['100 M EN COURBE', '100 M ON THE BEND'],
+  'hw_trace_nuit-200':  ['200 M EN LIGNE', '200 M STRAIGHT'],
+  'hw_trace_nuit-300':  ['300 M EN LIGNE', '300 M STRAIGHT'],
+  'hw_trace_nuit-400':  ['400 M EN LIGNE', '400 M STRAIGHT'],
   // le depart de la nuit (voir `depart` dans halloween-loi.js)
   hw_dep_blocs:   ['dans les blocs', 'from the blocks'],
   hw_dep_surpris: ['départ surpris', 'caught off guard'],
@@ -40,19 +47,13 @@ const MOTS: Record<string, Paire> = {
   hw_cal_titre:  ['LE CALENDRIER', 'THE CALENDAR'],
   hw_cal_sous:   ['une nuit par jour, du 19 au 31 octobre',
                   'one night a day, 19 to 31 October'],
-  hw_scelle:     ['scellée', 'sealed'],
   hw_ouvre_dans: ['ouvre dans {d}', 'opens in {d}'],
-  hw_ouvre_le:   ['ouvre le {d}', 'opens {d}'],
-  hw_ce_soir:    ['ouvre à 18 h', 'opens at 6 pm'],
-  hw_aujourdhui: ["CE SOIR", 'TONIGHT'],
+  // les durees du compte a rebours — elles etaient ecrites en dur, en francais
+  hw_duree_j:    ['{j} j {h} h', '{j}d {h}h'],
+  hw_duree_h:    ['{h} h {m} min', '{h}h {m}m'],
+  hw_duree_m:    ['{m} min', '{m} min'],
+  hw_date:       ['{d} oct.', 'Oct {d}'],
 
-  // --- le mode test
-  hw_test_bandeau: ['MODE TEST', 'TEST MODE'],
-  hw_test_jour:    ['jour simulé : {d}', 'simulated day: {d}'],
-  hw_test_reel:    ['heure réelle', 'real time'],
-  hw_test_tout:    ['tout ouvert', 'all unlocked'],
-  hw_test_source:  ['heure : {s}', 'time: {s}'],
-  hw_test_voyage:  ['VOYAGEUR TEMPOREL', 'TIME TRAVELLER'],
   hw_tenue:      ['TENUE', 'HELD'],
   hw_partir:     ['PARTIR', 'GO'],
   hw_fermer:     ['PLUS TARD', 'LATER'],
@@ -68,8 +69,16 @@ const MOTS: Record<string, Paire> = {
     + 'it counts what you have left.',
   ],
 
+  // --- l'avertissement et le confort (16/10 : la bete fait du bruit)
+  hw_avertissement: [
+    'Sons inquiétants, sursauts, flashs rouges et vibrations. Joue avec le son — au casque, c\'est pire.',
+    'Unsettling sounds, jump scares, red flashes and vibration. Play with sound on — headphones make it worse.',
+  ],
+  hw_frayeur:      ['Frayeur réduite', 'Reduced scares'],
+  hw_frayeur_sous: ['moins de sursauts, pas de secousse — la bête reste audible',
+                    'fewer jump scares, no shaking — you can still hear the beast'],
+
   // --- pendant la course
-  hw_reste:      ['RESTE', 'LEFT'],
   hw_derriere:   ['{m} m', '{m}m'],
   hw_dans_lecou: ['DANS TON COU', 'ON YOUR HEELS'],
 
@@ -78,6 +87,20 @@ const MOTS: Record<string, Paire> = {
   hw_mordu:      ['IL T\'A EU', 'IT GOT YOU'],
   hw_chrono:     ['{s} s', '{s}s'],
   hw_marge:      ['{s} s d\'avance sur lui', '{s}s ahead of it'],
+  hw_frole:      ['il est passé à {m} m de toi', 'it came within {m}m of you'],
+  hw_prochaine:  ['nuit {n} · ouvre dans {d}', 'night {n} · opens in {d}'],
+  // --- le recit (halloween-cinema.ts, LE RECIT) : un chapitre par nuit tenue
+  hw_ch_n:       ['CHAPITRE {n}', 'CHAPTER {n}'],
+  hw_la_suite:   ['LA SUITE · CHAPITRE {n}', 'NEXT · CHAPTER {n}'],
+  hw_ch_ouvert:  ['la nuit {n} est ouverte', 'night {n} is open'],
+  hw_ch_ferme:   ['Le chapitre {n} est de l\'autre côté de la ligne.',
+                  'Chapter {n} is on the other side of the line.'],
+  hw_lire:       ['LIRE', 'READ'],
+  hw_refermer:   ['FERMER', 'CLOSE'],
+  hw_recit:      ['LE RÉCIT', 'THE STORY'],
+  hw_recit_lu:   ['{n} / {t} chapitres', '{n} / {t} chapters'],
+  hw_toucher:    ['touche pour continuer', 'tap to continue'],
+  hw_suite_nuit: ['tiens la nuit {n} pour le lire', 'hold night {n} to read it'],
   hw_manque:     ['il te manquait {m} m', 'you were {m}m short'],
   hw_suivante:   ['NUIT SUIVANTE', 'NEXT NIGHT'],
   hw_encore:     ['ENCORE', 'AGAIN'],
@@ -85,12 +108,101 @@ const MOTS: Record<string, Paire> = {
   hw_toutes:     ['LES TREIZE NUITS SONT TOMBÉES', 'ALL THIRTEEN NIGHTS ARE DOWN'],
   hw_toutes_sous: ['La quatorzième n\'est pas sur le calendrier. Elle viendra quand même.',
                    'The fourteenth is not on the calendar. It will come anyway.'],
-  hw_suite:      ['toucher pour continuer', 'tap to continue'],
+
+  // --- le film d'intro, a la premiere ouverture (Halloween.tsx)
+  hw_intro_passer: ['PASSER', 'SKIP'],
+  hw_intro_son:    ['ACTIVER LE SON', 'SOUND ON'],
+  hw_intro_charge: ['chargement…', 'loading…'],
+  hw_intro_revoir: ['REVOIR L\'INTRO', 'WATCH THE INTRO AGAIN'],
+
+  // --- la meute : la nuit a plusieurs, jusqu'a huit (halloween-meute.ts)
+  hw_m_titre:     ['LA MEUTE', 'THE PACK'],
+  hw_m_sous:      ['jusqu\'à 8 sur la même nuit, une seule bête', 'up to 8 on the same night, one beast'],
+  hw_m_entrer:    ['À PLUSIEURS', 'WITH FRIENDS'],
+  hw_m_regle:     ['Une seule bête pour toute la meute, au même pistolet. Ceux qui passent la ligne avant elle survivent ; les autres sont classés par la distance où elle les a pris. On ne court en meute que les nuits que chacun a déjà débloquées. Rien ne s\'inscrit au récit : il se gagne seul.',
+                   'One beast for the whole pack, on the same gun. Those who cross before it survive; the others are ranked by how far they got before it took them. A pack only runs nights every runner has already unlocked. Nothing counts toward the story: that one you earn alone.'],
+  hw_m_ouvrir:    ['OUVRIR UNE MEUTE', 'START A PACK'],
+  hw_m_nuit:      ['la nuit', 'the night'],
+  hw_m_places:    ['coureurs', 'runners'],
+  hw_m_creer:     ['OUVRIR', 'OPEN'],
+  hw_m_rejoindre: ['REJOINDRE', 'JOIN'],
+  hw_m_code:      ['CODE', 'CODE'],
+  hw_m_nom:       ['ton nom', 'your name'],
+  hw_m_nom_requis: ['un nom d\'abord : la meute doit savoir qui elle perd', 'a name first: the pack needs to know who it loses'],
+  hw_m_connexion: ['on cherche la meute…', 'finding the pack…'],
+  hw_m_salon:     ['MEUTE {code}', 'PACK {code}'],
+  hw_m_inviter:   ['ENVOIE LE CODE OU LE LIEN', 'SEND THE CODE OR THE LINK'],
+  hw_m_copier:    ['COPIER LE LIEN', 'COPY LINK'],
+  hw_m_copie:     ['COPIÉ', 'COPIED'],
+  hw_m_partager:  ['PARTAGER', 'SHARE'],
+  hw_m_invitation: ['Rejoins ma meute sur Sprinter — la nuit du molosse, code {code}', 'Join my pack on Sprinter — the hound\'s night, code {code}'],
+  hw_m_attente:   ['la meute part quand les {n} sont là et prêts', 'the pack goes when all {n} are in and ready'],
+  hw_m_place_vide: ['place libre', 'open spot'],
+  hw_m_pret:      ['JE SUIS PRÊT', 'I\'M READY'],
+  hw_m_plus_pret: ['PAS ENCORE', 'NOT YET'],
+  hw_m_est_pret:  ['PRÊT', 'READY'],
+  hw_m_attend:    ['attend', 'waiting'],
+  hw_m_toi:       ['toi', 'you'],
+  hw_m_hote:      ['a ouvert', 'host'],
+  hw_m_quitter:   ['QUITTER', 'LEAVE'],
+  hw_m_err_reseau: ['la meute ne répond pas — réessaie', 'the pack is not answering — try again'],
+  hw_m_err_introuvable: ['aucune meute sous ce code', 'no pack under this code'],
+  hw_m_err_pas_une_nuit: ['ce code ouvre une course, pas une nuit', 'this code opens a race, not a night'],
+  hw_m_err_complete: ['cette meute est complète', 'this pack is full'],
+  hw_m_err_en_course: ['cette meute court déjà', 'this pack is already running'],
+  hw_m_err_fermee: ['la meute s\'est dispersée', 'the pack has scattered'],
+  hw_m_err_verrouillee: ['tu n\'as pas encore débloqué la nuit {n} : tiens-la seul d\'abord, puis reviens courir avec la meute',
+                         'you haven\'t unlocked night {n} yet: get through it alone first, then come back and run with the pack'],
+  hw_m_err_acces: ['accès de test manquant', 'missing test access'],
+  hw_m_survit:    ['TU AS TENU', 'YOU MADE IT'],
+  hw_m_mordu_a:   ['mordu à {m} m', 'taken at {m}m'],
+  hw_m_en_course: ['court encore · {m} m', 'still running · {m}m'],
+  hw_m_faux:      ['sorti au départ', 'out at the start'],
+  hw_m_survivants: ['{n} sur {t} ont tenu', '{n} of {t} made it'],
+  hw_m_personne:  ['la bête les a tous pris', 'the beast took them all'],
+  hw_m_pris:      ['LA BÊTE T\'A PRIS · TU REGARDES LA MEUTE', 'THE BEAST GOT YOU · WATCHING THE PACK'],
+  hw_m_chasse:    ['elle chasse {n}', 'it is hunting {n}'],
+  hw_m_top_ouvrir: ['INVITER DES COUREURS DU TOP 500', 'INVITE RUNNERS FROM THE TOP 500'],
+  hw_m_top_titre:  ['LE TOP 500', 'THE TOP 500'],
+  hw_m_top_places: ['{n} place(s) libre(s) — leur téléphone sonne, ils rejoignent d\'un toucher', '{n} open spot(s) — their phone rings, they join with one tap'],
+  hw_m_top_plein:  ['la meute est pleine', 'the pack is full'],
+  hw_m_top_chercher: ['chercher un nom', 'search a name'],
+  hw_m_top_inviter: ['INVITER', 'INVITE'],
+  hw_m_top_invite: ['INVITÉ', 'INVITED'],
+  hw_m_top_dedans: ['DANS LA MEUTE', 'IN THE PACK'],
+  hw_m_top_hors:   ['INJOIGNABLE', 'UNREACHABLE'],
+  hw_m_top_injoignable: ['{n} n\'a pas réservé son nom : impossible de le joindre', '{n} has not claimed their name: cannot be reached'],
+  hw_m_top_nom:    ['réserve ton nom pour inviter (vestiaire → ton nom)', 'claim your name to invite (locker room → your name)'],
+  hw_m_top_fini:   ['RETOUR À LA MEUTE', 'BACK TO THE PACK'],
+  hw_m_enligne_ouvrir: ['INVITER DES JOUEURS EN LIGNE', 'INVITE PLAYERS ONLINE'],
+  hw_m_enligne_titre:  ['JOUEURS EN LIGNE', 'PLAYERS ONLINE'],
+  hw_m_enligne_vide:   ['personne de disponible en ligne pour l\'instant', 'nobody available online right now'],
+  hw_m_revanche:  ['ENCORE UNE NUIT', 'ONE MORE NIGHT'],
+  hw_m_revanche_ok: ['PRÊT · {n}/{t}', 'READY · {n}/{t}'],
+  hw_m_attendre:  ['on attend les derniers…', 'waiting for the last ones…'],
 };
+
+/**
+ * LES MOTS DU MODE TEST, A PART ET DERRIERE `EST_TEST`.
+ *
+ * Le mode s'ouvre au public (game/halloween-ouverture.js) et ses mots partent
+ * avec lui ; ceux des outils du testeur — le bandeau, le voyageur temporel —
+ * ne doivent pas suivre. `EST_TEST` se replie a la compilation : en
+ * production, cette table est un objet vide et le bundler retire le reste
+ * (verifie par tools/molosse-canal-test.mjs).
+ */
+const MOTS_TEST: Record<string, Paire> = EST_TEST ? {
+  hw_test_bandeau: ['MODE TEST', 'TEST MODE'],
+  hw_test_jour:    ['jour simulé : {d}', 'simulated day: {d}'],
+  hw_test_reel:    ['heure réelle', 'real time'],
+  hw_test_tout:    ['tout ouvert', 'all unlocked'],
+  hw_test_source:  ['heure : {s}', 'time: {s}'],
+  hw_test_voyage:  ['VOYAGEUR TEMPOREL', 'TIME TRAVELLER'],
+} : {};
 
 /** Un mot du mode, dans la langue courante, avec ses variables. */
 export function mot(cle: string, vars?: Record<string, string>): string {
-  const paire = MOTS[cle];
+  const paire = MOTS[cle] || MOTS_TEST[cle];
   let s = paire ? paire[SprinterI18N.index()] : cle;
   if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
   return s;

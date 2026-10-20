@@ -6,7 +6,8 @@
 // DEUX VERROUS EN SERIE, CHACUN JUSTE, ET PERSONNE NE PASSE.
 //
 //   HALLOWEEN_OUVERT (canal.ts)  decide QUI voit le mode  — le canal de test.
-//   la fenetre       (edition.ts) decide QUAND on l'annonce — des le 24 octobre.
+//   la fenetre       (edition.ts) decide QUAND on l'annonce — des le 19 octobre
+//                                (le 24 jusqu'au 16/10).
 //
 // Relu separement, chacun etait bien regle, et c'est pour cela que personne
 // n'a rien vu. Leur INTERSECTION, elle, etait vide jusqu'au 24 octobre : le
@@ -23,11 +24,24 @@
 // mais ce qui ARRIVE dans le paquet du joueur.
 //
 //   node tools/molosse-canal-test.mjs
+//
+// L'OUVERTURE AU PUBLIC (16/10). Le mode a un interrupteur, un seul :
+// `HALLOWEEN_PUBLIC` (src/game/halloween-ouverture.js). Ce harnais le lit et
+// verifie CE QUE L'INTERRUPTEUR PROMET, dans un sens comme dans l'autre :
+//
+//   ferme   rien du mode dans le paquet public — ni code, ni musique, ni nom ;
+//   ouvert  TOUT le mode dans le paquet public — code, musique, bete en
+//           volume, cartes —, et les outils du testeur toujours dehors.
+//
+// Avant lui, ouvrir le mode en production aurait servi les nuits sans leur
+// musique ni leur bete : ce harnais-ci aurait applaudi, il ne verifiait que
+// la fermeture.
 
 import { build } from 'esbuild';
 import { mkdtempSync, writeFileSync, readFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { HALLOWEEN_PUBLIC } from '../src/game/halloween-ouverture.js';
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -64,14 +78,16 @@ const prod = await canalDe('production');
 
 titre('LE PREMIER VERROU : QUI VOIT LE MODE');
 
+console.log(`   · interrupteur HALLOWEEN_PUBLIC = ${HALLOWEEN_PUBLIC}`);
 ok('sur /test, le mode est dans le paquet', test.M.HALLOWEEN_OUVERT === true);
-ok('en production, il n y est pas', prod.M.HALLOWEEN_OUVERT === false);
+ok(`en production, il suit l interrupteur (${HALLOWEEN_PUBLIC ? 'ouvert' : 'ferme'})`,
+   prod.M.HALLOWEEN_OUVERT === HALLOWEEN_PUBLIC);
 
-// L'EDITION 2026 A SON PROPRE DRAPEAU, et il doit se replier pareillement.
-// Deux drapeaux separes valent mieux qu'un : on peut ouvrir le mode sans le
-// calendrier, ou preparer le calendrier sans montrer le mode.
+// LE CALENDRIER SUIT LE MODE, PARTOUT. Un mode publie sans son calendrier
+// servirait les treize nuits le premier soir.
 ok('sur /test, l edition datee est dans le paquet', test.M.HALLOWEEN_2026_OUVERT === true);
-ok('en production, l edition datee n y est pas', prod.M.HALLOWEEN_2026_OUVERT === false);
+ok('en production, le calendrier suit le mode',
+   prod.M.HALLOWEEN_2026_OUVERT === prod.M.HALLOWEEN_OUVERT);
 ok('EST_TEST se replie bien a la compilation',
    test.M.EST_TEST === true && prod.M.EST_TEST === false,
    `test=${test.M.EST_TEST} prod=${prod.M.EST_TEST}`);
@@ -83,7 +99,7 @@ const avant = H.debut - 86400000;   // la veille de l'ouverture
 const pendant = H.debut + 86400000; // le lendemain
 const apres = H.fin + 86400000;     // apres la fermeture
 
-ok('la fenetre est fermee avant le 24 octobre', test.M.editionActive(H, avant) === false);
+ok('la fenetre est fermee la veille de la premiere nuit', test.M.editionActive(H, avant) === false);
 ok('elle est ouverte pendant', test.M.editionActive(H, pendant) === true);
 ok('elle est refermee apres', test.M.editionActive(H, apres) === false);
 ok('editionActive ne depend PAS du canal — c est un predicat de dates',
@@ -110,8 +126,9 @@ ok('sur /test, elle l est aussi pendant la fenetre', porte(test, pendant) === tr
 ok('sur /test, elle l est encore apres — le lieu ne se reprend pas',
    porte(test, apres) === true);
 ok('en production, rien avant la fenetre', porte(prod, avant) === false);
-ok('en production, rien pendant non plus, tant que le mode n est pas ouvert a tous',
-   porte(prod, pendant) === false);
+ok(HALLOWEEN_PUBLIC ? 'en production, la porte s ouvre pendant la fenetre'
+                    : 'en production, rien pendant non plus, tant que le mode n est pas ouvert a tous',
+   porte(prod, pendant) === HALLOWEEN_PUBLIC);
 
 // LA GARDE EST-ELLE BIEN CELLE QU ON VIENT DE REJOUER ? On relit la ligne
 // plutot que de faire confiance a la memoire — meme methode que la seconde
@@ -174,13 +191,26 @@ const fichiersTest = batir('test', dossierTest);
 
 const duMode = f => /halloween|molosse/i.test(f);
 
-ok('aucun fichier du mode dans le build public',
-   fichiersProd.filter(duMode).length === 0,
-   fichiersProd.filter(duMode).join(', '));
-ok('le morceau JS du mode n est pas publie',
-   !fichiersProd.some(f => /^Halloween-.*\.js$/.test(f)));
-ok('la musique du mode n est pas publiee — 708 ko qui partaient pour rien',
-   !fichiersProd.some(f => /^molosse-.*\.mp3$/.test(f)));
+if (!HALLOWEEN_PUBLIC) {
+  ok('aucun fichier du mode dans le build public',
+     fichiersProd.filter(duMode).length === 0,
+     fichiersProd.filter(duMode).join(', '));
+  ok('le morceau JS du mode n est pas publie',
+     !fichiersProd.some(f => /^Halloween-.*\.js$/.test(f)));
+  ok('la musique du mode n est pas publiee — 708 ko qui partaient pour rien',
+     !fichiersProd.some(f => /^molosse-.*\.mp3$/.test(f)));
+} else {
+  // OUVERT : TOUT doit y etre. C'est la moitie qui manquait — vite.config.ts
+  // remplacait ces fichiers par un module vide hors du canal de test, quel que
+  // soit le drapeau du mode, et la nuit serait partie muette et sans bete.
+  ok('le morceau JS du mode est publie',
+     fichiersProd.some(f => /^Halloween-.*\.js$/.test(f)), fichiersProd.filter(duMode).join(', '));
+  ok('sa musique aussi', fichiersProd.some(f => /^molosse-.*\.mp3$/.test(f)));
+  ok('la bete en volume aussi', fichiersProd.some(f => /^molosse-.*\.glb$/.test(f)));
+  ok('la tete de la banniere aussi', fichiersProd.some(f => /^molosse-tete-.*\.webp$/.test(f)));
+  ok('et les cartes des scenettes', fichiersProd.some(f => /^(marque|miroir|appel)-.*\.webp$/.test(f)),
+     fichiersProd.filter(f => f.endsWith('.webp')).slice(0, 8).join(', '));
+}
 
 // L'AUTRE MOITIE, ET ELLE COMPTE AUTANT. Un remede qui retirerait le mode des
 // DEUX canaux aurait l'air de marcher et casserait /test en silence.
@@ -204,26 +234,33 @@ const jsProd = texteDe(dossierProd, fichiersProd);
 const jsTest = texteDe(dossierTest, fichiersTest);
 
 // Des noms de nuits qui n'existent nulle part ailleurs dans le jeu.
-const SECRETS = ['La ruelle', 'Le caveau', 'La lune rousse', 'Le glas',
-                 'La terre remuee', 'La terre remuée',
-                 // L'edition datee : son calendrier, ses outils testeurs, et la
-                 // route qui donne l'heure. Rien de tout cela n'a a exister
-                 // dans le paquet public avant le 19 octobre — et « MODE TEST »
-                 // publie serait le plus embarrassant des trois.
-                 'LE CALENDRIER', 'VOYAGEUR TEMPOREL', 'MODE TEST',
-                 'halloween2026', '/now',
-                 // LES TREIZE LIEUX. Ils ne sont encore que dans la table des
-                 // cameras, mais ce sont eux la surprise : « Palais des
-                 // glaces » lisible en septembre dans le paquet public raconte
-                 // la dixieme course a qui sait lire un fichier.
-                 'Ruelle du Croissant', 'Parking souterrain', 'Palais des glaces',
-                 'Champ de crash', 'Toits de la ville', 'Egouts, tunnel'];
-for (const mot of SECRETS) {
-  ok(`« ${mot} » absent du paquet public`, !jsProd.includes(mot));
+// (17/10 : les nuits portent les noms des chapitres du recit, et le recit
+// ses propres noms — Lucien Marchal, la ruelle des Tanneurs.)
+const NUITS_SECRETES = ['La ruelle', 'Le registre', 'Lucien Marchal', 'Tanneurs',
+                        'LE CALENDRIER', 'halloween2026', '/now'];
+// LES OUTILS DU TESTEUR NE PARTENT JAMAIS, mode ouvert ou non : « MODE TEST »
+// publie serait le plus embarrassant des trois. Leurs mots vivent a part dans
+// halloween-mots.ts, derriere EST_TEST.
+const OUTILS_TESTEUR = ['VOYAGEUR TEMPOREL', 'MODE TEST', 'jour simulé', 'tout ouvert'];
+// LES TREIZE LIEUX ont quitte la table des cameras (16/10) : aucune nuit ne
+// les montrait. Ils ne doivent plus apparaitre nulle part.
+const LIEUX = ['Ruelle du Croissant', 'Parking souterrain', 'Palais des glaces',
+               'Champ de crash', 'Toits de la ville', 'Egouts, tunnel'];
+
+if (!HALLOWEEN_PUBLIC) {
+  for (const mot of NUITS_SECRETES) ok(`« ${mot} » absent du paquet public`, !jsProd.includes(mot));
+  ok('mais /test les a bien, sinon on ne verifierait rien',
+     NUITS_SECRETES.some(m => jsTest.includes(m)),
+     'aucun nom de nuit dans /test non plus — le test ne prouve rien');
+} else {
+  ok('mode ouvert : les nuits sont dans le paquet public',
+     NUITS_SECRETES.filter(m => !jsProd.includes(m)).length <= 1,
+     NUITS_SECRETES.filter(m => !jsProd.includes(m)).join(', '));
 }
-ok('mais /test les a bien, sinon on ne verifierait rien',
-   SECRETS.some(m => jsTest.includes(m)),
-   'aucun nom de nuit dans /test non plus — le test ne prouve rien');
+for (const mot of OUTILS_TESTEUR) ok(`outil testeur « ${mot} » absent du paquet public`, !jsProd.includes(mot));
+ok('mais /test a bien ses outils', OUTILS_TESTEUR.every(m => jsTest.includes(m)),
+   OUTILS_TESTEUR.filter(m => !jsTest.includes(m)).join(', '));
+for (const mot of LIEUX) ok(`lieu fictif « ${mot} » absent des deux paquets`, !jsProd.includes(mot) && !jsTest.includes(mot));
 
 rmSync(dossierProd, { recursive: true, force: true });
 rmSync(dossierTest, { recursive: true, force: true });

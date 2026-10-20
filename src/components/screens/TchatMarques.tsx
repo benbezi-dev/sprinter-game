@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence, useDragControls } from 'motion/react';
-import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, MessageCircle, Search, ChevronDown, BadgeCheck } from 'lucide-react';
+import { motion, AnimatePresence, useDragControls, useMotionValue, animate } from 'motion/react';
+import { Loader2, Send, X, AtSign, Lock, UserPlus, Check, Flag, Ban, Bell, MessageCircle, Search, ChevronDown, BadgeCheck, Heart } from 'lucide-react';
 import { FEUILLE, VOILE, RESSORT, useAnimationsReduites } from '@/lib/mouvement';
 import { useRetour } from '@/hooks/use-retour';
 import { surCourrier, reprendreTouchee } from '@/game/boite';
@@ -13,9 +13,11 @@ import { bloquer, MOTIFS, type Motif } from '@/game/moderation';
 import { NOM_CAMP, type Camp } from '@/game/marques';
 import {
   lireTchat, ecrire, signalerMessage, lireInvitables, inviter, poserVu, dernierVu,
-  ecrireOfficiel, aLaCleOfficielle,
-  type Message, type Participant, type Invitation, type Invitable, type Refus,
+  ecrireOfficiel, aLaCleOfficielle, aimerMessage, marquerLu as marquerLuServeur,
+  type Message, type Lu, type Participant, type Invitation, type Invitable, type Refus,
 } from '@/game/tchat-marques';
+import { usePresences, parNom, type Present } from '@/game/presence';
+import { PointPresence } from './PointPresence';
 
 /* ---------------------------------------------------------------------------
    LE TCHAT DU DUEL DES MARQUES (13/10/2026) — voir game/tchat-marques.ts et
@@ -28,6 +30,15 @@ import {
 
    Le tchat se relit toutes les quatre secondes tant qu'il est ouvert, et
    tout de suite quand la boite sonne (un prive, une designation).
+
+   Les J'AIME (17/10) : un double tap sur le message, qui fait eclore un
+   grand coeur. Le petit coeur rouge et son compteur n'apparaissent qu'avec
+   des j'aime ; le toucher retire le sien. Le compteur se voit aussi sous les siens.
+
+   Les PRIVES LUS (18/10) : une conversation est non lue tant qu'un message
+   recu de l'autre n'a pas ete vu — ouverte, tiroir deplie — ni suivi d'une
+   reponse. Ouvrir la marque lue sur le serveur, qui rend ses marques a chaque
+   lecture : elles tiennent a la relecture, a la reouverture, au redemarrage.
 
    Le compte SPRINTERGAME (16/10) : la voix du jeu, d'aucun camp. Ses messages
    portent un badge et une teinte a eux ; on ne peut ni lui repondre, ni le
@@ -45,6 +56,8 @@ const RELIRE_REPLIE_MS = 15000;
 /** Replie sur l'accueil, chez tous les joueurs : une relecture par minute suffit a la pastille. */
 const RELIRE_REPLIE_ACCUEIL_MS = 60000;
 const MAX = 140;
+/** La cle d'un nom, comme le serveur la forme (tchat-marques.js, `cle`). */
+const cleDe = (nom: string) => nom.trim().toLowerCase().slice(0, 40);
 
 type Onglet = 'tous' | 'prives' | 'inviter';
 
@@ -92,8 +105,11 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [refus, setRefus] = useState<Refus | null>(null);
   const [charge, setCharge] = useState(false);
+  // les conversations privees lues : cle de l'autre -> dernier message vu
+  const [lus, setLus] = useState<Map<string, number>>(() => new Map());
   const dernier = useRef(0);
   const enCours = useRef(false);
+  const enVol = useRef(new Set<number>());   // les coeurs touches, en route
   const ouvert = useRef(deplie);
   ouvert.current = deplie;
 
@@ -107,13 +123,51 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
     setCharge(true);
     if (r.participants) setParticipants(r.participants);
     if (r.invitations) setInvitations(r.invitations);
-    if (r.messages.length) {
-      dernier.current = Math.max(dernier.current, r.dernier);
-      setMessages(m => {
-        const vus = new Set(m.map(x => x.id));
-        return [...m, ...r.messages.filter(x => !vus.has(x.id))].slice(-300);
+    if (r.lus) poserLus(r.lus);
+    if (r.messages.length) dernier.current = Math.max(dernier.current, r.dernier);
+    // Les j'aime arrivent sur des messages deja recus : on les repose a chaque
+    // lecture, sauf sur un message qu'on vient de toucher (la reponse arrive).
+    const aimes = new Map((r.aimes || []).map(a => [a.id, a]));
+    setMessages(m => {
+      const vus = new Set(m.map(x => x.id));
+      const neufs = r.messages.filter(x => !vus.has(x.id));
+      if (!neufs.length && !r.aimes) return m;
+      return [...m, ...neufs].slice(-300).map(x => {
+        if (enVol.current.has(x.id)) return x;
+        const a = aimes.get(x.id);
+        const n = a ? a.n : 0, moi = a ? a.moi : false;
+        return (x.aimes || 0) === n && !!x.aime === moi ? x : { ...x, aimes: n, aime: moi };
       });
+    });
+  }, []);
+
+  // Une marque ne recule jamais : on garde la plus avancee, d'ici ou du serveur.
+  const poserLus = useCallback((liste: Lu[]) => setLus(l => {
+    let n: Map<string, number> | null = null;
+    for (const x of liste) {
+      if (x.id > (l.get(x.avec) || 0)) (n ??= new Map(l)).set(x.avec, x.id);
     }
+    return n || l;
+  }), []);
+  // Ouvrir une conversation la marque lue : tout de suite a l'ecran, puis
+  // sur le serveur, qui la rendra aux lectures suivantes et au redemarrage.
+  const marquerLu = useCallback(async (avec: string, jusqua: number) => {
+    poserLus([{ avec: cleDe(avec), id: jusqua }]);
+    const r = await marquerLuServeur(avec, jusqua);
+    if (r) poserLus([r]);
+  }, [poserLus]);
+
+  // Un coeur touche : tout de suite a l'ecran, puis le compteur du serveur.
+  const poser = (id: number, aimes: number, aime: boolean) =>
+    setMessages(x => x.map(m => (m.id === id ? { ...m, aimes, aime } : m)));
+  const aimer = useCallback(async (m: Message) => {
+    if (m.a_moi || enVol.current.has(m.id)) return;
+    const veut = !m.aime;
+    enVol.current.add(m.id);
+    poser(m.id, Math.max(0, (m.aimes || 0) + (veut ? 1 : -1)), veut);
+    const r = await aimerMessage(m.id, veut);
+    enVol.current.delete(m.id);
+    if (r) poser(m.id, r.aimes, r.aime); else poser(m.id, m.aimes || 0, !!m.aime);
   }, []);
 
   useEffect(() => {
@@ -126,17 +180,36 @@ function useTchat(deplie: boolean, replieMs = RELIRE_REPLIE_MS) {
 
   const ajouter = (m: Message) => setMessages(x => (x.some(y => y.id === m.id) ? x : [...x, m]));
   const oter = (de: string) => setMessages(x => x.filter(m => m.de.toLowerCase() !== de.toLowerCase()));
-  return { messages, participants, invitations, refus, charge, relire, ajouter, oter };
+  return { messages, participants, invitations, refus, charge, lus, relire, ajouter, oter, aimer, marquerLu };
 }
 
 /** Une ligne du tchat. */
-function Ligne({ m, fr, onMenu }: { m: Message; fr: boolean; onMenu: (m: Message) => void }) {
+function Ligne({ m, fr, present, onMenu, onAimer }: { m: Message; fr: boolean; present?: Present; onMenu: (m: Message) => void; onAimer: (m: Message) => void }) {
   const vise = m.pour_moi;
-  // SprinterGame : on ne lui repond pas, on ne le signale ni ne le bloque
+  // SprinterGame : on ne lui repond pas, on ne le signale ni ne le bloque —
+  // mais on peut l'aimer
   const touchable = !m.a_moi && !m.officiel;
+  const n = m.aimes || 0;
+  // Le double tap (17/10) : deux touches rapprochees sur le message l'aiment,
+  // au doigt comme a la souris — le `dblclick` ne vient pas sur tous les
+  // telephones. Il aime seulement, comme ailleurs : le coeur, lui, retire.
+  const derniere = useRef(0);
+  const [eclat, setEclat] = useState(0);
+  const taper = (e: React.PointerEvent) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    const t = e.timeStamp;
+    if (t - derniere.current < 320) {
+      derniere.current = 0;
+      window.getSelection()?.removeAllRanges();
+      if (m.a_moi) return;
+      setEclat(x => x + 1);
+      if (!m.aime) onAimer(m);
+    } else derniere.current = t;
+  };
   return (
     <motion.li initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}
-      className={`group flex flex-col px-2.5 py-1.5 rounded-xl text-sm leading-snug
+      onPointerUp={taper}
+      className={`relative touch-manipulation group flex flex-col px-2.5 py-1.5 rounded-xl text-sm leading-snug
                   ${m.officiel ? 'bg-[#5CC8FF]/10 border border-[#5CC8FF]/35'
                     : vise ? 'bg-primary/15 border border-primary/40' : m.a_moi ? 'bg-white/5' : ''}`}>
       <span className="flex items-baseline gap-1.5 text-[11px] min-w-0">
@@ -145,6 +218,7 @@ function Ligne({ m, fr, onMenu }: { m: Message; fr: boolean; onMenu: (m: Message
                 style={{ color: TEINTE[m.camp] ?? TEINTE.sprinter }}>
           {m.de}
         </button>
+        <PointPresence p={present} />
         {m.officiel && (
           <span className="self-center flex items-center gap-0.5 px-1.5 py-px rounded-full bg-[#5CC8FF] text-black text-[9px] font-black tracking-wider shrink-0">
             <BadgeCheck className="w-2.5 h-2.5" aria-hidden />{fr ? 'OFFICIEL' : 'OFFICIAL'}
@@ -158,14 +232,42 @@ function Ligne({ m, fr, onMenu }: { m: Message; fr: boolean; onMenu: (m: Message
         )}
         <span className="ml-auto text-muted-foreground/60 shrink-0">{heure(m.quand, fr)}</span>
       </span>
-      <span className="break-words whitespace-pre-wrap text-foreground/90">{m.texte}</span>
+      <AnimatePresence>
+        {eclat > 0 && (
+          <motion.span key={eclat} aria-hidden
+            initial={{ scale: 0.3, opacity: 0 }} animate={{ scale: [0.3, 1.25, 1], opacity: [0, 1, 1] }}
+            exit={{ scale: 1.4, opacity: 0 }} transition={{ duration: 0.35 }}
+            onAnimationComplete={() => setTimeout(() => setEclat(x => (x === eclat ? 0 : x)), 250)}
+            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[#FF4D6D]">
+            <Heart className="w-9 h-9 drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]" fill="currentColor" />
+          </motion.span>
+        )}
+      </AnimatePresence>
+      <span className="flex items-end gap-2">
+        <span className="flex-1 min-w-0 break-words whitespace-pre-wrap text-foreground/90">{m.texte}</span>
+        {/* Pas de coeur vide (17/10) : il n'apparait, rouge, qu'avec des j'aime.
+            On aime d'un double tap ; toucher le coeur retire ou ajoute le sien. */}
+        {n > 0 && (
+          <button onClick={() => onAimer(m)} disabled={m.a_moi}
+                  aria-pressed={!!m.aime}
+                  aria-label={m.aime ? (fr ? 'Je n’aime plus' : 'Unlike') : (fr ? 'J’aime' : 'Like')}
+                  className="shrink-0 -mb-0.5 flex items-center gap-0.5 px-1 py-0.5 rounded-md text-[10px] font-bold text-[#FF4D6D]">
+            <motion.span key={m.aime ? 'oui' : 'non'} initial={m.aime ? { scale: 0.4 } : false} animate={{ scale: 1 }}
+                         transition={RESSORT.trophee} className="flex">
+              <Heart className="w-3.5 h-3.5" fill="currentColor" aria-hidden />
+            </motion.span>
+            <span>{n}</span>
+          </button>
+        )}
+      </span>
     </motion.li>
   );
 }
 
 /** La liste des inscrits, pour designer quelqu'un ou lui ecrire. */
-function ChoixPersonne({ participants, moi, fr, titre, onChoix, onClose }: {
+function ChoixPersonne({ participants, moi, fr, titre, presenceDe, onChoix, onClose }: {
   participants: Participant[]; moi: string; fr: boolean; titre: string;
+  presenceDe: (nom: string) => Present | undefined;
   onChoix: (p: Participant) => void; onClose: () => void;
 }) {
   const [q, setQ] = useState('');
@@ -193,6 +295,7 @@ function ChoixPersonne({ participants, moi, fr, titre, onChoix, onClose }: {
               <button onClick={() => onChoix(p)}
                       className="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-white/10 text-left">
                 <span className="font-bold truncate" style={{ color: TEINTE[p.camp] }}>{p.name}</span>
+                <PointPresence p={presenceDe(p.name)} />
                 {p.camp !== 'joueur' && (
                   <span className="ml-auto text-[10px] text-muted-foreground shrink-0">
                     {NOM_CAMP[p.camp]} · {p.epreuve} m
@@ -321,6 +424,92 @@ function Inviter({ fr }: { fr: boolean }) {
   );
 }
 
+/* ---------------------------------------------------------------------------
+   LA BULLE DU TCHAT, sur l'accueil (demande de l'auteur, 17/10/2026) : le
+   bouton TCHAT flotte, et on l'emmene ou l'on veut du doigt. Lachee, elle va
+   se coller au bord le plus proche, et ce telephone se souvient ou on l'a
+   laissee. Une touche sans la deplacer ouvre le tchat.
+--------------------------------------------------------------------------- */
+const MARGE_BULLE = 12;
+const CLE_BULLE = 'sprinter_tchat_bulle';
+
+type PlaceBulle = { cote: 'g' | 'd'; haut: number };   // haut : 0 (en haut) a 1 (en bas)
+
+function lirePlace(): PlaceBulle {
+  try {
+    const p = JSON.parse(localStorage.getItem(CLE_BULLE) || 'null');
+    if (p && (p.cote === 'g' || p.cote === 'd') && typeof p.haut === 'number') return { cote: p.cote, haut: Math.min(1, Math.max(0, p.haut)) };
+  } catch { /* stockage refuse */ }
+  return { cote: 'd', haut: 0.82 };
+}
+
+function BulleTchat({ fr, nonLus, bas, onOuvrir }: { fr: boolean; nonLus: number; bas: number; onOuvrir: () => void }) {
+  const reduit = useAnimationsReduites();
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const bouge = useRef(false);
+  const el = useRef<HTMLButtonElement>(null);
+  const [place, setPlace] = useState(lirePlace);
+  const taille = () => ({ w: el.current?.offsetWidth || 110, h: el.current?.offsetHeight || 40 });
+
+  // La ou elle doit etre, en pixels, pour une place et la taille de l'ecran.
+  const ou = useCallback((p: PlaceBulle) => {
+    const l = window.innerWidth, h = window.innerHeight, t = taille();
+    const haut = MARGE_BULLE + 40, basMax = h - t.h - MARGE_BULLE - bas;
+    return {
+      x: p.cote === 'g' ? MARGE_BULLE : l - t.w - MARGE_BULLE,
+      y: haut + p.haut * Math.max(0, basMax - haut),
+    };
+  }, [bas]);
+
+  useEffect(() => {
+    const poser = () => { const c = ou(place); x.set(c.x); y.set(c.y); };
+    poser();
+    window.addEventListener('resize', poser);
+    return () => window.removeEventListener('resize', poser);
+  }, [ou, place, x, y]);
+
+  const lacher = () => {
+    const l = window.innerWidth, h = window.innerHeight, t = taille();
+    const haut = MARGE_BULLE + 40, basMax = h - t.h - MARGE_BULLE - bas;
+    const p: PlaceBulle = {
+      cote: x.get() + t.w / 2 < l / 2 ? 'g' : 'd',
+      haut: Math.min(1, Math.max(0, (y.get() - haut) / Math.max(1, basMax - haut))),
+    };
+    const c = ou(p);
+    const ressort = reduit ? { duration: 0 } : { type: 'spring' as const, stiffness: 420, damping: 32 };
+    animate(x, c.x, ressort);
+    animate(y, c.y, ressort);
+    setPlace(p);
+    try { localStorage.setItem(CLE_BULLE, JSON.stringify(p)); } catch { /* stockage refuse */ }
+  };
+
+  return (
+    <motion.button key="bulle" ref={el}
+      drag dragMomentum={false} dragElastic={0}
+      onPointerDown={() => { bouge.current = false; }}
+      onDragStart={() => { bouge.current = true; }}
+      onDragEnd={lacher}
+      onClick={() => { if (!bouge.current) onOuvrir(); }}
+      initial={reduit ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+      exit={reduit ? { opacity: 0 } : { scale: 0.6, opacity: 0 }} whileTap={{ scale: 0.92 }} whileDrag={{ scale: 1.08 }}
+      transition={reduit ? { duration: 0 } : RESSORT.trophee}
+      aria-label={fr ? 'Ouvrir le tchat' : 'Open the chat'}
+      style={{ x, y }}
+      className="fixed left-0 top-0 z-[55] touch-none select-none flex items-center gap-2 pl-3 pr-4 py-2.5
+                 rounded-2xl bg-primary text-black font-black text-xs tracking-widest shadow-lg shadow-black/40
+                 cursor-grab active:cursor-grabbing">
+      <MessageCircle className="w-4 h-4" aria-hidden />
+      {fr ? 'TCHAT' : 'CHAT'}
+      {nonLus > 0 && (
+        <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-white text-black text-[10px] flex items-center justify-center">
+          {nonLus > 99 ? '99+' : nonLus}
+        </span>
+      )}
+    </motion.button>
+  );
+}
+
 /**
  * Le tchat est un TIROIR RETRACTABLE (voulu par l'auteur, 13/10) : il
  * n'occupe pas l'ecran. Replie, un bouton qui flotte avec la pastille des
@@ -339,6 +528,11 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   useRetour(() => onDeplier(false), deplie);
   const reduit = useAnimationsReduites();
   const t = useTchat(deplie, duel ? RELIRE_REPLIE_MS : RELIRE_REPLIE_ACCUEIL_MS);
+  // Qui est en ligne — meme lecture partagee que l'accueil et le classement
+  // (usePresences ne sonde qu'une fois pour tous les ecrans qui la regardent).
+  const presences = usePresences();
+  const presents = parNom(presences);
+  const presenceDe = (nom: string) => presents.get(nom.trim().toLowerCase());
   const onglets: Onglet[] = duel ? ['tous', 'prives', 'inviter'] : ['tous', 'prives'];
   const [onglet, setOnglet] = useState<Onglet>(ouvrirSur);
   useEffect(() => { setOnglet(ouvrirSur); }, [ouvrirSur]);
@@ -356,19 +550,26 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   const cleMoi = moi.name.trim().toLowerCase();
 
   const communs = t.messages.filter(m => !m.prive);
-  // les conversations privees : une par interlocuteur, la plus recente d'abord
+  // les conversations privees : une par interlocuteur, la plus recente d'abord.
+  // Non lue : un message recu apres la marque du serveur et apres sa propre
+  // derniere reponse — repondre, c'est avoir lu ce qui precede.
   const conversations = useMemo(() => {
     const parQui = new Map<string, Message[]>();
     for (const m of t.messages.filter(x => x.prive)) {
       const qui = m.a_moi ? (m.pour || '') : m.de;
       if (!qui) continue;
-      const k = qui.toLowerCase();
+      const k = cleDe(qui);
       parQui.set(k, [...(parQui.get(k) || []), m]);
     }
-    return [...parQui.values()].map(ms => ({
-      qui: ms[0].a_moi ? ms[0].pour! : ms[0].de, ms, dernier: ms[ms.length - 1],
-    })).sort((a, b) => b.dernier.id - a.dernier.id);
-  }, [t.messages]);
+    return [...parQui.entries()].map(([k, ms]) => {
+      let vu = t.lus.get(k) || 0;
+      for (const m of ms) if (m.a_moi && m.id > vu) vu = m.id;
+      return {
+        k, qui: ms[0].a_moi ? ms[0].pour! : ms[0].de, ms, dernier: ms[ms.length - 1],
+        nonLu: ms.some(m => !m.a_moi && m.id > vu),
+      };
+    }).sort((a, b) => b.dernier.id - a.dernier.id);
+  }, [t.messages, t.lus]);
   // La notification ne dit pas si c'etait un prive ou une designation (elle ne
   // porte que son genre) : on va au dernier message qui vise ce joueur, une fois.
   const vise = useRef(!viserLeDernier);
@@ -379,8 +580,13 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
     if (!m) return;
     if (m.prive) { setOnglet('prives'); setAvec(m.de); } else setOnglet('tous');
   }, [t.charge, t.messages]);
-  const fil = onglet === 'tous' ? communs
-    : avec ? (conversations.find(c => c.qui.toLowerCase() === avec.toLowerCase())?.ms || []) : [];
+  const ouverte = onglet === 'prives' && avec ? conversations.find(c => c.k === cleDe(avec)) : undefined;
+  const fil = onglet === 'tous' ? communs : ouverte?.ms || [];
+  // la conversation ouverte sous les yeux, tiroir deplie : elle est lue
+  const { marquerLu } = t;
+  useEffect(() => {
+    if (deplie && ouverte?.nonLu) marquerLu(ouverte.qui, ouverte.dernier.id);
+  }, [deplie, ouverte?.nonLu, ouverte?.qui, ouverte?.dernier.id, marquerLu]);
 
   // deplier le tchat, c'est avoir vu ce qu'il porte ; replie, il compte
   const [vuJusqua, setVuJusqua] = useState(() => dernierVu());
@@ -412,7 +618,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   // SprinterGame n'ecrit que dans TOUS, et n'a pas besoin d'un camp pour cela
   const enJeu = cleJeu && voixDuJeu && onglet === 'tous';
   const peutEcrire = (moi.inscrit || enJeu) && !t.refus && (onglet === 'tous' || !!avec);
-  const nonLusPrives = conversations.filter(c => !c.dernier.a_moi).length;
+  const nonLusPrives = conversations.filter(c => c.nonLu).length;
 
   const ressort = reduit ? { duration: 0 } : RESSORT.panneau;
   // le tiroir se tire par sa poignee seulement : le fil, lui, defile
@@ -438,7 +644,10 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
     <>
       {/* replie : le bouton qui flotte, et sa pastille */}
       <AnimatePresence>
-        {!deplie && (
+        {!deplie && !duel && (
+          <BulleTchat fr={fr} nonLus={nonLus} bas={carte ? carte + 8 : 0} onOuvrir={() => onDeplier(true)} />
+        )}
+        {!deplie && duel && (
           <motion.button key="bouton" onClick={() => onDeplier(true)}
             initial={reduit ? false : { scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
             exit={reduit ? { opacity: 0 } : { scale: 0.6, opacity: 0 }} whileTap={{ scale: 0.94 }}
@@ -479,6 +688,12 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
             <span className="font-black font-display text-xs tracking-widest">
               {duel ? (fr ? 'TCHAT DU DUEL' : 'DUEL CHAT') : (fr ? 'TCHAT' : 'CHAT')}
             </span>
+            {!!presences && presences.n > 0 && (
+              <span className="flex items-center gap-1 text-[10px] font-bold text-emerald-400 shrink-0">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" aria-hidden />
+                {presences.n} {fr ? 'en ligne' : 'online'}
+              </span>
+            )}
             <button onClick={() => onDeplier(false)} onPointerDown={e => e.stopPropagation()}
                     aria-label={fr ? 'Replier le tchat' : 'Collapse the chat'}
                     className="ml-auto p-1.5 rounded-lg hover:bg-white/10 text-foreground/70">
@@ -529,7 +744,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                   <button key={c.qui} onClick={() => setAvec(c.qui)}
                           className={`shrink-0 px-3 py-1 rounded-full text-[11px] font-bold border
                                       ${avec && avec.toLowerCase() === c.qui.toLowerCase() ? 'bg-white/15 border-white/40' : 'border-white/10'}`}>
-                    {c.qui}{!c.dernier.a_moi && <span className="ml-1 text-primary">•</span>}
+                    {c.qui}{c.nonLu && <span className="ml-1 text-primary">•</span>}
                   </button>
                 ))}
                 {avec && !conversations.some(c => c.qui.toLowerCase() === avec.toLowerCase()) && (
@@ -553,7 +768,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                 </p>
               )}
               <ul className="flex flex-col gap-0.5">
-                {fil.map(m => <Ligne key={m.id} m={m} fr={fr} onMenu={setMenu} />)}
+                {fil.map(m => <Ligne key={m.id} m={m} fr={fr} present={m.officiel ? undefined : presenceDe(m.de)} onMenu={setMenu} onAimer={t.aimer} />)}
               </ul>
               <div ref={fin} />
             </div>
@@ -588,8 +803,9 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                     </button>
                   )}
                   <div className="flex-1 relative">
-                    <textarea value={texte} rows={1} maxLength={MAX}
-                              onChange={e => setTexte(e.target.value.slice(0, MAX))}
+                    {/* SprinterGame ecrit sans limite de longueur (17/10) */}
+                    <textarea value={texte} rows={1} maxLength={enJeu ? undefined : MAX}
+                              onChange={e => setTexte(enJeu ? e.target.value : e.target.value.slice(0, MAX))}
                               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
                               placeholder={onglet === 'prives'
                                 ? (fr ? `Message privé à ${avec}` : `Private message to ${avec}`)
@@ -597,7 +813,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                                 : duel ? (fr ? 'Écris aux deux camps…' : 'Write to both sides…')
                                 : (fr ? 'Écris à tout le monde…' : 'Write to everyone…')}
                               className="w-full resize-none px-3 py-2.5 pr-12 rounded-xl bg-background/70 border border-white/10 outline-none text-sm focus:border-primary/60" />
-                    <span className="absolute right-2.5 bottom-2.5 text-[10px] text-muted-foreground/70">{MAX - texte.length}</span>
+                    {!enJeu && <span className="absolute right-2.5 bottom-2.5 text-[10px] text-muted-foreground/70">{MAX - texte.length}</span>}
                   </div>
                   <button onClick={envoyer} disabled={envoi || !texte.trim()}
                           className="p-2.5 rounded-xl bg-primary text-black shrink-0 disabled:opacity-40">
@@ -605,8 +821,8 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                   </button>
                 </div>
                 <p className="text-[9px] text-muted-foreground/60 text-center leading-snug">
-                  {fr ? 'Pas de lien, pas de contact, pas d’insulte. Touche un nom pour répondre, écrire en privé, signaler ou bloquer.'
-                      : 'No links, no contacts, no insults. Tap a name to reply, write privately, report or block.'}
+                  {fr ? 'Pas de lien, pas de contact, pas d’insulte. Touche un nom pour répondre, écrire en privé, signaler ou bloquer. Double tap pour aimer.'
+                      : 'No links, no contacts, no insults. Tap a name to reply, write privately, report or block. Double-tap to like.'}
                 </p>
               </div>
             )}
@@ -625,7 +841,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
             onBloque={() => { t.oter(menu.de); setMenu(null); }} />
         )}
         {choix && (
-          <ChoixPersonne participants={t.participants} moi={cleMoi} fr={fr}
+          <ChoixPersonne participants={t.participants} moi={cleMoi} fr={fr} presenceDe={presenceDe}
             titre={choix === 'designer' ? (fr ? 'DÉSIGNER' : 'MENTION') : (fr ? 'ÉCRIRE À' : 'WRITE TO')}
             onClose={() => setChoix(null)}
             onChoix={p => {

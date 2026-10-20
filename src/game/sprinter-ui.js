@@ -702,7 +702,8 @@
     G.flash = Math.max(0, G.flash - dt * 1.4);
     G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
 
-    if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
+    if (G.silenceMenu) Audio_.stop();
+    else if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
     else if (G.state === 'cut')
       // l'introduction du rival annonce deja l'ambiance de la course
       Audio_.music(G.cut && G.cut.kind === 'intro'

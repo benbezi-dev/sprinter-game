@@ -8,6 +8,8 @@ import {
   rankByRaceTime, rankOf, TOP_N, NO_RUN_MS,
 } from '@/game/leaderboard';
 import { LeaderboardScreen } from './LeaderboardScreen';
+import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
+import { ReviewVideo } from './ReviewVideo';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -17,6 +19,12 @@ export function WinAllScreen() {
   const runRank = useGameStore(s => s.runRank);
   const raceKey = useGameStore(s => s.raceKey);
   const { N } = SprinterApp;
+
+  // LA VIDEO DE LA DERNIERE COURSE DE LA CARRIERE — la finale, ici (demande du
+  // 20/10/2026). Le crochet pose a la racine (film-course.ts) l'a tournee
+  // pendant qu'on courait ; `ReviewVideo` ne s'affiche que s'il y a un film a
+  // proposer, et disparait tout seul sur un appareil qui ne sait pas encoder.
+  const film = useFilmDeLaCourse();
 
   const [name, setName] = useState(getSavedName());
   // 'checking' : on regarde d'abord si le chrono entre au tableau. On ne
@@ -221,6 +229,12 @@ export function WinAllScreen() {
             >
               {N.t('view_top500')}
             </button>
+          </div>
+
+          {/* La video de la course, au-dessus des boutons : elle se partage,
+              comme sur l'ecran de fin du one shot. */}
+          <div className="w-full max-w-md">
+            <ReviewVideo etat={film} onPartager={partagerLeFilm} />
           </div>
 
           {/* Actions */}

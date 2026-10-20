@@ -997,7 +997,10 @@ export function updateLogic(dt: number) {
   // game/musique-championnat.ts) : la musique de course ferait deux morceaux a
   // la fois. Tant qu'il n'est pas charge, ce drapeau reste faux et la course
   // garde la sienne.
-  if (G.musiqueChamp) Audio_.stop();
+  // `G.silenceMenu` : un film plein ecran joue sa propre bande son par-dessus
+  // l'accueil (l'intro de la nuit du molosse, Halloween.tsx). La boucle du
+  // menu, relancee ici a chaque image, s'y superposait : on se tait.
+  if (G.musiqueChamp || G.silenceMenu) Audio_.stop();
   else if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
   else if (G.state === 'cut') {
     // Le generique porte sa propre musique, et c'est la seule cinematique dans

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { nuitAPlusieurs } from '@/game/halloween';
 import { motion } from 'motion/react';
 import { Trophy, Check, Eye, EyeOff, Radio } from 'lucide-react';
 import { SprinterApp, useGameStore } from '@/game/engine';
@@ -248,6 +249,8 @@ export function BandeauTournoi() {
   const { N } = SprinterApp;
   if (!spectateur || !liveOn || champDirect) return null;
   if (state !== 'count' && state !== 'race') return null;
+  // La meute de la nuit du molosse a son propre bandeau (MeuteMolosse.tsx).
+  if (nuitAPlusieurs()) return null;
   // Pendant la presentation de la finale, la presentation parle seule.
   if (presentation) return null;
   const t = s?.dernierEtat?.tournoi;

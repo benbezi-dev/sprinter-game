@@ -26,11 +26,13 @@
      LED, etoiles. Les images rendues dans Blender (public, decors), qui ne
      passent pas par la palette, sont teintes a part (voir image()).
 
-   Les stades qui ont deja leur heure — le cosmos, la piste arc-en-ciel, la
-   nuit etoilee, le Danube, le cimetiere, la planete aux trois soleils — la
-   gardent : seuls les themes marques `heure: true` suivent le soleil. Les
-   sauts gardent aussi la leur (sauts-stades.js) : chaque etape y a son
-   heure, et elle monte avec la competition.
+   Depuis le 18/10 (« a tout le jeu ») : les themes `heure: true` suivent le
+   soleil, la planete aux trois soleils comprise ; les stades batis sur la
+   nuit (`heure: 'nuit'` : nuit etoilee, Danube, ruelle d'Halloween) passent
+   a l'heure bleue hors de la nuit (heureBleue) ; les sauts suivent l'heure
+   du joueur comme le reste. Seuls l'espace (cosmos, piste arc-en-ciel) et
+   l'Olympe de la Legende gardent leur lumiere : il n'y a pas de soleil qui
+   tourne la-haut.
 
    POUR FORCER UN MOMENT — une capture, un harnais, un essai : `?heure=nuit`
    (ou jour, apres-midi, soir) dans l'adresse, ou
@@ -259,8 +261,11 @@
         else if (Array.isArray(v) && v.length && v.every(estCouleur)) d[k] = v.map(c => sous(c, NUIT, part));
       }
       if (th.tour) d.tour = fois(th.tour, [1.6, 1.5, 1.1]);
-      d.skyTop = [8, 12, 34];
-      d.skyBot = [34, 42, 86];
+      // un ciel de nuit qui garde l'identite du lieu (Namek : vert sombre)
+      d.skyTop = th.cielNuit ? th.cielNuit[0] : [8, 12, 34];
+      d.skyBot = th.cielNuit ? th.cielNuit[1] : [34, 42, 86];
+      // ni soleils dans le noir (la planete aux trois soleils)
+      if (th.soleils) d.soleils = false;
       d.stars = 160;
       d.projecteurs = true;
       d.eclairage = ECLAIRAGE.nuit;
@@ -287,10 +292,41 @@
   function eclairer(th, G) {
     if (!th || !th.heure || th.base) return th;
     const m = moment(G);
+    if (th.heure === 'nuit') {
+      // un stade de nuit (Nuit etoilee, Danube, ruelle d'Halloween) : la nuit
+      // il est tel qu'il a ete regle ; le reste du temps, l'heure bleue
+      if (m === 'nuit') return th;
+      let par = _derives.get(th);
+      if (!par) _derives.set(th, par = {});
+      return par[m] || (par[m] = heureBleue(th, m));
+    }
     if (m === 'jour') return th;
     let par = _derives.get(th);
     if (!par) _derives.set(th, par = {});
     return par[m] || (par[m] = deriver(th, m));
+  }
+
+  // L'HEURE BLEUE DES STADES DE NUIT (18/10, l'auteur : « applique le
+  // systeme a tout le jeu », puis, des stades batis sur la nuit : « heure
+  // bleue le jour »). Ils ne passent jamais en plein jour — le Danube l'avait
+  // ete, et c'etait faux —, mais leur ciel suit l'heure : un crepuscule
+  // clair le jour, rose l'apres-midi, violet le soir, et leurs etoiles ne
+  // sortent qu'a mesure que la nuit vient. Leur palette, leurs projecteurs et
+  // leurs ecrans ne bougent pas : ils sont deja allumes.
+  const CREPUSCULE = {
+    jour: { haut: [58, 92, 170], bas: [164, 180, 216], k: 0.62, etoiles: 0.25 },
+    'apres-midi': { haut: [72, 78, 158], bas: [236, 168, 140], k: 0.55, etoiles: 0.4 },
+    soir: { haut: [46, 44, 116], bas: [214, 118, 112], k: 0.4, etoiles: 0.65 },
+  };
+  function heureBleue(th, m) {
+    const c = CREPUSCULE[m];
+    const d = Object.assign({}, th, { base: th, moment: m });
+    d.skyTop = melange(th.skyTop, c.haut, c.k);
+    d.skyBot = melange(th.skyBot, c.bas, c.k);
+    if (th.stars) d.stars = Math.round(th.stars * c.etoiles);
+    // le lointain s'eclaircit un peu avec le ciel
+    if (estCouleur(th.lointain)) d.lointain = melange(th.lointain, d.skyBot, 0.25);
+    return d;
   }
 
   /** La couleur `c` sous la lumiere du theme, pour la part `part` du stade. */
@@ -359,5 +395,5 @@
     return _lum && estCouleur(c) ? sous(c, _lum, part || 'loin') : c;
   }
 
-  root.SprinterHeure = { MOMENTS, ECLAIRAGE, soleil, momentDe, moment, forcer, eclairer, teinte, poser, image, couleur };
+  root.SprinterHeure = { MOMENTS, ECLAIRAGE, soleil, momentDe, moment, forcer, eclairer, heureBleue, teinte, poser, image, couleur };
 })(globalThis);

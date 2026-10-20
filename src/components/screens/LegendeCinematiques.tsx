@@ -50,8 +50,8 @@ type Peintre = (ctx: CanvasRenderingContext2D, W: number, H: number, t: number) 
  * taille de l'ecran, le fondu d'entree et de sortie, « touche pour passer ».
  * `creer` est appele une fois, au montage, et rend le peintre.
  */
-function Cinematique({ nom, duree, creer, onFin }:
-  { nom: string; duree: number; creer: () => Peintre; onFin: () => void }) {
+function Cinematique({ nom, duree, creer, onFin, voile: avecVoile = true }:
+  { nom: string; duree: number; creer: () => Peintre; onFin: () => void; voile?: boolean }) {
   const toile = useRef<HTMLCanvasElement | null>(null);
   const fini = useRef(false);
   // le parent passe des fonctions neuves a chaque rendu : dans les
@@ -82,13 +82,14 @@ function Cinematique({ nom, duree, creer, onFin }:
       ctx.font = `600 ${Math.round(Math.max(10, H * 0.014))}px system-ui, sans-serif`;
       ctx.fillStyle = 'rgba(255,255,255,0.5)';
       ctx.fillText(mot('passer'), W / 2, H - 22);
-      const voile = Math.max(1 - fenetre(t, 0, 0.35), fenetre(t, duree - 0.6, duree));
+      // les voyages ouvrent et ferment eux-memes l'image (le fil de l'etape)
+      const voile = avecVoile ? Math.max(1 - fenetre(t, 0, 0.35), fenetre(t, duree - 0.6, duree)) : 0;
       if (voile > 0) { ctx.fillStyle = `rgba(0,0,0,${voile})`; ctx.fillRect(0, 0, W, H); }
       raf = requestAnimationFrame(image);
     };
     raf = requestAnimationFrame(image);
     return () => cancelAnimationFrame(raf);
-  }, [duree]);
+  }, [duree, avecVoile]);
 
   return createPortal(
     <div data-legende={nom} className="fixed inset-0 z-[60] bg-black"
@@ -126,7 +127,8 @@ function distanceKm(a: [number, number], b: [number, number]) {
    ne sert plus que tant que l'image n'est pas chargee. Par-dessus chaque
    voyage, un habillage : bandes cinema qui entrent avec un filet de la
    couleur de l'etape, balayage de lumiere a l'ouverture, vignette ; entre le
-   vol et le trajet au sol, un volet en diagonale.
+   vol et le trajet au sol, un panoramique vertical (LE FIL DE L'ETAPE, 18/10 ;
+   avant, un volet en diagonale).
    =========================================================================== */
 
 /** Le vehicule de profil, roues a yPied, haut de hPx ; false s'il n'est pas encore la. */
@@ -231,16 +233,96 @@ function habillage(ctx: CanvasRenderingContext2D, W: number, H: number, t: numbe
   }
 }
 
-/** Le volet entre deux plans : une diagonale de la teinte couvre (u de 0 a 0,5) puis decouvre. */
-function volet(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
-  const a = lisse(Math.min(1, u * 2)), b = lisse(Math.max(0, u * 2 - 1));
-  const pente = W * 0.45;
-  const x1 = -pente + (W + pente * 2) * a, x0 = -pente + (W + pente * 2) * b;
+/* ===========================================================================
+   LE FIL DE L'ETAPE (18/10) — les transitions des voyages
+   ===========================================================================
+   L'auteur, 18/10 : « des transitions propres et originales ». Un seul motif,
+   tire de la couleur de l'etape, relie tout le voyage :
+     - l'ouverture : sur le noir, un fil se tire de gauche a droite, puis
+       s'ouvre comme une fente sur la scene ;
+     - de l'avion au sol : un panoramique vertical, du ciel vers la route ;
+       la couture entre les deux scenes est le fil ;
+     - l'arrivee : l'image se referme sur le fil, qui se retracte en un point
+       a droite — vers le stade — et s'eteint.
+   Les voyages eux-memes ne changent pas.
+   =========================================================================== */
+
+/** Le fil : un trait de la teinte, avec un halo et une tete lumineuse en x1. */
+function fil(ctx: CanvasRenderingContext2D, x0: number, x1: number, y: number, teinte: string, ep: number, tete = true) {
+  if (x1 - x0 < 0.5) return;
   ctx.save();
-  ctx.fillStyle = teinte;
-  ctx.beginPath(); ctx.moveTo(x0, 0); ctx.lineTo(x1, 0); ctx.lineTo(x1 - pente, H); ctx.lineTo(x0 - pente, H); ctx.closePath(); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.beginPath(); ctx.moveTo(x1, 0); ctx.lineTo(x1 + 5, 0); ctx.lineTo(x1 + 5 - pente, H); ctx.lineTo(x1 - pente, H); ctx.closePath(); ctx.fill();
+  ctx.shadowColor = teinte; ctx.shadowBlur = ep * 6;
+  ctx.fillStyle = teinte; ctx.fillRect(x0, y - ep / 2, x1 - x0, ep);
+  ctx.shadowBlur = 0;
+  if (tete) {
+    const g = ctx.createRadialGradient(x1, y, 0, x1, y, ep * 7);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.25, teinte); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(x1 - ep * 7, y - ep * 7, ep * 14, ep * 14);
+  }
+  ctx.restore();
+}
+
+// Des gestes lents et sans arete (l'auteur, 18/10 : « trop seches ») :
+// une courbe en sinus, des fentes aux levres fondues, l'image qui monte du
+// noir au lieu d'y etre decoupee.
+const sinus = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : 0.5 - 0.5 * Math.cos(Math.PI * x));
+const sortieDouce = (x: number) => (x <= 0 ? 0 : x >= 1 ? 1 : Math.sin(Math.PI * x / 2));
+
+/** Le noir au-dessus de `yh` et au-dessous de `yb`, fondu sur `flou` pixels vers l'interieur. */
+function fente(ctx: CanvasRenderingContext2D, W: number, H: number, yh: number, yb: number, flou: number) {
+  ctx.save();
+  ctx.fillStyle = '#000';
+  if (yh > 0) ctx.fillRect(0, 0, W, yh);
+  if (yb < H) ctx.fillRect(0, yb, W, H - yb);
+  const f = Math.max(1, Math.min(flou, (yb - yh) / 2));
+  let g = ctx.createLinearGradient(0, yh, 0, yh + f);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = g; ctx.fillRect(0, yh, W, f);
+  g = ctx.createLinearGradient(0, yb - f, 0, yb);
+  g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.fillStyle = g; ctx.fillRect(0, yb - f, W, f);
+  ctx.restore();
+}
+
+/**
+ * L'ouverture (u : 0 -> 1) : le fil se tire sur le noir, puis l'image
+ * s'ouvre en fente aux levres fondues, en montant du noir ; le fil se
+ * dedouble sur les deux levres et s'efface en chemin.
+ */
+function ouvrirLeFil(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
+  if (u >= 1) return;
+  const y = H * 0.5, ep = Math.max(2, Math.min(W, H) * 0.005);
+  const tire = sortieDouce(u / 0.38), ouvre = sinus((u - 0.28) / 0.72);
+  const demi = (H / 2 + H * 0.2) * ouvre;
+  if (ouvre <= 0) { ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); }
+  else {
+    // l'image monte du noir pendant que la fente s'ouvre
+    ctx.fillStyle = `rgba(0,0,0,${0.85 * (1 - sinus(ouvre * 1.25))})`; ctx.fillRect(0, 0, W, H);
+    fente(ctx, W, H, y - demi, y + demi, H * 0.2 * Math.min(1, ouvre * 3));
+  }
+  ctx.save();
+  ctx.globalAlpha = 1 - sinus(ouvre * 1.4);
+  if (ouvre <= 0.02) fil(ctx, 0, W * tire, y, teinte, ep);
+  else { fil(ctx, 0, W, y - demi * 0.82, teinte, ep, false); fil(ctx, 0, W, y + demi * 0.82, teinte, ep, false); }
+  ctx.restore();
+}
+
+/**
+ * La fermeture (u : 0 -> 1), le geste inverse : l'image s'assombrit et se
+ * referme en fente fondue sur le fil, puis le fil glisse vers la droite et
+ * s'eteint en un point.
+ */
+function fermerLeFil(ctx: CanvasRenderingContext2D, W: number, H: number, u: number, teinte: string) {
+  if (u <= 0) return;
+  const y = H * 0.5, ep = Math.max(2, Math.min(W, H) * 0.005);
+  const ferme = sinus(u / 0.6), retire = sinus((u - 0.55) / 0.45);
+  const demi = (H / 2 + H * 0.2) * (1 - ferme);
+  ctx.fillStyle = `rgba(0,0,0,${0.85 * sinus(ferme * 1.1)})`; ctx.fillRect(0, 0, W, H);
+  fente(ctx, W, H, y - demi, y + demi, H * 0.2 * Math.min(1, (1 - ferme) * 3 + 0.05));
+  ctx.save();
+  ctx.globalAlpha = sinus(ferme * 1.6) * (1 - sinus((u - 0.85) / 0.15));
+  if (ferme < 0.98) { fil(ctx, 0, W, y - demi * 0.82, teinte, ep, false); fil(ctx, 0, W, y + demi * 0.82, teinte, ep, false); }
+  else fil(ctx, Math.min(W * retire, W * 0.999), W, y, teinte, ep * (1 + retire), true);
   ctx.restore();
 }
 
@@ -266,14 +348,110 @@ const STYLES: Record<string, Style> = {
 };
 const styleDe = (l: Lieu) => STYLES[l.cle] || STYLES.transit;
 
-// Le ciel de chaque voyage : le matin a velo, le plein jour en voiture,
-// l'apres-midi dore en car, le couchant au-dessus des nuages en avion.
-const CIELS: [Rgb, Rgb, Rgb][] = [   // haut, bas, soleil
-  [[104, 172, 236], [255, 216, 168], [255, 236, 190]],
-  [[64, 136, 224], [188, 224, 250], [255, 250, 230]],
-  [[84, 124, 206], [255, 198, 136], [255, 226, 160]],
-  [[40, 66, 146], [255, 172, 112], [255, 214, 150]],
-];
+
+// L'HEURE DU JOUR (18/10, l'auteur : « applique le systeme de luminosite
+// jour, apres-midi, soir, nuit a tout le jeu »). Les voyages avaient chacun
+// leur heure ecrite en dur (le matin a velo, le couchant en avion) ; ils prennent desormais celle ou l'on
+// joue, comme les stades (heure-du-jour.js, `?heure=nuit` pour forcer).
+// L'image est peinte, puis etalonnee d'un bloc (`etalonner`) ; ce qui
+// eclaire — projecteurs, lune, etoiles, phares, feux de l'avion, monument
+// sous les projecteurs — se peint ensuite, par-dessus.
+type Moment = 'jour' | 'apres-midi' | 'soir' | 'nuit';
+function momentDuVoyage(): Moment {
+  try {
+    const Hr = (globalThis as any).SprinterHeure;
+    return (Hr && Hr.moment((globalThis as any).SprinterApp?.G)) || 'jour';
+  } catch { return 'jour'; }
+}
+// haut, bas, astre — la nuit, avant l'etalonnage (qui les fonce encore)
+const CIEL_DU_MOMENT: Record<Moment, [Rgb, Rgb, Rgb]> = {
+  jour: [[64, 136, 224], [188, 224, 250], [255, 250, 230]],
+  'apres-midi': [[80, 126, 208], [255, 210, 156], [255, 232, 176]],
+  soir: [[58, 62, 150], [255, 150, 98], [255, 176, 110]],
+  nuit: [[26, 35, 66], [104, 118, 164], [236, 240, 255]],
+};
+/** La hauteur de l'astre (fraction de l'ecran) : haut le jour, bas le soir. */
+const ASTRE_Y: Record<Moment, number> = { jour: 0.2, 'apres-midi': 0.3, soir: 0.5, nuit: 0.17 };
+/** Les projecteurs : eteints le jour, a moitie le soir, pleins la nuit. */
+const PROJECTEURS: Record<Moment, number> = { jour: 0, 'apres-midi': 0, soir: 0.5, nuit: 1 };
+
+/** L'etalonnage du moment, sur toute l'image deja peinte. */
+function etalonner(ctx: CanvasRenderingContext2D, W: number, H: number, m: Moment) {
+  if (m === 'jour') return;
+  ctx.save();
+  if (m === 'apres-midi') {
+    ctx.globalCompositeOperation = 'soft-light'; ctx.fillStyle = 'rgba(255,190,120,0.42)';
+  } else if (m === 'soir') {
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgb(240,200,192)';
+  } else {
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = 'rgb(78,88,138)';
+  }
+  ctx.fillRect(0, 0, W, H);
+  if (m === 'nuit') {
+    // dans le noir l'oeil voit en gris
+    ctx.globalCompositeOperation = 'saturation'; ctx.globalAlpha = 0.4;
+    ctx.fillStyle = '#808080'; ctx.fillRect(0, 0, W, H);
+  }
+  ctx.restore();
+}
+
+/** La lune et les etoiles, apres l'etalonnage (dans le haut du ciel seulement). */
+function luneEtEtoiles(ctx: CanvasRenderingContext2D, W: number, H: number, x: number, y: number, t: number) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 70; i++) {
+    const sx = alea(i * 13) * W, sy = alea(i * 29) * H * 0.42;
+    const a = 0.35 + 0.5 * alea(i * 7) * (0.7 + 0.3 * Math.sin(t * 2 + i));
+    ctx.fillStyle = `rgba(220,228,255,${a})`;
+    const r = alea(i * 3) < 0.15 ? 1.6 : 1;
+    ctx.fillRect(sx, sy, r, r);
+  }
+  const R = Math.min(W, H) * 0.03;
+  const g = ctx.createRadialGradient(x, y, 0, x, y, R * 6);
+  g.addColorStop(0, 'rgba(200,214,255,0.35)'); g.addColorStop(1, 'rgba(200,214,255,0)');
+  ctx.fillStyle = g; ctx.fillRect(x - R * 6, y - R * 6, R * 12, R * 12);
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = '#EEF2FF'; ctx.beginPath(); ctx.arc(x, y, R, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = 'rgba(180,190,215,0.5)';
+  ctx.beginPath(); ctx.arc(x - R * 0.3, y - R * 0.2, R * 0.22, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + R * 0.35, y + R * 0.3, R * 0.15, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+}
+
+/** Une image passee a une lumiere `rgb` (multiplie, alpha garde) — une fois par image et lumiere. */
+const _teintes = new Map<CanvasImageSource, Map<string, HTMLCanvasElement>>();
+function teinter(im: CanvasImageSource, rgb: [number, number, number]): CanvasImageSource {
+  const w = (im as any).naturalWidth || (im as any).width, h = (im as any).naturalHeight || (im as any).height;
+  if (!(w > 0 && h > 0)) return im;
+  let par = _teintes.get(im);
+  if (!par) _teintes.set(im, par = new Map());
+  const cle = rgb.join(',');
+  let cv = par.get(cle);
+  if (!cv) {
+    cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+    const c = cv.getContext('2d')!;
+    c.drawImage(im, 0, 0);
+    c.globalCompositeOperation = 'multiply'; c.fillStyle = `rgb(${rgb.join(',')})`; c.fillRect(0, 0, w, h);
+    c.globalCompositeOperation = 'destination-in'; c.drawImage(im, 0, 0);
+    par.set(cle, cv);
+  }
+  return cv;
+}
+
+/** Des phares : un cone de lumiere chaude devant le vehicule (vers la droite), et le feu lui-meme. */
+function phares(ctx: CanvasRenderingContext2D, x: number, y: number, L: number, force: number) {
+  if (force <= 0) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  const g = ctx.createLinearGradient(x, y, x + L, y);
+  g.addColorStop(0, `rgba(255,236,190,${0.5 * force})`); g.addColorStop(1, 'rgba(255,236,190,0)');
+  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.moveTo(x, y - 2); ctx.lineTo(x + L, y - L * 0.16); ctx.lineTo(x + L, y + L * 0.1); ctx.lineTo(x, y + 2); ctx.closePath(); ctx.fill();
+  const h = ctx.createRadialGradient(x, y, 0, x, y, 12);
+  h.addColorStop(0, `rgba(255,250,230,${force})`); h.addColorStop(1, 'rgba(255,250,230,0)');
+  ctx.fillStyle = h; ctx.fillRect(x - 12, y - 12, 24, 24);
+  ctx.restore();
+}
 
 function hauteurLoin(s: Loin, u: number, H: number) {
   const tri = (v: number) => 1 - Math.abs((((v % 2) + 2) % 2) - 1);
@@ -630,12 +808,20 @@ const DUREES = [8.2, 11.0, 11.0, 8.6];
 
 export function CinematiqueVoyage({ rang, onFin }: { rang: number; onFin: () => void }) {
   const duree = DUREES[rang] ?? 8.2;
-  return <Cinematique nom={`voyage-${rang}`} duree={duree} onFin={onFin}
+  return <Cinematique nom={`voyage-${rang}`} duree={duree} onFin={onFin} voile={false}
                       creer={() => {
                         prechargerVehicules(['velo', 'avion', 'voiture', 'car', 'jet', 'fusee']);
                         const p = rang === 3 ? peintreAvion(rang, { nom: 'jet', mode: mot('vol_jet') })
                           : rang === 0 ? peintreRoute(0) : peintreVolPuisSol(rang);
-                        return (ctx, W, H, t) => { p(ctx, W, H, t); habillage(ctx, W, H, t, duree, TEINTES[rang]); };
+                        const teinte = TEINTES[rang];
+                        return (ctx, W, H, t) => {
+                          hudDiffere = null;
+                          p(ctx, W, H, t);
+                          habillage(ctx, W, H, t, duree, teinte);
+                          if (hudDiffere) (hudDiffere as (c: CanvasRenderingContext2D) => void)(ctx);
+                          ouvrirLeFil(ctx, W, H, (t - 0.05) / 1.9, teinte);
+                          fermerLeFil(ctx, W, H, (t - (duree - 1.7)) / 1.7, teinte);
+                        };
                       }} />;
 }
 
@@ -645,15 +831,59 @@ function peintreVolPuisSol(rang: number): Peintre {
   const sol = peintreRoute(rang, { local: true, duree: (DUREES[rang] ?? 11) - VOL_ARRIVEE,
                                    departNom: dans(['Aéroport', 'Airport']), km: 22 + rang * 4 });
   const teinte = TEINTES[rang];
+  // du ciel a la route : un panoramique vertical d'une seconde, centre sur
+  // VOL_ARRIVEE ; le ciel monte et sort par le haut, le sol arrive par le
+  // bas, et le fil de l'etape court sur la couture
+  const PAN = 1.7;
+  let ecran: HTMLCanvasElement | null = null;
   return (ctx, W, H, t) => {
-    if (t < VOL_ARRIVEE) vol(ctx, W, H, t); else sol(ctx, W, H, t - VOL_ARRIVEE);
-    const u = (t - (VOL_ARRIVEE - 0.38)) / 0.76;
-    if (u > 0 && u < 1) volet(ctx, W, H, u, teinte);
+    const k = sinus((t - (VOL_ARRIVEE - PAN / 2)) / PAN);
+    if (k <= 0) { vol(ctx, W, H, t); return; }
+    if (k >= 1) { sol(ctx, W, H, t - VOL_ARRIVEE); return; }
+    const couture = H * (1 - k), F = H * 0.14;
+    // LE SOL entre par le bas, son horizon (a 60 % de sa hauteur, voir
+    // peintreRoute) en tete, et son ciel se decouvre au-dessus a mesure que
+    // la camera descend — un basculement, pas deux images empilees
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, Math.max(0, couture - F), W, H); ctx.clip();
+    ctx.translate(0, couture - H * 0.6 * (1 - k));
+    sol(ctx, W, H, Math.max(0, t - VOL_ARRIVEE));
+    ctx.restore();
+    const texteSol = hudDiffere;
+    // LE CIEL, peint a part puis fondu dans le sol sur F pixels : pas d'arete
+    const cv = ctx.canvas;
+    if (!ecran) ecran = document.createElement('canvas');
+    if (ecran.width !== cv.width || ecran.height !== cv.height) { ecran.width = cv.width; ecran.height = cv.height; }
+    const o = ecran.getContext('2d')!;
+    o.setTransform(1, 0, 0, 1, 0, 0); o.clearRect(0, 0, ecran.width, ecran.height);
+    o.setTransform(ctx.getTransform());
+    o.save(); o.translate(0, couture - H); vol(o, W, H, t); o.restore();
+    o.globalCompositeOperation = 'destination-out';
+    const g = o.createLinearGradient(0, couture - F, 0, couture + 2);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,1)');
+    o.fillStyle = g; o.fillRect(0, couture - F, W, H);
+    o.globalCompositeOperation = 'source-over';
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(ecran, 0, 0); ctx.restore();
+    // le texte du vol tant que la couture n'a pas passe le milieu, puis celui du sol
+    if (k >= 0.5) hudDiffere = texteSol;
+    // le fil, sur l'horizon, s'allume au milieu du geste et s'eteint avec lui
+    ctx.save(); ctx.globalAlpha = 0.7 * Math.sin(Math.PI * k);
+    fil(ctx, 0, W, couture - F * 0.35, teinte, Math.max(2, Math.min(W, H) * 0.005), false);
+    ctx.restore();
   };
 }
 
+// Pendant les transitions l'image glisse ; le texte, lui, reste en place.
+// Le peintre ne l'ecrit donc pas tout de suite : il le confie a
+// `hudDiffere`, que CinematiqueVoyage ecrit par-dessus.
+let hudDiffere: ((c: CanvasRenderingContext2D) => void) | null = null;
+
+function hudVoyage(_ctx: CanvasRenderingContext2D, ...a: Parameters<typeof hudVoyageEcrit> extends [unknown, ...infer R] ? R : never) {
+  hudDiffere = (c) => hudVoyageEcrit(c, ...a);
+}
+
 /** Ce qui s'ecrit en haut : l'etape, d'ou vers ou, la distance, puis le lieu. */
-function hudVoyage(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, duree: number,
+function hudVoyageEcrit(ctx: CanvasRenderingContext2D, W: number, H: number, t: number, duree: number,
                    rang: number, depart: Lieu, arrivee: Lieu, km: number, mode?: string) {
   const e = ETAPES[rang];
   ctx.save();
@@ -695,7 +925,8 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
   const sD = o.local ? sA : styleDe(depart), sT = o.local ? sA : STYLES.transit;
   const km = o.km ?? (depart.geo && arrivee.geo ? distanceKm(depart.geo, arrivee.geo) : 0);
   const p = progression(duree);
-  const [cielH, cielB, soleil] = CIELS[rang];
+  const m = momentDuVoyage();
+  const [cielH, cielB, soleil] = CIEL_DU_MOMENT[m];
   const teinte = TEINTES[rang];
   const transport = ETAPES[rang].transport;
   // le monument et les nuages se chargent des l'ouverture ; au sol apres le
@@ -727,11 +958,13 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
     const g = ctx.createLinearGradient(0, 0, 0, yH);
     g.addColorStop(0, css(cielH)); g.addColorStop(1, css(cielB));
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, yH + 2);
-    const sx = W * 0.8 - X * 0.01, sy = H * (rang === 2 ? 0.36 : 0.24);
-    const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, W * 0.45);
-    halo.addColorStop(0, css(soleil, 0.6)); halo.addColorStop(1, css(soleil, 0));
-    ctx.fillStyle = halo; ctx.fillRect(0, 0, W, yH);
-    ctx.fillStyle = css(soleil); ctx.beginPath(); ctx.arc(sx, sy, Math.min(W, H) * 0.045, 0, Math.PI * 2); ctx.fill();
+    const sx = W * 0.8 - X * 0.01, sy = H * ASTRE_Y[m];
+    if (m !== 'nuit') {
+      const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, W * (m === 'soir' ? 0.6 : 0.45));
+      halo.addColorStop(0, css(soleil, 0.6)); halo.addColorStop(1, css(soleil, 0));
+      ctx.fillStyle = halo; ctx.fillRect(0, 0, W, yH);
+      ctx.fillStyle = css(soleil); ctx.beginPath(); ctx.arc(sx, sy, Math.min(W, H) * (m === 'soir' ? 0.06 : 0.045), 0, Math.PI * 2); ctx.fill();
+    }
     // des cumulus qui passent lentement
     for (let i = 0; i < 5; i++) {
       const im = cumulus(i * 2 + rang, true);
@@ -779,8 +1012,9 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
 
     // LE STADE S'ANNONCE : au sol apres le vol, ses projecteurs s'allument a
     // l'horizon et balaient le ciel quand on approche
-    if (o.local) {
-      const a = fenetre(p(t), 0.42, 0.72);
+    // (dessines apres l'etalonnage : voir plus bas, « LES LUMIERES »)
+    const projecteurs = () => {
+      const a = fenetre(p(t), 0.42, 0.72) * PROJECTEURS[m];
       if (a > 0) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
@@ -802,9 +1036,10 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
         }
         ctx.restore();
       }
-    }
+    };
 
     // le monument d'arrivee, qui se leve a droite en fin de voyage
+    let posM: [CanvasImageSource, number, number, number, number] | null = null;
     const M = monumentDuLieu(arrivee.cle);
     if (M) {
       const plage = arrivee.cle === 'menole';
@@ -816,6 +1051,7 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
         // au bord de la mer, il se pose sur la rive et non dans l'eau
         const base = plage ? yMid + H * 0.012 : sA.loin === 'mer' ? yMid : yH + H * 0.012;
         ctx.drawImage(M.im, xm - M.ax * kM, base - M.ay * kM, M.w * kM, M.h * kM);
+        posM = [M.im, xm - M.ax * kM, base - M.ay * kM, M.w * kM, M.h * kM];
       }
     }
 
@@ -924,6 +1160,20 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
       }
     }
 
+    // LES LUMIERES : l'heure etalonne l'image, puis ce qui eclaire se peint
+    // par-dessus — les projecteurs du stade (soir et nuit seulement), le
+    // monument qu'ils eclairent, la lune, les phares
+    etalonner(ctx, W, H, m);
+    if (m === 'nuit') luneEtEtoiles(ctx, W, H, sx, sy, t);
+    if (o.local) projecteurs();
+    if (posM && m === 'nuit') {
+      const [im, mx, my, mw, mh] = posM;
+      ctx.save(); ctx.globalAlpha = 0.85 * fenetre(p(t), 0.5, 0.8);
+      ctx.drawImage(teinter(im, [236, 196, 140]), mx, my, mw, mh);
+      ctx.restore();
+    }
+    if (transport !== 'velo') phares(ctx, xv + hautM * parM * (transport === 'car' ? 1.55 : 1.35), yR1 - H * 0.04, W * 0.35,
+                                     m === 'nuit' ? 1 : m === 'soir' ? 0.45 : 0);
     hudVoyage(ctx, W, H, t, duree, rang, depart, arrivee, km * p(t), o.local ? mot(transport) : undefined);
   };
 }
@@ -935,7 +1185,8 @@ function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom
   const depart = lieuDeLEtape(rang - 1), arrivee = lieuDeLEtape(rang);
   const km = depart.geo && arrivee.geo ? distanceKm(depart.geo, arrivee.geo) : 0;
   const p = progression(duree);
-  const [cielH, cielB, soleil] = CIELS[rang];
+  const m = momentDuVoyage();
+  const [cielH, cielB, soleil] = CIEL_DU_MOMENT[m];
   const teinte = TEINTES[rang];
   chargerLesCumulus(true);
   monumentDuLieu(arrivee.cle);
@@ -943,15 +1194,19 @@ function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom
   return (ctx, W, H, t) => {
     const X = p(t) * W * 9;
     const descente = o.descente === false ? 0 : fenetre(t, duree - 3.4, duree - 1.0);
+    // a la descente le ciel tourne au ciel du sol, au meme moment de la journee
+    const [solH, solB] = CIEL_DU_MOMENT[m];
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, css(mel(cielH, [70, 130, 210], descente)));
-    g.addColorStop(1, css(mel(cielB, [196, 222, 244], descente)));
+    g.addColorStop(0, css(mel(cielH, solH, descente)));
+    g.addColorStop(1, css(mel(cielB, solB, descente)));
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    const sx = W * 0.82, sy = H * (0.5 - 0.25 * descente);
-    const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, W * 0.6);
-    halo.addColorStop(0, css(soleil, 0.7)); halo.addColorStop(1, css(soleil, 0));
-    ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle = css(soleil); ctx.beginPath(); ctx.arc(sx, sy, Math.min(W, H) * 0.05, 0, Math.PI * 2); ctx.fill();
+    const sx = W * 0.82, sy = H * (m === 'soir' ? 0.62 - 0.2 * descente : m === 'nuit' ? 0.16 : 0.5 - 0.25 * descente);
+    if (m !== 'nuit') {
+      const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, W * 0.6);
+      halo.addColorStop(0, css(soleil, 0.7)); halo.addColorStop(1, css(soleil, 0));
+      ctx.fillStyle = halo; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = css(soleil); ctx.beginPath(); ctx.arc(sx, sy, Math.min(W, H) * 0.05, 0, Math.PI * 2); ctx.fill();
+    }
 
     // la ville d'arrivee, qui monte sous les nuages qui s'ouvrent : les
     // immeubles dans la brume, le monument, un rang plus proche, et le
@@ -1049,6 +1304,35 @@ function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom
     }
     traitsDeVitesse(ctx, W, H, ya - H * 0.15, ya + H * 0.15, t, 0.55 * (1 - descente));
 
+    // LES LUMIERES (voir peintreRoute) : l'etalonnage, puis la lune, les
+    // fenetres de la ville qui s'allument, les feux de l'avion
+    etalonner(ctx, W, H, m);
+    if (m === 'nuit' || m === 'soir') {
+      if (m === 'nuit') luneEtEtoiles(ctx, W, H, sx, sy, t);
+      if (descente > 0) {
+        const yS = H * 0.8 + (1 - descente) * H * 0.5;
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 90; i++) {
+          const fx = alea(i * 17 + 3) * W, fy = yS - H * 0.11 * alea(i * 23 + 5);
+          if (alea(i * 31) > (m === 'nuit' ? 0.85 : 0.45)) continue;
+          ctx.fillStyle = `rgba(255,214,140,${(m === 'nuit' ? 0.8 : 0.45) * descente})`;
+          ctx.fillRect(fx, fy, 2, 3);
+        }
+        ctx.restore();
+      }
+      // les feux de navigation : rouge, vert, et le flash blanc
+      const larg = Math.min(W * 0.66, H * 0.52) * (1 - 0.45 * loin_);
+      const fl = m === 'nuit' ? 1 : 0.5;
+      ctx.save(); ctx.globalCompositeOperation = 'lighter';
+      const feu = (x: number, y: number, c: string, a: number) => {
+        const r = ctx.createRadialGradient(x, y, 0, x, y, 9); r.addColorStop(0, c.replace('A', String(a))); r.addColorStop(1, c.replace('A', '0'));
+        ctx.fillStyle = r; ctx.fillRect(x - 9, y - 9, 18, 18);
+      };
+      feu(xa - larg * 0.02, ya + larg * 0.05, 'rgba(255,60,60,A)', 0.9 * fl);
+      feu(xa + larg * 0.08, ya + larg * 0.07, 'rgba(80,255,120,A)', 0.8 * fl);
+      if ((t * 1.2) % 1 < 0.08) feu(xa - larg * 0.42, ya - larg * 0.08, 'rgba(255,255,255,A)', fl);
+      ctx.restore();
+    }
     hudVoyage(ctx, W, H, t, duree, rang, depart, arrivee, km * p(t), o.mode);
   };
 }

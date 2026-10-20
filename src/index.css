@@ -447,3 +447,72 @@
     touch-action: none;
   }
 }
+
+/* ----------------------------------------------------------- Halloween
+   Habillage saisonnier de l'accueil, et de l'accueil seulement.
+
+   L'attribut data-halloween n'est pose que sur les conteneurs de l'ecran
+   d'ouverture et du menu (voir OpenScreen, TitleScreen, pilotes par
+   game/theme-accueil.ts). Ces variables sont redefinies LOCALEMENT : elles ne
+   retombent que sur les descendants de ces conteneurs, donc la course garde
+   la palette doree d'origine. Hors saison l'attribut n'existe pas, et rien de
+   ceci ne s'applique.
+
+   Orange citrouille en couleur vive, violet en accent, cartes d'un violet
+   nocturne. On surcharge aussi --primaire-rgb et --primaire-fonce, d'ou les
+   halos et les bordures de bouton tirent leur couleur. */
+[data-halloween] {
+  --primary: #ff7a18;
+  --primary-foreground: #1a0a02;
+  --ring: #ff7a18;
+  --primaire-rgb: 255 122 24;
+  --primaire-fonce: #c0530a;
+  --accent: #7c3aed;
+  --accent-foreground: #f7ecff;
+  --card: #170a24;
+  --card-foreground: #f7ecff;
+  --popover: #170a24;
+  --popover-foreground: #f7ecff;
+  --secondary: #2a1640;
+  --secondary-foreground: #f7ecff;
+  --muted: #3a2555;
+  --muted-foreground: #c3aede;
+  --border: #3a2555;
+  --input: #3a2555;
+}
+
+/* Calque decoratif (HalloweenDecor) : animations legeres, transform/opacity
+   uniquement. */
+@keyframes hw-float {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-7px); }
+}
+@keyframes hw-twinkle {
+  from { opacity: 0.2; }
+  to   { opacity: 1; }
+}
+@keyframes hw-bat-wing {
+  from { transform: scaleX(1); }
+  to   { transform: scaleX(0.55); }
+}
+@keyframes hw-sway {
+  from { transform: rotate(-4deg); }
+  to   { transform: rotate(4deg); }
+}
+@keyframes hw-drift {
+  from { transform: translate(0, 0); }
+  to   { transform: translate(26px, -14px); }
+}
+.hw-float    { animation: hw-float 6s ease-in-out infinite alternate; }
+.hw-twinkle  { animation: hw-twinkle 2.4s ease-in-out infinite alternate; }
+.hw-bat-wing { animation: hw-bat-wing 0.34s ease-in-out infinite alternate; }
+.hw-sway     { animation: hw-sway 3.6s ease-in-out infinite alternate; }
+.hw-drift    { animation: hw-drift 8s ease-in-out infinite alternate; }
+
+/* Sous prefers-reduced-motion, tout se fige : le decor reste visible, mais
+   plus rien ne bouge. */
+@media (prefers-reduced-motion: reduce) {
+  .hw-float, .hw-twinkle, .hw-bat-wing, .hw-sway, .hw-drift {
+    animation: none !important;
+  }
+}

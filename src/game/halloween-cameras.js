@@ -37,21 +37,28 @@
    resultat a l'oeil, un tiers du travail dans Blender, et des pieces qui se
    partagent entre nuits d'une meme famille.
 
-   LA TREIZIEME EST LA SEULE A EN AVOIR TROIS. Sa finale se court en trois
-   phases, et la camera DESCEND a chaque vague : le monde se referme
-   litteralement sur le joueur. C'est la seule nuit ou l'angle bouge pendant
-   qu'on court.
+   LA FINALE EN TROIS PHASES N'EXISTE PAS, ET LA TABLE NE LE PRETEND PLUS
+   (16/10). La treizieme devait descendre pendant qu'on court, de 20° a 6° ;
+   la fonction qui l'aurait fait (poserLaPhase) n'a jamais ete appelee, et la
+   faire vivre demanderait de decoder trois series de decor en pleine course —
+   des maisons qui disparaissent le temps d'arriver. Les phases sont retirees,
+   avec la serie a 12° qui ne servait qu'a elles.
+
+   NI LES TREIZE LIEUX. Chaque nuit portait le nom d'un lieu (palais des
+   glaces, morgue, toits…) qu'aucune ne montre : les treize se courent dans la
+   ruelle (decors-stades.js, PLAN.halloween). Le plan d'origine les garde
+   (docs/HALLOWEEN_PLAN.md, §3.3) ; la table ne garde que ce qui est vrai.
 --------------------------------------------------------------------------- */
 
 /** Les quatre familles, et ce que chacune montre. */
 export const FAMILLES = {
-  // Un couloir, un tunnel, une ruelle : les murs ecrasent, on ne voit pas loin.
+  // Les murs ecrasent, on ne voit pas loin.
   confine: { deg: 6, zoom: 2.5 },
-  // On voit le sol juste devant et rien au-dela : maiS, foret, miroirs.
+  // On voit le sol juste devant et rien au-dela.
   resserre: { deg: 11, zoom: 2.0 },
-  // Le cimetiere : il faut lire la terre d'ou sortent les mains.
+  // Entre les deux : on lit le pave devant soi et un peu de la rue.
   ouvert: { deg: 14, zoom: 1.9 },
-  // Les trois lieux qui ont besoin d'espace : la piste, les toits, le champ.
+  // Les lignes droites longues, ou il faut voir loin devant et loin derriere.
   large: { deg: 20, zoom: 1.6 },
 };
 
@@ -59,7 +66,10 @@ export const FAMILLES = {
  * La camera de chaque nuit.
  *
  * `deg` est l'angle au-dessus de l'horizon ; `zoom` multiplie l'echelle du
- * jeu. `famille` dit quel jeu de pieces Blender la nuit consomme.
+ * jeu. `famille` dit quel jeu de pieces Blender la nuit consomme — le rendu
+ * prend, lui, la serie dont l'angle est le plus proche (serieDeLaVue,
+ * decors-stades.js), et le chargement a la demande fait le meme choix
+ * (prechargerLaNuit, chargement.ts).
  *
  * Les valeurs propres a une nuit s'ecartent un peu de leur famille quand le
  * lieu le demande — mais jamais assez pour qu'un autre jeu de pieces soit
@@ -67,23 +77,19 @@ export const FAMILLES = {
  * on change de famille en sachant qu'on commande un rendu.
  */
 export const CAMERAS = {
-  1:  { deg: 7,  zoom: 2.4, famille: 'confine',  lieu: 'Ruelle du Croissant Noir' },
-  2:  { deg: 14, zoom: 2.0, famille: 'ouvert',   lieu: 'Cimetiere Saint-Gall' },
-  3:  { deg: 8,  zoom: 2.2, famille: 'confine',  lieu: 'Champ de mais' },
-  4:  { deg: 6,  zoom: 2.5, famille: 'confine',  lieu: 'Parking souterrain' },
-  5:  { deg: 22, zoom: 1.6, famille: 'large',    lieu: 'Piste abandonnee' },
-  6:  { deg: 5,  zoom: 2.6, famille: 'confine',  lieu: 'Egouts, tunnel inonde' },
-  7:  { deg: 11, zoom: 1.9, famille: 'resserre', lieu: 'Foret, faisceaux' },
-  8:  { deg: 7,  zoom: 2.3, famille: 'confine',  lieu: 'Manoir, couloirs' },
-  9:  { deg: 18, zoom: 1.7, famille: 'large',    lieu: 'Toits de la ville' },
-  10: { deg: 13, zoom: 2.0, famille: 'resserre', lieu: 'Palais des glaces' },
-  11: { deg: 6,  zoom: 2.5, famille: 'confine',  lieu: 'Morgue, hopital' },
-  12: { deg: 20, zoom: 1.6, famille: 'large',    lieu: 'Champ de crash' },
-  // LA FINALE DESCEND. Trois phases, trois cadrages, et le dernier est le plus
-  // bas de toute l'edition : a la troisieme vague, on ne voit plus que ce qui
-  // arrive.
-  13: { deg: 20, zoom: 1.6, famille: 'large',    lieu: 'Le Grand Cimetiere',
-        phases: [ { deg: 20, zoom: 1.6 }, { deg: 12, zoom: 2.0 }, { deg: 6, zoom: 2.6 } ] },
+  1:  { deg: 7,  zoom: 2.4, famille: 'confine' },
+  2:  { deg: 14, zoom: 2.0, famille: 'ouvert' },
+  3:  { deg: 8,  zoom: 2.2, famille: 'confine' },
+  4:  { deg: 6,  zoom: 2.5, famille: 'confine' },
+  5:  { deg: 22, zoom: 1.6, famille: 'large' },
+  6:  { deg: 5,  zoom: 2.6, famille: 'confine' },
+  7:  { deg: 11, zoom: 1.9, famille: 'resserre' },
+  8:  { deg: 7,  zoom: 2.3, famille: 'confine' },
+  9:  { deg: 18, zoom: 1.7, famille: 'large' },
+  10: { deg: 13, zoom: 2.0, famille: 'resserre' },
+  11: { deg: 6,  zoom: 2.5, famille: 'confine' },
+  12: { deg: 20, zoom: 1.6, famille: 'large' },
+  13: { deg: 20, zoom: 1.6, famille: 'large' },
 };
 
 /** L'angle du sprint, celui qu'on remet en sortant du mode. */
