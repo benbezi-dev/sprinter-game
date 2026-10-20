@@ -43,7 +43,11 @@ sans se justifier, sans s'excuser longuement — puis enchaîner sur le correcti
   general-purpose compris).
 - **Tâches peu exigeantes → Haiku** : renommer, reformater, convertir,
   extraire, compter, lister, appliquer un changement déjà décidé. Agent
-  `executant`, ou `model: "haiku"`.
+  `executant` (Haiku, 6 outils), ou `model: "haiku"`. S'il s'arrête sur une
+  consigne ambiguë, ou si la tâche demande de la précision, la passer à
+  `chercheur` (Sonnet) ou la faire soi-même.
+- Seuls deux agents existent dans `.claude/agents/` : `chercheur` et
+  `executant` (depuis le 20/10/2026).
 - Toujours passer `model` explicitement dans l'appel Agent (il prime sur tout
   le reste). Un sous-agent Opus seulement si la tâche l'exige, en le disant.
 - Une seule commande ou la lecture d'un fichier connu : le chef la fait
