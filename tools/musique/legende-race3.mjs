@@ -21,6 +21,7 @@
 // bourdon, stab) : l'ecart dit lequel passe devant.
 
 import { Audio_, tampon, ecrireWav, SR } from './moteur.mjs';
+import { auree } from '../../src/game/legende/aura.js';
 
 // --- fabriquerCourse, recopie de sprinter-app.js (plus `melodie`) --------
 function mains(d, t0, amp, graine) {
@@ -107,6 +108,10 @@ function fabriquerCourse(cfg) {
       const jouer = INSTRUMENTS[c.instrument], m = c.melodie[b % c.melodie.length];
       for (const [s, x, l] of m) jouer(d, t + x * beat, l * beat, F(s, c.octave), c.amp);
     }
+  }
+  if (cfg.aura && !brut) {
+    const g = auree(d, cfg, (nom, dd, t, dur, f, a) => INSTRUMENTS[nom](dd, t, dur, f, a), (s, o) => Audio_.semi(s, o));
+    while (!g.next().done);
   }
   return brut ? d : Audio_.norm(d);
 }

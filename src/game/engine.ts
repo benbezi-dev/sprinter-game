@@ -43,6 +43,11 @@ import tribuneManifeste from './tribune-manifeste.json';
 // tribune.js n'en charge qu'un, selon la densite de la toile.
 import tribuneManifesteUltra from './tribune-manifeste-ultra.json';
 (globalThis as any).SprinterTribuneManifesteUltra = tribuneManifesteUltra;
+// Les memes sous la camera a 15° (tribune.py --angle 15) : Legende, Champ-de-Mars.
+import tribuneManifeste15 from './tribune-manifeste-a15.json';
+(globalThis as any).SprinterTribuneManifeste15 = tribuneManifeste15;
+import tribuneManifesteUltra15 from './tribune-manifeste-ultra-a15.json';
+(globalThis as any).SprinterTribuneManifesteUltra15 = tribuneManifesteUltra15;
 import './tribune.js';
 // La couleur du logo des panneaux, choisie pour se detacher de chaque stade.
 import './teintes-pub.js';

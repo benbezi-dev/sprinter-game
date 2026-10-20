@@ -9042,6 +9042,12 @@
     // l'inverse. Les noms, eux, restent au-dessus de tout — un nom cache par
     // un mat ne se lit plus.
     if (DEC()) DEC().debout(ctx, apiDecor(), th, G.levelIdx);
+    // Le premier plan debout d'un evenement (torii, cerisiers, pirogues :
+    // game/legende/decors.ts), pour la meme raison.
+    if (G.premierPlanEvenement && G.premierPlanEvenement.devant && th && G.track) {
+      try { G.premierPlanEvenement.devant(ctx, apiCdm(), th, samples(), G.track.curved ? G.track.edge(0) : 0); }
+      catch (e) { /* la pelouse sans son decor */ }
+    }
     // LES ARBRES DU DEDANS, DEVANT LES COUREURS, QUAND LA CAMERA DESCEND.
     //
     // Sous la vue du jeu, un cypres du dedans ne mord que les pieds du

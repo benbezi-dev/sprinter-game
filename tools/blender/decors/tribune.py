@@ -368,6 +368,14 @@ def main():
     ULTRA = '--ultra' in args
     if ULTRA:
         PPM, LARGEUR = PPM * 1.5, int(LARGEUR * 1.5)
+    # --angle : le meme public sous une camera plus basse (les lieux de la
+    # Legende et le Champ-de-Mars, a 15° : sous l'atlas a 26,6°, chaque siege
+    # penchait par rapport a sa rangee). Range a part, « tribune-a<deg> » et
+    # son manifeste, cherches par tribune.js selon la camera du moment.
+    angle = float(args[args.index('--angle') + 1]) if '--angle' in args else None
+    suffixe = '' if angle is None else '-a%g' % angle
+    if angle is not None:
+        vue.poser_angle(angle)
     racine, cases = construire()
 
     # 1. mesurer chaque figure et ranger les rectangles
@@ -397,7 +405,7 @@ def main():
     mats, blanc, trou = materiaux()
 
     # 3. les six passes
-    dossier = os.path.join(RACINE, 'public', 'decors-ultra' if ULTRA else 'decors', 'tribune')
+    dossier = os.path.join(RACINE, 'public', 'decors-ultra' if ULTRA else 'decors', 'tribune' + suffixe)
     os.makedirs(dossier, exist_ok=True)
     for passe in CATEGORIES:
         appliquer(passe, mats, blanc, trou)
@@ -439,7 +447,7 @@ def main():
            'caps': CAPS, 'ancres': ancres, 'passes': list(CATEGORIES), 'w': W, 'h': H,
            'cadres': cadres}
     f_man = os.path.join(RACINE, 'src', 'game',
-                         'tribune-manifeste-ultra.json' if ULTRA else 'tribune-manifeste.json')
+                         ('tribune-manifeste-ultra%s.json' if ULTRA else 'tribune-manifeste%s.json') % suffixe)
     json.dump(man, open(f_man, 'w'), indent=1)
     print('manifeste : ' + f_man)
 

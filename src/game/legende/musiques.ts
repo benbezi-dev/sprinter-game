@@ -17,6 +17,7 @@
 
 import { SprinterApp } from '../engine';
 import { MUSIQUES_LEGENDE } from './race3-lieux.js';
+import { auree } from './aura.js';
 
 /** Le nom sous lequel le moteur range le morceau du lieu `cle`. */
 export const nomDeLaMusique = (cle: string) => 'legende_' + cle;
@@ -36,7 +37,13 @@ export function chargerLaMusiqueDuLieu(cle: string): void {
   // pas de contexte audio avant le premier geste : l'appel suivant le trouvera
   if (!cfg || !A || !A.ok || !A.ctx || A.buf[nom] || enCours.has(cle)) return;
   enCours.add(cle);
-  const gen = A.fabriquerCourse(cfg);
+  // l'Olympe et l'apotheose : le morceau fini, puis son aura (aura.js), puis
+  // la normalisation de l'ensemble — toujours par tranches
+  const gen = (cfg as any).aura ? (function* () {
+    const d = yield* A.fabriquerCourse(cfg);
+    yield* auree(d, cfg, A.instrument.bind(A), A.semi.bind(A));
+    return yield* A.normaliser(d);
+  })() : A.fabriquerCourse(cfg);
   const tranche = () => {
     const fin = performance.now() + 6;
     let r = gen.next();

@@ -12,7 +12,9 @@
 //   couches     LE REFRAIN : [demi-ton depuis le la, temps, duree en temps]
 //               par mesure, joue par un instrument synthetise avec les memes
 //               briques (`tone`) — voir INSTRUMENTS dans sprinter-app.js ;
-//   contretemps les accords plaques sur les contretemps (skank reggae).
+//   contretemps les accords plaques sur les contretemps (skank reggae) ;
+//   aura        l'Olympe et l'apotheose : choeur, halo, harpe et grande
+//               reverberation par-dessus (aura.js ; 1 = le dosage de base).
 // Un fichier de donnees pur : le jeu le lit (Audio_.buildRace) et
 // tools/musique/legende-race3.mjs aussi, pour l'ecoute hors du navigateur.
 
@@ -215,7 +217,7 @@ const LIEUX = {
   // KARMAN, HERMES « le Messager ». Le mode dorien, l'aulos qui monte et
   // redescend, la lyre qui pince dessous.
   karman: {
-    ...BASE, prog: [[0, MIN], [5, MAJ], [0, MIN], [-2, MAJ]], bassPat: BASSE_JUSTE, stabSemi: 7,
+    ...BASE, aura: 1, prog: [[0, MIN], [5, MAJ], [0, MIN], [-2, MAJ]], bassPat: BASSE_JUSTE, stabSemi: 7,
     couches: [
       { instrument: 'anche', octave: 4, amp: 0.20, melodie: [
         [[0, 0, .5], [2, .5, .5], [3, 1, .5], [5, 1.5, .5], [7, 2, 1], [9, 3, 1]],
@@ -232,7 +234,7 @@ const LIEUX = {
   // KARMAN, SUN WUKONG « le Roi Singe ». La pentatonique au dizi, qui saute
   // comme lui ; un gong a chaque tour, les claquettes de l'opera de Pekin.
   'karman-wukong': {
-    ...BASE, prog: [[0, MAJ], [-3, MIN], [5, MAJ], [7, MAJ]], bassPat: BASSE_JUSTE, stabSemi: 7,
+    ...BASE, aura: 1, prog: [[0, MAJ], [-3, MIN], [5, MAJ], [7, MAJ]], bassPat: BASSE_JUSTE, stabSemi: 7,
     claps: [1.5, 3.5], clapAmp: 1.0,
     couches: [
       { instrument: 'souffle', octave: 4, amp: 0.24, melodie: [
@@ -248,7 +250,7 @@ const LIEUX = {
   // KARMAN, ANANSI « l'Araignee ». La kalimba qui tisse en pentatonique,
   // la cloche gankogui des Akan qui tourne au-dessus.
   'karman-anansi': {
-    ...BASE, prog: [[0, MIN], [-2, MAJ], [0, MIN], [3, MAJ]], bassPat: BASSE_JUSTE, stabSemi: 7,
+    ...BASE, aura: 1, prog: [[0, MIN], [-2, MAJ], [0, MIN], [3, MAJ]], bassPat: BASSE_JUSTE, stabSemi: 7,
     couches: [
       { instrument: 'cloche', octave: 4, amp: 0.24, melodie: (() => {
         const m = [[0, 0, .25], [7, .25, .25], [12, .5, .25], [10, .75, .25], [7, 1, .25], [12, 1.25, .25], [15, 1.5, .5], [12, 2, .25], [10, 2.25, .25], [7, 2.5, .25], [10, 2.75, .25], [12, 3, .5], [7, 3.5, .5]];
@@ -263,7 +265,7 @@ const LIEUX = {
   // KARMAN, INTI « le Soleil ». La quena en pentatonique andine, au rythme
   // du huayno (longue, breve), le charango qui gratte dessous.
   'karman-inti': {
-    ...BASE, prog: [[0, MIN], [-2, MAJ], [3, MAJ], [-5, MAJ]], bassPat: BASSE_JUSTE, stabSemi: 7,
+    ...BASE, aura: 1, prog: [[0, MIN], [-2, MAJ], [3, MAJ], [-5, MAJ]], bassPat: BASSE_JUSTE, stabSemi: 7,
     contretemps: { instrument: 'pincee', octave: 5, amp: 0.05, temps: [0, 0.75, 1.5, 2, 2.75, 3.5] },
     couches: [{ instrument: 'souffle', octave: 4, amp: 0.26, melodie: [
       [[12, 0, .75], [10, .75, .25], [7, 1, .5], [10, 1.5, .5], [12, 2, .75], [15, 2.75, .25], [12, 3, 1]],
@@ -277,7 +279,7 @@ const LIEUX = {
   // l'inter galactique : on la garde entiere, accords diminues compris, et
   // un cristal monte les arpeges des accords, une octave au-dessus.
   apotheose: {
-    ...BASE,
+    ...BASE, aura: 1,
     couches: [{ instrument: 'cloche', octave: 5, amp: 0.22, melodie: [
       [[0, 0, 1], [3, 1, 1], [6, 2, 1], [12, 3, 1]],
       tr([[0, 0, 1], [3, 1, 1], [6, 2, 1], [12, 3, 1]], -1),

@@ -612,9 +612,22 @@ function objetsDuLieu(ctx: CanvasRenderingContext2D, api: any, rIn: number, C: C
     poses.push([p[1], R.im, p[0], R.p.ax * kk, R.p.ay * kk, w, h, ((g >>> 5) & 1) === 1 && ob.img !== 'kiosque']);
   }
   poses.sort((a, b) => a[0] - b[0]);
+  // UN COUREUR DERRIERE UN OBJET LE VOIT S'EFFACER (20/10). Ces pieces sont
+  // peintes apres les coureurs (`devant`) : plus pres de la camera que le
+  // couloir 1, elles les cachent, comme il se doit — mais sous la camera a
+  // 15°, un torii ou un cerisier couvre les couloirs 1 a 4. Celui qui masque
+  // un coureur passe donc en transparence, le temps qu'il soit derriere.
+  const coureurs: number[][] = [];
+  for (const r of G.runners || []) {
+    const q = api.ground(...G.track.posDemi(r.d, r.lane, r.demi || 0));
+    coureurs.push([q[0] - 0.5 * m, q[1] - 2.1 * m, q[0] + 0.5 * m, q[1]]);
+  }
   const Hr = (globalThis as any).SprinterHeure;
   for (const [y, im0, x, ax, ay, w, h, retourne] of poses) {
     const im = Hr ? Hr.image(im0, 'proche') : im0;
+    const x0 = retourne ? x - (w - ax) : x - ax, y0 = y - ay;
+    const cache = coureurs.some(([a, b, c, e]) => a < x0 + w && c > x0 && b < y0 + h && e > y0);
+    ctx.globalAlpha = cache ? 0.38 : 1;
     if (retourne) {
       ctx.save(); ctx.translate(x, 0); ctx.scale(-1, 1);
       ctx.drawImage(im, -ax, y - ay, w, h);
@@ -623,6 +636,7 @@ function objetsDuLieu(ctx: CanvasRenderingContext2D, api: any, rIn: number, C: C
       ctx.drawImage(im, x - ax, y - ay, w, h);
     }
   }
+  ctx.globalAlpha = 1;
 }
 
 /**
@@ -1147,19 +1161,27 @@ export function premierPlanDe(lieu: string) {
   const Cu = CULTURE[cle];
   if (Cu) {
     const graine = cle.length * 7919 + cle.charCodeAt(0);
-    return function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
+    // Le sol et la guirlande (au fond, le long des panneaux) avant les
+    // coureurs ; les objets debout de la pelouse et les petales APRES eux
+    // (`devant`, voir drawAthletes) : ils sont plus pres de la camera que le
+    // couloir 1, et un coureur se peignait par-dessus un torii (20/10).
+    return Object.assign(function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
       const { G, C } = api;
       const rOut = G.track.curved ? G.track.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
       if (Cu.sol === 'karesansui') karesansui(ctx, api, sm, rIn);
       if (Cu.piste) pistePoetique(ctx, api, rIn, Cu.piste, graine);
       guirlande(ctx, api, rOut, Cu);
-      objetsDuLieu(ctx, api, rIn, Cu, graine);
-      if (cle === 'kyoto') petales(ctx, api);
-    };
+    }, {
+      devant(ctx: CanvasRenderingContext2D, api: any, _th: any, _sm: any[], rIn: number) {
+        objetsDuLieu(ctx, api, rIn, Cu, graine);
+        if (cle === 'kyoto') petales(ctx, api);
+      },
+    });
   }
   const P = PREMIER_PLAN[cle];
   if (!P || !IMAGES[P.img]) return null;
-  return function premierPlan(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
+  // tout debout dans la pelouse : peint apres les coureurs (voir plus haut)
+  return Object.assign(function premierPlan() {}, { devant(ctx: CanvasRenderingContext2D, api: any, _th: any, sm: any[], rIn: number) {
     // les enfants d'abord : a deux ou trois metres de la piste, ils sont plus
     // loin de la camera que les barques (cinq metres)
     if (cle === 'menole') enfants(ctx, api, sm, rIn);
@@ -1183,5 +1205,5 @@ export function premierPlanDe(lieu: string) {
         ctx.drawImage(im, x, y, w, h);
       }
     }
-  };
+  } });
 }

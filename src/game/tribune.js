@@ -38,6 +38,12 @@
     ordinaire: { man: () => root.SprinterTribuneManifeste, dossier: '/decors/tribune/', ppm: 80, ppmDrapeau: 64 },
     ultra: { man: () => root.SprinterTribuneManifesteUltra, dossier: '/decors-ultra/tribune/', ppm: 120,
              ppmDrapeau: 128 },
+    // LE MEME PUBLIC SOUS LA CAMERA A 15° (tribune.py --angle 15) : les lieux
+    // de la Legende et le Champ-de-Mars. Sous l'atlas a 26,6°, chaque siege
+    // et son occupant penchaient par rapport a leur rangee (20/10).
+    ordinaire15: { man: () => root.SprinterTribuneManifeste15, dossier: '/decors/tribune-a15/', ppm: 80, ppmDrapeau: 64 },
+    ultra15: { man: () => root.SprinterTribuneManifesteUltra15, dossier: '/decors-ultra/tribune-a15/', ppm: 120,
+               ppmDrapeau: 128 },
   };
   let jeu = JEUX.ordinaire;
   const MAN = () => jeu.man();
@@ -54,10 +60,16 @@
    * l'autre et vide les images composees : leurs ancres sont en pixels de
    * l'atlas qui les a faites.
    */
-  function choisirJeu() {
+  function choisirJeu(th) {
     const A = root.SprinterApp, G = A && A.G;
-    const mu = JEUX.ultra.man();
-    const voulu = G && G.dpr > 2 && mu && mu.passes ? JEUX.ultra : JEUX.ordinaire;
+    // l'angle du theme s'il en demande un (le public se compose d'avance,
+    // avant que la camera du lieu soit posee), sinon celui de la camera
+    const C = root.SprinterCore && root.SprinterCore.C;
+    const deg = (th && th.angle) || (C ? Math.atan2(C.ISO_SIN, C.ISO_COS) * 180 / Math.PI : 26.6);
+    const a15 = Math.abs(deg - 15) < 2 && JEUX.ordinaire15.man() && JEUX.ordinaire15.man().passes;
+    const mu = (a15 ? JEUX.ultra15 : JEUX.ultra).man();
+    const ultra = G && G.dpr > 2 && mu && mu.passes;
+    const voulu = a15 ? (ultra ? JEUX.ultra15 : JEUX.ordinaire15) : (ultra ? JEUX.ultra : JEUX.ordinaire);
     if (voulu === jeu) return;
     jeu = voulu;
     for (const p in atlas) delete atlas[p];
@@ -67,8 +79,8 @@
     reserve.clear();
   }
 
-  function charger() {
-    choisirJeu();
+  function charger(th) {
+    choisirJeu(th);
     const man = MAN();
     if (!man || !man.passes) return false;
     if (pret) return true;
@@ -529,7 +541,7 @@
    * autre public.
    */
   function composerDAvance(th, nom, jusqua) {
-    if (!charger()) return 0;
+    if (!charger(th)) return 0;
     if (th !== _themeCourant) changerDeStade(th);
     const man = MAN();
     for (let c = 0; c < man.caps.length; c++) capsVus.add(c);
@@ -556,7 +568,7 @@
    */
   function dessiner(ctx, api, th, nom, sm, near, rangs, pr, pz, densite, allees) {
     vuA = performance.now();
-    if (!charger()) { inacheve = true; return false; }
+    if (!charger(th)) { inacheve = true; return false; }
     if (th !== _themeCourant) changerDeStade(th);
     const G = api.G, T = G.track;
     const prepa = G.enPreparation && G.state === 'count';
