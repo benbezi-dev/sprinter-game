@@ -35,16 +35,29 @@ export function ReviewVideo({ etat, onPartager, titre }: {
   // Le rouge n'arrive que dans la derniere minute : avant, il crierait au loup.
   const urgent = etat.phase === 'prete' && etat.reste < 60_000;
 
+  // COMPACTE (20/10/2026, « l'image de partage de la video prend trop
+  // d'espace sur la page ») : le titre et le compte a rebours partagent une
+  // ligne, le bouton tient sur une seule, et la barre du temps s'amincit. La
+  // carte passe d'environ 182 a 91 points de haut sur un telephone.
   return (
     <motion.div
       {...MONTEE}
-      className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col gap-3"
+      className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl px-3 py-2.5 flex flex-col gap-2"
     >
-      <div className="flex items-center gap-2 justify-center">
-        <Film className="w-4 h-4 text-emerald-400" />
-        <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-emerald-400">
-          {titre ?? N.t('review_title')}
-        </h3>
+      <div className="flex items-center gap-2 justify-between min-w-0">
+        <span className="flex items-center gap-1.5 min-w-0">
+          <Film className="w-3.5 h-3.5 shrink-0 text-emerald-400" />
+          <h3 className="truncate text-[10px] md:text-xs font-bold tracking-widest text-emerald-400">
+            {titre ?? N.t('review_title')}
+          </h3>
+        </span>
+        {etat.phase === 'prete' && (
+          <span className={`flex items-center gap-1 shrink-0 text-[10px] tabular-nums
+                           ${urgent ? 'text-red-300' : 'text-muted-foreground'}`}>
+            <Timer className="w-3 h-3" />
+            {N.t('review_left', { t: compteARebours(etat.reste) })}
+          </span>
+        )}
       </div>
 
       {etat.phase === 'enregistre' && (
@@ -62,12 +75,13 @@ export function ReviewVideo({ etat, onPartager, titre }: {
         <>
           <button
             onClick={async () => setSortie(await onPartager())}
-            className="w-full py-3 rounded-xl font-black font-display tracking-widest text-background
-                       bg-emerald-400 hover:bg-emerald-400/90 transition-colors
+            className="w-full py-2 rounded-xl font-black font-display tracking-widest text-sm text-background
+                       bg-emerald-400 hover:bg-emerald-400/90 transition-colors whitespace-nowrap
                        flex items-center justify-center gap-2"
           >
-            <Download className="w-4 h-4" />
-            {N.t('review_share')}{mo ? ` · ${mo}` : ''}
+            <Download className="w-4 h-4 shrink-0" />
+            {N.t('review_share')}
+            {mo && <span className="font-sans font-semibold text-[11px] tracking-normal opacity-70">{mo}</span>}
           </button>
 
           {/* Seul l'echec se dit encore ici : c'est la seule issue qui laisse
@@ -84,18 +98,13 @@ export function ReviewVideo({ etat, onPartager, titre }: {
           )}
 
           {/* La barre se vide en meme temps que le temps restant. */}
-          <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+          <div className="h-0.5 rounded-full bg-white/10 overflow-hidden">
             <div
               className={`h-full transition-all duration-1000 ease-linear
                 ${urgent ? 'bg-red-400' : 'bg-emerald-400/70'}`}
               style={{ width: `${part * 100}%` }}
             />
           </div>
-          <p className={`flex items-center justify-center gap-1.5 text-[11px] tabular-nums
-                        ${urgent ? 'text-red-300' : 'text-muted-foreground'}`}>
-            <Timer className="w-3.5 h-3.5" />
-            {N.t('review_left', { t: compteARebours(etat.reste) })}
-          </p>
         </>
       )}
 
@@ -108,7 +117,7 @@ export function ReviewVideo({ etat, onPartager, titre }: {
         <>
           <button
             disabled
-            className="w-full py-3 rounded-xl font-black font-display tracking-widest
+            className="w-full py-2 rounded-xl font-black font-display tracking-widest text-sm whitespace-nowrap
                        bg-white/5 text-white/25 border border-white/10
                        flex items-center justify-center gap-2 cursor-not-allowed"
           >

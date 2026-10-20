@@ -1186,6 +1186,7 @@ export function updateLogic(dt: number) {
       SprinterApp.coupDePistolet();
       courseLancee(G.levelIdx);
       G.state = 'race'; G.elapsed = 0;
+      G.immobileDepuis = null;
       // Le chronometre de la course repart de zero : ce qui se compte sur lui
       // doit repartir avec, sans quoi la deuxieme course d'une salle emet dans
       // le vide. Voir reinitialiserEnvoi.
@@ -1274,6 +1275,21 @@ export function updateLogic(dt: number) {
     // du garde-fou. Le drapeau est pose par game/halloween.ts et retire avec
     // la nuit ; hors de ce mode il n'existe pas.
     const mordu = !!G.molosseMord;
+    // PLANTE SUR LA PISTE QUAND TOUT LE MONDE EST ARRIVE (20/10/2026, demande
+    // de l'auteur) : tous les adversaires ont passe la ligne et le joueur n'a
+    // pas avance depuis dix secondes — c'est une defaite, la partie s'arrete.
+    // Avant, on le regardait immobile jusqu'au garde-fou des quatre-vingt-dix
+    // secondes. Il faut au moins un adversaire (le tutoriel court seul), et un
+    // relayeur retenu a la fin de sa portion n'est pas un coureur arrete.
+    const p = G.player;
+    if (G.immobileDepuis == null || G.elapsed < G.immobileDepuis || p.d - G.immobileD > 0.05) {
+      G.immobileD = p.d; G.immobileDepuis = G.elapsed;
+    }
+    const adversaires = G.runners.filter((r: any) => !r.isPlayer)
+      .concat(G.ghost && G.runners.indexOf(G.ghost.runner) < 0 ? [G.ghost.runner] : []);
+    const plante = !p.finished && p.relaisFin == null && adversaires.length > 0
+      && adversaires.every((r: any) => r.finished)
+      && G.elapsed - G.immobileDepuis >= 10;
     // UN REJEU SE TERMINE SUR LE DERNIER, PAS SUR LE PREMIER.
     //
     // Une course jouee s'arrete peu apres le joueur : ce qui se passe derriere
@@ -1321,7 +1337,9 @@ export function updateLogic(dt: number) {
       // que si la salle se tait — cinq minutes, plus que la manche la plus
       // longue et sa limite de retardataires.
       if (G.elapsed >= 300) SprinterApp.goHome();
-    } else if (out || slow || mordu || G.elapsed >= 90) {
+    } else if (out || slow || mordu || plante || G.elapsed >= 90) {
+      // Plante seulement : la serie s'arrete la (finishRace, one shot).
+      G.finPlante = plante && !(out || slow || mordu);
       for (const r of G.runners)
         if (!r.finished && !r.isPlayer) r.finishTime = r.target;
       SprinterApp.finishRace();

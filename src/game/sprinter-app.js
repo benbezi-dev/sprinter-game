@@ -3559,6 +3559,8 @@
   }
 
   function finishRace() {
+    // Pose par engine.ts juste avant l'appel, lu une seule fois.
+    const plante = !!G.finPlante; G.finPlante = false;
     // Le fantome court hors de G.runners (il n'a pas d'IA), mais il doit
     // apparaitre au classement comme n'importe quel adversaire. S'il n'a pas
     // eu le temps de finir avant l'arret de la course, on lui rend son chrono
@@ -3606,6 +3608,14 @@
       // pour garder le son ordinaire.
       const son = G.sonDArrivee ? G.sonDArrivee() : null;
       if (son) Audio_.cue(son); else Audio_.sfx(tt !== null ? 'win' : 'lose');
+      // RESTE PLANTE APRES L'ARRIVEE DE TOUS (engine.ts, G.finPlante) : c'est
+      // la fin de la partie, pas seulement de cette course. Les epreuves
+      // restantes comptent pour abandon, comme apres un faux depart.
+      if (plante) {
+        while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
+        while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
+        G.shotIdx = G.shotRaces.length - 1;
+      }
       if (G.shotIdx + 1 < G.shotRaces.length) { G.state = 'result'; return; }
       G.state = 'winall'; return;
     }
