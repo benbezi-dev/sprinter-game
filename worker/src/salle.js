@@ -636,6 +636,42 @@ export class SalleDirecte {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  /** Le pistolet, si la salle est pleine et que tout le monde a confirme. */
+  lancerSiPret() {
+    // Le depart se declenche quand la salle est pleine et que tout le
+    // monde a confirme. On l'annonce a une date absolue : chacun compte
+    // avec sa propre horloge recalee, personne n'attend le signal d'un
+    // autre.
+    const tous = this.joueurs.size === this.max &&
+                 [...this.joueurs.values()].every(x => x.pret);
+    if (tous && !this.departA) {
+      // L'ordre des couloirs est l'ordre d'inscription : l'hote a ouvert
+      // la salle, il passe le premier. C'est arbitraire mais stable, et
+      // les deux clients doivent en avoir exactement le meme.
+      this.ordre = [...this.joueurs.values()].map((x, i) => ({
+        id: x.id, nom: x.nom, couloir: i + 1,
+      }));
+      // Seul sur la piste, on ne se presente a personne : la sequence est
+      // faite pour qu'on se regarde avant de courir, et six secondes de
+      // presentation face a des couloirs vides ne sont plus qu'une attente.
+      // On passe directement au pistolet.
+      // La meute non plus : la presentation est un tour de parole, et
+      // l'ecran de la nuit n'en a pas — on part au pistolet.
+      const seul = this.ordre.length < 2 || !!this.nuit;
+      this.presentationA = seul ? null : Date.now() + AVANT_PRESENTATION_MS;
+      // Le pistolet tombe apres que tout le monde soit passe. Une seule
+      // soustraction cote client suffit alors a savoir ou l'on en est.
+      const attente = avantDepart(this.test, AVANT_DEPART_MS);
+      this.departA = seul
+        ? Date.now() + attente
+        : this.presentationA
+          + this.ordre.length * creneauPresentation()
+          + attente;
+      this.termine = false;
+      for (const x of this.joueurs.values()) { x.d = 0; x.c = null; x.fin = null; x.parti = false; x.mordu = null; }
+    }
+  }
+
   parti(ws) {
     const j = this.joueurs.get(ws);
     if (!j) return;
@@ -671,6 +707,14 @@ export class SalleDirecte {
     // La meute : celui qui part en pleine course etait peut-etre le dernier
     // qu'on attendait.
     if (this.nuit && this.departA) { this.peutTrancher(); return; }
+    // Celui qui quitte le SALON emporte sa place : la meute part quand tout le
+    // monde est la, et sans ca ceux qui restent attendaient un remplacant qui
+    // ne vient pas (21/10). Deux au moins : seul, ce n'est plus une meute.
+    if (this.nuit && !this.departA && this.max > 2) {
+      this.max = Math.max(2, this.max - 1);
+      this.lancerSiPret();
+      this.envoyerEtat();
+    }
     // Le forfait a peut-etre ete la derniere arrivee qu'on attendait, ou le
     // dernier « pas pret » d'une pause.
     if (t && t.etat === 'manche') this.peutTrancher();
@@ -704,38 +748,7 @@ export class SalleDirecte {
           this.envoyerEtat();
           return;
         }
-        // Le depart se declenche quand la salle est pleine et que tout le
-        // monde a confirme. On l'annonce a une date absolue : chacun compte
-        // avec sa propre horloge recalee, personne n'attend le signal d'un
-        // autre.
-        const tous = this.joueurs.size === this.max &&
-                     [...this.joueurs.values()].every(x => x.pret);
-        if (tous && !this.departA) {
-          // L'ordre des couloirs est l'ordre d'inscription : l'hote a ouvert
-          // la salle, il passe le premier. C'est arbitraire mais stable, et
-          // les deux clients doivent en avoir exactement le meme.
-          this.ordre = [...this.joueurs.values()].map((x, i) => ({
-            id: x.id, nom: x.nom, couloir: i + 1,
-          }));
-          // Seul sur la piste, on ne se presente a personne : la sequence est
-          // faite pour qu'on se regarde avant de courir, et six secondes de
-          // presentation face a des couloirs vides ne sont plus qu'une attente.
-          // On passe directement au pistolet.
-          // La meute non plus : la presentation est un tour de parole, et
-          // l'ecran de la nuit n'en a pas — on part au pistolet.
-          const seul = this.ordre.length < 2 || !!this.nuit;
-          this.presentationA = seul ? null : Date.now() + AVANT_PRESENTATION_MS;
-          // Le pistolet tombe apres que tout le monde soit passe. Une seule
-          // soustraction cote client suffit alors a savoir ou l'on en est.
-          const attente = avantDepart(this.test, AVANT_DEPART_MS);
-          this.departA = seul
-            ? Date.now() + attente
-            : this.presentationA
-              + this.ordre.length * creneauPresentation()
-              + attente;
-          this.termine = false;
-          for (const x of this.joueurs.values()) { x.d = 0; x.c = null; x.fin = null; x.parti = false; x.mordu = null; }
-        }
+        this.lancerSiPret();
         this.envoyerEtat();
         return;
       }

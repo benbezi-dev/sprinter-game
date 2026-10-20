@@ -86,11 +86,11 @@ import {
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
 import { alerterRecuperation } from './courriel.js';
-import { empreinteIp, sousLimite, purgerLimites } from './limites.js';
+import { empreinteIp, sousLimite, quotaAtteint, noterCodeRate, purgerLimites } from './limites.js';
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
-import { etapeConnue, noterEtape, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
+import { etapeConnue, noterEtape, etapeHalloweenPlausible, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
 import { PROFIL_MAX_OCTETS, donneesValides, appareilRelie, lireProfil, ecrireProfil } from './profil.js';
 import {
   ensureComptage, compterCourse, sourceDeLaVisite, compterArrivee,
@@ -1248,8 +1248,20 @@ async function servir(request, env, ctx, porteur) {
     const production = env.DB;
     const codeDonne = request.headers.get('X-Sprinter-Test')
       || url.searchParams.get('acces') || '';
+    // Les codes rates se comptent par adresse : au-dela du quota, plus aucun
+    // code n'est meme examine — un code juste passerait, et l'essai suivant
+    // dirait donc encore lequel est le bon.
+    let empreinteCode = null;
+    if (codeDonne && production) {
+      empreinteCode = await empreinteIp(request.headers.get('CF-Connecting-IP') || 'inconnue', env.ADMIN_CLE);
+      if (await quotaAtteint(production, empreinteCode, 'acces-echec')) {
+        return cors(new Response(JSON.stringify({ error: 'trop de codes essayes, reessayez plus tard' }),
+          { status: 429, headers: { 'Content-Type': 'application/json' } }));
+      }
+    }
     const acces = codeDonne && production
       ? await verifierAcces(production, codeDonne, ctx) : null;
+    if (codeDonne && production && !acces) await noterCodeRate(production, empreinteCode, codeDonne);
     const canal = { test: !!acces, nom: acces ? acces.nom : null };
 
     // Les quatre-vingt-treize routes qui suivent parlent a `env.DB` sans avoir
@@ -1372,7 +1384,12 @@ async function servir(request, env, ctx, porteur) {
       if (sous === 'entrer' && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const ip = await empreinteIp(request.headers.get('CF-Connecting-IP') || 'inconnue', env.ADMIN_CLE);
+        if (await quotaAtteint(production, ip, 'acces-echec')) {
+          return json({ error: 'trop de codes essayes, reessayez plus tard' }, 429);
+        }
         const r = await verifierAcces(production, (body || {}).code, ctx);
+        if (!r) await noterCodeRate(production, ip, (body || {}).code);
         return r ? json({ ok: true, nom: r.nom })
                  : json({ error: 'code refuse' }, 403);
       }
@@ -4327,6 +4344,9 @@ async function servir(request, env, ctx, porteur) {
       const { device_id, etape } = body || {};
       if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
       if (!etapeConnue(etape)) return json({ error: 'etape inconnue' }, 400);
+      // Invraisemblable : ignoree, mais en 200 — le jeu renverrait sinon la
+      // meme marche a chaque fois.
+      if (!(await etapeHalloweenPlausible(env.DB, device_id, etape))) return json({ ok: true, ignoree: true });
       await noterEtape(env.DB, device_id, etape);
       // La fiche est un plus : si elle echoue, l'etape, elle, est notee.
       await noterAppareil(env.DB, device_id, body).catch(() => {});

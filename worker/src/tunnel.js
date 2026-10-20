@@ -112,6 +112,40 @@ export async function ensureTunnel(db) {
   pret.add(db);
 }
 
+/**
+ * L'ouverture de la nuit n, edition 2026 : 22 h a Paris, du 19 au 31/10.
+ * 20:00 UTC jusqu'a la nuit 6, 21:00 UTC a partir du 25/10 (heure d'hiver).
+ * Meme calendrier que src/game/halloween-calendrier.ts (ouvertureDe).
+ */
+export const ouvertureDeLaNuit = n => Date.UTC(2026, 9, 18 + n, n <= 6 ? 20 : 21, 0, 0);
+
+/** Le temps le plus court pour courir une nuit, depart compris. */
+const NUIT_MIN_MS = 5000;
+
+/**
+ * Une marche d'Halloween vraisemblable ? Le jeu les envoie sans preuve, et une
+ * requete a la main suffisait a faire « tenir » la nuit 13 (21/10). On exige
+ * ce que le vrai parcours laisse forcement derriere lui : la nuit ouverte a
+ * l'heure du serveur, la precedente tenue, et — pour une nuit tenue — la
+ * tentative notee au moins quelques secondes avant. Ca ne prouve pas la
+ * course ; ca rend la fraude laborieuse au lieu d'une ligne de curl.
+ */
+export async function etapeHalloweenPlausible(db, deviceId, etape, now = Date.now()) {
+  const m = /^hw_(nuit|tenue)_(\d{1,2})$/.exec(String(etape));
+  if (!m) return true;                                   // hw_entree, et le reste du tunnel
+  const n = Number(m[2]);
+  if (n < 1 || n > 13 || now < ouvertureDeLaNuit(n)) return false;
+  await ensureTunnel(db);
+  const a = (e) => db.prepare(
+    `SELECT premier_at FROM tunnel WHERE device_id = ? AND etape = ?`).bind(deviceId, e).first();
+  if (n > 1 && !(await a(`hw_tenue_${n - 1}`))) return false;
+  if (m[1] === 'tenue') {
+    const tentee = await a(`hw_nuit_${n}`);
+    if (!tentee || now - tentee.premier_at < NUIT_MIN_MS) return false;
+  }
+  return true;
+}
+
 /** La premiere fois compte, les suivantes sont ignorees. */
 export async function noterEtape(db, deviceId, etape, now = Date.now()) {
   await ensureTunnel(db);

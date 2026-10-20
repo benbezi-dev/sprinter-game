@@ -51,6 +51,9 @@ export const RATE_LIMITS = {
   // chaque 100 m termine, soit une toutes les quinze secondes au plus vite.
   '/marques/camp': { max: 6, fenetreMs: 60_000 },
   '/marques/course': { max: 12, fenetreMs: 60_000 },
+  // Les codes du canal de test RATES, sur toutes les routes (GET compris) :
+  // chaque requete portant un code etait un essai gratuit (21/10).
+  'acces-echec': { max: 10, fenetreMs: 10 * 60_000 },
   default: { max: 30, fenetreMs: 60_000 },
 };
 
@@ -105,6 +108,34 @@ export async function empreinteIp(ip, secret, maintenant = Date.now()) {
  * seule ligne par cle et une seule ecriture par appel — ce que la fenetre
  * glissante ne tient pas sans une table d'evenements qui grossit sans fin.
  */
+/**
+ * Un code d'acces rate. Chaque code DIFFERENT compte une fois par fenetre :
+ * deviner, c'est en essayer beaucoup ; un testeur dont le code a ete revoque
+ * renvoie le meme a chaque requete et ne doit pas s'enfermer dehors.
+ */
+export async function noterCodeRate(db, empreinte, code, now = Date.now()) {
+  await ensureRateLimitTable(db);
+  const regle = RATE_LIMITS['acces-echec'];
+  const cle = `acces-vu:${empreinte}:${String(code).slice(0, 24)}`;
+  const vu = await db.prepare(`SELECT fenetre_debut FROM rate_limits WHERE cle = ?`).bind(cle).first();
+  if (vu && now - vu.fenetre_debut < regle.fenetreMs) return;
+  await db.prepare(
+    `INSERT INTO rate_limits (cle, fenetre_debut, compte) VALUES (?, ?, 1)
+     ON CONFLICT(cle) DO UPDATE SET fenetre_debut = excluded.fenetre_debut`
+  ).bind(cle, now).run();
+  await sousLimite(db, empreinte, 'acces-echec', now);
+}
+
+/** Le quota est-il deja atteint ? Lit sans compter. */
+export async function quotaAtteint(db, empreinte, route, now = Date.now()) {
+  await ensureRateLimitTable(db);
+  const regle = RATE_LIMITS[route] || RATE_LIMITS.default;
+  const row = await db.prepare(
+    `SELECT fenetre_debut, compte FROM rate_limits WHERE cle = ?`
+  ).bind(`${route}:${empreinte}`).first();
+  return !!row && now - row.fenetre_debut < regle.fenetreMs && row.compte >= regle.max;
+}
+
 export async function sousLimite(db, empreinte, route, now = Date.now()) {
   await ensureRateLimitTable(db);
   const regle = RATE_LIMITS[route] || RATE_LIMITS.default;

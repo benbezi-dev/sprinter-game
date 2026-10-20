@@ -27,6 +27,22 @@
 --------------------------------------------------------------------------- */
 
 const TAILLE = 4;                     // un relais, c'est quatre. Jamais moins.
+
+/**
+ * Une equipe qui ne se forme pas en trois jours ne se formera plus : un invite
+ * qui ne repond jamais gardait son nom et sa composition pour toujours
+ * (21/10). On la defait, et le nom redevient libre.
+ */
+const FORMATION_MAX_MS = 3 * 24 * 3600 * 1000;
+
+async function defaireLesEquipesEnPanne(db) {
+  const avant = Date.now() - FORMATION_MAX_MS;
+  await db.batch([
+    db.prepare(`DELETE FROM relay_members WHERE team_id IN (
+                  SELECT id FROM relay_teams WHERE status = 'forming' AND created_at < ?)`).bind(avant),
+    db.prepare(`DELETE FROM relay_teams WHERE status = 'forming' AND created_at < ?`).bind(avant),
+  ]);
+}
 // Une confrontation oppose de deux a huit equipes. Deux, c'est un duel
 // d'equipes ; huit, c'est une finale a couloirs pleins. Au-dela, la piste n'a
 // plus de couloir a offrir et l'ecran plus rien a montrer.
@@ -229,6 +245,7 @@ export async function equipe(db, id) {
  */
 export async function creerEquipe(db, { createur, coequipiers, nom }) {
   await ensureRelayTables(db);
+  await defaireLesEquipesEnPanne(db);
 
   const cCreateur = cle(createur);
   if (!cCreateur) return { erreur: 'nom du createur manquant' };
@@ -351,6 +368,7 @@ export async function ordonner(db, { id, ordre }) {
 /** Les equipes d'un joueur : celles ou il court, et celles ou on l'attend. */
 export async function mesEquipes(db, joueur) {
   await ensureRelayTables(db);
+  await defaireLesEquipesEnPanne(db);
   const k = cle(joueur);
   if (!k) return { equipes: [], invitations: [] };
   const { results } = await db.prepare(

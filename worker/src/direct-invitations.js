@@ -123,19 +123,30 @@ export async function inviterEnDirect(db, { deNom, versNoms, code, epreuve }) {
     // et rien ne permet de le joindre. Ce n'est pas une panne.
     if (!lignes.length) { injoignables.push(nom); continue; }
 
+    const salle = String(code || '').trim().toUpperCase();
+    let joint = false;
     for (const l of lignes) {
       try {
-        await db.prepare(
-          `INSERT INTO invitations_directes
-             (de_nom, vers_device, vers_nom, code, epreuve, cree_le, expire_le)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        ).bind(String(deNom || '').trim() || 'Un joueur', l.device_id, nom,
-               String(code || '').trim().toUpperCase(), epreuve || null,
-               maintenant, expire).run();
+        // Deja invite dans cette salle et pas encore tranche : on prolonge la
+        // meme carte plutot que d'en empiler une seconde (21/10).
+        const deja = await db.prepare(
+          `UPDATE invitations_directes SET expire_le = ?
+            WHERE vers_device = ? AND code = ? AND vue_le IS NULL AND expire_le > ?`
+        ).bind(expire, l.device_id, salle, maintenant).run();
+        if (!(deja.meta && deja.meta.changes)) {
+          await db.prepare(
+            `INSERT INTO invitations_directes
+               (de_nom, vers_device, vers_nom, code, epreuve, cree_le, expire_le)
+             VALUES (?, ?, ?, ?, ?, ?, ?)`
+          ).bind(String(deNom || '').trim() || 'Un joueur', l.device_id, nom,
+                 salle, epreuve || null, maintenant, expire).run();
+        }
         appareils.push(l.device_id);
+        joint = true;
       } catch { /* un appareil manque, les autres passent */ }
     }
-    invites.push(nom);
+    // aucun envoi n'a abouti : on ne l'annonce pas « invite »
+    if (joint) invites.push(nom); else injoignables.push(nom);
   }
 
   return { invites, injoignables, appareils };
