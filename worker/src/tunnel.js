@@ -39,6 +39,7 @@ export const ETAPES_TUNNEL = [
 
 /** Ce qui se franchit a cote du chemin, sans en etre une marche. */
 export const ETAPES_A_COTE = [
+  'page',           // la page HTML est arrivee et visible, AVANT le telechargement du jeu (index.html)
   'visite',         // la visite du jeu est fermee, vue ou passee
   'nom',            // un nom est pose — facultatif, on court sans
   'carriere_1',     // la carriere est lancee (et non le one shot)
@@ -284,8 +285,26 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
     l.arrivee += r.arrivee ? 1 : 0;
   }
 
+  // LE TELECHARGEMENT (22/10/2026) : `page` part d'index.html avant le code du
+  // jeu. Un appareil neuf qui a `page` sans `ouverture` est parti pendant le
+  // telechargement — invisible pour la cohorte, qui commence a l'ouverture.
+  const tele = await db.prepare(
+    `SELECT COUNT(*) AS pages,
+            SUM(CASE WHEN NOT EXISTS (
+              SELECT 1 FROM tunnel o WHERE o.device_id = p.device_id AND o.etape = 'ouverture'
+            ) THEN 1 ELSE 0 END) AS perdus
+       FROM tunnel p
+      WHERE p.etape = 'page' AND p.premier_at >= ?1 AND p.premier_at < ?2
+        AND NOT EXISTS (
+          SELECT 1 FROM visits v
+           WHERE v.device_id = p.device_id
+             AND v.day < date(p.premier_at / 1000, 'unixepoch'))`)
+    // Les cinq dernieres minutes ne comptent pas : un telechargement en cours n'est pas un abandon.
+    .bind(depuis, now - 5 * 60 * 1000).first().catch(() => null);
+
   return {
     jours, depuis, mesure_depuis: premier,
+    telechargement: { pages: tele?.pages || 0, perdus: tele?.perdus || 0 },
     cohorte: base,
     etapes: ETAPES_TUNNEL.map(ligne),
     a_cote: ETAPES_A_COTE.map(ligne),

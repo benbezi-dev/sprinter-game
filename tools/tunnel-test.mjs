@@ -152,6 +152,18 @@ const t2 = await lireTunnel(db, 30, NOW);
 ok('10 mesures : p90 = 9e valeur (40000), mediane = moyenne des 5e et 6e (7500)',
   t2.chargement.n === 10 && t2.chargement.p90_ms === 40000 && t2.chargement.mediane_ms === 7500, t2.chargement);
 
+titre('lireTunnel : perdus pendant le telechargement');
+base.exec(`DELETE FROM tunnel; DELETE FROM tunnel_appareil; DELETE FROM visits`);
+await noterEtape(db, 'p-joue', 'page', T); await noterEtape(db, 'p-joue', 'ouverture', T + 3000);
+await noterEtape(db, 'p-parti-1', 'page', T);
+await noterEtape(db, 'p-parti-2', 'page', T);
+await noterEtape(db, 'p-en-cours', 'page', NOW - 60 * 1000);    // il y a une minute : pas encore un abandon
+base.exec(`INSERT INTO visits VALUES ('p-ancien', '2026-09-01')`);
+await noterEtape(db, 'p-ancien', 'page', T);                     // deja vu avant : hors cohorte
+const tp = await lireTunnel(db, 30, NOW);
+ok('telechargement : 3 pages neuves, 2 perdus', tp.telechargement.pages === 3 && tp.telechargement.perdus === 2, tp.telechargement);
+ok('« page » ne change pas la cohorte (ancree sur l\'ouverture)', tp.cohorte === 1, tp.cohorte);
+
 titre('lireTunnel : base sans aucune fiche');
 base.exec(`DELETE FROM tunnel; DELETE FROM tunnel_appareil`);
 await noterEtape(db, 'seul-sans-fiche', 'ouverture', T);

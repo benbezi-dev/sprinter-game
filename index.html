@@ -57,6 +57,42 @@
          manifeste atteignable, Chrome ne juge pas l'application installable
          du tout — donc pas d'installation, et pas de capture des liens. -->
     <link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+    <!-- L'ETAPE « page » DU TUNNEL (22/10/2026). Elle part ICI, avant le code
+         du jeu (~1 Mo) : qui ferme pendant ce telechargement n'envoyait rien,
+         puisque le reste du tunnel vit dans ce code. Meme identifiant
+         d'appareil, meme memo et meme adresse que game/tunnel.ts ; page
+         cachee (apercu, onglet d'arriere-plan) : on attend qu'elle soit vue.
+         shortcut: si tunnel.ts reecrit le memo avant la reponse, « page »
+         repart au lancement suivant — le serveur l'ignore, c'est un appel de trop. -->
+    <script>
+      (function () {
+        try {
+          var MEMO = 'sprinter_tunnel', CLE = 'sprinter_device_id';
+          var lire = function () { try { return JSON.parse(localStorage.getItem(MEMO) || '[]'); } catch (e) { return []; } };
+          if (lire().indexOf('page') >= 0) return;
+          var id = localStorage.getItem(CLE);
+          if (!id) {
+            id = crypto.randomUUID ? crypto.randomUUID().replace(/-/g, '')
+              : Array.from({ length: 32 }, function () { return Math.floor(Math.random() * 16).toString(16); }).join('');
+            localStorage.setItem(CLE, id);
+          }
+          var envoyer = function () {
+            if (document.visibilityState !== 'visible') return;
+            document.removeEventListener('visibilitychange', envoyer);
+            fetch('https://sprinter-leaderboard.benbezi-sprinter.workers.dev/etape', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ device_id: id, etape: 'page' }), keepalive: true,
+            }).then(function (r) {
+              if (!r.ok) return;
+              var f = lire();
+              if (f.indexOf('page') < 0) { f.push('page'); localStorage.setItem(MEMO, JSON.stringify(f)); }
+            }).catch(function () {});
+          };
+          document.addEventListener('visibilitychange', envoyer);
+          envoyer();
+        } catch (e) { /* sans stockage : pas de mesure, le jeu se charge quand meme */ }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -35,7 +35,7 @@ const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const PARTIES = 'sprinter_tunnel';
 
 export type EtapeTunnel =
-  | 'ouverture' | 'ecran' | 'accueil' | 'visite' | 'nom'
+  | 'page' | 'ouverture' | 'ecran' | 'accueil' | 'visite' | 'nom'
   | 'depart' | 'premier_appui' | 'arrivee' | 'oneshot'
   | 'carriere_1' | 'carriere_2' | 'carriere_3'
   | 'carriere_4' | 'carriere_5' | 'carriere_6'
