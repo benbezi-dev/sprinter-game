@@ -688,6 +688,11 @@ export function TitleScreen() {
               )}
             </div>
 
+            {/* L'EPREUVE ET COMMENCER, COLLES AU BAS DU MENU (l'auteur, 21/10) :
+                avec les banderoles d'evenement au-dessus, il fallait encore
+                derouler pour lancer une course. Ils restent en vue, le reste
+                defile dessous. */}
+            <div className="sticky bottom-0 z-10 flex flex-col gap-2 pt-2 pb-1 -mx-1 px-1 rounded-2xl bg-black/60 backdrop-blur-md">
             {/* Race Selectors */}
             <div className="flex gap-2">
               {epreuves.map(k => (
@@ -711,6 +716,7 @@ export function TitleScreen() {
             >
               {N.t('start')}
             </button>
+            </div>
 
             </>}
 

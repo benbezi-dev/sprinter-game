@@ -450,7 +450,7 @@ function BulleTchat({ fr, nonLus, bas, onOuvrir }: { fr: boolean; nonLus: number
   const bouge = useRef(false);
   const el = useRef<HTMLButtonElement>(null);
   const [place, setPlace] = useState(lirePlace);
-  const taille = () => ({ w: el.current?.offsetWidth || 110, h: el.current?.offsetHeight || 40 });
+  const taille = () => ({ w: el.current?.offsetWidth || 40, h: el.current?.offsetHeight || 40 });
 
   // La ou elle doit etre, en pixels, pour une place et la taille de l'ecran.
   const ou = useCallback((p: PlaceBulle) => {
@@ -496,11 +496,11 @@ function BulleTchat({ fr, nonLus, bas, onOuvrir }: { fr: boolean; nonLus: number
       transition={reduit ? { duration: 0 } : RESSORT.trophee}
       aria-label={fr ? 'Ouvrir le tchat' : 'Open the chat'}
       style={{ x, y }}
-      className="fixed left-0 top-0 z-[55] touch-none select-none flex items-center gap-2 pl-3 pr-4 py-2.5
-                 rounded-2xl bg-primary text-black font-black text-xs tracking-widest shadow-lg shadow-black/40
+      className="fixed left-0 top-0 z-[55] touch-none select-none flex items-center justify-center w-10 h-10
+                 rounded-full bg-primary text-black shadow-lg shadow-black/40
                  cursor-grab active:cursor-grabbing">
-      <MessageCircle className="w-4 h-4" aria-hidden />
-      {fr ? 'TCHAT' : 'CHAT'}
+      {/* Une icone seule (l'auteur, 21/10) : le mot TCHAT en faisait une bulle trop grosse sur l'accueil. */}
+      <MessageCircle className="w-5 h-5" aria-hidden />
       {nonLus > 0 && (
         <span className="absolute -top-1.5 -right-1.5 min-w-5 h-5 px-1 rounded-full bg-white text-black text-[10px] flex items-center justify-center">
           {nonLus > 99 ? '99+' : nonLus}

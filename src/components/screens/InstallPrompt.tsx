@@ -117,8 +117,13 @@ export function InstallPrompt() {
     return () => window.removeEventListener(VISITE_OUVERTE, suivre);
   }, []);
 
+  // Pas avant une premiere course (l'auteur, 21/10) : posee sur l'accueil
+  // d'un nouveau venu, la carte cachait COMMENCER avant qu'il ait joue.
+  const [aCouru, setACouru] = useState(false);
+  useEffect(() => { if (state === 'race') setACouru(true); }, [state]);
+
   // Jamais pendant une course : on n'interrompt pas un chrono.
-  const montre = state === 'title' && ouvert && !visite;
+  const montre = state === 'title' && ouvert && !visite && aCouru;
 
   // Le drapeau se pose dans un effet, pas dans le rendu : un rendu qui laisse
   // une trace derriere lui est un rendu qu'on ne peut plus rejouer.
