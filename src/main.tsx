@@ -2,7 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { MotionConfig } from 'motion/react';
 
 import App from './App';
-import { ErrorBoundary } from '@/components/error-boundary';
+import { ErrorBoundary, rechargerUneFois } from '@/components/error-boundary';
 import { brancherAcces, brancherSignet } from '@/game/canal';
 import { prendreCleOfficielleDepuisUrl } from '@/game/tchat-officiel';
 
@@ -21,6 +21,12 @@ brancherAcces();
 // La cle du compte SprinterGame dans le tchat du duel, si l'adresse la porte
 // (tchat-officiel.ts) : lue et retiree de l'adresse avant tout le reste.
 prendreCleOfficielleDepuisUrl();
+
+// Vite signale lui-meme un morceau introuvable avant que React ne le voie :
+// on recharge des ce moment-la (voir error-boundary.tsx).
+window.addEventListener('vite:preloadError', event => {
+  if (rechargerUneFois()) event.preventDefault();
+});
 
 // Service worker : rend le jeu installable sur le telephone, et jouable hors
 // ligne. Enregistre apres le chargement pour ne pas disputer la bande passante
