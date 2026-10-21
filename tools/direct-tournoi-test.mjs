@@ -43,7 +43,8 @@ const nouvelle = () => fetch(`${B}/live/nouveau`, { method: 'POST' }).then(r => 
 function client(code, nom, { places = 8, tournoi = true } = {}) {
   const c = { nom, moi: null, etat: null, departs: [], presentations: [],
               resultats: [], points: [], positions: new Map(), fermee: false };
-  const q = `name=${encodeURIComponent(nom)}&races=100&level=5&max=${places}`
+  // l'appareil, comme le jeu : sans lui, la salle compte le nom en anonyme
+  const q = `device=harnais-${String(nom).replace(/[^a-zA-Z0-9]/g, '').slice(0, 50)}&name=${encodeURIComponent(nom)}&races=100&level=5&max=${places}`
           + (tournoi ? '&tournoi=1' : '');
   c.ws = new WebSocket(`${WS}/live/${code}?${q}`);
   c.ouvert = new Promise((res, rej) => {
