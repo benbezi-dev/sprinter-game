@@ -11,10 +11,9 @@
 // `suivreTunnel(G)` a chaque image, qui lit les changements d'etat, et
 // `etapeTunnel('premier_appui')` au premier appui en course.
 //
-// « OUVERTURE » N'EST PAS « VU ». Elle part au montage de React, avant que
-// quoi que ce soit s'affiche : un apercu de lien, un onglet ouvert en arriere-
-// plan ou le navigateur integre d'Instagram la declenchent aussi bien qu'un
-// joueur. « ecran » part quand la page est VISIBLE et qu'une premiere image a
+// « OUVERTURE » N'EST PAS « VU ». Elle part au montage de React, des que la
+// page est visible (depuis le 21/10/2026 ; avant, meme cachee : un apercu de
+// lien ou un onglet d'arriere-plan la declenchaient aussi bien qu'un joueur). « ecran » part quand la page est VISIBLE et qu'une premiere image a
 // ete peinte. Avec les deux, une fiche d'appareil — la classe de navigateur
 // (game/navigateur.ts, jamais l'agent brut) puis, a l'accueil, le temps de
 // chargement depuis le debut de la navigation — permet au tableau de dire qui
@@ -174,7 +173,19 @@ export function demarrerTunnel() {
   if (demarre) return;
   demarre = true;
   chargerLesTutos();
-  etapeTunnel('ouverture');
+  // L'ouverture attend que la page soit VISIBLE (l'auteur, 21/10/2026) : un
+  // apercu de lien ou un onglet d'arriere-plan qui ne s'affiche jamais n'entre
+  // plus dans la cohorte. Avant, ils y entraient et gonflaient la perte
+  // « ouverture → ecran » (429 appareils) sans etre des joueurs.
+  const ouvrir = () => {
+    if (document.visibilityState !== 'visible') return;
+    document.removeEventListener('visibilitychange', ouvrir);
+    etapeTunnel('ouverture');
+  };
+  try {
+    document.addEventListener('visibilitychange', ouvrir);
+    ouvrir();
+  } catch { etapeTunnel('ouverture'); /* hors navigateur */ }
   guetterLEcran();
   const nomPose = () => { if (getSavedName().trim()) etapeTunnel('nom'); };
   nomPose();
