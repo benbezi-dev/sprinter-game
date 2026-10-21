@@ -30,7 +30,8 @@ const ok = (nom, cond, detail) => {
 function client(code, nom, places) {
   const c = { nom, moi: null, joueurs: [], presentation: null, depart: null,
               resultat: null, max: null, refuse: false };
-  const q = `name=${encodeURIComponent(nom)}&races=100&level=4&max=${places}`;
+  // l'appareil, comme le jeu : sans lui, la salle compte le nom en anonyme
+  const q = `device=harnais-${String(nom).replace(/[^a-zA-Z0-9]/g, '').slice(0, 50)}&name=${encodeURIComponent(nom)}&races=100&level=4&max=${places}`;
   c.ws = new WebSocket(`${WS}/live/${code}?${q}`);
   // Une salle pleine repond 409 : la poignee de main echoue et l'on n'a pas
   // d'« open ». On attend donc l'un ou l'autre, jamais indefiniment.

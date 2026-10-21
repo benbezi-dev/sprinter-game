@@ -152,6 +152,8 @@ function brancher() {
     // une socket remplacee (fermer(); brancher()) ne coupe pas le battement
     // de celle qui l'a remplacee
     if (!ws) arreterBattement();
+    // ni echec ni reprise pour elle : sa remplacante est deja branchee
+    if (ws && ws !== s) return;
     if (!voulue) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
     echecs++;
