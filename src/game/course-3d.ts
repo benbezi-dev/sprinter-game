@@ -532,6 +532,22 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   soleil.color.set(luxe ? 0xffd49a : cyber ? 0xd8b8ff : plage ? 0xffc58a : nuit ? 0xe6eeff : 0xfff4e0);
   soleil.intensity = luxe ? 2.6 : cyber ? 1.7 : plage ? 2.6 : nuit ? 2.0 : 2.2;
   soleilDecal.set(plage ? 22 : -10, plage ? 50 : -18, plage ? 16 : 30);   // a la plage, bas, au-dessus de la mer
+  // LA LUMIERE DE L'HEURE (heure-du-jour.js : le theme du moment porte `moment`). Le jour
+  // reste tel quel ; l'apres-midi le soleil baisse et se rechauffe ; le soir il est orange
+  // et rasant, les ombres s'allongent ; la nuit, ce sont les projecteurs (plus haut).
+  const moment = th.moment || 'jour';
+  if (!luxe && !cyber && !plage && !th.espace && !nuit && moment === 'apres-midi') {
+    hemi.color.set(0xfff0dc); hemi.intensity = 1.45;
+    soleil.color.set(0xffe2b8); soleil.intensity = 2.3;
+    soleilDecal.set(-30, -14, 20);
+  } else if (!luxe && !cyber && !plage && !th.espace && !nuit && moment === 'soir') {
+    // (trop rasant au premier essai, a 11 m : le soleil n'eclairait plus le sol, et le soir
+    // sortait aussi sombre que la nuit)
+    hemi.color.set(0xffd0b0); hemi.groundColor.set(0x806050); hemi.intensity = 1.35;
+    soleil.color.set(0xffa860); soleil.intensity = 2.8;
+    soleilDecal.set(-40, -12, 20);
+    uFoule.uLum.value = 0.92;
+  }
   uFoule.uLum.value = luxe ? 0.42 : cyber ? 0.5 : nuit ? 0.7 : 1;
   uLisere.value = luxe || cyber ? 1 : 0;
   uLisereCoul.value.set(cyber ? 0x30e8ff : 0xffc76b);
@@ -587,7 +603,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let i = 0; i < 8; i++) { c.fillStyle = css(herbe, i % 2 ? 0.88 : 1.06); c.fillRect(i * w / 8, 0, w / 8, h); }
   }, 256, 8);
   tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(10, 1);
-  if (!espace && !plage) plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.03);
+  if (!espace && !plage) plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.1);
 
   // LA PISTE : les deux lignes droites et les deux virages, couloir par couloir
   const A = th.trackA || [148, 0, 0], B = th.trackB || A;
@@ -967,7 +983,7 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   monde = new THREE.Group();
   monde.scale.y = -1;
   scene.add(monde);
-  camera = new THREE.PerspectiveCamera(55, 1, 0.1, 600);
+  camera = new THREE.PerspectiveCamera(55, 1, 0.3, 1600)   // pres a 0,3 m : la profondeur reste fine au loin (survol);
   camera.up.set(0, 0, 1);
   hemi = new THREE.HemisphereLight(0xdfefff, 0x5a7a40, 1.6);
   scene.add(hemi);
@@ -1297,7 +1313,8 @@ export function rendre(App: any, dt: number) {
   const brut = force || (App.themeBrut ? App.themeBrut() : null);
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
-  const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + '/' + (G.levelIdx | 0);
+  const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + '/' + (G.levelIdx | 0)
+    + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour');   // le moment de la journee aussi
   caler(T);
   if (!stade || brut !== themeVu || forme !== formeVue) {
     themeVu = brut; formeVue = forme;

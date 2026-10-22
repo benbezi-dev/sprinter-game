@@ -93,7 +93,7 @@ export function construirePlage(o: ContextePlage) {
     }
   }, 256, 256);
   rides.wrapS = rides.wrapT = THREE.RepeatWrapping; rides.repeat.set(120, 120);
-  plat(2400, 2400, new THREE.MeshLambertMaterial({ map: rides }), xc, yE - 1 - 1200, -0.03);
+  plat(2400, 2400, new THREE.MeshLambertMaterial({ map: rides }), xc, yE - 1 - 1200, -0.12)   // assez bas sous la piste : vue du ciel, a 3 cm, le sable percait;
 
   // --- LA PISTE SE FOND DANS LE SABLE ------------------------------------------------
   // dix bandes de chaque cote, du rouge de la piste au sable, sur les lignes droites et
@@ -138,18 +138,18 @@ export function construirePlage(o: ContextePlage) {
   for (let i = 0; i < 26; i++) {
     const u0 = i / 26, u1 = (i + 1) / 26, ya = yE + 1100 * u0 * u0, yb = yE + 1100 * u1 * u1;
     plat(2600, yb - ya + 0.2, new THREE.MeshStandardMaterial({ color: mer((u0 + u1) / 2), roughness: 0.22, metalness: 0.05 }),
-      xc, (ya + yb) / 2, -0.04);
+      xc, (ya + yb) / 2, -0.2);    // couches espacees : vues du ciel, a quelques mm, elles se percaient
   }
-  plat(2600, 5, new THREE.MeshLambertMaterial({ color: c3(204, 174, 128) }), xc, yE - 2.2, -0.025);   // le sable mouille
+  plat(2600, 5, new THREE.MeshLambertMaterial({ color: c3(204, 174, 128) }), xc, yE - 2.2, -0.06);    // le sable mouille
   // l'ecume ondulee du rivage, et des nappes plus claires et plus sombres plus loin
   const ecume = new Lot(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
   for (let x = xc - 600; x < xc + 600; x += 3.6)
-    ecume.poser(place(x + hasard() * 2, yE + Math.sin(x * 0.07) * 1.2 + hasard() * 0.5, -0.03, 0, 2.6 + hasard() * 1.6, 0.25 + hasard() * 0.35, 1));
+    ecume.poser(place(x + hasard() * 2, yE + Math.sin(x * 0.07) * 1.2 + hasard() * 0.5, -0.04, 0, 2.6 + hasard() * 1.6, 0.25 + hasard() * 0.35, 1));
   ecume.finir(stade);
   const nappes = new Lot(new THREE.CircleGeometry(1, 20), new THREE.MeshLambertMaterial({ color: 0xffffff }));
   for (let i = 0; i < 18; i++) {
     const r = 12 + hasard() * 40;
-    nappes.poser(place(xc - 300 + hasard() * 700, yE + 20 + hasard() * 160, -0.035, hasard() * 3, r * (1.4 + hasard()), r, 1),
+    nappes.poser(place(xc - 300 + hasard() * 700, yE + 20 + hasard() * 160, -0.15, hasard() * 3, r * (1.4 + hasard()), r, 1),
       // a peine plus sombres ou plus claires que l'eau autour : des taches franches faisaient des trous
       i % 3 === 0 ? mer(Math.min(1, ((hasard() * 160 + 20) / 1100) ** 0.5 + 0.08)) : mer(Math.max(0, ((hasard() * 160 + 20) / 1100) ** 0.5 - 0.06)));
   }
@@ -161,7 +161,7 @@ export function construirePlage(o: ContextePlage) {
   for (let i = 0; i < 900; i++) {
     const t = 20 + Math.pow(hasard(), 0.6) * 900, ecart = (hasard() - 0.5) * (5 + t * 0.08) * (hasard() + hasard());
     const x = xc + SOLEIL.x * t + lat.x * ecart, y = yE + SOLEIL.y * t + lat.y * ecart;
-    reflets.poser(place(x, y, -0.02, Math.atan2(lat.y, lat.x), 0.6 + t * 0.012 * (0.5 + hasard()), 0.06 + t * 0.001, 1));
+    reflets.poser(place(x, y, -0.1, Math.atan2(lat.y, lat.x), 0.6 + t * 0.012 * (0.5 + hasard()), 0.06 + t * 0.001, 1));
   }
   reflets.finir(stade);
   // des iles au loin, des voiliers
