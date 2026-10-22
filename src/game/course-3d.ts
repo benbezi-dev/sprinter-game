@@ -598,7 +598,9 @@ function echoDe(k: number): Corps | null {
   if (echos[k]) return echos[k];
   if (!gabarit) return null;
   const copie = clonerSquelette(gabarit);
-  const mat = new THREE.MeshBasicMaterial({ color: 0xf8cd4a, transparent: true, opacity: 0.3, depthWrite: false, blending: THREE.AdditiveBlending });
+  // une silhouette pleine, doree, et non une lueur additive : sur le rouge de la piste,
+  // une lueur a 30 % disparaissait en pleine course (l'auteur, 22/10 : « je ne la vois pas »)
+  const mat = new THREE.MeshLambertMaterial({ color: 0xffc93a, emissive: 0x6a4a00, transparent: true, opacity: 0.6, depthWrite: false });
   copie.traverse((o: any) => { if (o.isMesh) { o.material = mat; o.castShadow = false; } });
   echos[k] = { m: modeleDe(copie), mats: {} };
   (echos[k] as any).mat = mat;
@@ -613,7 +615,7 @@ function dessinerLesEffets(App: any) {
   const p = G.player;
   for (const e of echos) if (e) e.m.racine.visible = false;
   onde.visible = aura.visible = false;
-  if (f <= 0.02 || !p) return;
+  if (age < 0 || !p) return;
   const T = G.track, q = T.posDemi(p.d, p.lane, p.demi || 0);
   // l'onde s'ouvre sous ses appuis
   const r = 0.5 + 3.6 * age;
@@ -641,7 +643,8 @@ function dessinerLesEffets(App: any) {
     _M.set(ex[0], ey[0], ez[0], 0, ex[1], ey[1], ez[1], 0, ex[2], ey[2], ez[2], 0, 0, 0, 0, 1);
     e.m.racine.matrix.multiplyMatrices(_T.makeTranslation(pq[0], pq[1], 0), _S.makeScale(k0, k0, k0)).multiply(_M).multiply(Qgl);
     e.m.racine.matrixWorldNeedsUpdate = true;
-    (e as any).mat.opacity = f * 0.3 * (4 - k) / 3;
+    // l'image remanente tient sa pleine force plus longtemps que le halo
+    (e as any).mat.opacity = (1 - age * age) * 0.75 * (4 - k) / 3;
     e.m.racine.visible = true;
   }
 }
