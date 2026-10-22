@@ -1719,7 +1719,8 @@ export function rendre(App: any, dt: number) {
     // — ou tout de suite s'il n'y a pas de presentation —, elle plonge en 1,8 s sur la
     // camera de depart, qu'elle rejoint exactement, avant le coup de pistolet.
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
-    const avant = intro || G.state === 'count';
+    // pas de survol pour la nuit du molosse (« pas de vue aerienne de presentation », l'auteur, 23/10)
+    const avant = (intro || G.state === 'count') && !nuitDuMolosse;
     if (!avant && G.state !== 'race' && G.state !== 'falseout') { volLance = false; volPlonge = -1; }
     if (avant && !volLance) { volLance = true; volT = 0; volPlonge = -1; }
     let survol = false;
