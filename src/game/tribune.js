@@ -118,6 +118,8 @@
     or: [26, 23, 20],
     // Le Stade Neon : des coques de metal sombre.
     cyber: [20, 18, 30],
+    // La plage : la toile des transats.
+    plage: [236, 120, 96],
   };
   const hexa = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
   // La couleur `c` dans la lumiere des gradins de `th` — la meme, le jour.

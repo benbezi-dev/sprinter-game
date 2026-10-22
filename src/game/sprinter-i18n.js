@@ -1982,7 +1982,9 @@
     // Le Stade d'Or (Dark Luxury, n° 11 de la planche des styles, 22/10).
     ["Stade d'Or", 'Golden Stadium'],
     // Le Stade Neon (cyberpunk, 22/10).
-    ['Stade Néon', 'Neon Stadium']
+    ['Stade Néon', 'Neon Stadium'],
+    // La plage (22/10).
+    ['Plage Paradis', 'Paradise Beach']
   ];
 
   const RACE_SUB = {

@@ -285,6 +285,20 @@
       projecteurs: true, pubsLed: true,
       cyber: true
     },
+    // LA PLAGE PARADIS : `plage` est lu par la course 3D (plage-3d.ts) — sable, lagon,
+    // palmiers, yachts BENBEZI, pas de gradins. Le 2D n'en reprend que les couleurs.
+    plage: {
+      skyTop: [70, 120, 220], skyBot: [250, 196, 130], stars: 0,
+      grass: [240, 214, 166], grassEdge: [226, 196, 146],
+      trackA: [204, 86, 60], trackB: [192, 78, 54],
+      lane: [250, 246, 236], kerb: [250, 246, 236],
+      tread: [240, 214, 166], riser: [226, 196, 146], roof: [200, 170, 120],
+      barrier: [250, 246, 236],
+      panels: [[235, 87, 87], [242, 201, 76], [45, 156, 219], [39, 174, 96]],
+      crowdLo: [60, 50, 40], crowdHi: [255, 248, 236],
+      accent: [255, 170, 80], dust: [240, 214, 166],
+      plage: true
+    },
     danube: {
       // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
       heure: 'nuit',

@@ -37,6 +37,7 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
+import { construirePlage } from './plage-3d';
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
@@ -69,6 +70,7 @@ let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
+const soleilDecal = new THREE.Vector3(-10, -18, 30);
 // LE SURVOL d'avant-course (voir rendre) : ou il en est, et ou il plonge
 let volLance = false, volT = 0, volPlonge = -1;
 const volDepart = new THREE.Vector3(), volVise0 = new THREE.Vector3();
@@ -114,11 +116,25 @@ function texteCanvas(dessin: (c: CanvasRenderingContext2D, w: number, h: number)
 // leve apres l'arrivee (uLiesse) ; ceux qui applaudissent sautillent.
 const P_SIL = 6, P_GESTES = 5, P_ANGLES = 5, CARTE_L = 1.1, CARTE_H = 2.2;
 let atlasPublic: THREE.Texture | null = null, publicDemande = false;
+// le public de la plage : memes corps, sans siege de stade (public_cartes.py --plage)
+let atlasPlage: THREE.Texture | null = null, plageDemandee = false;
 const uFoule = {
   uAtlas: { value: null as THREE.Texture | null }, uCam: { value: new THREE.Vector3() },
   uT: { value: 0 }, uJoueur: { value: new THREE.Vector2(1e4, 1e4) }, uLiesse: { value: 0 },
   uSiege: { value: new THREE.Color(0x2457b8) }, uLum: { value: 1 },
 };
+function chargerLaPlage() {
+  if (plageDemandee) return;
+  plageDemandee = true;
+  const base = (import.meta as any).env?.BASE_URL || '/';
+  new THREE.TextureLoader().loadAsync(base + 'modeles/stades/public-plage-cartes.png').then(t => {
+    t.magFilter = t.minFilter = THREE.NearestFilter;
+    t.generateMipmaps = false;
+    t.colorSpace = THREE.NoColorSpace;
+    atlasPlage = t;
+    formeVue = '';
+  }).catch(() => { /* une plage sans public */ });
+}
 function chargerLePublic() {
   if (publicDemande) return;
   publicDemande = true;
@@ -506,11 +522,16 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const luxe = !!th.luxe;
   // LE STADE NEON (cyberpunk, StadeCyber.cs) : une nuit violette, des neons, la pluie
   const cyber = !!th.cyber;
-  hemi.color.set(luxe ? 0x6a5638 : cyber ? 0x5a2a8a : nuit ? 0x7a88c0 : 0xdfefff);
-  hemi.groundColor.set(luxe ? 0x080604 : cyber ? 0x05040a : nuit ? 0x1a1f2a : 0x5a7a40);
-  hemi.intensity = luxe ? 0.45 : cyber ? 0.55 : nuit ? 0.6 : 1.6;
-  soleil.color.set(luxe ? 0xffd49a : cyber ? 0xd8b8ff : nuit ? 0xe6eeff : 0xfff4e0);
-  soleil.intensity = luxe ? 2.6 : cyber ? 1.7 : nuit ? 2.0 : 2.2;
+  // LA PLAGE (plage-3d.ts) : un soleil bas et dore de fin d'apres-midi, pas de gradins
+  const plage = !!th.plage;
+  if (plage) chargerLaPlage();
+  uFoule.uAtlas.value = plage ? atlasPlage : atlasPublic;
+  hemi.color.set(luxe ? 0x6a5638 : cyber ? 0x5a2a8a : plage ? 0xffe2c0 : nuit ? 0x7a88c0 : 0xdfefff);
+  hemi.groundColor.set(luxe ? 0x080604 : cyber ? 0x05040a : plage ? 0xd8b080 : nuit ? 0x1a1f2a : 0x5a7a40);
+  hemi.intensity = luxe ? 0.45 : cyber ? 0.55 : plage ? 1.25 : nuit ? 0.6 : 1.6;
+  soleil.color.set(luxe ? 0xffd49a : cyber ? 0xd8b8ff : plage ? 0xffc58a : nuit ? 0xe6eeff : 0xfff4e0);
+  soleil.intensity = luxe ? 2.6 : cyber ? 1.7 : plage ? 2.6 : nuit ? 2.0 : 2.2;
+  soleilDecal.set(plage ? 22 : -10, plage ? 50 : -18, plage ? 16 : 30);   // a la plage, bas, au-dessus de la mer
   uFoule.uLum.value = luxe ? 0.42 : cyber ? 0.5 : nuit ? 0.7 : 1;
   uLisere.value = luxe || cyber ? 1 : 0;
   uLisereCoul.value.set(cyber ? 0x30e8ff : 0xffc76b);
@@ -518,7 +539,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // un jeu de lumiere qui fait qu'on les voit clairement », 22/10) : la lumiere de face fait le reste
   uLisereForce.value = cyber ? 0.22 : 0.9;
   uLisereFace.value = cyber ? 1 : 0;   // le Stade d'Or garde le reglage valide
-  uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : 0x2457b8);
+  uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : plage ? 0xec7860 : 0x2457b8);
+  if (plage) scene.fog = new THREE.Fog(0xf3c9a2, 260, 1300);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
   if (cyber) scene.fog = new THREE.Fog(0x14061f, 60, 460);
   hologrammes = [];
@@ -540,7 +562,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
     stade.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false })));
   }
-  if (!th.stars && !luxe && !cyber) {
+  if (!th.stars && !luxe && !cyber && !plage) {
     const nuage = texteCanvas((c, w, h) => {
       for (let i = 0; i < 14; i++) {
         const x = w * (0.2 + 0.6 * Math.random()), y = h * (0.45 + 0.2 * Math.random()), r = h * (0.18 + 0.2 * Math.random());
@@ -565,7 +587,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let i = 0; i < 8; i++) { c.fillStyle = css(herbe, i % 2 ? 0.88 : 1.06); c.fillRect(i * w / 8, 0, w / 8, h); }
   }, 256, 8);
   tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(10, 1);
-  if (!espace) plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.03);
+  if (!espace && !plage) plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.03);
 
   // LA PISTE : les deux lignes droites et les deux virages, couloir par couloir
   const A = th.trackA || [148, 0, 0], B = th.trackB || A;
@@ -669,7 +691,10 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     : luxe
     ? [[14, 13, 15], [20, 19, 22], [28, 25, 24], [38, 32, 28], [14, 13, 15], [201, 164, 92], [217, 207, 189], [74, 20, 24]]
     : [...(th.panels || [[231, 60, 45], [28, 106, 202], [255, 203, 55], [50, 162, 121]]), lo, hi, [240, 240, 240]];
-  const peaux = [[74, 46, 32], [120, 76, 50], [176, 122, 78], [224, 186, 142], [246, 220, 190]].map(couleur);
+  // HUIT TEINTES DE PEAU, LA MOITIE NOIRES ET BRUNES (« il n'y a pas de personnes noires ? »,
+  // l'auteur, 22/10) : a deux sur cinq, sur des visages de quelques pixels, elles ne se voyaient pas
+  const peaux = [[44, 28, 20], [66, 42, 30], [92, 58, 38], [120, 76, 50], [160, 108, 70], [196, 142, 98],
+    [224, 186, 142], [246, 220, 190]].map(couleur);
   const coulMaillots = maillots.map(couleur);
   const coulCheveux = [[28, 20, 16], [58, 38, 24], [104, 70, 40], [196, 160, 98], [140, 136, 132]].map(couleur);
   const coulPantalons = [[30, 38, 68], [24, 24, 28], [58, 84, 128], [196, 178, 142], [96, 98, 104]].map(couleur);
@@ -727,15 +752,18 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // cote et s'enfoncait dans les tribunes des virages (« pas de chevauchement », 22/10)
   const yS = W + 3.2, XA = DROITE0, LS = DROITE1 - DROITE0;
   const Mp = repere(XA, yS, 0);
+  let z1 = 0, yLoges = 0, z2 = 0, yFond = 0;
+  const rS = R_CORDE + W + 3.2;
+  if (!plage) {                                  // la plage n'a pas de gradins
   boite(lBlanc, Mp, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);                       // le muret
   if (luxe || cyber) boite(cyber ? lFilet2 : lFilet, Mp, LS / 2, -0.15, 1.22, LS, 0.27, 0.04);
-  const z1 = gradins(Mp, LS, 13, 0.4, 1.2);
-  const yLoges = 0.4 + 13 * 0.85;
+  z1 = gradins(Mp, LS, 13, 0.4, 1.2);
+  yLoges = 0.4 + 13 * 0.85;
   boite(lBeton, Mp, LS / 2, yLoges + 1.2, z1 + 0.3, LS, 2.4, 0.6);
   boite(lVitre, Mp, LS / 2, yLoges + 1.9, z1 + 1.9, LS, 0.2, 2.6);           // les loges vitrees
   boite(lBeton, Mp, LS / 2, yLoges + 1.2, z1 + 3.3, LS, 2.6, 0.3);
-  const z2 = gradins(Mp, LS, 15, yLoges + 2.6, z1 + 3.6, 0.85, 0.5);
-  const yFond = yLoges + 2.6 + 15 * 0.85;
+  z2 = gradins(Mp, LS, 15, yLoges + 2.6, z1 + 3.6, 0.85, 0.5);
+  yFond = yLoges + 2.6 + 15 * 0.85;
   if (cyber) {
     // a ciel ouvert sur la ville : un dernier filet de neon en haut des gradins
     boite(lFilet, Mp, LS / 2, yFond, z2 + 0.05, LS, 0.08, 0.08);
@@ -747,7 +775,6 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
 
   // LES TRIBUNES DES VIRAGES ET DE LA LIGNE OPPOSEE, plus basses, en segments
-  const rS = R_CORDE + W + 3.2;
   for (const [xc, sens] of [[DROITE1, 1], [DROITE0, -1]] as const) {
     const N = 18, L = Math.PI * (rS + 6) / N + 0.6;
     for (let i = 0; i < N; i++) {
@@ -770,6 +797,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   if (!cyber) boite(lToit, Mo, LS / 2, 0.4 + 16 * 0.85 + 0.2, (zo + 2) / 2, LS, 0.4, zo + 2);
   if (luxe) boite(lFilet, Mo, LS / 2, 0.4 + 16 * 0.85, zo + 2, LS, 0.1, 0.1);
   if (cyber) boite(lFilet, Mo, LS / 2, 0.4 + 16 * 0.85, zo + 0.05, LS, 0.08, 0.08);
+  }
 
   // LES PANNEAUX LED, au bord de la piste, devant la tribune principale
   const pub = new THREE.TextureLoader().load(base + 'pubs/benbezi-logo-3d-cadre.webp');
@@ -778,13 +806,16 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   panneau.position.set(XA + LS / 2, W + 1.7, 0.55); panneau.rotation.x = Math.PI / 2; panneau.scale.x = -1;  // (monde en miroir)
   stade.add(panneau);
   boite(lBloc, repere(0, 0, 0), XA + LS / 2, W + 1.78, 0.55, LS, 0.12, 1.1);
-  // ... et le bandeau entre les deux etages
+  // ... et le bandeau entre les deux etages (pas a la plage : pas de tribune)
+  if (!plage) {
   const bandeau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 0.7), new THREE.MeshBasicMaterial({ map: pub.clone() }));
   (bandeau.material as THREE.MeshBasicMaterial).map!.repeat.set(LS / 3.4, 1);
   bandeau.position.set(XA + LS / 2, yS + yLoges + 0.05, z1 + 0.3); bandeau.rotation.x = Math.PI / 2; bandeau.scale.x = -1;
   stade.add(bandeau);
+  }
 
-  // L'ECRAN GEANT, au-dessus du virage d'arrivee, tourne vers la ligne droite
+  // L'ECRAN GEANT, au-dessus du virage d'arrivee, tourne vers la ligne droite (pas a la plage)
+  if (!plage) {
   const ecran = texteCanvas((c, w, h) => {
     c.fillStyle = '#05070d'; c.fillRect(0, 0, w, h);
     c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -812,6 +843,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   stade.add(ec);
   boite(lBloc, repere(0, 0, 0), xE + 0.4, -R_CORDE + 6, 22, 0.6, 17, 9);
   boite(lMetal, repere(0, 0, 0), xE + 0.6, -R_CORDE + 6, 9, 1.2, 1.2, 18);
+  }
 
   // LES PYLONES D'ECLAIRAGE, aux quatre coins
   const lampes = texteCanvas((c, w, h) => {
@@ -821,7 +853,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }
   }, 128, 96);
   const matLampes = new THREE.MeshBasicMaterial({ map: lampes });
-  for (const [x, y] of cyber ? [] : [[DROITE1 + 30, W + 34], [DROITE0 - 30, W + 34], [DROITE1 + 30, yOppose - 34], [DROITE0 - 30, yOppose - 34]]) {
+  for (const [x, y] of cyber || plage ? [] : [[DROITE1 + 30, W + 34], [DROITE0 - 30, W + 34], [DROITE1 + 30, yOppose - 34], [DROITE0 - 30, yOppose - 34]]) {
     boite(lMetal, repere(0, 0, 0), x, y, 24, 1.4, 1.4, 48);
     const p = new THREE.Mesh(new THREE.BoxGeometry(9, 1, 6), [matLampes, matLampes, matLampes, matLampes, matLampes, matLampes]);
     p.position.set(x, y, 49); p.lookAt(44, -R_CORDE, 0); stade.add(p);
@@ -829,7 +861,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   // LES DRAPEAUX, sur la facade de la tribune principale
   const lDrap = maillots.slice(0, 4).map(v => new THREE.MeshLambertMaterial({ color: couleur(v), side: THREE.DoubleSide }));
-  for (let i = 0, x = 4; x < LS; x += 9, i++) {
+  for (let i = 0, x = 4; !plage && x < LS; x += 9, i++) {
     boite(lMetal, Mp, x, yFond + 0.1, z2 + 5.4, 0.08, 0.08, 4);
     const d = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1), lDrap[i % lDrap.length]);
     d.position.copy(new THREE.Vector3(x + 0.9, yFond + 0.1, z2 + 6.8).applyMatrix4(Mp));
@@ -890,9 +922,11 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
 
   if (cyber) villeNeon(hasard, rS);
+  if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base,
+    spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 
   // LES ARBRES, autour du stade (pas au luxe : autour, c'est le noir ; pas au Stade Neon : la ville)
-  for (let i = 0; i < (luxe || cyber ? 0 : 70); i++) {
+  for (let i = 0; i < (luxe || cyber || plage ? 0 : 70); i++) {
     const a = hasard() * Math.PI * 2, rx = 150 + hasard() * 40, ry = 95 + hasard() * 30;
     const x = 44 + rx * Math.cos(a), y = -R_CORDE + ry * Math.sin(a), h = 5 + hasard() * 5;
     boite(lTronc, M0, x, y, h * 0.3, 1, 1, h * 0.6);
@@ -1447,7 +1481,7 @@ export function rendre(App: any, dt: number) {
     camera.lookAt(camVise);
     const fov = champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
     if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3); camera.updateProjectionMatrix(); }
-    soleil.position.set(p[0] - 10, p[1] - 18, 30);
+    soleil.position.set(p[0] + soleilDecal.x, p[1] + soleilDecal.y, soleilDecal.z);
     soleil.target.position.set(p[0] + 6, p[1], 0);
   }
   if (SURVOL) {

@@ -54,6 +54,12 @@ SILHOUETTES = [('Male', ['SimpleParted']), ('Male', ['Buzzed', 'Beard']), ('Male
 # Pas plus de cinq : a six, l'atlas passerait 4 096 pixels de large, la limite des
 # textures sur les telephones les plus faibles.
 GESTES = ['assis', 'applaudit', 'debout', 'pied', 'photo']
+# LA PLAGE (--plage) : pas de gradins, donc pas de siege de stade. Le premier geste devient
+# un transat (allonge, le dos incline), les autres sont debout ; meme disposition de l'atlas,
+# pour que le shader de course-3d.ts n'ait rien a savoir. Sortie : public-plage-cartes.png.
+PLAGE = '--plage' in sys.argv
+if PLAGE:
+    GESTES = ['transat', 'applaudit', 'debout', 'pied', 'photo']
 ANGLES = [-60, -30, 0, 30, 60]
 CW, CH = 128, 256                  # une case, en pixels
 LARG, HAUT = 1.1, 2.2              # ce qu'elle couvre, en metres (le siege au bas, au milieu)
@@ -136,6 +142,17 @@ def poser(rig, geste):
         viser_os(rig, 'thigh_r', (0, -0.25, -1))
         viser_os(rig, 'calf_r', (0, 1, -0.08))
         viser_os(rig, 'foot_r', (0, 1, 0.3))
+    elif geste == 'transat':
+        # allonge sur un transat : jambes tendues devant, dos incline en arriere
+        for c in ('l', 'r'):
+            viser_os(rig, 'thigh_' + c, (0, -1, 0.12))
+            viser_os(rig, 'calf_' + c, (0, -1, -0.05))
+            viser_os(rig, 'foot_' + c, (0, -0.3, 1))
+        for os_ in ('spine_01', 'spine_02', 'spine_03'):
+            viser_os(rig, os_, (0, 0.62, 1))
+        viser_os(rig, 'neck_01', (0, 0.3, 1))
+    elif PLAGE and geste in ('applaudit',):
+        pass                                     # debout, sur ses deux jambes
     elif geste not in ('debout', 'pied'):
         for c in ('l', 'r'):
             viser_os(rig, 'thigh_' + c, (0, -1, -0.08))
@@ -143,7 +160,10 @@ def poser(rig, geste):
             viser_os(rig, 'foot_' + c, (0, -1, -0.55))
     for c, s in (('l', 1), ('r', -1)):
         # le cote gauche du personnage est a +X quand il regarde -Y
-        if geste == 'assis':
+        if geste == 'transat':
+            viser_os(rig, 'upperarm_' + c, (s * 0.35, 0.3, -1))
+            viser_os(rig, 'lowerarm_' + c, (s * 0.1, -0.9, -0.2))
+        elif geste == 'assis':
             viser_os(rig, 'upperarm_' + c, (s * 0.18, -0.35, -1))
             viser_os(rig, 'lowerarm_' + c, (s * 0.05, -1, -0.25))
         elif geste == 'applaudit':
@@ -210,9 +230,12 @@ def personne(silhouette, geste, mats):
     # assis, le bassin se pose sur l'assise ; debout, les pieds au sol
     bpy.context.view_layer.update()
     pelvis = rig.matrix_world @ rig.pose.bones['pelvis'].head
-    if geste in ('debout', 'pied'):
+    if geste in ('debout', 'pied') or (PLAGE and geste == 'applaudit'):
         rig.location.z -= min((rig.matrix_world @ rig.pose.bones['ball_' + c].head).z for c in 'lr') - 0.03
         rig.location.y += -0.18 - pelvis.y
+    elif geste == 'transat':
+        rig.location.z += 0.42 - pelvis.z
+        rig.location.y += 0.15 - pelvis.y
     elif geste == 'photo':
         # le genou droit et le pied gauche au sol
         bas = min((rig.matrix_world @ rig.pose.bones['calf_r'].head).z, (rig.matrix_world @ rig.pose.bones['ball_l'].head).z)
@@ -239,6 +262,16 @@ def appareil(rig, mats):
     o = bpy.context.active_object
     for m in (b, o):
         m.data.materials.append(mats['base'])
+
+
+def transat(racine):
+    """Un transat : son cadre de bois (passe `base`) et sa toile (passe `siege`, teinte par le jeu)."""
+    for x in (-0.3, 0.3):
+        tribune.boite('pied', 'base', racine, (x, -0.55, 0.15), (0.05, 0.05, 0.3))
+        tribune.boite('pied', 'base', racine, (x, 0.45, 0.15), (0.05, 0.05, 0.3))
+        tribune.boite('montant', 'base', racine, (x, 0.62, 0.62), (0.05, 0.05, 0.75), rot_x=-0.55)
+    tribune.boite('assise', 'siege', racine, (0, -0.1, 0.32), (0.58, 1.05, 0.03))
+    tribune.boite('dossier', 'siege', racine, (0, 0.6, 0.66), (0.58, 0.04, 0.78), rot_x=-0.55)
 
 
 def materiaux():
@@ -277,7 +310,9 @@ def main():
         cam = camera(sc)
         e = bpy.data.objects.new('siege', None)
         sc.collection.objects.link(e)
-        if g not in ('pied', 'photo'):
+        if g == 'transat':
+            transat(e)
+        elif g not in ('pied', 'photo') and not PLAGE:
             tribune.siege(e, releve=(g == 'debout'))
         for o in e.children:
             o.data.materials.append(mats['siege'])
@@ -301,13 +336,14 @@ def main():
     os.remove(tmp)
     img = bpy.data.images.new('atlas', atlas.shape[1], atlas.shape[0], alpha=True)
     img.pixels[:] = (atlas[::-1].astype(np.float32) / 255.0).ravel()
-    img.filepath_raw = os.path.join(SORTIE, 'public-cartes.png')
+    nom = 'public-plage-cartes' if PLAGE else 'public-cartes'
+    img.filepath_raw = os.path.join(SORTIE, nom + '.png')
     img.file_format = 'PNG'
     img.save()
-    with open(os.path.join(SORTIE, 'public-cartes.json'), 'w') as f:
+    with open(os.path.join(SORTIE, nom + '.json'), 'w') as f:
         json.dump(dict(silhouettes=len(SILHOUETTES), gestes=GESTES, angles=ANGLES, case=[CW, CH],
                        metres=[LARG, HAUT], passes=PASSES), f, indent=1)
-    print('ECRIT public-cartes.png', atlas.shape)
+    print('ECRIT ' + nom + '.png', atlas.shape)
 
 
 main()

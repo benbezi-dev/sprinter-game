@@ -743,6 +743,22 @@
       names: ['Kai Voltaire', 'Nyx Arden', 'Rook Calder', 'Juno Vex',
               'Axel Marrow', 'Sable Quinn', 'Orin Hale'] },
 
+    // LA PLAGE PARADIS (22/10). « Une piste fondue au sable sur une plage paradisiaque,
+    // pas de gradins : un public debout, d'autres sur une chaise, d'autres sur leurs
+    // bateaux de marque BENBEZI. » Cherchee dans Unity (StadePlage.cs, quatre passes),
+    // validee par l'auteur, construite pour la course 3D (plage-3d.ts). Fermee, derniere
+    // de la liste, choisissable sur la branche de test 3D.
+    { cle: 'plage', name: 'Plage Paradis', theme: 'plage',
+      pool: 'sprint',
+      horsSerie: true,
+      brancheTest: true,
+      noms: ['Plage Paradis', 'Paradise Beach'],
+      foule: 0.8,
+      plateau: { '100': [9.60, 9.95], '200': [19.30, 20.00],
+                 '400': [43.40, 44.60], '4x100': [37.60, 38.60] },
+      names: ['Kai Moana', 'Leilani Sol', 'Teva Marin', 'Ines Coral',
+              'Malo Riviera', 'Nalu Ferreira', 'Sofia Lagos'] },
+
   ];
 
   // ---------------------------------------------------------------------
