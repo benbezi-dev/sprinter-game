@@ -46,10 +46,10 @@ const RECUL = nombre('recul', DOS ? 5.5 : 8.5);
 const COTE = nombre('cote', DOS ? 0 : 2.4);
 // Le profil (voir la camera, dans rendre) : ou il commence et s'acheve (en part de la
 // course), sa hauteur et sa part d'arriere en portrait. A regler sur le telephone :
-// ?pdebut=0.08 ?pfin=0.92 ?phaut=6 ?parriere=0.15 ?ploin=1
+// ?pdebut=0.08 ?pfin=0.92 ?phaut=6 ?parriere=0.15 ?ploin=1.2
 const P_DEBUT = nombre('pdebut', 0.08), P_FIN = Math.max(P_DEBUT + 0.05, nombre('pfin', 0.92));
-// ?ploin : la distance du profil, 1 par defaut (0,8 plus pres, 1,2 plus loin)
-const P_LOIN = Math.max(0.4, nombre('ploin', 1));
+// ?ploin : la distance du profil — 1,2 retenu par l'auteur sur son telephone (22/10)
+const P_LOIN = Math.max(0.4, nombre('ploin', 1.2));
 const P_HAUT = nombre('phaut', 6), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.15)));
 const OMBRES = Q.get('ombres') !== '0';
 const STADE_FORCE = Q.get('stade');
@@ -619,14 +619,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   boite(lBloc, M0, 103.1, W + 1.2, 1.0, 0.2, 2.6, 2.0);
   // une poignee de gens au bord de la piste : officiels a l'arrivee, photographes apres la ligne
   if (atlasPublic) {
-    // tournes vers la piste (+y) : officiels a l'arrivee, photographes sur l'herbe apres la ligne, commissaires
+    // tournes vers la piste (+y) : officiels a l'arrivee, commissaires
     for (let i = 0; i < 6; i++) spectateur(M0, 101 + i * 0.7, -1.6 - (i % 2) * 0.6, 0, true, Math.PI / 2);
-    // les photographes, un genou a terre, en arc irregulier de part et d'autre de la piste apres la ligne
-    for (let i = 0; i < 6; i++) {
-      const a = (i + 0.5) / 6 * 1.2 - 0.6;
-      spectateur(M0, 106 + 3 * Math.cos(a) + (hasard() - 0.5) * 0.8, -3.2 + 2.4 * Math.sin(a) + (hasard() - 0.5) * 0.6, 0, 4, Math.PI);
-    }
-    for (let i = 0; i < 4; i++) spectateur(M0, 105.5 + i * 1.1 + (hasard() - 0.5) * 0.6, W + 0.9 + (hasard() - 0.5) * 0.3, 0, 4, Math.PI);
+    // pas de photographes (l'auteur, 22/10 : « retire les photographes »)
     for (let i = 0; i < 4; i++) spectateur(M0, 30 + i * 18, -1.8, 0, true, Math.PI / 2);
   }
 
