@@ -57,6 +57,7 @@ let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
+const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
 /** Un tronc de cone de rayon 1, axe Y de -0,5 a +0,5 : ses deux rayons viennent de l'instance. */
 function materiauTronc() {
@@ -1043,6 +1044,40 @@ export function rendre(App: any, dt: number) {
     // le point vise prolonge la droite camera -> joueur : il reste au centre de l'image
     const loin = DOS ? 14 : 7, kc = COTE * loin / RECUL;
     const vise = _b.set(p[0] + loin * ax - kc * ix, -(p[1] + loin * ay - kc * iy), DOS ? 0.9 : 0.6);
+    // LE PROFIL (l'auteur, 22/10 : « le depart part comme actuellement et au fur et a
+    // mesure de la course passe en vue de profil pour qu'on voie l'ecart entre les
+    // joueurs »). Le depart garde notre camera ; entre 6 et 31 % de la course, elle
+    // glisse cote pelouse, face aux couloirs, la tribune derriere eux — le plan de la
+    // camera sur rail des retransmissions. Elle cadre ses voisins, sept metres devant
+    // et derriere lui au plus — au-dela, en portrait, les coureurs deviendraient des
+    // points : l'ecart au premier, lui, reste ecrit dans le bandeau.
+    const total = T.total || 100;
+    const u = Math.min(1, Math.max(0, (pl.d - 0.06 * total) / (0.25 * total)));
+    const b = u * u * (3 - 2 * u);
+    if (b > 0 && !DOS) {
+      let dMin = pl.d, dMax = pl.d;
+      for (const r of G.runners) if (r && r.look && !r.retour) { dMin = Math.min(dMin, r.d); dMax = Math.max(dMax, r.d); }
+      dMin = Math.max(dMin, pl.d - 7); dMax = Math.min(dMax, pl.d + 7);
+      // le joueur d'abord : le cadre ne va qu'a mi-chemin vers le milieu de ses voisins
+      const centre = pl.d + 1.5 + ((dMin + dMax) / 2 - pl.d) * 0.5, ecart = dMax - dMin + 4;
+      const milieu = (nCouloirs - 1) / 2;
+      const f = ici(T.pos(centre, milieu)), hf = capIci(T.heading(centre, milieu));
+      const fx = Math.sin(hf), fy = -Math.cos(hf);                 // vers la pelouse
+      // EN PORTRAIT, UN PROFIL DE TROIS QUARTS. Le champ horizontal d'un telephone tenu
+      // droit ne fait qu'une trentaine de degres : de profil pur, la piste n'etait plus
+      // qu'une bande au milieu de l'ecran et les coureurs des points (mesure du 22/10,
+      // 375 x 812). Un peu en arriere et plus haute, la camera range l'ecart dans la
+      // profondeur — le premier en haut, les suivants plus bas. Ecran large : profil pur.
+      const arriere = camera.aspect >= 1 ? 0 : 0.55;
+      const demiChamp = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect);
+      const D = arriere ? Math.min(20, Math.max(9, 6 + ecart * 0.9))
+        : Math.min(26, Math.max(10, ecart / (2 * Math.tan(demiChamp)) + nCouloirs * LANE_W / 2));
+      const ax2 = Math.cos(hf), ay2 = Math.sin(hf);
+      const lat = Math.sqrt(1 - arriere * arriere);
+      voulu.lerp(_c3.set(f[0] + (fx * lat - ax2 * arriere) * D, -(f[1] + (fy * lat - ay2 * arriere) * D), 3.2 + arriere * 4), b);
+      // visant sous les coureurs : ils montent dans l'image, au-dessus des touches
+      vise.lerp(_d3.set(f[0] + ax2 * arriere * 3, -(f[1] + ay2 * arriere * 3), arriere ? 0 : -0.6), b);
+    }
     const lisse = camPret ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
     camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
     camPret = true;
