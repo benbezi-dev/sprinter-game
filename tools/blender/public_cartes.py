@@ -49,7 +49,11 @@ CORPS = os.path.join(Q, 'Base Characters', 'Godot - UE', 'Superhero_%s_FullBody.
 CHEVEUX = os.path.join(Q, 'Hairstyles', 'Origin at 0', 'glTF (Godot)', 'Hair_%s.gltf')
 SILHOUETTES = [('Male', ['SimpleParted']), ('Male', ['Buzzed', 'Beard']), ('Male', ['Buzzed']),
                ('Female', ['Long']), ('Female', ['Buns']), ('Female', ['BuzzedFemale'])]
-GESTES = ['assis', 'applaudit', 'debout', 'pied']   # pied : debout, bras le long du corps, sans siege (officiels)
+# pied : debout, bras le long du corps, sans siege (officiels) ; photo : un genou a terre,
+# l'appareil a l'oeil (« les photographes n'ont pas d'attitude de photographe », 22/10).
+# Pas plus de cinq : a six, l'atlas passerait 4 096 pixels de large, la limite des
+# textures sur les telephones les plus faibles.
+GESTES = ['assis', 'applaudit', 'debout', 'pied', 'photo']
 ANGLES = [-60, -30, 0, 30, 60]
 CW, CH = 128, 256                  # une case, en pixels
 LARG, HAUT = 1.1, 2.2              # ce qu'elle couvre, en metres (le siege au bas, au milieu)
@@ -124,7 +128,15 @@ def viser_os(rig, nom, direction):
 
 def poser(rig, geste):
     """Il regarde -Y. Assis : cuisses vers l'avant, tibias vers le bas."""
-    if geste not in ('debout', 'pied'):
+    if geste == 'photo':
+        # un genou a terre : la jambe gauche devant, le genou droit au sol, le pied derriere
+        viser_os(rig, 'thigh_l', (0, -1, -0.15))
+        viser_os(rig, 'calf_l', (0, -0.05, -1))
+        viser_os(rig, 'foot_l', (0, -1, -0.3))
+        viser_os(rig, 'thigh_r', (0, -0.25, -1))
+        viser_os(rig, 'calf_r', (0, 1, -0.08))
+        viser_os(rig, 'foot_r', (0, 1, 0.3))
+    elif geste not in ('debout', 'pied'):
         for c in ('l', 'r'):
             viser_os(rig, 'thigh_' + c, (0, -1, -0.08))
             viser_os(rig, 'calf_' + c, (0, -0.12, -1))
@@ -137,6 +149,10 @@ def poser(rig, geste):
         elif geste == 'applaudit':
             viser_os(rig, 'upperarm_' + c, (s * 0.35, -0.75, -0.55))
             viser_os(rig, 'lowerarm_' + c, (-s * 0.55, -0.55, 0.55))
+        elif geste == 'photo':
+            # les coudes ecartes, les mains devant le visage : elles tiennent l'appareil
+            viser_os(rig, 'upperarm_' + c, (s * 0.45, -0.55, -0.35))
+            viser_os(rig, 'lowerarm_' + c, (-s * 0.35, -0.85, 0.4))
         elif geste == 'pied':
             viser_os(rig, 'upperarm_' + c, (s * 0.16, 0.02, -1))
             viser_os(rig, 'lowerarm_' + c, (s * 0.05, -0.12, -1))
@@ -197,10 +213,32 @@ def personne(silhouette, geste, mats):
     if geste in ('debout', 'pied'):
         rig.location.z -= min((rig.matrix_world @ rig.pose.bones['ball_' + c].head).z for c in 'lr') - 0.03
         rig.location.y += -0.18 - pelvis.y
+    elif geste == 'photo':
+        # le genou droit et le pied gauche au sol
+        bas = min((rig.matrix_world @ rig.pose.bones['calf_r'].head).z, (rig.matrix_world @ rig.pose.bones['ball_l'].head).z)
+        rig.location.z -= bas - 0.06
+        rig.location.y -= pelvis.y
     else:
         rig.location.z += ASSISE + 0.10 - pelvis.z
         rig.location.y += 0.02 - pelvis.y
     rig.location.x -= pelvis.x
+    if geste == 'photo':
+        appareil(rig, mats)
+
+
+def appareil(rig, mats):
+    """Le boitier et son teleobjectif, devant l'oeil, pointes droit devant (-Y)."""
+    bpy.context.view_layer.update()
+    t = rig.matrix_world @ rig.pose.bones['Head'].head
+    z = t.z + 0.09
+    bpy.ops.mesh.primitive_cube_add(location=(t.x, t.y - 0.16, z))
+    b = bpy.context.active_object
+    b.scale = (0.075, 0.05, 0.055)
+    bpy.ops.mesh.primitive_cylinder_add(radius=0.048, depth=0.34, vertices=16,
+                                        location=(t.x, t.y - 0.36, z + 0.005), rotation=(math.pi / 2, 0, 0))
+    o = bpy.context.active_object
+    for m in (b, o):
+        m.data.materials.append(mats['base'])
 
 
 def materiaux():
@@ -239,7 +277,7 @@ def main():
         cam = camera(sc)
         e = bpy.data.objects.new('siege', None)
         sc.collection.objects.link(e)
-        if g != 'pied':
+        if g not in ('pied', 'photo'):
             tribune.siege(e, releve=(g == 'debout'))
         for o in e.children:
             o.data.materials.append(mats['siege'])

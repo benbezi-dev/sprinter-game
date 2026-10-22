@@ -48,7 +48,7 @@ const COTE = nombre('cote', DOS ? 0 : 2.4);
 // course), sa hauteur et sa part d'arriere en portrait. A regler sur le telephone :
 // ?pdebut=0.08 ?pfin=0.92 ?phaut=8 ?parriere=0.3
 const P_DEBUT = nombre('pdebut', 0.08), P_FIN = Math.max(P_DEBUT + 0.05, nombre('pfin', 0.92));
-const P_HAUT = nombre('phaut', 8), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.3)));
+const P_HAUT = nombre('phaut', 8), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.15)));
 const OMBRES = Q.get('ombres') !== '0';
 const STADE_FORCE = Q.get('stade');
 
@@ -65,7 +65,7 @@ let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
-let profilDecal = 0, profilEcart = 0, profilPret = false;
+let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
 /** Un tronc de cone de rayon 1, axe Y de -0,5 a +0,5 : ses deux rayons viennent de l'instance. */
@@ -101,7 +101,7 @@ function texteCanvas(dessin: (c: CanvasRenderingContext2D, w: number, h: number)
 //
 // LA FOULE VIT. Elle se leve et saute au passage du joueur, et tout le stade se
 // leve apres l'arrivee (uLiesse) ; ceux qui applaudissent sautillent.
-const P_SIL = 6, P_GESTES = 4, P_ANGLES = 5, CARTE_L = 1.1, CARTE_H = 2.2;
+const P_SIL = 6, P_GESTES = 5, P_ANGLES = 5, CARTE_L = 1.1, CARTE_H = 2.2;
 let atlasPublic: THREE.Texture | null = null, publicDemande = false;
 const uFoule = {
   uAtlas: { value: null as THREE.Texture | null }, uCam: { value: new THREE.Vector3() },
@@ -144,7 +144,12 @@ varying vec2 vCase; varying vec3 vC1, vC2, vC3, vC4;`)
       .replace('#include <begin_vertex>', `
 vec2 versCam = uCam.xy - aPos.xy;
 float ang = atan(versCam.y, versCam.x);
-float rel = mod(degrees(ang - aFace) + 180.0, 360.0) - 180.0;
+float ge0 = mod(aVar, ${P_GESTES}.0);
+// LES PHOTOGRAPHES SUIVENT LA COURSE : leur objectif tourne vers le joueur (« en
+// mouvement, pas tout droit », l'auteur, 22/10), chacun avec son petit ecart
+float face = aFace;
+if (ge0 > 3.5) face = atan(uJoueur.y - aPos.y, uJoueur.x - aPos.x) + (fract(aPh * 37.1) - 0.5) * 0.5;
+float rel = mod(degrees(ang - face) + 180.0, 360.0) - 180.0;
 float ia = clamp(floor((rel + 60.0) / 30.0 + 0.5), 0.0, ${P_ANGLES - 1}.0);
 float sil = floor(aVar / ${P_GESTES}.0), ge = mod(aVar, ${P_GESTES}.0);
 // au passage du joueur, et toute entiere apres l'arrivee, la foule se leve
@@ -449,11 +454,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
    * une carte du public (voir LE PUBLIC, EN CARTES). `pied` : debout, bras le long
    * du corps et sans siege (officiels, photographes) ; `face` force son cap.
    */
-  const spectateur = (M: THREE.Matrix4, x: number, y: number, z: number, pied = false, face?: number) => {
+  const spectateur = (M: THREE.Matrix4, x: number, y: number, z: number, pied: boolean | number = false, face?: number) => {
     _p.set(x, y, z).applyMatrix4(M);
     if (face === undefined) { _f.set(0, -1, 0).transformDirection(M); face = Math.atan2(_f.y, _f.x); }
-    const u = hasard(), geste = pied ? 3 : u < 0.6 ? 0 : u < 0.85 ? 1 : 2;
-    cartes.push(_p.x, _p.y, _p.z, face, ((hasard() * 6) | 0) * 4 + geste, hasard());
+    // `pied` : vrai pour un officiel debout (3), ou le geste lui-meme (4 : photographe)
+    const u = hasard(), geste = typeof pied === 'number' ? pied : pied ? 3 : u < 0.6 ? 0 : u < 0.85 ? 1 : 2;
+    cartes.push(_p.x, _p.y, _p.z, face, ((hasard() * P_SIL) | 0) * P_GESTES + geste, hasard());
     for (const c of [choix(peaux), choix(coulMaillots), choix(coulCheveux), choix(coulPantalons)]) cartes.push(c.r, c.g, c.b);
   };
 
@@ -602,7 +608,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   if (atlasPublic) {
     // tournes vers la piste (+y) : officiels a l'arrivee, photographes sur l'herbe apres la ligne, commissaires
     for (let i = 0; i < 6; i++) spectateur(M0, 101 + i * 0.7, -1.6 - (i % 2) * 0.6, 0, true, Math.PI / 2);
-    for (let i = 0; i < 7; i++) spectateur(M0, 105 + i * 0.8, -2.6 - (i % 2) * 0.5, 0, true, Math.PI * 0.75);
+    // les photographes, un genou a terre, en arc irregulier de part et d'autre de la piste apres la ligne
+    for (let i = 0; i < 6; i++) {
+      const a = (i + 0.5) / 6 * 1.2 - 0.6;
+      spectateur(M0, 106 + 3 * Math.cos(a) + (hasard() - 0.5) * 0.8, -3.2 + 2.4 * Math.sin(a) + (hasard() - 0.5) * 0.6, 0, 4, Math.PI);
+    }
+    for (let i = 0; i < 4; i++) spectateur(M0, 105.5 + i * 1.1 + (hasard() - 0.5) * 0.6, W + 0.9 + (hasard() - 0.5) * 0.3, 0, 4, Math.PI);
     for (let i = 0; i < 4; i++) spectateur(M0, 30 + i * 18, -1.8, 0, true, Math.PI / 2);
   }
 
@@ -1063,8 +1074,21 @@ export function rendre(App: any, dt: number) {
     // et derriere lui au plus — au-dela, en portrait, les coureurs deviendraient des
     // points : l'ecart au premier, lui, reste ecrit dans le bandeau.
     const total = T.total || 100;
-    const u = Math.min(1, Math.max(0, (pl.d - P_DEBUT * total) / ((P_FIN - P_DEBUT) * total)));
-    const b = u * u * (3 - 2 * u);
+    // SUR UN TOUR (200, 400 m), LE PROFIL SUIT LA PISTE : entier dans les lignes droites,
+    // a moitie dans les virages — de profil, un virage sort du cadre —, et la camera
+    // pivote doucement de l'un a l'autre (« sur les lignes droites, pas assez de profil »,
+    // l'auteur, 22/10). Le 100 m garde sa lente glissade.
+    let cible: number;
+    if (T.curved) {
+      const v = Math.min(1, Math.max(0, (pl.d - 0.03 * total) / (0.08 * total)));
+      cible = v * v * (3 - 2 * v) * (T.lean(pl.d, pl.lane, 1) ? 0.5 : 1);
+    } else {
+      const u = Math.min(1, Math.max(0, (pl.d - P_DEBUT * total) / ((P_FIN - P_DEBUT) * total)));
+      cible = u * u * (3 - 2 * u);
+    }
+    if (pl.d < 0.5 || !T.curved) profilB = cible;
+    else profilB += (cible - profilB) * Math.min(1, (dt || 0.016) * 0.7);
+    const b = profilB;
     if (b <= 0) profilPret = false;
     if (b > 0 && !DOS) {
       let dMin = pl.d, dMax = pl.d;
