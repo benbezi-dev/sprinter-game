@@ -53,6 +53,8 @@ const P_LOIN = Math.max(0.4, nombre('ploin', 1.2));
 const P_HAUT = nombre('phaut', 6), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.15)));
 const OMBRES = Q.get('ombres') !== '0';
 const STADE_FORCE = Q.get('stade');
+// ?vue=survol : une vue aerienne fixe du stade entier, pour verifier le decor (rien ne s'y chevauche)
+const SURVOL = Q.get('vue') === 'survol';
 
 const MAX_TRONCS = 1400;
 const LANE_W = 1.22;
@@ -627,7 +629,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   };
 
   // LA TRIBUNE PRINCIPALE, le long de la ligne droite, en face de la camera
-  const yS = W + 3.2, XA = DROITE0 - 4, LS = DROITE1 - DROITE0 + 8;
+  // ELLE S'ARRETE OU COMMENCENT LES VIRAGES : elle debordait de quatre metres de chaque
+  // cote et s'enfoncait dans les tribunes des virages (« pas de chevauchement », 22/10)
+  const yS = W + 3.2, XA = DROITE0, LS = DROITE1 - DROITE0;
   const Mp = repere(XA, yS, 0);
   boite(lBlanc, Mp, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);                       // le muret
   if (luxe) boite(lFilet, Mp, LS / 2, -0.15, 1.22, LS, 0.27, 0.04);
@@ -660,7 +664,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       if (luxe) boite(lFilet, M, L / 2, 0.4 + 16 * 0.85, z + 2, L, 0.1, 0.1);
     }
   }
-  const Mo = repere(DROITE1 + 4, yOppose - 3.2, Math.PI);                    // ligne opposee
+  const Mo = repere(DROITE1, yOppose - 3.2, Math.PI);                        // ligne opposee
   boite(lBlanc, Mo, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);
   const zo = gradins(Mo, LS, 16, 0.4, 1.2);
   boite(lToit, Mo, LS / 2, 0.4 + 16 * 0.85 + 0.2, (zo + 2) / 2, LS, 0.4, zo + 2);
@@ -1298,6 +1302,10 @@ export function rendre(App: any, dt: number) {
     if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3); camera.updateProjectionMatrix(); }
     soleil.position.set(p[0] - 10, p[1] - 18, 30);
     soleil.target.position.set(p[0] + 6, p[1], 0);
+  }
+  if (SURVOL) {
+    camera.position.set(-70, R_CORDE + 95, 85);     // y retourne : voir `monde`
+    camera.lookAt(46, R_CORDE, 0);
   }
   // la foule : ou est la camera (dans le repere du monde), ou est le joueur, l'arrivee passee
   if (voute) voute.rotation.y += (dt || 0.016) * 0.006;
