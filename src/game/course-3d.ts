@@ -319,7 +319,7 @@ function planetesSousLaPiste(T: any, hasard: () => number) {
 function villeNeon(hasard: () => number, rS: number) {
   const fenetres = texteCanvas((c, w, h) => {
     c.fillStyle = '#05040a'; c.fillRect(0, 0, w, h);
-    const teintes = ['#ffd9a0', '#ffd9a0', '#ffd9a0', '#00e5ff', '#ff2bd6', '#b0c8ff'];
+    const teintes = ['#ffd9a0', '#00e5ff', '#00e5ff', '#ff2bd6', '#ff2bd6', '#b04dff', '#b0c8ff'];   // plus de neon que de lampes
     for (let y = 2; y < h - 4; y += 6) for (let x = 2; x < w - 3; x += 5) {
       if (hasard() > 0.36) continue;
       c.globalAlpha = 0.35 + hasard() * 0.65;
@@ -367,18 +367,9 @@ function villeNeon(hasard: () => number, rS: number) {
     stade!.add(m);
     hologrammes.push(m);
   }
-  // PLUS CYBERPUNK (« accentue le cote cyberpunk », 22/10) : sous la ville et la pelouse, une
-  // grille de neon sur l'asphalte mouille ; aux tours proches, des enseignes verticales ; dans
-  // le ciel, la circulation des vehicules volants. Tout en addition, rien d'eclaire.
-  const grille = texteCanvas((c, w, h) => {
-    c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
-    c.fillStyle = '#00e5ff'; c.globalAlpha = 0.55; c.fillRect(0, 0, w, 2); c.fillRect(0, 0, 2, h);
-    c.fillStyle = '#ff2bd6'; c.globalAlpha = 0.25; c.fillRect(0, h / 2, w, 1); c.fillRect(w / 2, 0, 1, h);
-  }, 64, 64);
-  grille.wrapS = grille.wrapT = THREE.RepeatWrapping; grille.repeat.set(70, 70);
-  const sol = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), new THREE.MeshBasicMaterial({ map: grille, transparent: true,
-    blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-  sol.position.set(44, -R_CORDE, -0.09); stade!.add(sol);
+  // PLUS CYBERPUNK (« accentue le cote cyberpunk », 22/10) : aux tours proches, des enseignes
+  // verticales ; dans le ciel, la circulation des vehicules volants. (La grille de neon au sol
+  // est retiree : « c'est trop, accentue au niveau des couleurs ».)
   const teintesEns = ['#ff2bd6', '#00e5ff', '#ffdc1e', '#ff4d4d', '#8c3cff'];
   proches.slice(0, 26).forEach(([x, y, h, l], i) => {
     const col = teintesEns[i % teintesEns.length];
@@ -573,10 +564,10 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const plage = !!th.plage;
   if (plage) chargerLaPlage();
   uFoule.uAtlas.value = plage ? atlasPlage : atlasPublic;
-  hemi.color.set(luxe ? 0x6a5638 : cyber ? 0x5a2a8a : plage ? 0xffe2c0 : nuit ? 0x7a88c0 : 0xdfefff);
-  hemi.groundColor.set(luxe ? 0x080604 : cyber ? 0x05040a : plage ? 0xd8b080 : nuit ? 0x1a1f2a : 0x5a7a40);
-  hemi.intensity = luxe ? 0.45 : cyber ? 0.55 : plage ? 1.25 : nuit ? 0.6 : 1.6;
-  soleil.color.set(luxe ? 0xffd49a : cyber ? 0xd8b8ff : plage ? 0xffc58a : nuit ? 0xe6eeff : 0xfff4e0);
+  hemi.color.set(luxe ? 0x6a5638 : cyber ? 0x9a38d8 : plage ? 0xffe2c0 : nuit ? 0x7a88c0 : 0xdfefff);
+  hemi.groundColor.set(luxe ? 0x080604 : cyber ? 0x1c0634 : plage ? 0xd8b080 : nuit ? 0x1a1f2a : 0x5a7a40);
+  hemi.intensity = luxe ? 0.45 : cyber ? 0.7 : plage ? 1.25 : nuit ? 0.6 : 1.6;
+  soleil.color.set(luxe ? 0xffd49a : cyber ? 0xe0a0ff : plage ? 0xffc58a : nuit ? 0xe6eeff : 0xfff4e0);
   soleil.intensity = luxe ? 2.6 : cyber ? 1.7 : plage ? 2.6 : nuit ? 2.0 : 2.2;
   soleilDecal.set(plage ? 22 : -10, plage ? 50 : -18, plage ? 16 : 30);   // a la plage, bas, au-dessus de la mer
   // LA LUMIERE DE L'HEURE (heure-du-jour.js : le theme du moment porte `moment`). Le jour
@@ -616,7 +607,16 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : plage ? 0xec7860 : 0x2457b8);
   if (plage) scene.fog = nuit ? new THREE.Fog(0x0c1530, 220, 1100) : new THREE.Fog(0xf3c9a2, 260, 1300);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
-  if (cyber) scene.fog = new THREE.Fog(0x14061f, 60, 460);
+  if (cyber) {
+    // les couleurs du Stade Neon poussees (« accentue au niveau des couleurs », 22/10) : un ciel
+    // magenta sur violet profond, une brume violette, des lumieres plus saturees
+    scene.background = texteCanvas((c, w, h) => {
+      const g = c.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, '#12042a'); g.addColorStop(0.6, '#3a0c5e'); g.addColorStop(1, '#a3168c');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }, 4, 256);
+    scene.fog = new THREE.Fog(0x2c0a46, 50, 420);
+  }
   hologrammes = [];
   pubAnim = [];
   if (videoPub) { videoPub.pause(); videoPub.removeAttribute('src'); videoPub.load(); videoPub = null; }
@@ -749,7 +749,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const lBeton = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0xc9c6c0 }));
   const lBlanc = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.barrier, [231, 234, 239]) }));
   const lVitre = new Lot(cube, new THREE.MeshLambertMaterial(luxe ? { color: 0x2a2014, emissive: 0x4a3410 }
-    : cyber ? { color: 0x1a0a2a, emissive: 0x6a1a8a } : { color: 0x9fc4dc, emissive: 0x1a2a38 }));
+    : cyber ? { color: 0x1a0a2a, emissive: 0xb02ad8 } : { color: 0x9fc4dc, emissive: 0x1a2a38 }));
   const OR = new THREE.Color(0xc9a45c);
   const lMetal = new Lot(new THREE.CylinderGeometry(0.5, 0.5, 1, 10), cyber
     ? new THREE.MeshStandardMaterial({ color: 0x1a1a24, roughness: 0.4, metalness: 0.5 }) : luxe
