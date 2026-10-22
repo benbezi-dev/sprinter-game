@@ -27,7 +27,9 @@
 // piste en suivant le joueur. `?cam=dos` la met derriere lui, dans son couloir.
 //
 // Reglages d'URL : ?cam=dos ?haut= (hauteur, m) ?recul= (m derriere le
-// joueur) ?cote= (m sur le cote) ?ombres=0 (sans ombres, telephones faibles).
+// joueur) ?cote= (m sur le cote) ?ombres=0 (sans ombres, telephones faibles)
+// ?stade=or (habille la course 3D d'un autre stade du jeu, pour le voir sans le
+// canal de test : la liste des stades, elle, ne change pas).
 
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -43,6 +45,7 @@ const HAUT = nombre('haut', DOS ? 2.5 : 5.5);
 const RECUL = nombre('recul', DOS ? 5.5 : 8.5);
 const COTE = nombre('cote', DOS ? 0 : 2.4);
 const OMBRES = Q.get('ombres') !== '0';
+const STADE_FORCE = Q.get('stade');
 
 const MAX_TRONCS = 1400;
 const LANE_W = 1.22;
@@ -970,7 +973,8 @@ export function rendre(App: any, dt: number) {
   }
   // le stade de l'etape en cours (le theme a l'heure ou l'on joue, comme le dessin 2D)
   // (l'eclairage de l'heure rend un nouvel objet : c'est le theme brut qui dit si l'etape a change)
-  const brut = App.themeBrut ? App.themeBrut() : null;
+  const force = STADE_FORCE && App.THEMES && App.THEMES[STADE_FORCE];
+  const brut = force || (App.themeBrut ? App.themeBrut() : null);
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
   const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + '/' + (G.levelIdx | 0);
@@ -979,7 +983,7 @@ export function rendre(App: any, dt: number) {
     themeVu = brut; formeVue = forme;
     const b = (brut && brut.base) || brut, TH = App.THEMES || {};
     const stadeCle = Object.keys(TH).find(k => TH[k] === b) || null;
-    construireLeStade(nCouloirs, App.theme ? App.theme() : {}, T, C, stadeCle, G.levelIdx | 0);
+    construireLeStade(nCouloirs, force || (App.theme ? App.theme() : {}), T, C, stadeCle, force ? 9 : G.levelIdx | 0);
   }
   if (!toile || toile.style.display === 'none') {
     afficher(true);
