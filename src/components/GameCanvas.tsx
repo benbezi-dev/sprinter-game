@@ -5,6 +5,7 @@ import { dessinerLeGenerique, placerLaCameraDuGenerique } from '@/game/scene-gen
 import { cameraPassage, appliquerCamera } from '@/game/passage';
 import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
+import { jeuCourant } from '@/game/jeux';
 import { cameraPour } from '@/game/cadrage';
 import { POUSSEE_OUVERTE } from '@/game/canal';
 import { guetteurDePoussee } from '@/game/poussee-gestes';
@@ -12,9 +13,12 @@ import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRede
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
 import { chargementFini, partChargee } from '@/game/chargement';
 
-// LA COURSE EN VRAIE 3D, PROTOTYPE (22/10/2026) : derriere ?rendu=3d seulement,
-// chargee a part pour que three ne pese rien sur le jeu normal. Voir game/course-3d.ts.
-const RENDU_3D = (() => { try { return new URLSearchParams(location.search).get('rendu') === '3d'; } catch { return false; } })();
+// LA COURSE EN VRAIE 3D (22/10/2026). Sur la branche de test ferme test-ferme/course-3d,
+// elle est la par defaut (`?rendu=2d` revient au dessin du jeu) ; chargee a part pour
+// que three ne pese rien tant qu'elle n'est pas demandee. Voir game/course-3d.ts.
+const RENDU_3D = (() => { try { return new URLSearchParams(location.search).get('rendu') !== '2d'; } catch { return true; } })();
+// Les epreuves deja faites en 3D ; les autres (haies, relais, concours) restent en 2D.
+const EPREUVES_3D = new Set(['100', '200', '400']);
 let rendu3D: any = null;
 if (RENDU_3D) import('@/game/course-3d').then(m => { rendu3D = m; }).catch(() => { /* reste en 2D */ });
 
@@ -280,7 +284,8 @@ export function GameCanvas() {
       // garde le fond de l'ouverture plutot que de montrer le stade sous une
       // camera qui n'est pas la sienne. Voir game/scene-accueil.ts.
       const accueilSansScene = G.state === 'title' && !placerLaCameraDeLAccueil(SprinterApp);
-      const en3D = !!rendu3D && (G.state === 'race' || G.state === 'count' || G.state === 'falseout');
+      const en3D = !!rendu3D && EPREUVES_3D.has(G.raceKey) && jeuCourant() !== 'jumper'
+        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout');
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {
         const g = ctx.createLinearGradient(0, 0, 0, G.VH);

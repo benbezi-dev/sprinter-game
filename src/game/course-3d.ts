@@ -14,8 +14,12 @@
 // pour les articulations : deux appels de dessin, quel que soit le nombre
 // de coureurs.
 //
-// shortcut: un seul stade (piste de jour en ligne droite), pas de virage, pas
-// de haies, pas d'enregistreur video — a etendre si le prototype convainc.
+// LES VIRAGES (200 et 400 m) : le jeu pose ces courses dans son propre repere,
+// le virage de depart centre sur l'origine (voir Track, sprinter-core.js). `caler`
+// le ramene sur le stade, l'arrivee toujours au bout de la ligne droite principale.
+//
+// shortcut: pas de haies, pas de relais, pas de concours (ils restent en 2D,
+// GameCanvas.tsx), pas d'enregistreur video.
 //
 // LA CAMERA SERT LE JEU ACTUEL (l'auteur, 22/10) : on y court en voyant les
 // huit couloirs, pour se mesurer aux autres. Par defaut, elle se tient donc en
@@ -29,6 +33,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
@@ -96,10 +101,24 @@ function texteCanvas(dessin: (c: CanvasRenderingContext2D, w: number, h: number)
 // shortcut: les pieces de decor propres a chaque stade (images Blender du jeu,
 // cuites pour sa vue 2D) ne sont pas reprises : seul le theme l'est.
 let stade: THREE.Group | null = null;
-let themeVu: any = null;
+let themeVu: any = null, formeVue = '';
 const PUBLIC = Math.max(0, Math.min(1, nombre('public', 1)));
 const R_CORDE = 36.5;                     // rayon de la corde dans les virages (m)
-const DROITE0 = -12, DROITE1 = 100;       // la ligne droite, de la sortie du virage a l'arrivee
+const DROITE0_100 = -12, DROITE1 = 100;       // la ligne droite, de la sortie du virage a l'arrivee
+// (au 100 m ; sur un virage, la ligne droite d'un vrai stade, 84,39 m, l'arrivee au meme endroit)
+
+// DU REPERE DU JEU A CELUI DU STADE. En ligne droite, ce sont les memes. Sur un
+// demi-tour, le jeu met son virage autour de l'origine et la ligne droite a y = r :
+// on le pousse jusqu'au virage du stade. Sur un tour complet, il finit sur l'autre
+// ligne droite, en sens inverse (y = -r, cap -pi) : on le retourne d'un demi-tour.
+let sx = 1, x0 = 0, y0 = 0;
+function caler(T: any) {
+  if (!T.curved) { sx = 1; x0 = 0; y0 = 0; }
+  else if (T.fullLap) { sx = -1; x0 = DROITE1; y0 = -R_CORDE; }
+  else { sx = 1; x0 = DROITE1 - T.straight; y0 = -R_CORDE; }
+}
+const ici = (p: number[]) => [x0 + sx * p[0], y0 + sx * p[1]];
+const capIci = (c: number) => (sx < 0 ? c + Math.PI : c);
 const c3 = (v: number[] | undefined, d: number[]) => {
   const a = v || d;
   return new THREE.Color().setRGB(a[0] / 255, a[1] / 255, a[2] / 255, THREE.SRGBColorSpace);
@@ -134,7 +153,9 @@ function boite(lot: Lot, M: THREE.Matrix4, x: number, y: number, z: number, lx: 
   lot.poser(_bx.copy(M).multiply(_tr.makeTranslation(x, y, z)).multiply(_sc.makeScale(lx, ly, lz)), c);
 }
 
-function construireLeStade(nCouloirs: number, th: any) {
+function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
+  // le virage du depart : celui du stade sur un virage, plus loin derriere au 100 m (sa ligne droite est plus longue)
+  const DROITE0 = T.curved ? DROITE1 - T.straight : DROITE0_100;
   if (stade) { monde.remove(stade); stade.traverse((o: any) => { o.geometry?.dispose?.(); }); }
   stade = new THREE.Group();
   monde.add(stade);
@@ -200,20 +221,33 @@ function construireLeStade(nCouloirs: number, th: any) {
     for (let k = 1; k < nCouloirs; k += 2) anneau(R_CORDE + k * LANE_W, R_CORDE + (k + 1) * LANE_W, matB, 0.001);
     for (let k = 0; k <= nCouloirs; k++) anneau(R_CORDE + k * LANE_W - 0.025, R_CORDE + k * LANE_W + 0.025, ligne, 0.002);
   }
-  plan(0.05, W, ligne, 0, W / 2, 0.003);                       // la ligne de depart
   const damier = texteCanvas((c, w, h) => {
     for (let i = 0; i < 4; i++) for (let j = 0; j < 40; j++) {
       c.fillStyle = (i + j) % 2 ? '#111' : '#f4f4f4'; c.fillRect(i * w / 4, j * h / 40, w / 4, h / 40);
     }
   }, 64, 640);
   plan(0.5, W, new THREE.MeshBasicMaterial({ map: damier }), 100.25, W / 2, 0.003);
+  // LE DEPART, couloir par couloir : en ligne au 100 m, en quinconce dans le virage sinon
+  const UP0 = new THREE.Vector3(0, 0, 1);
+  const departs: [THREE.Matrix4, number, number][] = [];
   for (let k = 0; k < nCouloirs; k++) {
+    const p = ici(T.pos(0, k)), a = capIci(T.heading(0, k));
+    // le coureur court sur la ligne de mesure, pres du bord interieur : le milieu du couloir est plus loin
+    const mil = T.curved ? LANE_W / 2 - (k ? C.MES_N : C.MES_1) : 0;
+    departs.push([new THREE.Matrix4().makeRotationAxis(UP0, a).setPosition(p[0], p[1], 0), a, mil]);
+  }
+  for (let k = 0; k < nCouloirs; k++) {
+    const [Md, a, mil] = departs[k];
+    const q = new THREE.Vector3(0, mil, 0).applyMatrix4(Md);
+    const l = plan(0.05, LANE_W, ligne, q.x, q.y, 0.003);
+    l.rotation.z = a;
     const t = texteCanvas((c, w, h) => {
       c.fillStyle = css(th.lane || [247, 242, 233]); c.font = `900 ${h * 0.9}px system-ui, sans-serif`;
       c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(k + 1), w / 2, h / 2 + h * 0.04);
     }, 128, 128);
-    const m = plan(1.0, 1.0, new THREE.MeshBasicMaterial({ map: t, transparent: true }), -2.2, (k + 0.5) * LANE_W, 0.004);
-    m.rotation.z = -Math.PI / 2;
+    const qn = new THREE.Vector3(-2.2, mil, 0).applyMatrix4(Md);
+    const m = plan(1.0, 1.0, new THREE.MeshBasicMaterial({ map: t, transparent: true }), qn.x, qn.y, 0.004);
+    m.rotation.z = a - Math.PI / 2;
     m.scale.x = -1;   // le monde est en miroir (voir initialiser) : le chiffre, lui, se lit a l'endroit
   }
 
@@ -321,7 +355,7 @@ function construireLeStade(nCouloirs: number, th: any) {
     c.fillStyle = '#ff7a1a'; c.font = `900 ${h * 0.42}px system-ui, sans-serif`;
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('SPRINTER', w / 2, h * 0.42);
     c.fillStyle = '#e8ecf4'; c.font = `700 ${h * 0.16}px system-ui, sans-serif`;
-    c.fillText('100 M  ·  LIVE', w / 2, h * 0.78);
+    c.fillText((T.fullLap ? '400' : T.curved ? '200' : '100') + ' M  ·  LIVE', w / 2, h * 0.78);
   }, 512, 256);
   const xE = DROITE1 + rS + 22;
   const ec = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshBasicMaterial({ map: ecran, fog: false }));
@@ -356,11 +390,11 @@ function construireLeStade(nCouloirs: number, th: any) {
 
   // SUR LA PISTE : les blocs, le portique du chrono, officiels et photographes
   const M0 = repere(0, 0, 0);
-  for (let k = 0; k < nCouloirs; k++) {
-    const y = (k + 0.5) * LANE_W;
-    boite(lBloc, M0, -0.55, y, 0.04, 0.6, 0.12, 0.05);
-    boite(lBloc, M0, -0.42, y + 0.14, 0.09, 0.08, 0.14, 0.16);
-    boite(lBloc, M0, -0.7, y - 0.14, 0.09, 0.08, 0.14, 0.16);
+  // les blocs du jeu, la ou pose() met chaque coureur au coup de feu (voir drawBlocs)
+  if (blocLots) for (const { geo, mat } of blocLots) {
+    const l = new Lot(geo, mat, true);
+    for (const [Md] of departs) l.poser(Md);
+    l.finir(stade);
   }
   for (const y of [-0.9, W + 0.9]) boite(lMetal, M0, 100, y, 1.6, 0.18, 0.18, 3.2);
   boite(lBlanc, M0, 100, W / 2, 3.25, 0.25, W + 1.8, 0.3);
@@ -375,7 +409,7 @@ function construireLeStade(nCouloirs: number, th: any) {
   boite(lBloc, M0, 103.1, W + 1.2, 1.0, 0.2, 2.6, 2.0);
   // une poignee de gens au bord de la piste : officiels a l'arrivee, photographes apres la ligne
   for (let i = 0; i < 6; i++) spectateur(M0, 101 + i * 0.7, -1.6 - (i % 2) * 0.6, -0.1);
-  for (let i = 0; i < 7; i++) spectateur(M0, 104 + i * 0.8, W * (i / 6), -0.55);
+  for (let i = 0; i < 7; i++) spectateur(M0, 105 + i * 0.8, -2.6 - (i % 2) * 0.5, -0.1);   // sur l'herbe, pas dans la piste
   for (let i = 0; i < 4; i++) spectateur(M0, 30 + i * 18, -1.8, -0.1);
 
   // LES ARBRES, autour du stade
@@ -457,6 +491,42 @@ let gabarit: THREE.Object3D | null = null;
 let chargement: Promise<void> | null = null;
 type Corps = { m: Modele; mats: Record<string, THREE.MeshStandardMaterial> };
 const corps = new Map<any, Corps>();
+
+// LE BLOC DE DEPART : la piece Blender des images 2D (pieces.blocs), exportee par
+// tools/blender/bloc_depart_glb.py, fondue en un maillage par matiere : quatre
+// appels de dessin pour les huit couloirs. Ses couleurs, perdues a l'export, sont
+// celles de pieces.py. Tant qu'il n'est pas la, pas de blocs (jamais de bloc au trait).
+let blocLots: { geo: THREE.BufferGeometry; mat: THREE.Material }[] | null = null;
+let blocDemande = false;
+const BLOC_COULEURS: Record<string, number[]> = {
+  aluminium: [190, 196, 208], fonte: [58, 62, 76], caoutchouc: [40, 42, 52], chariot: [204, 48, 54],
+};
+function chargerLeBloc() {
+  if (blocDemande) return;
+  blocDemande = true;
+  const base = (import.meta as any).env?.BASE_URL || '/';
+  const l = new GLTFLoader();
+  l.setMeshoptDecoder(MeshoptDecoder);
+  l.loadAsync(base + 'modeles/bloc-depart.glb').then(g => {
+    g.scene.updateMatrixWorld(true);
+    const parMat = new Map<string, THREE.BufferGeometry[]>();
+    g.scene.traverse((o: any) => {
+      if (!o.isMesh) return;
+      const brut = o.geometry.clone().applyMatrix4(o.matrixWorld).toNonIndexed();
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', brut.getAttribute('position'));
+      geo.setAttribute('normal', brut.getAttribute('normal'));
+      const n = o.material.name;
+      if (!parMat.has(n)) parMat.set(n, []);
+      parMat.get(n)!.push(geo);
+    });
+    blocLots = [...parMat].map(([n, gs]) => ({
+      geo: mergeGeometries(gs)!,
+      mat: new THREE.MeshLambertMaterial({ color: c3(BLOC_COULEURS[n], [128, 128, 128]) }),
+    }));
+    formeVue = '';   // le stade se refait, avec ses blocs
+  }).catch(() => { /* pas de blocs */ });
+}
 
 function chargerLeCorps() {
   if (chargement) return;
@@ -616,7 +686,7 @@ function dessinerLesEffets(App: any) {
   for (const e of echos) if (e) e.m.racine.visible = false;
   onde.visible = aura.visible = false;
   if (age < 0 || !p) return;
-  const T = G.track, q = T.posDemi(p.d, p.lane, p.demi || 0);
+  const T = G.track, q = ici(T.posDemi(p.d, p.lane, p.demi || 0));
   // l'onde s'ouvre sous ses appuis
   const r = 0.5 + 3.6 * age;
   onde.position.set(q[0], q[1], 0.02); onde.scale.set(r, r, 1);
@@ -629,7 +699,7 @@ function dessinerLesEffets(App: any) {
   aura.visible = true;
   // les copies derriere lui, de plus en plus pales
   if (!poussEchos || !p.squelette) return;
-  const cap = T.heading(p.d, p.lane), lean = T.lean(p.d, p.lane, p.v);
+  const cap = capIci(T.heading(p.d, p.lane)), lean = T.lean(p.d, p.lane, p.v);
   const k0 = (p.look.h || C.MODEL_H) / C.MODEL_H;
   for (let k = 1; k <= 3; k++) {
     // plus espacees qu'en 2D : vue de dos, des copies serrees se fondent en une tache
@@ -638,7 +708,7 @@ function dessinerLesEffets(App: any) {
     const e = echoDe(k - 1);
     if (!e) continue;
     poser(e.m, p.squelette);
-    const pq = T.posDemi(d, p.lane, p.demi || 0);
+    const pq = ici(T.posDemi(d, p.lane, p.demi || 0));
     const [ex, ey, ez] = App.repereDuCoureur(p, cap, lean, false, false);
     _M.set(ex[0], ey[0], ez[0], 0, ex[1], ey[1], ez[1], 0, ex[2], ey[2], ez[2], 0, 0, 0, 0, 1);
     e.m.racine.matrix.multiplyMatrices(_T.makeTranslation(pq[0], pq[1], 0), _S.makeScale(k0, k0, k0)).multiply(_M).multiply(Qgl);
@@ -671,16 +741,21 @@ export function rendre(App: any, dt: number) {
     initialiser(nCouloirs, G.cv || null);
     initialiserLesEffets();
     chargerLeCorps();
+    chargerLeBloc();
   }
   // le stade de l'etape en cours (le theme a l'heure ou l'on joue, comme le dessin 2D)
   // (l'eclairage de l'heure rend un nouvel objet : c'est le theme brut qui dit si l'etape a change)
   const brut = App.themeBrut ? App.themeBrut() : null;
-  if (!stade || brut !== themeVu) { themeVu = brut; construireLeStade(nCouloirs, App.theme ? App.theme() : {}); }
+  // ... et la forme de la course : ligne droite, demi-tour ou tour complet
+  const forme = T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite';
+  caler(T);
+  if (!stade || brut !== themeVu || forme !== formeVue) {
+    themeVu = brut; formeVue = forme;
+    construireLeStade(nCouloirs, App.theme ? App.theme() : {}, T, C);
+  }
   if (!toile || toile.style.display === 'none') {
     afficher(true);
   }
-  if (T.curved) return;   // shortcut: ligne droite seulement
-
   const tous = (G.ghost && G.runners.indexOf(G.ghost.runner) < 0) ? G.runners.concat([G.ghost.runner]) : G.runners;
   // les blocs et le « prets » : c'est le dessin du jeu qui les pose, a chaque image
   for (const r of tous) App.phaseBlocs(r);
@@ -693,8 +768,8 @@ export function rendre(App: any, dt: number) {
   let n = 0, nj = 0;
   for (const r of tous) {
     if (!r || !r.look) continue;
-    const p = T.posDemi(r.d, r.lane, r.demi || 0);
-    const cap = T.heading(r.d, r.lane) + (r.retour ? Math.PI : 0) + (r.cap || 0);
+    const p = ici(T.posDemi(r.d, r.lane, r.demi || 0));
+    const cap = capIci(T.heading(r.d, r.lane)) + (r.retour ? Math.PI : 0) + (r.cap || 0);
     const k = (r.look.h || C.MODEL_H) / C.MODEL_H;
     const lean = T.lean(r.d, r.lane, r.v) + (r.roulis || 0);
     r.squelette3D = true;
@@ -731,14 +806,16 @@ export function rendre(App: any, dt: number) {
   // LA CAMERA, derriere le joueur dans l'axe de son couloir, un peu en hauteur
   const pl = G.player;
   if (pl) {
-    const p = T.posDemi(pl.d, pl.lane, pl.demi || 0);
+    const p = ici(T.posDemi(pl.d, pl.lane, pl.demi || 0));
     // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
-    // il est au milieu de l'image, ses voisins des deux cotes. Y retourne : voir `monde`.
-    const yAxe = p[1];
-    const voulu = _a.set(p[0] - RECUL, -(yAxe - COTE), HAUT);
+    // il est au milieu de l'image, ses voisins des deux cotes. Dans un virage, elle tourne
+    // avec lui. Y retourne : voir `monde`.
+    const h = capIci(T.heading(pl.d, pl.lane));
+    const ax = Math.cos(h), ay = Math.sin(h), ix = Math.sin(h), iy = -Math.cos(h);   // devant, vers la corde
+    const voulu = _a.set(p[0] - RECUL * ax + COTE * ix, -(p[1] - RECUL * ay + COTE * iy), HAUT);
     // le point vise prolonge la droite camera -> joueur : il reste au centre de l'image
-    const loin = DOS ? 14 : 7;
-    const vise = _b.set(p[0] + loin, -(yAxe + COTE * loin / RECUL), DOS ? 0.9 : 0.6);
+    const loin = DOS ? 14 : 7, kc = COTE * loin / RECUL;
+    const vise = _b.set(p[0] + loin * ax - kc * ix, -(p[1] + loin * ay - kc * iy), DOS ? 0.9 : 0.6);
     const lisse = camPret ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
     camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
     camPret = true;
