@@ -79,6 +79,8 @@ let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
 let voute: THREE.Object3D | null = null, filante: THREE.Mesh | null = null, filanteT = 0;
 // le Stade Neon : ses hologrammes (qui gresillent) et sa pluie (qui suit la camera)
 let hologrammes: THREE.Mesh[] = [], pluie: THREE.LineSegments | null = null;
+// les panneaux animes et le film de l'ecran geant (voir LES PANNEAUX LED)
+let pubAnim: ((t: number) => void)[] = [], videoPub: HTMLVideoElement | null = null;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
 /** Un tronc de cone de rayon 1, axe Y de -0,5 a +0,5 : ses deux rayons viennent de l'instance. */
@@ -553,13 +555,15 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   uLisereCoul.value.set(cyber ? 0x30e8ff : 0xffc76b);
   // au Stade Neon, le lisere reste un fil (« les neons sur les personnages sont trop forts,
   // un jeu de lumiere qui fait qu'on les voit clairement », 22/10) : la lumiere de face fait le reste
-  uLisereForce.value = cyber ? 0.22 : 0.9;
+  uLisereForce.value = cyber ? 0.22 : 0.45;   // Stade d'Or : moitie moins (« reduis la lumiere qui emane du joueur », 22/10)
   uLisereFace.value = cyber ? 1 : 0;   // le Stade d'Or garde le reglage valide
   uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : plage ? 0xec7860 : 0x2457b8);
   if (plage) scene.fog = new THREE.Fog(0xf3c9a2, 260, 1300);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
   if (cyber) scene.fog = new THREE.Fog(0x14061f, 60, 460);
   hologrammes = [];
+  pubAnim = [];
+  if (videoPub) { videoPub.pause(); videoPub.removeAttribute('src'); videoPub.load(); videoPub = null; }
   if (pluie) { scene.remove(pluie); pluie.geometry.dispose(); pluie = null; }
   // L'ESPACE (Intergalactique, Arc-en-ciel) : pas de pelouse, la piste FLOTTE dans le vide
   // (decor-cosmos.js en 2D) — des etoiles et des nebuleuses tout autour ET en dessous, des
@@ -579,21 +583,23 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     stade.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false })));
   }
   if (!th.stars && !luxe && !cyber && !plage) {
-    const nuage = texteCanvas((c, w, h) => {
-      for (let i = 0; i < 14; i++) {
-        const x = w * (0.2 + 0.6 * Math.random()), y = h * (0.45 + 0.2 * Math.random()), r = h * (0.18 + 0.2 * Math.random());
+    // Des sprites loin autour du stade, comme a la plage : des plaques fixes a 300 m se
+    // voyaient de biais et de pres pendant le survol — des taches blanches coupees net.
+    // Les bouffees restent dans la toile (x 0,2-0,8, rayon <= 0,34 h) : aucun bord droit.
+    const nuages = [0, 1, 2].map(() => texteCanvas((c, w, h) => {
+      for (let i = 0; i < 22; i++) {
+        const x = w * (0.2 + 0.6 * hasard()), y = h * (0.38 + 0.24 * hasard()), r = h * (0.12 + 0.22 * hasard());
         const g = c.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, 'rgba(255,255,255,0.85)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        g.addColorStop(0, 'rgba(255,255,255,0.45)'); g.addColorStop(1, 'rgba(255,255,255,0)');
         c.fillStyle = g; c.fillRect(0, 0, w, h);
       }
-    }, 256, 128);
-    const matN = new THREE.MeshBasicMaterial({ map: nuage, transparent: true, depthWrite: false, fog: false });
-    for (let i = 0; i < 9; i++) {
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(90, 45), matN);
-      const a = -0.9 + i * 0.22;
-      m.position.set(60 + 300 * Math.cos(a), -40 + 300 * Math.sin(a) * 0.6, 70 + 25 * hasard());
-      m.lookAt(40, -30, 30);
-      stade.add(m);
+    }, 256, 128));
+    for (let i = 0; i < 16; i++) {
+      const a = hasard() * Math.PI * 2, d = 480 + hasard() * 260, lg = 140 + hasard() * 180;
+      const n = new THREE.Sprite(new THREE.SpriteMaterial({ map: nuages[i % 3], transparent: true, depthWrite: false, fog: false }));
+      n.position.set(44 + Math.cos(a) * d, -R_CORDE + Math.sin(a) * d, 90 + hasard() * 120);
+      n.scale.set(lg, lg * (0.3 + hasard() * 0.15), 1);
+      stade.add(n);
     }
   }
 
@@ -815,17 +821,60 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   if (cyber) boite(lFilet, Mo, LS / 2, 0.4 + 16 * 0.85, zo + 0.05, LS, 0.08, 0.08);
   }
 
-  // LES PANNEAUX LED, au bord de la piste, devant la tribune principale
-  const pub = new THREE.TextureLoader().load(base + 'pubs/benbezi-logo-3d-cadre.webp');
+  // LES PANNEAUX LED, au bord de la piste, devant la tribune principale — animes (« exploiter
+  // les panneaux publicitaires : videos de promotion, logos animes », 22/10). Une toile
+  // redessinee enchaine, six secondes chacun : le logo balaye d'un reflet, le logo qui
+  // defile, une accroche. Le film, lui, passe sur l'ecran geant (un panneau d'un metre de
+  // haut n'en montrerait qu'une vignette).
+  const logoPub = new Image(); logoPub.src = base + 'pubs/benbezi-logo-3d-cadre.webp';
+  const toileLed = document.createElement('canvas'); toileLed.width = 512; toileLed.height = 106;
+  const cl = toileLed.getContext('2d')!;
+  const pub = new THREE.CanvasTexture(toileLed);
   pub.colorSpace = THREE.SRGBColorSpace; pub.wrapS = THREE.RepeatWrapping; pub.repeat.set(LS / 5, 1);
+  const pubHaut = pub.clone(); pubHaut.repeat.set(LS / 3.4, 1);
+  const accent = css(th.accent || [255, 122, 26]);
+  const accroches = ['SPRINTER', 'DÉFIE TES AMIS', (T.fullLap ? '400' : T.curved ? '200' : '100') + ' M EN DIRECT', 'BENBEZI'];
+  let imageLed = -1;
+  pubAnim.push(t => {
+    const img = Math.floor(t * 20);          // 20 images/s suffisent a un panneau
+    if (img === imageLed) return;
+    imageLed = img;
+    const w = 512, h = 106, n = Math.floor(t / 6), u = (t % 6) / 6, sorte = n % 3;
+    cl.globalCompositeOperation = 'source-over';
+    cl.fillStyle = '#050608'; cl.fillRect(0, 0, w, h);
+    if (sorte < 2 && logoPub.complete && logoPub.naturalWidth) {
+      if (sorte === 0) {
+        cl.drawImage(logoPub, 0, 0, w, h);
+        // le reflet qui traverse le panneau
+        const x = (u * 1.8 - 0.4) * w, g = cl.createLinearGradient(x - 60, 0, x + 60, 0);
+        g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        cl.globalCompositeOperation = 'lighter'; cl.fillStyle = g; cl.fillRect(0, 0, w, h);
+      } else {
+        const x = -((u * 3) % 1) * w;
+        cl.drawImage(logoPub, x, 0, w, h); cl.drawImage(logoPub, x + w, 0, w, h);
+      }
+    } else {
+      // l'accroche entre en grandissant, respire, puis s'eteint
+      const k = Math.min(1, u * 6), f = Math.min(1, (1 - u) * 8);
+      cl.globalAlpha = f;
+      cl.fillStyle = accent; cl.textAlign = 'center'; cl.textBaseline = 'middle';
+      const mot = accroches[Math.floor(n / 3) % accroches.length];
+      let px = h * (0.42 + 0.12 * k + 0.02 * Math.sin(t * 6));
+      cl.font = `900 ${Math.round(px)}px system-ui, sans-serif`;
+      const lg = cl.measureText(mot).width;
+      if (lg > w * 0.9) { px *= w * 0.9 / lg; cl.font = `900 ${Math.round(px)}px system-ui, sans-serif`; }   // tient dans le panneau
+      cl.fillText(mot, w / 2, h / 2 + 2);
+      cl.globalAlpha = 1;
+    }
+    pub.needsUpdate = true; pubHaut.needsUpdate = true;
+  });
   const panneau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 1.03), new THREE.MeshBasicMaterial({ map: pub }));
   panneau.position.set(XA + LS / 2, W + 1.7, 0.55); panneau.rotation.x = Math.PI / 2; panneau.scale.x = -1;  // (monde en miroir)
   stade.add(panneau);
   boite(lBloc, repere(0, 0, 0), XA + LS / 2, W + 1.78, 0.55, LS, 0.12, 1.1);
   // ... et le bandeau entre les deux etages (pas a la plage : pas de tribune)
   if (!plage) {
-  const bandeau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 0.7), new THREE.MeshBasicMaterial({ map: pub.clone() }));
-  (bandeau.material as THREE.MeshBasicMaterial).map!.repeat.set(LS / 3.4, 1);
+  const bandeau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 0.7), new THREE.MeshBasicMaterial({ map: pubHaut }));
   bandeau.position.set(XA + LS / 2, yS + yLoges + 0.05, z1 + 0.3); bandeau.rotation.x = Math.PI / 2; bandeau.scale.x = -1;
   stade.add(bandeau);
   }
@@ -857,6 +906,18 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const ec = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshBasicMaterial({ map: ecran, fog: false }));
   ec.position.set(xE, -R_CORDE + 6, 22); ec.rotation.set(Math.PI / 2, -Math.PI / 2, 0); ec.scale.x = -1;
   stade.add(ec);
+  // ... et le film de promotion (public/pubs/videos, tire du reel « course en direct »,
+  // remonte en 2:1) : quinze secondes de film, six d'habillage du stade, en boucle
+  const film = document.createElement('video');
+  film.src = base + 'pubs/videos/sprinter-direct.mp4';
+  film.muted = true; film.loop = true; film.playsInline = true; film.preload = 'auto'; film.setAttribute('playsinline', '');
+  videoPub = film;
+  const tFilm = new THREE.VideoTexture(film); tFilm.colorSpace = THREE.SRGBColorSpace;
+  const matE = ec.material as THREE.MeshBasicMaterial;
+  pubAnim.push(t => {
+    if (film.paused) film.play().catch(() => {});
+    matE.map = t % 21 < 15 && film.readyState >= 2 ? tFilm : ecran;
+  });
   boite(lBloc, repere(0, 0, 0), xE + 0.4, -R_CORDE + 6, 22, 0.6, 17, 9);
   boite(lMetal, repere(0, 0, 0), xE + 0.6, -R_CORDE + 6, 9, 1.2, 1.2, 18);
   }
@@ -921,10 +982,39 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       g.addColorStop(0, 'rgba(255,196,110,0.9)'); g.addColorStop(0.45, 'rgba(230,150,60,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
       c.fillStyle = g; c.fillRect(0, 0, w, h);
     }, 256, 256);
+    // le faisceau : vif a la rampe (haut de la toile = sommet du cone), eteint au sol
+    const faisceau = new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+      side: THREE.DoubleSide, opacity: 0.1, map: texteCanvas((c, w, h) => {
+        const g = c.createLinearGradient(0, 0, 0, h);
+        g.addColorStop(0, 'rgba(255,214,140,1)'); g.addColorStop(0.5, 'rgba(230,160,70,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = g; c.fillRect(0, 0, w, h);
+      }, 4, 128) });
     const mat = new THREE.MeshBasicMaterial({ map: nappe, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.55 });
     for (let x = DROITE0 + 8; x < DROITE1 + 10; x += 24) {
       const m = plan(34, W + 10, mat, x, W / 2, 0.008);
       m.receiveShadow = false;
+    }
+    // LES QUATRE PROJECTEURS eclairent tout le stade (« utilise la lumiere des projecteurs
+    // sans perdre l'aspect luxueux, sublime-le », 22/10) : vu du ciel, seule la ligne
+    // d'arrivee sortait du noir. Toujours peint en addition (aucune lumiere de plus) :
+    // une large nappe par pylone sur la pelouse et les virages, un halo sur chaque
+    // rampe, un faisceau d'or tres leger jusqu'au sol.
+    const large = new THREE.MeshBasicMaterial({ map: nappe, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+      opacity: 0.45, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+    const xc = 44, yc = -R_CORDE;
+    for (const [x, y] of [[DROITE1 + 30, W + 34], [DROITE0 - 30, W + 34], [DROITE1 + 30, yOppose - 34], [DROITE0 - 30, yOppose - 34]]) {
+      const cx = x + (xc - x) * 0.55, cy = y + (yc - y) * 0.55;
+      const m = plan(150, 110, large, cx, cy, 0.02);
+      m.rotation.z = Math.atan2(yc - y, xc - x); m.receiveShadow = false;
+      const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: nappe, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, opacity: 0.9 }));
+      halo.position.set(x, y, 49); halo.scale.set(22, 22, 1);
+      stade.add(halo);
+      const bout = new THREE.Vector3(x, y, 48), sol = new THREE.Vector3(cx, cy, 0);
+      const long = bout.distanceTo(sol);
+      const f = new THREE.Mesh(new THREE.ConeGeometry(20, long, 32, 1, true), faisceau);
+      f.position.copy(bout).add(sol).multiplyScalar(0.5);
+      f.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), bout.clone().sub(sol).normalize());
+      stade.add(f);
     }
   }
 
@@ -1118,7 +1208,7 @@ function lisere(m: THREE.MeshStandardMaterial) {
 float bord = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 2.5);
 // une lumiere de face douce, venue d'en haut a gauche de la camera : le cote qu'on voit
 float face = max(dot(normalize(normal), normalize(vec3(-0.35, 0.55, 0.75))), 0.0);
-outgoingLight += uLisere * (uLisereCoul * bord * uLisereForce + diffuseColor.rgb * (0.22 - 0.08 * uLisereFace + 0.5 * uLisereFace * face));
+outgoingLight += uLisere * (uLisereCoul * bord * uLisereForce + diffuseColor.rgb * (0.12 + 0.02 * uLisereFace + 0.5 * uLisereFace * face));
 #include <opaque_fragment>`);
   };
 }
@@ -1288,6 +1378,7 @@ export function afficher(oui: boolean) {
   toile.style.display = oui ? 'block' : 'none';
   if (vignetteDe) vignetteDe.style.display = oui ? 'block' : 'none';
   if (!oui) camPret = false;
+  if (!oui && videoPub) videoPub.pause();     // rendre() la relance au retour en piste
 }
 
 const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _a = new THREE.Vector3(),
@@ -1507,6 +1598,7 @@ export function rendre(App: any, dt: number) {
   }
   // la foule : ou est la camera (dans le repere du monde), ou est le joueur, l'arrivee passee
   if (voute) voute.rotation.y += (dt || 0.016) * 0.006;
+  if (pubAnim.length) { const t = performance.now() / 1000; for (const f of pubAnim) f(t); }
   if (hologrammes.length) {
     const t = performance.now() / 1000;
     hologrammes.forEach((m, i) => {
