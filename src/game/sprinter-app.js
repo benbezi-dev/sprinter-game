@@ -9215,7 +9215,7 @@
     drawFacetFigure(ctx, caps, cx2, cy2, k, false, man.look && man.look.facettes);
   }
 
-  globalThis.SprinterApp = { G, THEMES, Audio_, load, save, levelScores,
+  globalThis.SprinterApp = { G, THEMES, fouleDe, Audio_, load, save, levelScores,
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, continuerCarriere, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,

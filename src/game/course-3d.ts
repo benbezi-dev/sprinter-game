@@ -292,7 +292,7 @@ function boite(lot: Lot, M: THREE.Matrix4, x: number, y: number, z: number, lx: 
   lot.poser(_bx.copy(M).multiply(_tr.makeTranslation(x, y, z)).multiply(_sc.makeScale(lx, ly, lz)), c);
 }
 
-function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle: string | null, etape: number) {
+function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle: string | null, etape: number, affluence = 1) {
   // le virage du depart : celui du stade sur un virage, plus loin derriere au 100 m (sa ligne droite est plus longue)
   const DROITE0 = T.curved ? DROITE1 - T.straight : DROITE0_100;
   if (stade) { monde.remove(stade); stade.traverse((o: any) => { o.geometry?.dispose?.(); }); }
@@ -467,6 +467,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
    * DES GRADINS dans le repere local M : x le long de la tribune (0 -> L),
    * y en s'eloignant de la piste, z en haut. Rend la hauteur atteinte.
    */
+  // L'AFFLUENCE SUIT L'ENVERGURE DE L'EPREUVE (fouleDe, sprinter-app.js : un quart des
+  // places au scolaire, tout le stade a l'Intergalactique ; « trop de monde pour une
+  // competition scolaire », l'auteur, 22/10). Un stade a moitie vide se remplit par le
+  // bas : on s'assoit pres de la piste, les derniers rangs restent clairsemes.
+  const occupe = (r: number, rangs: number) =>
+    0.95 * Math.min(1, Math.max(0.03, affluence * 1.6 - (r / rangs) * 1.6 * (1 - affluence)));
   const gradins = (M: THREE.Matrix4, L: number, rangs: number, y0: number, z0: number, prof = 0.85, monte = 0.42) => {
     const pas = 0.55, n = Math.max(1, Math.floor(L / pas));
     for (let r = 0; r < rangs; r++) {
@@ -477,7 +483,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       for (let i = 0; i < n; i++) {
         const x = (i + 0.5) * (L / n);
         // la carte porte son siege ; un siege vide reste un siege
-        if (atlasPublic && hasard() < 0.74 * PUBLIC) spectateur(M, x, y + prof * 0.55, z);
+        if (atlasPublic && hasard() < occupe(r, rangs) * PUBLIC) spectateur(M, x, y + prof * 0.55, z);
         else boite(lSiege, M, x, y + prof * 0.55, z + 0.19, 1, 1, 1);
       }
     }
@@ -1000,7 +1006,8 @@ export function rendre(App: any, dt: number) {
     themeVu = brut; formeVue = forme;
     const b = (brut && brut.base) || brut, TH = App.THEMES || {};
     const stadeCle = Object.keys(TH).find(k => TH[k] === b) || null;
-    construireLeStade(nCouloirs, force || (App.theme ? App.theme() : {}), T, C, stadeCle, force ? 9 : G.levelIdx | 0);
+    const affluence = force ? 0.92 : App.fouleDe ? App.fouleDe(G.levelIdx | 0) : 1;
+    construireLeStade(nCouloirs, force || (App.theme ? App.theme() : {}), T, C, stadeCle, force ? 9 : G.levelIdx | 0, affluence);
   }
   if (!toile || toile.style.display === 'none') {
     afficher(true);
