@@ -582,7 +582,12 @@
     && Date.now() < __LANCEMENT_DEFI_MEBA__ + __DUREE_EVENEMENT_MS__;
   for (const stade of K.STADES_HORS_SERIE) {
     if (stade.ouvert || import.meta.env.VITE_CANAL === 'test'
-        || (stade.auLancement && LANCES)) LEVELS.push(stade);
+        || (stade.auLancement && LANCES) || stade.brancheTest) {
+      LEVELS.push(stade);
+      // un stade qui n'est pas a sa place du canal de test y porte son nom (voir `noms`)
+      const N0 = globalThis.SprinterI18N;
+      if (stade.noms && N0 && N0.LEVEL_NAMES) N0.LEVEL_NAMES[LEVELS.length - 1] = stade.noms;
+    }
   }
   if (import.meta.env.VITE_CANAL === 'test') {
     LEVELS[ETAPE_BORD_DE_MER].theme = 'riviera';

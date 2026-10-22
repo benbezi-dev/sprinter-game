@@ -44,6 +44,11 @@ const DOS = Q.get('cam') === 'dos';
 const HAUT = nombre('haut', DOS ? 2.5 : 5.5);
 const RECUL = nombre('recul', DOS ? 5.5 : 8.5);
 const COTE = nombre('cote', DOS ? 0 : 2.4);
+// Le profil (voir la camera, dans rendre) : ou il commence et s'acheve (en part de la
+// course), sa hauteur et sa part d'arriere en portrait. A regler sur le telephone :
+// ?pdebut=0.08 ?pfin=0.92 ?phaut=8 ?parriere=0.3
+const P_DEBUT = nombre('pdebut', 0.08), P_FIN = Math.max(P_DEBUT + 0.05, nombre('pfin', 0.92));
+const P_HAUT = nombre('phaut', 8), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.3)));
 const OMBRES = Q.get('ombres') !== '0';
 const STADE_FORCE = Q.get('stade');
 
@@ -1051,14 +1056,14 @@ export function rendre(App: any, dt: number) {
     const vise = _b.set(p[0] + loin * ax - kc * ix, -(p[1] + loin * ay - kc * iy), DOS ? 0.9 : 0.6);
     // LE PROFIL (l'auteur, 22/10 : « le depart part comme actuellement et au fur et a
     // mesure de la course passe en vue de profil pour qu'on voie l'ecart entre les
-    // joueurs »). Le depart garde notre camera ; entre 8 et 60 % de la course (« trop
-    // rapide » sur 6-31 %, l'auteur, 22/10), elle
+    // joueurs »). Le depart garde notre camera ; de 8 a 92 % de la course (« trop
+    // rapide » sur 6-31 %, puis « se bloque trop tot » a 60 % — l'auteur, 22/10), elle
     // glisse cote pelouse, face aux couloirs, la tribune derriere eux — le plan de la
     // camera sur rail des retransmissions. Elle cadre ses voisins, sept metres devant
     // et derriere lui au plus — au-dela, en portrait, les coureurs deviendraient des
     // points : l'ecart au premier, lui, reste ecrit dans le bandeau.
     const total = T.total || 100;
-    const u = Math.min(1, Math.max(0, (pl.d - 0.08 * total) / (0.52 * total)));
+    const u = Math.min(1, Math.max(0, (pl.d - P_DEBUT * total) / ((P_FIN - P_DEBUT) * total)));
     const b = u * u * (3 - 2 * u);
     if (b <= 0) profilPret = false;
     if (b > 0 && !DOS) {
@@ -1081,15 +1086,17 @@ export function rendre(App: any, dt: number) {
       // qu'une bande au milieu de l'ecran et les coureurs des points (mesure du 22/10,
       // 375 x 812). Un peu en arriere et plus haute, la camera range l'ecart dans la
       // profondeur — le premier en haut, les suivants plus bas. Ecran large : profil pur.
-      const arriere = camera.aspect >= 1 ? 0 : 0.55;
+      // plus de profil et plus haut que le premier essai (0,55 et 5,4 m : « manque de
+      // hauteur ou plus une vue de profil ») : de haut, la piste garde sa place a l'image
+      const arriere = camera.aspect >= 1 ? 0 : P_ARRIERE;
       const demiChamp = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect);
-      const D = arriere ? Math.min(20, Math.max(9, 6 + ecart * 0.9))
+      const D = arriere ? Math.min(22, Math.max(11, 8 + ecart * 0.9))
         : Math.min(26, Math.max(10, ecart / (2 * Math.tan(demiChamp)) + nCouloirs * LANE_W / 2));
       const ax2 = Math.cos(hf), ay2 = Math.sin(hf);
       const lat = Math.sqrt(1 - arriere * arriere);
-      voulu.lerp(_c3.set(f[0] + (fx * lat - ax2 * arriere) * D, -(f[1] + (fy * lat - ay2 * arriere) * D), 3.2 + arriere * 4), b);
+      voulu.lerp(_c3.set(f[0] + (fx * lat - ax2 * arriere) * D, -(f[1] + (fy * lat - ay2 * arriere) * D), camera.aspect >= 1 ? 4.2 : P_HAUT), b);
       // visant sous les coureurs : ils montent dans l'image, au-dessus des touches
-      vise.lerp(_d3.set(f[0] + ax2 * arriere * 3, -(f[1] + ay2 * arriere * 3), arriere ? 0 : -0.6), b);
+      vise.lerp(_d3.set(f[0] + ax2 * arriere * 3, -(f[1] + ay2 * arriere * 3), camera.aspect >= 1 ? -0.6 : 0), b);
     }
     const lisse = camPret ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
     camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);

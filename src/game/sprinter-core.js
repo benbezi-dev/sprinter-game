@@ -715,6 +715,12 @@
     { cle: 'or', name: "Stade d'Or", theme: 'or',
       pool: 'sprint',
       horsSerie: true,
+      // SUR LA BRANCHE DE TEST FERME 3D, il se choisit quel que soit le canal (« le
+      // stade luxury n'est pas selectionnable dans le test 3D », l'auteur, 22/10).
+      // Hors du canal de test il ne tombe donc pas a l'index de LEVEL_NAMES qui
+      // l'attend : `noms` repose son nom a sa vraie place (sprinter-app.js).
+      brancheTest: true,
+      noms: ["Stade d'Or", 'Golden Stadium'],
       foule: 0.92,
       plateau: { '100': [9.50, 9.85], '200': [19.10, 19.80],
                  '400': [43.00, 44.00], '4x100': [37.40, 38.40] },
