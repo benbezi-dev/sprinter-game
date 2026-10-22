@@ -297,6 +297,8 @@
       panels: [[235, 87, 87], [242, 201, 76], [45, 156, 219], [39, 174, 96]],
       crowdLo: [60, 50, 40], crowdHi: [255, 248, 236],
       accent: [255, 170, 80], dust: [240, 214, 166],
+      // la plage suit l'heure (22/10) : la nuit, ce sont les yachts qui l'eclairent (plage-3d.ts)
+      heure: true,
       plage: true
     },
     danube: {
@@ -9245,7 +9247,7 @@
     drawFacetFigure(ctx, caps, cx2, cy2, k, false, man.look && man.look.facettes);
   }
 
-  globalThis.SprinterApp = { G, THEMES, fouleDe, Audio_, load, save, levelScores,
+  globalThis.SprinterApp = { G, THEMES, fouleDe, eclaire, Audio_, load, save, levelScores,
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, continuerCarriere, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,

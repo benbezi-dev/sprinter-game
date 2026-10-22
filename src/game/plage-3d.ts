@@ -25,6 +25,8 @@ export type ContextePlage = {
   /** Une carte du public : x, y, z, geste (0 transat, 1 applaudit, 2 bras leves, 3 calme), cap. */
   spectateur: (x: number, y: number, z: number, geste: number, face: number) => void;
   base: string;
+  /** La nuit (?heure=nuit, ou l'heure qu'il est) : la lune au lieu du soleil, la mer sombre, les torches allumees. */
+  nuit?: boolean;
 };
 
 /** La ligne de la mer : la plage s'arrete la, au-dela de la ligne droite d'arrivee. */
@@ -125,8 +127,9 @@ export function construirePlage(o: ContextePlage) {
   // --- LA MER --------------------------------------------------------------------------
   // un degrade continu, du turquoise laiteux sur le sable au bleu profond du large
   // (« trop sec » en quatre bandes) : des bandes fines, serrees pres du bord
-  const cles: [number, THREE.Color][] = [[0, c3(158, 237, 217)], [0.12, c3(87, 222, 219)], [0.3, c3(31, 173, 204)],
-    [0.55, c3(10, 115, 173)], [1, c3(5, 61, 122)]];
+  const cles: [number, THREE.Color][] = o.nuit
+    ? [[0, c3(70, 120, 140)], [0.12, c3(36, 92, 122)], [0.3, c3(18, 62, 98)], [0.55, c3(9, 36, 70)], [1, c3(4, 16, 38)]]
+    : [[0, c3(158, 237, 217)], [0.12, c3(87, 222, 219)], [0.3, c3(31, 173, 204)], [0.55, c3(10, 115, 173)], [1, c3(5, 61, 122)]];
   const mer = (u: number) => {
     for (let k = 0; k < cles.length - 1; k++)
       if (u <= cles[k + 1][0]) {
@@ -142,7 +145,7 @@ export function construirePlage(o: ContextePlage) {
   }
   plat(2600, 5, new THREE.MeshLambertMaterial({ color: c3(204, 174, 128) }), xc, yE - 2.2, -0.06);    // le sable mouille
   // l'ecume ondulee du rivage, et des nappes plus claires et plus sombres plus loin
-  const ecume = new Lot(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  const ecume = new Lot(new THREE.CircleGeometry(1, 12), new THREE.MeshBasicMaterial({ color: o.nuit ? 0x7d8ca6 : 0xffffff }));
   for (let x = xc - 600; x < xc + 600; x += 3.6)
     ecume.poser(place(x + hasard() * 2, yE + Math.sin(x * 0.07) * 1.2 + hasard() * 0.5, -0.04, 0, 2.6 + hasard() * 1.6, 0.25 + hasard() * 0.35, 1));
   ecume.finir(stade);
@@ -155,8 +158,8 @@ export function construirePlage(o: ContextePlage) {
   }
   nappes.finir(stade);
   // LE CHEMIN DU SOLEIL : une trainee de reflets dores, vers le couchant
-  const reflets = new Lot(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: c3(255, 214, 150), transparent: true,
-    opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const reflets = new Lot(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ color: o.nuit ? c3(190, 210, 255) : c3(255, 214, 150), transparent: true,
+    opacity: o.nuit ? 0.5 : 0.9, blending: THREE.AdditiveBlending, depthWrite: false }));
   const lat = new THREE.Vector2(-SOLEIL.y, SOLEIL.x);
   for (let i = 0; i < 900; i++) {
     const t = 20 + Math.pow(hasard(), 0.6) * 900, ecart = (hasard() - 0.5) * (5 + t * 0.08) * (hasard() + hasard());
@@ -181,12 +184,17 @@ export function construirePlage(o: ContextePlage) {
   // --- LE CIEL : le soleil, son halo, les nuages ---------------------------------------
   const halo = toile((c, w, h) => {
     const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-    g.addColorStop(0, 'rgba(255,250,230,1)'); g.addColorStop(0.12, 'rgba(255,236,190,1)');
-    g.addColorStop(0.2, 'rgba(255,190,120,0.6)'); g.addColorStop(1, 'rgba(255,150,80,0)');
+    if (o.nuit) {   // la lune : un disque froid, un halo court
+      g.addColorStop(0, 'rgba(250,252,255,1)'); g.addColorStop(0.1, 'rgba(235,242,255,1)');
+      g.addColorStop(0.14, 'rgba(160,185,255,0.35)'); g.addColorStop(1, 'rgba(80,100,180,0)');
+    } else {
+      g.addColorStop(0, 'rgba(255,250,230,1)'); g.addColorStop(0.12, 'rgba(255,236,190,1)');
+      g.addColorStop(0.2, 'rgba(255,190,120,0.6)'); g.addColorStop(1, 'rgba(255,150,80,0)');
+    }
     c.fillStyle = g; c.fillRect(0, 0, w, h);
   }, 256, 256);
   const soleil = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
-  soleil.position.set(xc + SOLEIL.x * 700, yE + SOLEIL.y * 700, 120); soleil.scale.set(320, 320, 1);
+  soleil.position.set(xc + SOLEIL.x * 700, yE + SOLEIL.y * 700, o.nuit ? 160 : 120); soleil.scale.setScalar(o.nuit ? 220 : 320);
   ajoute(soleil);
   const nuages = [0, 1, 2].map(() => toile((c, w, h) => {
     for (let k = 0; k < 26; k++) {
@@ -201,7 +209,8 @@ export function construirePlage(o: ContextePlage) {
     const a = hasard() * Math.PI * 2;
     if (Math.abs(Math.atan2(Math.sin(a - azSoleil), Math.cos(a - azSoleil))) < 0.3) continue;   // le soleil reste degage
     const d = 450 + hasard() * 300, lg = 150 + hasard() * 200;
-    const n = new THREE.Sprite(new THREE.SpriteMaterial({ map: nuages[i % 3], transparent: true, depthWrite: false, fog: false }));
+    const n = new THREE.Sprite(new THREE.SpriteMaterial({ map: nuages[i % 3], transparent: true, depthWrite: false, fog: false,
+      color: o.nuit ? 0x3a4560 : 0xffffff }));
     n.position.set(xc + Math.cos(a) * d, -R + Math.sin(a) * d, 60 + hasard() * 110); n.scale.set(lg, lg * (0.3 + hasard() * 0.15), 1);
     ajoute(n);
   }
@@ -268,7 +277,7 @@ export function construirePlage(o: ContextePlage) {
   ellipse(29, 18, new THREE.MeshLambertMaterial({ color: c3(206, 176, 130) }), 0.002);
   ellipse(26, 15, new THREE.MeshStandardMaterial({ color: c3(77, 219, 214), roughness: 0.2 }), 0.004);
   ellipse(17, 9, new THREE.MeshStandardMaterial({ color: c3(31, 168, 199), roughness: 0.2 }), 0.006);
-  const ecumeL = new Lot(new THREE.CircleGeometry(1, 10), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  const ecumeL = new Lot(new THREE.CircleGeometry(1, 10), new THREE.MeshBasicMaterial({ color: o.nuit ? 0x7d8ca6 : 0xffffff }));
   for (let i = 0; i < 150; i++) {
     const a = i / 150 * Math.PI * 2;
     ecumeL.poser(place(cx + Math.cos(a) * 25.8, cy + Math.sin(a) * 14.8, 0.008, a + Math.PI / 2, 1.2 + hasard(), 0.2 + hasard() * 0.2, 1));
@@ -312,11 +321,19 @@ export function construirePlage(o: ContextePlage) {
     o.spectateur(cx + Math.cos(a) * 31, cy + Math.sin(a) * 19.5, 0, 0, a + Math.PI);
   }
   // les torches tiki, tout le long de la corde
+  const lueur = new THREE.SpriteMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8, map: toile((c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(255,190,90,1)'); g.addColorStop(0.3, 'rgba(255,120,40,0.4)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  }, 64, 64) });
   const bambou = new Lot(new THREE.CylinderGeometry(0.06, 0.08, 1.8, 6).rotateX(Math.PI / 2), new THREE.MeshLambertMaterial({ color: c3(140, 106, 56) }));
   const flamme = new Lot(new THREE.SphereGeometry(1, 8, 6), new THREE.MeshBasicMaterial({ color: c3(255, 150, 50) }));
   for (let i = 0; i < 40; i++) {
     const p = ovale(R - 3, (i + 0.5) / 40);
     bambou.poser(place(p[0], p[1], 0.9)); flamme.poser(place(p[0], p[1], 1.95, 0, 0.16, 0.16, 0.3));
+    if (o.nuit) {   // la nuit, chaque torche jette un halo chaud
+      const h = new THREE.Sprite(lueur); h.position.set(p[0], p[1], 2); h.scale.setScalar(3.2); stade.add(h);
+    }
   }
   bambou.finir(stade); flamme.finir(stade);
 
@@ -364,7 +381,9 @@ export function construirePlage(o: ContextePlage) {
   logo.colorSpace = THREE.SRGBColorSpace;
   const matLogo = new THREE.MeshBasicMaterial({ map: logo, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide });
   const coque = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.25 });
-  const vitre = new THREE.MeshStandardMaterial({ color: 0x14202c, roughness: 0.1, metalness: 0.4 });
+  // la nuit, les cabines sont allumees
+  const vitre = o.nuit ? new THREE.MeshBasicMaterial({ color: c3(255, 214, 150) })
+    : new THREE.MeshStandardMaterial({ color: 0x14202c, roughness: 0.1, metalness: 0.4 });
   const teck = new THREE.MeshLambertMaterial({ color: c3(140, 97, 56) });
   const refletTex = toile((c, w, h) => {
     for (let y = 0; y < h; y++) {
@@ -375,7 +394,27 @@ export function construirePlage(o: ContextePlage) {
       c.fillStyle = g; c.fillRect(0, y, w, 1);
     }
   }, 128, 128);
-  const matReflet = new THREE.MeshBasicMaterial({ map: refletTex, transparent: true, opacity: 0.5, depthWrite: false });
+  const matReflet = o.nuit
+    ? new THREE.MeshBasicMaterial({ map: refletTex, transparent: true, opacity: 0.85, depthWrite: false, color: c3(255, 190, 110), blending: THREE.AdditiveBlending })
+    : new THREE.MeshBasicMaterial({ map: refletTex, transparent: true, opacity: 0.5, depthWrite: false });
+  // LA NUIT, CE SONT LES YACHTS QUI ECLAIRENT LA PLAGE (l'auteur, 22/10) : leurs guirlandes,
+  // un halo, et un projecteur par yacht braque sur la piste — tout peint en addition,
+  // aucune lumiere de plus (le plus faible des telephones).
+  const chaud = toile((c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(255,214,150,1)'); g.addColorStop(0.4, 'rgba(255,170,90,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  }, 128, 128);
+  const matHalo = new THREE.SpriteMaterial({ map: chaud, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.7 });
+  const matNappe = new THREE.MeshBasicMaterial({ map: chaud, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    opacity: 0.4, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  const matFaisceau = new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false,
+    side: THREE.DoubleSide, opacity: 0.09, map: toile((c, w, h) => {
+      const g = c.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0, 'rgba(255,220,160,1)'); g.addColorStop(0.6, 'rgba(255,170,90,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }, 4, 128) });
+  const guirlandes: number[] = [];
   for (let i = 0; i < 8; i++) {
     const L = 24 + hasard() * 8, l = L * 0.24, y = yE + 16 + hasard() * 18;
     const g = new THREE.Group(); g.position.set(D0 - 45 + i * 26 + hasard() * 6, y, 0.25); g.rotation.z = (hasard() - 0.5) * 0.5; ajoute(g);
@@ -401,6 +440,27 @@ export function construirePlage(o: ContextePlage) {
     // son reflet, une coulee blanche brisee par les rides, vers la plage
     const r = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.85, L * 0.5), matReflet);
     r.position.set(g.position.x, y - L * 0.32, -0.015); ajoute(r);
+    if (o.nuit) {
+      // les guirlandes, du mat a la proue et a la poupe
+      for (let k = 0; k <= 16; k++) {
+        const u = k / 16, lx = -L * 0.45 + u * L * 0.9, z = L * 0.12 + L * 0.16 * (1 - Math.abs(u - 0.4) / 0.6);
+        const v = new THREE.Vector3(lx, 0, z).applyAxisAngle(new THREE.Vector3(0, 0, 1), g.rotation.z).add(g.position);
+        guirlandes.push(v.x, v.y, v.z);
+      }
+      const h = new THREE.Sprite(matHalo); h.position.set(g.position.x, y, L * 0.2); h.scale.setScalar(L * 1.4); ajoute(h);
+      // le projecteur, du pont superieur a la ligne droite d'arrivee
+      const bout = new THREE.Vector3(g.position.x, y, L * 0.22), sol = new THREE.Vector3(g.position.x + (hasard() - 0.5) * 10, W * 0.5, 0);
+      const f = new THREE.Mesh(new THREE.ConeGeometry(9, bout.distanceTo(sol), 24, 1, true), matFaisceau);
+      f.position.copy(bout).add(sol).multiplyScalar(0.5);
+      f.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), bout.clone().sub(sol).normalize());
+      ajoute(f);
+      const n = new THREE.Mesh(new THREE.PlaneGeometry(26, 20), matNappe); n.position.set(sol.x, sol.y, 0.02); ajoute(n);
+      const n2 = new THREE.Mesh(new THREE.PlaneGeometry(30, 22), matNappe); n2.position.set(g.position.x, (y + W) / 2 + 6, 0.02); ajoute(n2);
+    }
+  }
+  if (guirlandes.length) {
+    const gg = new THREE.BufferGeometry(); gg.setAttribute('position', new THREE.Float32BufferAttribute(guirlandes, 3));
+    ajoute(new THREE.Points(gg, new THREE.PointsMaterial({ color: c3(255, 226, 170), size: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true })));
   }
 
   // --- LA LISIERE, cote terre : des buissons ----------------------------------------------

@@ -551,14 +551,25 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     uFoule.uLum.value = 0.92;
   }
   uFoule.uLum.value = luxe ? 0.42 : cyber ? 0.5 : nuit ? 0.7 : 1;
+  if (plage && nuit) {
+    // LA PLAGE DE NUIT : la lune au-dessus de la mer, une ambiance bleue, les torches (plage-3d.ts)
+    // la lumiere qui porte les ombres vient de la mer, des yachts : chaude ; la lune ne fait que l'ambiance
+    hemi.color.set(0x5a6a9a); hemi.groundColor.set(0x3a3024); hemi.intensity = 0.7;
+    soleil.color.set(0xffc890); soleil.intensity = 1.6;
+  }
   uLisere.value = luxe || cyber ? 1 : 0;
   uLisereCoul.value.set(cyber ? 0x30e8ff : 0xffc76b);
   // au Stade Neon, le lisere reste un fil (« les neons sur les personnages sont trop forts,
   // un jeu de lumiere qui fait qu'on les voit clairement », 22/10) : la lumiere de face fait le reste
   uLisereForce.value = cyber ? 0.22 : 0.45;   // Stade d'Or : moitie moins (« reduis la lumiere qui emane du joueur », 22/10)
   uLisereFace.value = cyber ? 1 : 0;   // le Stade d'Or garde le reglage valide
+  if (plage && nuit) {
+    // la plage de nuit : les yachts eclairent de la mer, les coureurs vus de la piste sont a
+    // contre-jour — un liseré chaud (les bateaux) et la lumiere de face du Stade Neon
+    uLisere.value = 1; uLisereCoul.value.set(0xffc890); uLisereForce.value = 0.35; uLisereFace.value = 1;
+  }
   uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : plage ? 0xec7860 : 0x2457b8);
-  if (plage) scene.fog = new THREE.Fog(0xf3c9a2, 260, 1300);
+  if (plage) scene.fog = nuit ? new THREE.Fog(0x0c1530, 220, 1100) : new THREE.Fog(0xf3c9a2, 260, 1300);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
   if (cyber) scene.fog = new THREE.Fog(0x14061f, 60, 460);
   hologrammes = [];
@@ -1028,7 +1039,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
 
   if (cyber) villeNeon(hasard, rS);
-  if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base,
+  if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 
   // LES ARBRES, autour du stade (pas au luxe : autour, c'est le noir ; pas au Stade Neon : la ville)
@@ -1400,8 +1411,10 @@ export function rendre(App: any, dt: number) {
   }
   // le stade de l'etape en cours (le theme a l'heure ou l'on joue, comme le dessin 2D)
   // (l'eclairage de l'heure rend un nouvel objet : c'est le theme brut qui dit si l'etape a change)
-  const force = STADE_FORCE && App.THEMES && App.THEMES[STADE_FORCE];
-  const brut = force || (App.themeBrut ? App.themeBrut() : null);
+  // le stade force passe lui aussi par l'heure (?stade=plage&heure=nuit), comme App.theme()
+  const forceBrut = STADE_FORCE && App.THEMES && App.THEMES[STADE_FORCE];
+  const force = forceBrut && App.eclaire ? App.eclaire(forceBrut) : forceBrut;
+  const brut = forceBrut || (App.themeBrut ? App.themeBrut() : null);
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
   const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + '/' + (G.levelIdx | 0)
