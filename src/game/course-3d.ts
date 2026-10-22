@@ -68,6 +68,8 @@ const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
 let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
+// l'espace (Intergalactique) : la voute etoilee qui tourne et l'etoile filante
+let voute: THREE.Object3D | null = null, filante: THREE.Mesh | null = null, filanteT = 0;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
 /** Un tronc de cone de rayon 1, axe Y de -0,5 a +0,5 : ses deux rayons viennent de l'instance. */
@@ -177,6 +179,109 @@ diffuseColor.rgb = cz * (0.28 + 0.9 * tx.g) * uLum;`);
   const mesh = new THREE.Mesh(g, m);
   mesh.frustumCulled = false;
   return mesh;
+}
+
+// --- L'ESPACE (Intergalactique) -------------------------------------------------
+
+/** La voute du vide : nebuleuses et poussiere d'etoiles sur une sphere tout autour, et une galaxie. */
+function espaceAutour(th: any, hasard: () => number) {
+  const fond = th.skyTop || [11, 7, 26];
+  scene.background = new THREE.Color().setRGB(fond[0] / 255 * 0.5, fond[1] / 255 * 0.5, fond[2] / 255 * 0.5, THREE.SRGBColorSpace);
+  scene.fog = new THREE.Fog(scene.background.getHex(), 380, 1400);
+  const teintes: number[][] = th.nebuleuses || [[196, 72, 190], [52, 150, 220], [120, 70, 210]];
+  const ciel = texteCanvas((c, w, h) => {
+    c.fillStyle = css(fond, 0.6); c.fillRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) {
+      const x = hasard() * w, y = h * (0.1 + hasard() * 0.8), r = h * (0.08 + hasard() * 0.22);
+      const col = teintes[i % teintes.length], a = 0.12 + hasard() * 0.16;
+      for (const dx of [0, -w, w]) {
+        const g = c.createRadialGradient(x + dx, y, 0, x + dx, y, r);
+        g.addColorStop(0, `rgba(${col[0]},${col[1]},${col[2]},${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = g; c.fillRect(x + dx - r, y - r, 2 * r, 2 * r);
+      }
+    }
+    for (let i = 0; i < 2600; i++) {
+      c.fillStyle = `rgba(255,255,255,${0.2 + hasard() * 0.6})`;
+      c.fillRect(hasard() * w, hasard() * h, 1, 1);
+    }
+  }, 2048, 1024);
+  const sphere = new THREE.Mesh(new THREE.SphereGeometry(560, 48, 24),
+    new THREE.MeshBasicMaterial({ map: ciel, side: THREE.BackSide, fog: false, depthWrite: false }));
+  sphere.rotation.x = Math.PI / 2;                      // ses poles sur l'axe z du monde
+  sphere.position.set(44, -R_CORDE, 0);
+  stade!.add(sphere);
+  voute = sphere;
+  // LA GALAXIE, au loin, sous l'horizon de la piste
+  const spirale = texteCanvas((c, w, h) => {
+    const cx = w / 2, cy = h / 2;
+    const g = c.createRadialGradient(cx, cy, 0, cx, cy, w * 0.18);
+    g.addColorStop(0, 'rgba(255,240,255,0.95)'); g.addColorStop(1, 'rgba(200,120,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+    for (let bras = 0; bras < 2; bras++) for (let i = 0; i < 1400; i++) {
+      const t = i / 1400, a = bras * Math.PI + t * 9, r = t * w * 0.46;
+      const x = cx + Math.cos(a) * r + (hasard() - 0.5) * w * 0.05 * (0.3 + t), y = cy + Math.sin(a) * r * 0.42 + (hasard() - 0.5) * h * 0.03;
+      const col = teintes[(i + bras) % teintes.length];
+      c.fillStyle = `rgba(${Math.min(255, col[0] + 60)},${Math.min(255, col[1] + 60)},${Math.min(255, col[2] + 60)},${0.5 * (1 - t)})`;
+      c.fillRect(x, y, 2, 2);
+    }
+  }, 512, 512);
+  const gal = new THREE.Mesh(new THREE.PlaneGeometry(260, 260),
+    new THREE.MeshBasicMaterial({ map: spirale, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
+  gal.position.set(330, -R_CORDE - 160, -150);
+  gal.lookAt(44, -R_CORDE, 20);
+  stade!.add(gal);
+  // L'ETOILE FILANTE : un trait qui traverse le ciel de temps en temps (rendre)
+  const trace = texteCanvas((c, w, h) => {
+    const g = c.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,1)');
+    c.fillStyle = g; c.fillRect(0, h / 2 - 1, w, 2);
+  }, 256, 8);
+  filante = new THREE.Mesh(new THREE.PlaneGeometry(40, 0.6),
+    new THREE.MeshBasicMaterial({ map: trace, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide }));
+  filante.visible = false;
+  stade!.add(filante);
+}
+
+/** Les planetes de decor-cosmos.js, aux memes places le long du trace, loin sous la piste. */
+const PLANETES_3D = [
+  { f: 0.10, couloir: -12, R: 5.2, col: [214, 92, 200], anneau: true },
+  { f: 0.42, couloir: -24, R: 10.5, col: [58, 170, 214], anneau: false },
+  { f: 0.72, couloir: -10, R: 2.6, col: [236, 162, 84], anneau: false },
+  { f: 0.95, couloir: -18, R: 6.4, col: [130, 110, 236], anneau: true },
+];
+function planetesSousLaPiste(T: any, hasard: () => number) {
+  for (const pl of PLANETES_3D) {
+    const p = ici(T.pos(pl.f * (T.total || 100), pl.couloir));
+    const R = pl.R * 2.4, z = -(20 + R * 3.2);
+    const bandes = texteCanvas((c, w, h) => {
+      for (let y = 0; y < h; y += 4) {
+        const k = 0.75 + 0.35 * Math.sin(y * 0.09 + hasard() * 0.6);
+        c.fillStyle = css(pl.col, k); c.fillRect(0, y, w, 4);
+      }
+    }, 64, 128);
+    const astre = new THREE.Mesh(new THREE.SphereGeometry(R, 32, 20),
+      new THREE.MeshLambertMaterial({ map: bandes, emissive: c3(pl.col, pl.col).multiplyScalar(0.18), fog: false }));
+    astre.position.set(p[0], p[1], z);
+    astre.rotation.set(0.4, 0.2, 0);
+    stade!.add(astre);
+    // le halo autour, et l'anneau
+    const halo = texteCanvas((c, w, h) => {
+      const g = c.createRadialGradient(w / 2, h / 2, w * 0.3, w / 2, h / 2, w / 2);
+      g.addColorStop(0, `rgba(${pl.col[0]},${pl.col[1]},${pl.col[2]},0.45)`); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }, 128, 128);
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    sp.position.copy(astre.position); sp.scale.set(R * 3.4, R * 3.4, 1);
+    stade!.add(sp);
+    if (pl.anneau) {
+      const a = new THREE.Mesh(new THREE.RingGeometry(R * 1.4, R * 2.2, 96),
+        new THREE.MeshBasicMaterial({ color: c3(pl.col, pl.col).lerp(new THREE.Color(0xffffff), 0.4), transparent: true, opacity: 0.55,
+          side: THREE.DoubleSide, depthWrite: false, fog: false }));
+      a.position.copy(astre.position);
+      a.rotation.set(1.15, 0.3, 0);
+      stade!.add(a);
+    }
+  }
 }
 
 // --- LES PIECES DE CHAQUE STADE ------------------------------------------------
@@ -329,10 +434,17 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   uLisere.value = luxe ? 1 : 0;
   uFoule.uSiege.value.set(luxe ? 0x1a1714 : 0x2457b8);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
+  // L'ESPACE (Intergalactique, Arc-en-ciel) : pas de pelouse, la piste FLOTTE dans le vide
+  // (decor-cosmos.js en 2D) — des etoiles et des nebuleuses tout autour ET en dessous, des
+  // planetes loin sous la piste, une galaxie, ses bords en neon (« une atmosphere plus
+  // cosmique, la piste qui flotte dans l'espace », l'auteur, 22/10).
+  const espace = !!th.espace;
+  voute = null; filante = null;
+  if (espace) espaceAutour(th, hasard);
   if (th.stars) {
-    const n = Math.min(2500, th.stars * 8), pts = new Float32Array(n * 3);
+    const n = Math.min(espace ? 4000 : 2500, th.stars * (espace ? 16 : 8)), pts = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
-      const a = hasard() * Math.PI * 2, h = 0.08 + hasard() * 0.9, r = 380;
+      const a = hasard() * Math.PI * 2, h = espace ? Math.asin(hasard() * 2 - 1) : 0.08 + hasard() * 0.9, r = 380;
       pts.set([44 + r * Math.cos(a) * Math.cos(h), -R_CORDE + r * Math.sin(a) * Math.cos(h), r * Math.sin(h)], i * 3);
     }
     const g = new THREE.BufferGeometry();
@@ -364,7 +476,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let i = 0; i < 8; i++) { c.fillStyle = css(herbe, i % 2 ? 0.88 : 1.06); c.fillRect(i * w / 8, 0, w / 8, h); }
   }, 256, 8);
   tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(10, 1);
-  plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.03);
+  if (!espace) plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.03);
 
   // LA PISTE : les deux lignes droites et les deux virages, couloir par couloir
   const A = th.trackA || [148, 0, 0], B = th.trackB || A;
@@ -389,6 +501,24 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let k = 1; k < nCouloirs; k += 2) anneau(R_CORDE + k * LANE_W, R_CORDE + (k + 1) * LANE_W, matB, 0.001);
     for (let k = 0; k <= nCouloirs; k++) anneau(R_CORDE + k * LANE_W - 0.025, R_CORDE + k * LANE_W + 0.025, ligne, 0.002);
   }
+  // LES BORDS EN NEON (th.neon, th.neonExt) : une surface qui flotte dans le noir doit
+  // avoir une limite qui se voie. Un trait vif et deux halos additifs de chaque cote.
+  if (th.neon) {
+    for (const [e, col] of [[0, th.neon], [nCouloirs, th.neonExt || th.neon]] as const) {
+      const r = R_CORDE + (e as number) * LANE_W;
+      for (const [demi, op] of [[0.05, 1], [0.18, 0.45], [0.42, 0.18], [0.8, 0.07]]) {
+        const m = new THREE.MeshBasicMaterial({ color: c3(col as number[], [96, 226, 255]), transparent: op < 1, opacity: op,
+          blending: op < 1 ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: false });
+        for (const y0 of [0, yOppose]) plan(LD, demi * 2, m, XD, y0 + (e as number) * LANE_W, 0.004).receiveShadow = false;
+        for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
+          const g = new THREE.Mesh(new THREE.RingGeometry(r - demi, r + demi, 96, 1, debut, Math.PI), m);
+          g.position.set(xc, -R_CORDE, 0.004); stade.add(g);
+        }
+      }
+    }
+  }
+  if (espace) planetesSousLaPiste(T, hasard);
+
   const damier = texteCanvas((c, w, h) => {
     for (let i = 0; i < 4; i++) for (let j = 0; j < 40; j++) {
       c.fillStyle = (i + j) % 2 ? '#111' : luxe ? '#d8b46a' : '#f4f4f4'; c.fillRect(i * w / 4, j * h / 40, w / 4, h / 40);
@@ -1170,6 +1300,23 @@ export function rendre(App: any, dt: number) {
     soleil.target.position.set(p[0] + 6, p[1], 0);
   }
   // la foule : ou est la camera (dans le repere du monde), ou est le joueur, l'arrivee passee
+  if (voute) voute.rotation.y += (dt || 0.016) * 0.006;
+  if (filante) {
+    filanteT -= dt || 0.016;
+    if (filanteT < -0.9) {
+      // une nouvelle, quelque part dans le ciel, toutes les cinq a dix secondes
+      filanteT = 5 + Math.random() * 5;
+      const a = Math.random() * Math.PI * 2;
+      filante.position.set(44 + 260 * Math.cos(a), -R_CORDE + 260 * Math.sin(a), 70 + Math.random() * 90);
+      filante.lookAt(44, -R_CORDE, 0);
+      filante.rotateZ(Math.random() * Math.PI);
+    }
+    filante.visible = filanteT < 0;
+    if (filanteT < 0) {
+      filante.translateX(-(dt || 0.016) * 120);
+      (filante.material as THREE.MeshBasicMaterial).opacity = Math.min(1, -filanteT * 4) * (1 + filanteT);
+    }
+  }
   uFoule.uT.value = performance.now() / 1000;
   monde.worldToLocal(uFoule.uCam.value.copy(camera.position));
   if (pl) {
