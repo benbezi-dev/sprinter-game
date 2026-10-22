@@ -284,8 +284,11 @@ export function GameCanvas() {
       // garde le fond de l'ouverture plutot que de montrer le stade sous une
       // camera qui n'est pas la sienne. Voir game/scene-accueil.ts.
       const accueilSansScene = G.state === 'title' && !placerLaCameraDeLAccueil(SprinterApp);
+      // la presentation de l'adversaire (cinematique `intro`) se passe aussi en 3D : la camera
+      // y fait le tour du stade avant de plonger vers le depart (course-3d.ts, LE SURVOL)
+      const introCourse = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
       const en3D = !!rendu3D && EPREUVES_3D.has(G.raceKey) && jeuCourant() !== 'jumper'
-        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout');
+        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || introCourse);
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {
         const g = ctx.createLinearGradient(0, 0, 0, G.VH);
@@ -411,7 +414,8 @@ export function GameCanvas() {
             dessinerCinematique(ctx, G.sortie, theme);
             ctx.restore();
           }
-        } else if (G.state === 'cut') {
+        } else if (G.state === 'cut' && !en3D) {
+          // en 3D, la presentation n'a pas son coureur dessine : le stade la porte
           if (G.cut) dessinerCinematique(ctx, G.cut, theme);
         }
         

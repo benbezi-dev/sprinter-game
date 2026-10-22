@@ -69,6 +69,9 @@ let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
+// LE SURVOL d'avant-course (voir rendre) : ou il en est, et ou il plonge
+let volLance = false, volT = 0, volPlonge = -1;
+const volDepart = new THREE.Vector3(), volVise0 = new THREE.Vector3();
 let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
 // l'espace (Intergalactique) : la voute etoilee qui tourne et l'etoile filante
 let voute: THREE.Object3D | null = null, filante: THREE.Mesh | null = null, filanteT = 0;
@@ -1390,9 +1393,47 @@ export function rendre(App: any, dt: number) {
       // visant sous les coureurs : ils montent dans l'image, au-dessus des touches
       vise.lerp(_d3.set(f[0] + ax2 * arriere * 3, -(f[1] + ay2 * arriere * 3), camera.aspect >= 1 ? -0.6 : 0), b);
     }
-    const lisse = camPret ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
-    camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
-    camPret = true;
+    // LE SURVOL D'AVANT-COURSE (« avant chaque course, un tour de stade pour le presenter
+    // pendant qu'on presente l'adversaire ; une camera plongeante qui part du ciel vers le
+    // point de depart en douceur », l'auteur, 22/10). Pendant la presentation (cinematique
+    // `intro`), la camera tourne lentement au-dessus du stade ; quand le decompte commence
+    // — ou tout de suite s'il n'y a pas de presentation —, elle plonge en 1,8 s sur la
+    // camera de depart, qu'elle rejoint exactement, avant le coup de pistolet.
+    const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
+    const avant = intro || G.state === 'count';
+    if (!avant && G.state !== 'race' && G.state !== 'falseout') { volLance = false; volPlonge = -1; }
+    if (avant && !volLance) { volLance = true; volT = 0; volPlonge = -1; }
+    let survol = false;
+    // volPlonge : -1 avant la plongee, son instant pendant, -2 une fois finie
+    if (volLance && !SURVOL && volPlonge !== -2) {
+      volT += dt || 0.016;
+      const cx = 44, cy = R_CORDE;                         // le centre du stade (y retourne : voir monde)
+      const tourne = (t: number) => -2.3 + t * 0.32;        // un lent tour de piste, vu de haut
+      const orbite = (t: number) => _c3.set(cx + Math.cos(tourne(t)) * 125, cy + Math.sin(tourne(t)) * 95, 62 - Math.min(12, t * 1.5));
+      if (!intro && volPlonge === -1) {
+        // la presentation est finie (ou n'existe pas) : la plongee commence, d'ou l'on est
+        volPlonge = volT;
+        volDepart.copy(orbite(volT)); volVise0.set(cx, cy, 0);
+      }
+      const DUREE = 1.8;   // finie avant « prets » : le decompte est court
+      const u = volPlonge === -1 ? 0 : Math.min(1, (volT - volPlonge) / DUREE);
+      if (u < 1) {
+        const e = u * u * u * (u * (u * 6 - 15) + 10);       // tres doux aux deux bouts
+        if (volPlonge === -1) { camPos.copy(orbite(volT)); camVise.set(cx, cy, 0); }
+        else {
+          camPos.lerpVectors(volDepart, voulu, e);
+          camPos.z += Math.sin(u * Math.PI) * 6;            // la plongee s'arrondit
+          camVise.lerpVectors(volVise0, vise, e);
+        }
+        camPret = true;
+        survol = true;
+      } else volPlonge = -2;                                // fini : la camera de course reprend
+    }
+    if (!survol) {
+      const lisse = camPret ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
+      camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
+      camPret = true;
+    }
     camera.position.copy(camPos);
     // LA CAMERA VIT (l'auteur, 22/10 : « cinematique et dynamique ») : au coup de
     // pistolet elle tremble un instant, et son champ s'ouvre avec la vitesse.
