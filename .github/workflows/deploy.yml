@@ -80,6 +80,40 @@ jobs:
           '
           mv dist-test dist/test
 
+      # LA BRANCHE DE TEST 3D, sous /test3d/ (23/10, l'auteur : « met le jeu en ligne mais
+      # pas pour les joueurs, uniquement sur une branche test 3D »). Elle est construite
+      # depuis la branche test-ferme/course-3d, en canal de test : la meme porte a code
+      # que /test/, aucun joueur n'y entre. La production et /test/ viennent toujours de
+      # main (ce depot-ci) ; la branche n'a pas de workflow a elle : une poussee sur elle
+      # ne publie rien, on relance ce deploiement (gh workflow run deploy.yml --ref main).
+      #
+      # LE POIDS. Pages plafonne vers 1 Go et le site en fait deja ~600 Mo : la copie 3D
+      # laisse les videos anglaises du molosse et les images 2D de la ruelle (la nuit y
+      # court en 3D), ~160 Mo de moins. Si la branche n'existe plus, l'etape ne fait rien.
+      - name: Construire la branche de test 3D
+        run: |
+          git fetch --depth 1 origin test-ferme/course-3d || { echo "pas de branche test 3D"; exit 0; }
+          git worktree add ../course-3d FETCH_HEAD
+          cd ../course-3d
+          npm install
+          npx vite build --outDir dist-test3d
+          rm -rf dist-test3d/decors-ultra/halloween-* dist-test3d/halloween/*-en.mp4 dist-test3d/halloween/*-en.jpg dist-test3d/halloween/*-en.webp
+          node -e '
+            const f = "dist-test3d/manifest.webmanifest";
+            const m = JSON.parse(require("fs").readFileSync(f, "utf8"));
+            const base = "/test3d/";
+            m.name = "Sprinter — test 3D";
+            m.short_name = "Sprinter 3D";
+            m.id = base;
+            m.scope = base;
+            m.start_url = ".";
+            require("fs").writeFileSync(f, JSON.stringify(m, null, 2));
+          '
+          mv dist-test3d "$GITHUB_WORKSPACE/dist/test3d"
+        env:
+          BASE_PATH: /test3d/
+          VITE_CANAL: test
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
