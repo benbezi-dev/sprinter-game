@@ -301,10 +301,16 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // stade — une lumiere froide et dure, une ambiance basse, la foule dans la penombre.
   const ct = th.skyTop || [68, 81, 167];
   const nuit = !!th.stars || 0.3 * ct[0] + 0.59 * ct[1] + 0.11 * ct[2] < 60;
-  hemi.color.set(nuit ? 0x7a88c0 : 0xdfefff); hemi.groundColor.set(nuit ? 0x1a1f2a : 0x5a7a40);
-  hemi.intensity = nuit ? 0.6 : 1.6;
-  soleil.color.set(nuit ? 0xe6eeff : 0xfff4e0); soleil.intensity = nuit ? 2.0 : 2.2;
-  uFoule.uLum.value = nuit ? 0.7 : 1;
+  // LE LUXE (Stade d'Or) : la nuit y est chaude — des projecteurs couleur d'or sur une
+  // piste laquee, une ambiance presque nulle, la foule dans l'ombre (StadeOr.cs, Unity).
+  const luxe = !!th.luxe;
+  hemi.color.set(luxe ? 0x6a5638 : nuit ? 0x7a88c0 : 0xdfefff);
+  hemi.groundColor.set(luxe ? 0x080604 : nuit ? 0x1a1f2a : 0x5a7a40);
+  hemi.intensity = luxe ? 0.45 : nuit ? 0.6 : 1.6;
+  soleil.color.set(luxe ? 0xffd49a : nuit ? 0xe6eeff : 0xfff4e0); soleil.intensity = luxe ? 2.6 : nuit ? 2.0 : 2.2;
+  uFoule.uLum.value = luxe ? 0.42 : nuit ? 0.7 : 1;
+  uFoule.uSiege.value.set(luxe ? 0x1a1714 : 0x2457b8);
+  if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
   if (th.stars) {
     const n = Math.min(2500, th.stars * 8), pts = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) {
@@ -315,7 +321,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
     stade.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false })));
   }
-  if (!th.stars) {
+  if (!th.stars && !luxe) {
     const nuage = texteCanvas((c, w, h) => {
       for (let i = 0; i < 14; i++) {
         const x = w * (0.2 + 0.6 * Math.random()), y = h * (0.45 + 0.2 * Math.random()), r = h * (0.18 + 0.2 * Math.random());
@@ -344,7 +350,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   // LA PISTE : les deux lignes droites et les deux virages, couloir par couloir
   const A = th.trackA || [148, 0, 0], B = th.trackB || A;
-  const matA = new THREE.MeshLambertMaterial({ color: c3(A, A) }), matB = new THREE.MeshLambertMaterial({ color: c3(B, B) });
+  // la piste du luxe est une laque : elle prend un reflet des projecteurs
+  const matA = luxe ? new THREE.MeshStandardMaterial({ color: c3(A, A), roughness: 0.32, metalness: 0.1 }) : new THREE.MeshLambertMaterial({ color: c3(A, A) });
+  const matB = luxe ? new THREE.MeshStandardMaterial({ color: c3(B, B), roughness: 0.32, metalness: 0.1 }) : new THREE.MeshLambertMaterial({ color: c3(B, B) });
   const ligne = new THREE.MeshBasicMaterial({ color: c3(th.lane, [247, 242, 233]) });
   const LD = DROITE1 - DROITE0, XD = (DROITE0 + DROITE1) / 2;
   const yOppose = -2 * R_CORDE - W;          // la ligne opposee, de l'autre cote de la pelouse
@@ -397,17 +405,25 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const cube = new THREE.BoxGeometry(1, 1, 1);
   const lMarche = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.tread, [175, 177, 187]) }));
   const lContre = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.riser, [130, 135, 150]) }));
-  const lSiege = new Lot(new THREE.BoxGeometry(0.46, 0.38, 0.34), new THREE.MeshLambertMaterial({ color: 0x2457b8 }));
+  const lSiege = new Lot(new THREE.BoxGeometry(0.46, 0.38, 0.34), new THREE.MeshLambertMaterial({ color: uFoule.uSiege.value }));
   const lToit = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.roof, [76, 81, 100]) }), true);
   const lBeton = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0xc9c6c0 }));
   const lBlanc = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.barrier, [231, 234, 239]) }));
-  const lVitre = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0x9fc4dc, emissive: 0x1a2a38 }));
-  const lMetal = new Lot(new THREE.CylinderGeometry(0.5, 0.5, 1, 10), new THREE.MeshLambertMaterial({ color: 0xd8dbe2 }), true);
+  const lVitre = new Lot(cube, new THREE.MeshLambertMaterial(luxe ? { color: 0x2a2014, emissive: 0x4a3410 } : { color: 0x9fc4dc, emissive: 0x1a2a38 }));
+  const OR = new THREE.Color(0xc9a45c);
+  const lMetal = new Lot(new THREE.CylinderGeometry(0.5, 0.5, 1, 10), luxe
+    ? new THREE.MeshStandardMaterial({ color: OR, roughness: 0.3, metalness: 0.9, emissive: 0x3a2a10 })
+    : new THREE.MeshLambertMaterial({ color: 0xd8dbe2 }), true);
+  // les filets d'or (nez des gradins, muret) : sans lumiere propre, ils brillent dans le noir
+  const lFilet = new Lot(cube, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xe2bd6e) }));
   const lBloc = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0x8b9099 }));
   const lTronc = new Lot(new THREE.CylinderGeometry(0.22, 0.3, 1, 7), new THREE.MeshLambertMaterial({ color: 0x5b4030 }));
   const lFeuille = new Lot(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ color: c3(th.feuillage, [38, 111, 31]) }), true);
   const lo = th.crowdLo || [43, 38, 56], hi = th.crowdHi || [252, 242, 230];
-  const maillots: number[][] = [...(th.panels || [[231, 60, 45], [28, 106, 202], [255, 203, 55], [50, 162, 121]]), lo, hi, [240, 240, 240]];
+  // au luxe, le public est en tenue de soiree : surtout du noir, un peu de creme, d'or, de bordeaux
+  const maillots: number[][] = luxe
+    ? [[14, 13, 15], [20, 19, 22], [28, 25, 24], [38, 32, 28], [14, 13, 15], [201, 164, 92], [217, 207, 189], [74, 20, 24]]
+    : [...(th.panels || [[231, 60, 45], [28, 106, 202], [255, 203, 55], [50, 162, 121]]), lo, hi, [240, 240, 240]];
   const peaux = [[74, 46, 32], [120, 76, 50], [176, 122, 78], [224, 186, 142], [246, 220, 190]].map(couleur);
   const coulMaillots = maillots.map(couleur);
   const coulCheveux = [[28, 20, 16], [58, 38, 24], [104, 70, 40], [196, 160, 98], [140, 136, 132]].map(couleur);
@@ -440,6 +456,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let r = 0; r < rangs; r++) {
       const y = y0 + r * prof, z = z0 + r * monte;
       boite(lMarche, M, L / 2, y + prof / 2, z - 0.04, L, prof, 0.08);
+      if (luxe) boite(lFilet, M, L / 2, y + 0.02, z + 0.005, L, 0.04, 0.02);
       boite(lContre, M, L / 2, y + prof, z + monte / 2, L, 0.06, monte);
       for (let i = 0; i < n; i++) {
         const x = (i + 0.5) * (L / n);
@@ -457,6 +474,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const yS = W + 3.2, XA = DROITE0 - 4, LS = DROITE1 - DROITE0 + 8;
   const Mp = repere(XA, yS, 0);
   boite(lBlanc, Mp, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);                       // le muret
+  if (luxe) boite(lFilet, Mp, LS / 2, -0.15, 1.22, LS, 0.27, 0.04);
   const z1 = gradins(Mp, LS, 13, 0.4, 1.2);
   const yLoges = 0.4 + 13 * 0.85;
   boite(lBeton, Mp, LS / 2, yLoges + 1.2, z1 + 0.3, LS, 2.4, 0.6);
@@ -505,9 +523,19 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // L'ECRAN GEANT, au-dessus du virage d'arrivee, tourne vers la ligne droite
   const ecran = texteCanvas((c, w, h) => {
     c.fillStyle = '#05070d'; c.fillRect(0, 0, w, h);
-    c.fillStyle = '#ff7a1a'; c.font = `900 ${h * 0.42}px system-ui, sans-serif`;
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('SPRINTER', w / 2, h * 0.42);
-    c.fillStyle = '#e8ecf4'; c.font = `700 ${h * 0.16}px system-ui, sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    if (luxe) {
+      // la planche du style : un serif d'or en italique, un filet, des capitales espacees
+      c.fillStyle = '#d8b46a'; c.font = `italic 500 ${h * 0.36}px Georgia, 'Times New Roman', serif`;
+      c.fillText("Stade d'Or", w / 2, h * 0.42);
+      c.fillRect(w * 0.38, h * 0.62, w * 0.24, 2);
+      c.font = `400 ${h * 0.1}px Georgia, serif`;
+    } else {
+      c.fillStyle = '#ff7a1a'; c.font = `900 ${h * 0.42}px system-ui, sans-serif`;
+      c.fillText('SPRINTER', w / 2, h * 0.42);
+      c.font = `700 ${h * 0.16}px system-ui, sans-serif`;
+    }
+    c.fillStyle = luxe ? '#c9a45c' : '#e8ecf4';
     c.fillText((T.fullLap ? '400' : T.curved ? '200' : '100') + ' M  ·  LIVE', w / 2, h * 0.78);
   }, 512, 256);
   const xE = DROITE1 + rS + 22;
@@ -521,7 +549,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const lampes = texteCanvas((c, w, h) => {
     c.fillStyle = '#20242c'; c.fillRect(0, 0, w, h);
     for (let i = 0; i < 4; i++) for (let j = 0; j < 6; j++) {
-      c.fillStyle = '#fffbe8'; c.fillRect(4 + j * (w - 8) / 6, 4 + i * (h - 8) / 4, (w - 8) / 6 - 4, (h - 8) / 4 - 4);
+      c.fillStyle = luxe ? '#ffe0a6' : '#fffbe8'; c.fillRect(4 + j * (w - 8) / 6, 4 + i * (h - 8) / 4, (w - 8) / 6 - 4, (h - 8) / 4 - 4);
     }
   }, 128, 96);
   const matLampes = new THREE.MeshBasicMaterial({ map: lampes });
@@ -568,8 +596,33 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let i = 0; i < 4; i++) spectateur(M0, 30 + i * 18, -1.8, 0, true, Math.PI / 2);
   }
 
-  // LES ARBRES, autour du stade
-  for (let i = 0; i < 70; i++) {
+  // LES NAPPES DE LUMIERE, au luxe : sous chaque projecteur, une flaque doree sur la
+  // laque — peinte (un degrade radial en addition) plutot qu'eclairee : une lumiere de
+  // plus couterait sur chaque pixel du plus faible des telephones.
+  if (luxe) {
+    const nappe = texteCanvas((c, w, h) => {
+      const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+      g.addColorStop(0, 'rgba(255,196,110,0.9)'); g.addColorStop(0.45, 'rgba(230,150,60,0.35)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }, 256, 256);
+    const mat = new THREE.MeshBasicMaterial({ map: nappe, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.55 });
+    for (let x = DROITE0 + 8; x < DROITE1 + 10; x += 24) {
+      const m = plan(34, W + 10, mat, x, W / 2, 0.008);
+      m.receiveShadow = false;
+    }
+  }
+
+  // LA POUSSIERE D'OR, en suspension au-dessus de la piste (le luxe seulement)
+  if (luxe) {
+    const n = 900, pts = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) pts.set([DROITE0 + hasard() * (DROITE1 - DROITE0 + 20), -6 + hasard() * (W + 14), 0.4 + hasard() * 7], i * 3);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+    stade.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xe8c47a, size: 0.05, transparent: true, opacity: 0.7, depthWrite: false })));
+  }
+
+  // LES ARBRES, autour du stade (pas au luxe : autour, c'est le noir)
+  for (let i = 0; i < (luxe ? 0 : 70); i++) {
     const a = hasard() * Math.PI * 2, rx = 150 + hasard() * 40, ry = 95 + hasard() * 30;
     const x = 44 + rx * Math.cos(a), y = -R_CORDE + ry * Math.sin(a), h = 5 + hasard() * 5;
     boite(lTronc, M0, x, y, h * 0.3, 1, 1, h * 0.6);
@@ -579,7 +632,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   if (cartes.length) stade.add(laFoule(cartes));
   poserLesPieces(T, stadeCle, etape);
-  for (const l of [lMarche, lContre, lSiege, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille]) l.finir(stade);
+  for (const l of [lMarche, lContre, lSiege, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille, lFilet]) l.finir(stade);
 }
 
 function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {

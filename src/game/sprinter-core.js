@@ -699,6 +699,28 @@
       names: ['Nova Prisma', 'Iris Solenne', 'Orion Vega', 'Lumen Arcos',
               'Stella Rivka', 'Cosmo Delaunay', 'Aurore Lys'] },
 
+    // LE STADE D'OR — Dark Luxury (n° 11 de la planche des styles, 22/10).
+    //
+    // Noir profond, filets d'or, lumiere subtile : une piste laquee noire sous
+    // des projecteurs chauds, des gradins de pierre noire cercles d'or. Son
+    // rendu a ete cherche dans Unity (projets/Sprinter-Unity-Halloween,
+    // StadeOr.cs) et valide par l'auteur avant d'entrer ici ; il est fait pour
+    // la course 3D (course-3d.ts, `luxe`), le dessin 2D n'en reprend que les
+    // couleurs.
+    //
+    // FERME, et dernier de la liste pour la meme raison que l'Arc-en-ciel.
+    //
+    // LE PLATEAU EST CELUI D'UNE SOIREE DE GALA : sept coureurs entre 9,50 et
+    // 9,85 au 100 m.
+    { cle: 'or', name: "Stade d'Or", theme: 'or',
+      pool: 'sprint',
+      horsSerie: true,
+      foule: 0.92,
+      plateau: { '100': [9.50, 9.85], '200': [19.10, 19.80],
+                 '400': [43.00, 44.00], '4x100': [37.40, 38.40] },
+      names: ['Auguste Varenne', 'Celeste Moreau', 'Leandre Saint-Ange', 'Ines de Valcourt',
+              'Octave Marlowe', 'Margaux Delorme', 'Felix Aurelien'] },
+
   ];
 
   // ---------------------------------------------------------------------

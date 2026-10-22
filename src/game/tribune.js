@@ -114,6 +114,8 @@
     namek: [226, 118, 38], champdemars: [26, 60, 150], arcenciel: [236, 96, 196],
     // Jean-Delbert n'a pas de sieges : des gradins-bancs de beton clair.
     montreuil: [206, 204, 198],
+    // Le Stade d'Or : des sieges de cuir noir.
+    or: [26, 23, 20],
   };
   const hexa = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
   // La couleur `c` dans la lumiere des gradins de `th` — la meme, le jour.

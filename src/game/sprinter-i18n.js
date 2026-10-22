@@ -1978,7 +1978,9 @@
     ['Stade des Trois Soleils', 'Three Suns Stadium'],
     // La piste de lumiere. Meme regle que les Trois Soleils : son nom ne se
     // decide qu'ici, et il ne reprend celui d'aucune piste existante.
-    ['Piste Arc-en-ciel', 'Rainbow Track']
+    ['Piste Arc-en-ciel', 'Rainbow Track'],
+    // Le Stade d'Or (Dark Luxury, n° 11 de la planche des styles, 22/10).
+    ["Stade d'Or", 'Golden Stadium']
   ];
 
   const RACE_SUB = {

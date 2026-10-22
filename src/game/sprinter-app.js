@@ -253,6 +253,22 @@
     // lumineux qui font le tour de l'enceinte. Ce sont des couleurs ; aucun
     // nom, aucun embleme, aucune typographie n'entre dans ce theme — voir
     // juridique/edition-danube.md.
+    // LE STADE D'OR (Dark Luxury) : noir profond et filets d'or. `luxe` est lu par
+    // la course 3D (course-3d.ts) : piste laquee, nez des gradins dores, pylones
+    // d'or, projecteurs chauds, poussiere doree dans la lumiere.
+    or: {
+      skyTop: [8, 6, 5], skyBot: [28, 21, 13], stars: 0,
+      grass: [12, 10, 9], grassEdge: [22, 18, 13],
+      trackA: [17, 15, 13], trackB: [14, 12, 11],
+      lane: [201, 164, 92], kerb: [226, 189, 110],
+      tread: [24, 21, 18], riser: [15, 13, 11], roof: [10, 9, 8],
+      barrier: [201, 164, 92],
+      panels: [[201, 164, 92], [22, 22, 24], [217, 207, 189], [74, 20, 24]],
+      crowdLo: [14, 13, 15], crowdHi: [217, 207, 189],
+      accent: [226, 189, 110], dust: [120, 96, 60],
+      projecteurs: true, pubsLed: true,
+      luxe: true
+    },
     danube: {
       // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
       heure: 'nuit',
