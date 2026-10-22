@@ -48,13 +48,15 @@ const MAX_TRONCS = 1400;
 const LANE_W = 1.22;
 
 let renderer: THREE.WebGLRenderer | null = null;
+let hemi: THREE.HemisphereLight;
 let scene: THREE.Scene, monde: THREE.Group, camera: THREE.PerspectiveCamera, soleil: THREE.DirectionalLight;
 let troncs: THREE.InstancedMesh, joints: THREE.InstancedMesh, aR: THREE.InstancedBufferAttribute;
-let toile: HTMLCanvasElement;
+let toile: HTMLCanvasElement, vignetteDe: HTMLDivElement | null = null;
 let visible = false;
 let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
+let secousse = 0, etatVu = '', champBase = 55;
 
 /** Un tronc de cone de rayon 1, axe Y de -0,5 a +0,5 : ses deux rayons viennent de l'instance. */
 function materiauTronc() {
@@ -160,6 +162,45 @@ diffuseColor.rgb = cz * (0.28 + 0.9 * tx.g) * uLum;`);
   return mesh;
 }
 
+// --- LES PIECES DE CHAQUE STADE ------------------------------------------------
+//
+// Celles des images 2D, aux memes places : le plan de decors-stades.js (PLAN, lieu)
+// dit quelle piece va ou et a partir de quelle etape ; tools/blender/stades_3d_glb.py
+// les exporte en GLB, construites par les memes fonctions Blender que leurs images.
+// Une piece pas encore chargee n'est pas posee ; son arrivee refait le stade.
+const pieces3D = new Map<string, THREE.Object3D | null>();
+function pieceDuStade(cle: string): THREE.Object3D | null {
+  if (!pieces3D.has(cle)) {
+    pieces3D.set(cle, null);
+    const base = (import.meta as any).env?.BASE_URL || '/';
+    const l = new GLTFLoader();
+    l.setMeshoptDecoder(MeshoptDecoder);
+    l.loadAsync(base + 'modeles/stades/' + cle + '.glb').then(g => {
+      g.scene.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      pieces3D.set(cle, g.scene);
+      formeVue = '';
+    }).catch(() => { /* la piece manque : le stade reste sans elle */ });
+  }
+  return pieces3D.get(cle) || null;
+}
+function poserLesPieces(T: any, stadeCle: string | null, etape: number) {
+  const D = (globalThis as any).DecorsStades;
+  const plan = stadeCle && D && D.PLAN && D.PLAN[stadeCle];
+  if (!plan || !D.lieu) return;
+  for (const e of plan) {
+    if (etape < (e.des || 0)) continue;
+    const L = D.lieu(T, e.l);
+    if (!L) continue;
+    const modele = pieceDuStade(stadeCle + '/' + e.p);
+    if (!modele) continue;
+    const o = modele.clone();
+    const q = ici([L.X, L.Y]);
+    o.position.set(q[0], q[1], 0);
+    o.rotation.z = capIci((L.yaw + (e.rot || 0)) * Math.PI / 180);
+    stade!.add(o);
+  }
+}
+
 // --- LE STADE, AUX COULEURS DU THEME DU JEU ----------------------------------
 //
 // Chaque stade du jeu est un theme (THEMES, sprinter-app.js) : ciel, pelouse et
@@ -236,7 +277,7 @@ function boite(lot: Lot, M: THREE.Matrix4, x: number, y: number, z: number, lx: 
   lot.poser(_bx.copy(M).multiply(_tr.makeTranslation(x, y, z)).multiply(_sc.makeScale(lx, ly, lz)), c);
 }
 
-function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
+function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle: string | null, etape: number) {
   // le virage du depart : celui du stade sur un virage, plus loin derriere au 100 m (sa ligne droite est plus longue)
   const DROITE0 = T.curved ? DROITE1 - T.straight : DROITE0_100;
   if (stade) { monde.remove(stade); stade.traverse((o: any) => { o.geometry?.dispose?.(); }); }
@@ -256,6 +297,24 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
   }, 4, 256);
   scene.background = ciel;
   scene.fog = new THREE.Fog(c3(th.skyBot, [71, 87, 192]).getHex(), 160, 420);
+  // LA NUIT : un ciel sombre (ou etoile) eteint le soleil et allume les projecteurs du
+  // stade — une lumiere froide et dure, une ambiance basse, la foule dans la penombre.
+  const ct = th.skyTop || [68, 81, 167];
+  const nuit = !!th.stars || 0.3 * ct[0] + 0.59 * ct[1] + 0.11 * ct[2] < 60;
+  hemi.color.set(nuit ? 0x7a88c0 : 0xdfefff); hemi.groundColor.set(nuit ? 0x1a1f2a : 0x5a7a40);
+  hemi.intensity = nuit ? 0.6 : 1.6;
+  soleil.color.set(nuit ? 0xe6eeff : 0xfff4e0); soleil.intensity = nuit ? 2.0 : 2.2;
+  uFoule.uLum.value = nuit ? 0.7 : 1;
+  if (th.stars) {
+    const n = Math.min(2500, th.stars * 8), pts = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const a = hasard() * Math.PI * 2, h = 0.08 + hasard() * 0.9, r = 380;
+      pts.set([44 + r * Math.cos(a) * Math.cos(h), -R_CORDE + r * Math.sin(a) * Math.cos(h), r * Math.sin(h)], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
+    stade.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false })));
+  }
   if (!th.stars) {
     const nuage = texteCanvas((c, w, h) => {
       for (let i = 0; i < 14; i++) {
@@ -519,6 +578,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
   }
 
   if (cartes.length) stade.add(laFoule(cartes));
+  poserLesPieces(T, stadeCle, etape);
   for (const l of [lMarche, lContre, lSiege, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille]) l.finir(stade);
 }
 
@@ -532,6 +592,16 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
   renderer.shadowMap.enabled = OMBRES;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // L'ESTHETIQUE CINEMATIQUE (l'auteur, 22/10) : une courbe filmique (ACES) plutot
+  // que l'ecretage brut, et un vignettage peint en CSS sur la toile — il ne coute
+  // rien au processeur graphique, meme sur le plus faible des telephones.
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.12;
+  const vignette = document.createElement('div');
+  vignette.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:0;'
+    + 'background:radial-gradient(ellipse at 50% 55%,rgba(0,0,0,0) 55%,rgba(0,0,0,0.38) 100%)';
+  toile.after(vignette);
+  vignetteDe = vignette;
   scene = new THREE.Scene();
   // LE MONDE EN MIROIR. Le repere du jeu met le couloir 1 a droite de qui
   // regarde la ligne droite ; un vrai stade le met a gauche. Tout ce qui est
@@ -542,7 +612,8 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   scene.add(monde);
   camera = new THREE.PerspectiveCamera(55, 1, 0.1, 600);
   camera.up.set(0, 0, 1);
-  scene.add(new THREE.HemisphereLight(0xdfefff, 0x5a7a40, 1.6));
+  hemi = new THREE.HemisphereLight(0xdfefff, 0x5a7a40, 1.6);
+  scene.add(hemi);
   soleil = new THREE.DirectionalLight(0xfff4e0, 2.2);
   soleil.castShadow = OMBRES;
   soleil.shadow.mapSize.set(1024, 1024);
@@ -571,7 +642,7 @@ function dimensionner() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   // en portrait, on elargit le champ pour garder les couloirs voisins
-  camera.fov = w < h ? 62 : 50;
+  camera.fov = champBase = w < h ? 62 : 50;
   camera.updateProjectionMatrix();
 }
 
@@ -822,6 +893,7 @@ export function afficher(oui: boolean) {
   if (oui === visible || !renderer) { visible = oui && !!renderer; if (renderer) toile.style.display = visible ? 'block' : 'none'; return; }
   visible = oui;
   toile.style.display = oui ? 'block' : 'none';
+  if (vignetteDe) vignetteDe.style.display = oui ? 'block' : 'none';
   if (!oui) camPret = false;
 }
 
@@ -846,11 +918,14 @@ export function rendre(App: any, dt: number) {
   // (l'eclairage de l'heure rend un nouvel objet : c'est le theme brut qui dit si l'etape a change)
   const brut = App.themeBrut ? App.themeBrut() : null;
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
-  const forme = T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite';
+  // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
+  const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + '/' + (G.levelIdx | 0);
   caler(T);
   if (!stade || brut !== themeVu || forme !== formeVue) {
     themeVu = brut; formeVue = forme;
-    construireLeStade(nCouloirs, App.theme ? App.theme() : {}, T, C);
+    const b = (brut && brut.base) || brut, TH = App.THEMES || {};
+    const stadeCle = Object.keys(TH).find(k => TH[k] === b) || null;
+    construireLeStade(nCouloirs, App.theme ? App.theme() : {}, T, C, stadeCle, G.levelIdx | 0);
   }
   if (!toile || toile.style.display === 'none') {
     afficher(true);
@@ -919,7 +994,18 @@ export function rendre(App: any, dt: number) {
     camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
     camPret = true;
     camera.position.copy(camPos);
+    // LA CAMERA VIT (l'auteur, 22/10 : « cinematique et dynamique ») : au coup de
+    // pistolet elle tremble un instant, et son champ s'ouvre avec la vitesse.
+    if (G.state === 'race' && etatVu !== 'race') secousse = 0.28;
+    etatVu = G.state;
+    if (secousse > 0) {
+      secousse = Math.max(0, secousse - (dt || 0.016));
+      const f = secousse * 0.22;
+      camera.position.x += (Math.random() - 0.5) * f; camera.position.z += (Math.random() - 0.5) * f;
+    }
     camera.lookAt(camVise);
+    const fov = champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
+    if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3); camera.updateProjectionMatrix(); }
     soleil.position.set(p[0] - 10, p[1] - 18, 30);
     soleil.target.position.set(p[0] + 6, p[1], 0);
   }

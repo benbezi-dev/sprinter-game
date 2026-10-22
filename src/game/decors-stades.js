@@ -664,5 +664,6 @@
   }
   const materielDeLaVue = (api) => serieDeLaVue(api, 'materiel');
 
-  root.DecorsStades = { sol, fond, debout, bloc, demanderBloc, PLAN };
+  // `lieu` et `PLAN` servent aussi a la course 3D (course-3d.ts), qui pose les memes pieces
+  root.DecorsStades = { sol, fond, debout, bloc, demanderBloc, PLAN, lieu };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
