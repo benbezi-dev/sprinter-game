@@ -17,7 +17,8 @@ import { chargementFini, partChargee } from '@/game/chargement';
 // elle est la par defaut (`?rendu=2d` revient au dessin du jeu) ; chargee a part pour
 // que three ne pese rien tant qu'elle n'est pas demandee. Voir game/course-3d.ts.
 const RENDU_3D = (() => { try { return new URLSearchParams(location.search).get('rendu') !== '2d'; } catch { return true; } })();
-// Les epreuves deja faites en 3D ; les autres (haies, relais, concours) restent en 2D.
+// Les epreuves deja faites en 3D, et les nuits du molosse (`nuit-*`, la ruelle de ruelle-3d.ts) ;
+// les autres (haies, relais, concours) restent en 2D.
 const EPREUVES_3D = new Set(['100', '200', '400']);
 let rendu3D: any = null;
 if (RENDU_3D) import('@/game/course-3d').then(m => { rendu3D = m; }).catch(() => { /* reste en 2D */ });
@@ -287,7 +288,7 @@ export function GameCanvas() {
       // la presentation de l'adversaire (cinematique `intro`) se passe aussi en 3D : la camera
       // y fait le tour du stade avant de plonger vers le depart (course-3d.ts, LE SURVOL)
       const introCourse = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
-      const en3D = !!rendu3D && EPREUVES_3D.has(G.raceKey) && jeuCourant() !== 'jumper'
+      const en3D = !!rendu3D && (EPREUVES_3D.has(G.raceKey) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
         && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || introCourse);
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {

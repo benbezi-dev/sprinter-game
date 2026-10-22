@@ -38,6 +38,7 @@ import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
+import { construireRuelle, type Ruelle } from './ruelle-3d';
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
@@ -79,6 +80,8 @@ let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
 let voute: THREE.Object3D | null = null, filante: THREE.Mesh | null = null, filanteT = 0;
 // le Stade Neon : ses hologrammes (qui gresillent) et sa pluie (qui suit la camera)
 let hologrammes: THREE.Mesh[] = [], pluie: THREE.LineSegments | null = null;
+// la nuit du molosse : sa ruelle (ruelle-3d.ts) et sa bete (molosse.glb)
+let ruelle: Ruelle | null = null;
 // les panneaux animes et le film de l'ecran geant (voir LES PANNEAUX LED)
 let pubAnim: ((t: number) => void)[] = [], videoPub: HTMLVideoElement | null = null;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
@@ -657,6 +660,20 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       n.scale.set(lg, lg * (0.3 + hasard() * 0.15), 1);
       stade.add(n);
     }
+  }
+
+  ruelle = null;
+  if (th.ruelle) {
+    // LA NUIT DU MOLOSSE : la ruelle des Tanneurs a la place du stade, sur toute la
+    // longueur de la nuit (ruelle-3d.ts). Une lune froide, une ambiance violette, les
+    // reverberes font le reste ; les coureurs gardent un liseré chaud pour se detacher.
+    hemi.color.set(0x4a3a72); hemi.groundColor.set(0x16101e); hemi.intensity = 0.55;
+    soleil.color.set(0xb4c4ff); soleil.intensity = 1.1;
+    soleilDecal.set(-6, 14, 30);
+    scene.fog = new THREE.Fog(c3(th.skyBot, [46, 24, 58]).getHex(), 30, 150);
+    uLisere.value = 1; uLisereCoul.value.set(0xffa860); uLisereForce.value = 0.3; uLisereFace.value = 1;
+    ruelle = construireRuelle({ stade: stade!, T, W, R1: R_CORDE, ici, th, hasard, piece: pieceDuStade });
+    return;
   }
 
   // LA PELOUSE et sa tonte en bandes
@@ -1278,6 +1295,78 @@ outgoingLight += uLisere * (uLisereCoul * bord * uLisereForce + diffuseColor.rgb
   };
 }
 
+// --- LA BETE (la nuit du molosse) ----------------------------------------------
+//
+// Le maillage TRELLIS de halloween-molosse-3d.ts (molosse.glb, 1,60 m au garrot, son
+// galop d'une seconde), mais pose DANS la ruelle, au milieu des coureurs : la 2D le
+// rendait de profil dans une toile a part et le couchait sur la piste. Sa position est
+// celle de la regle (etatDeLaChasse : la distance de la bete, calee sur le chrono),
+// dans le couloir du joueur (ou de celui qu'un mordu regarde, en meute) ; sa foulee
+// suit la distance, comme le trace (FOULEE 0,45). Les yeux : deux braises rouges.
+// La chasse est lue sur G.obstacles (molosseDe la porte) : la 3D n'importe pas le mode.
+const FICHIER_BETE = import.meta.glob('/src/assets/molosse.glb', { query: '?url', import: 'default' }) as
+  Record<string, () => Promise<string>>;
+type Bete = { racine: THREE.Group; melangeur: THREE.AnimationMixer; duree: number };
+let bete: Bete | null = null, beteDemandee = false;
+function chargerLaBete() {
+  if (beteDemandee) return;
+  beteDemandee = true;
+  const f = Object.values(FICHIER_BETE)[0];
+  if (!f) return;
+  f().then((u) => {
+    const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+    l.load(u, (gltf) => {
+      const racine = new THREE.Group(), corps = gltf.scene;
+      corps.rotation.x = Math.PI / 2;      // le glTF a y en haut, le stade z
+      racine.add(corps);
+      const yeux: THREE.Object3D[] = [];
+      corps.traverse((o: any) => {
+        if (o.isBone && /^oeil_/.test(o.name)) yeux.push(o);
+        if (o.isMesh) {
+          o.frustumCulled = false; o.castShadow = true;
+          const m = o.material as THREE.MeshStandardMaterial;
+          if (m.color) m.color.multiplyScalar(0.6);     // une bete noire, la nuit
+          lisere(m);
+        }
+      });
+      const matOeil = new THREE.MeshBasicMaterial({ color: 0xff2a10 });
+      const matLueur = new THREE.SpriteMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, map: texteCanvas((c, w, h) => {
+        const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+        g.addColorStop(0, 'rgba(255,80,40,1)'); g.addColorStop(0.3, 'rgba(255,30,10,0.5)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = g; c.fillRect(0, 0, w, h);
+      }, 64, 64) });
+      for (const y of yeux) {
+        const s = new THREE.Vector3(); y.getWorldScale(s);
+        const k = 1 / Math.max(1e-3, s.x);        // en metres, quelle que soit l'echelle de l'os
+        const b = new THREE.Mesh(new THREE.SphereGeometry(0.035 * k, 10, 8), matOeil); y.add(b);
+        const h = new THREE.Sprite(matLueur); h.scale.setScalar(0.5 * k); y.add(h);
+      }
+      const clip = gltf.animations.find((a: THREE.AnimationClip) => a.name === 'galop') || gltf.animations[0];
+      const melangeur = new THREE.AnimationMixer(corps);
+      if (clip) melangeur.clipAction(clip).play();
+      racine.visible = false;
+      monde.add(racine);
+      bete = { racine, melangeur, duree: clip ? clip.duration : 1 };
+    }, undefined, () => { beteDemandee = false; });
+  }).catch(() => { beteDemandee = false; });
+}
+// ?sonde : la bete et la chasse, lisibles depuis la console (verifier sans jouer la nuit)
+if (Q.get('sonde') !== null) (globalThis as any).__course3d = { get bete() { return bete; }, get chasse() { const o = (globalThis as any).SprinterApp?.G?.obstacles; return o && o.molosse ? o.chasse : null; }, get monde() { return monde; } };
+function poserLaBete(G: any, T: any, nuit: boolean) {
+  if (!bete) return;
+  // la chasse, portee par l'obstacle que la nuit pose (molosseDe) : pas d'import du mode,
+  // qui resterait sinon dans le paquet de la 3D (et, en dev, en serait une seconde copie)
+  const c = nuit && G.obstacles && G.obstacles.molosse ? G.obstacles.chasse : null;
+  if (!c) { bete.racine.visible = false; return; }
+  const suivi = G.spectateur && G.suivi ? G.suivi : G.player;
+  const lane = suivi ? suivi.lane : 0, d = Math.min(c.d, T.total + 24);
+  const p = ici(T.pos(d, lane));
+  bete.racine.position.set(p[0], p[1], 0);
+  bete.racine.rotation.z = capIci(T.heading(d, lane));
+  bete.racine.visible = d > -14;          // elle sort de l'ombre, derriere la ligne
+  bete.melangeur.setTime(((((d * 0.45) % 1) + 1) % 1) * bete.duree);
+}
+
 function corpsDe(r: any): Corps | null {
   let c = corps.get(r);
   if (c) return c;
@@ -1471,7 +1560,7 @@ export function rendre(App: any, dt: number) {
   const brut = forceBrut || (App.themeBrut ? App.themeBrut() : null);
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
-  const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + '/' + (G.levelIdx | 0)
+  const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + T.total + '/' + (G.levelIdx | 0)
     + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour');   // le moment de la journee aussi
   caler(T);
   if (!stade || brut !== themeVu || forme !== formeVue) {
@@ -1528,6 +1617,14 @@ export function rendre(App: any, dt: number) {
   troncs.count = n; joints.count = nj;
   troncs.instanceMatrix.needsUpdate = true; joints.instanceMatrix.needsUpdate = true;
   aR.needsUpdate = true;
+  // LA NUIT DU MOLOSSE : la ruelle vit (brume, reverberes), la bete court derriere le joueur
+  const nuitDuMolosse = typeof G.raceKey === 'string' && G.raceKey.startsWith('nuit-');
+  if (ruelle) {
+    const pj = ici(T.pos(G.player ? G.player.d : 0, G.player ? G.player.lane : 0));
+    ruelle.animer(camera.position.x, -camera.position.y, pj[0], pj[1], performance.now() / 1000);
+  }
+  if (nuitDuMolosse) chargerLaBete();
+  poserLaBete(G, T, nuitDuMolosse);
   if (troncs.instanceColor) troncs.instanceColor.needsUpdate = true;
   if (joints.instanceColor) joints.instanceColor.needsUpdate = true;
 
@@ -1569,7 +1666,7 @@ export function rendre(App: any, dt: number) {
     else profilB += (cible - profilB) * Math.min(1, (dt || 0.016) * 0.7);
     const b = profilB;
     if (b <= 0) profilPret = false;
-    if (b > 0 && !DOS) {
+    if (b > 0 && !DOS && !nuitDuMolosse) {
       let dMin = pl.d, dMax = pl.d;
       for (const r of G.runners) if (r && r.look && !r.retour) { dMin = Math.min(dMin, r.d); dMax = Math.max(dMax, r.d); }
       dMin = Math.max(dMin, pl.d - 7); dMax = Math.min(dMax, pl.d + 7);
@@ -1601,6 +1698,19 @@ export function rendre(App: any, dt: number) {
       voulu.lerp(_c3.set(f[0] + (fx * lat - ax2 * arriere) * D, -(f[1] + (fy * lat - ay2 * arriere) * D), camera.aspect >= 1 ? 4.2 : P_HAUT), b);
       // visant sous les coureurs : ils montent dans l'image, au-dessus des touches
       vise.lerp(_d3.set(f[0] + ax2 * arriere * 3, -(f[1] + ay2 * arriere * 3), camera.aspect >= 1 ? -0.6 : 0), b);
+    }
+    // LA NUIT DU MOLOSSE : UNE CAMERA DE POURSUITE (« recree l'evenement le molosse en full
+    // 3D », l'auteur, 23/10). De profil, la bete qui court derriere sort du cadre d'un
+    // telephone tenu droit ; de face, le coureur vient vers nous et elle grandit dans son
+    // dos, les yeux dans la brume. Le depart garde notre camera, la bascule se fait sur les
+    // six premiers metres ; plus la bete est loin, plus la camera recule et vise derriere.
+    if (nuitDuMolosse && !DOS) {
+      const ch = G.obstacles && G.obstacles.molosse ? G.obstacles.chasse : null;
+      const e = ch ? Math.min(22, Math.max(0, pl.d - ch.d)) : 12;
+      const v = Math.min(1, Math.max(0, pl.d / 6)), nb = v * v * (3 - 2 * v);
+      const av = 6.2 + e * 0.12, cote = 1.8;
+      voulu.lerp(_c3.set(p[0] + av * ax + cote * ix, -(p[1] + av * ay + cote * iy), 3.1 + e * 0.04), nb);
+      vise.lerp(_d3.set(p[0] - e * 0.3 * ax, -(p[1] - e * 0.3 * ay), 0.8), nb);
     }
     // LE SURVOL D'AVANT-COURSE (« avant chaque course, un tour de stade pour le presenter
     // pendant qu'on presente l'adversaire ; une camera plongeante qui part du ciel vers le
