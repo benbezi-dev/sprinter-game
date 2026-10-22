@@ -1620,7 +1620,8 @@ export function rendre(App: any, dt: number) {
   // LA NUIT DU MOLOSSE : la ruelle vit (brume, reverberes), la bete court derriere le joueur
   const nuitDuMolosse = typeof G.raceKey === 'string' && G.raceKey.startsWith('nuit-');
   if (ruelle) {
-    const pj = ici(T.pos(G.player ? G.player.d : 0, G.player ? G.player.lane : 0));
+    const qui = G.spectateur && G.suivi ? G.suivi : G.player;
+    const pj = ici(T.pos(qui ? qui.d : 0, qui ? qui.lane : 0));
     ruelle.animer(camera.position.x, -camera.position.y, pj[0], pj[1], performance.now() / 1000);
   }
   if (nuitDuMolosse) chargerLaBete();
@@ -1629,7 +1630,8 @@ export function rendre(App: any, dt: number) {
   if (joints.instanceColor) joints.instanceColor.needsUpdate = true;
 
   // LA CAMERA, derriere le joueur dans l'axe de son couloir, un peu en hauteur
-  const pl = G.player;
+  // (en meute, un mordu regarde la poursuite : la camera suit sa proie, `G.suivi`, comme le 2D)
+  const pl = G.spectateur && G.suivi ? G.suivi : G.player;
   if (pl) {
     const p = ici(T.posDemi(pl.d, pl.lane, pl.demi || 0));
     // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
