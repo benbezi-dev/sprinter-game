@@ -77,6 +77,89 @@ function texteCanvas(dessin: (c: CanvasRenderingContext2D, w: number, h: number)
   return t;
 }
 
+// --- LE PUBLIC, EN CARTES -----------------------------------------------------
+//
+// Quinze mille spectateurs ne se modelisent pas : un corps fait douze mille faces.
+// Chacun est donc une CARTE — deux triangles —, rendue dans Blender depuis de vrais
+// corps (tools/blender/public_cartes.py : Quaternius CC0, homme et femme, trois
+// coiffures, quatre gestes, cinq angles). Le shader la tourne vers la camera, prend
+// l'angle rendu le plus proche et la teint : la case porte sa passe (peau, maillot,
+// cheveux, pantalon, siege, chaussures) en rouge et sa lumiere en vert, et chaque
+// spectateur a ses couleurs. Une seule texture, un seul appel de dessin.
+//
+// LA FOULE VIT. Elle se leve et saute au passage du joueur, et tout le stade se
+// leve apres l'arrivee (uLiesse) ; ceux qui applaudissent sautillent.
+const P_SIL = 6, P_GESTES = 4, P_ANGLES = 5, CARTE_L = 1.1, CARTE_H = 2.2;
+let atlasPublic: THREE.Texture | null = null, publicDemande = false;
+const uFoule = {
+  uAtlas: { value: null as THREE.Texture | null }, uCam: { value: new THREE.Vector3() },
+  uT: { value: 0 }, uJoueur: { value: new THREE.Vector2(1e4, 1e4) }, uLiesse: { value: 0 },
+  uSiege: { value: new THREE.Color(0x2457b8) }, uLum: { value: 1 },
+};
+function chargerLePublic() {
+  if (publicDemande) return;
+  publicDemande = true;
+  const base = (import.meta as any).env?.BASE_URL || '/';
+  new THREE.TextureLoader().loadAsync(base + 'modeles/stades/public-cartes.png').then(t => {
+    // au plus proche, sans mipmaps : une passe melangee a sa voisine n'existe pas
+    t.magFilter = t.minFilter = THREE.NearestFilter;
+    t.generateMipmaps = false;
+    t.colorSpace = THREE.NoColorSpace;
+    atlasPublic = uFoule.uAtlas.value = t;
+    formeVue = '';   // le stade se refait, peuple
+  }).catch(() => { /* gradins vides */ });
+}
+/** La foule : `cartes` = par spectateur x, y, z, cap, variante, phase, puis quatre couleurs. */
+function laFoule(cartes: number[]) {
+  const g = new THREE.InstancedBufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, 0, 0, 0.5, 0, 0, 0.5, 1, 0, -0.5, 1, 0], 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+  g.setIndex([0, 1, 2, 0, 2, 3]);
+  const ib = new THREE.InstancedInterleavedBuffer(new Float32Array(cartes), 18);
+  const at = (n: string, taille: number, decal: number) => g.setAttribute(n, new THREE.InterleavedBufferAttribute(ib, taille, decal));
+  at('aPos', 3, 0); at('aFace', 1, 3); at('aVar', 1, 4); at('aPh', 1, 5);
+  at('aC1', 3, 6); at('aC2', 3, 9); at('aC3', 3, 12); at('aC4', 3, 15);
+  g.instanceCount = cartes.length / 18;
+  const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, uFoule);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', `#include <common>
+attribute vec3 aPos, aC1, aC2, aC3, aC4;
+attribute float aFace, aVar, aPh;
+uniform vec3 uCam; uniform float uT, uLiesse; uniform vec2 uJoueur;
+varying vec2 vCase; varying vec3 vC1, vC2, vC3, vC4;`)
+      .replace('#include <begin_vertex>', `
+vec2 versCam = uCam.xy - aPos.xy;
+float ang = atan(versCam.y, versCam.x);
+float rel = mod(degrees(ang - aFace) + 180.0, 360.0) - 180.0;
+float ia = clamp(floor((rel + 60.0) / 30.0 + 0.5), 0.0, ${P_ANGLES - 1}.0);
+float sil = floor(aVar / ${P_GESTES}.0), ge = mod(aVar, ${P_GESTES}.0);
+// au passage du joueur, et toute entiere apres l'arrivee, la foule se leve
+float h = fract(sin(aPh * 91.7) * 4375.85);
+float pres = 1.0 - smoothstep(10.0, 24.0, distance(aPos.xy, uJoueur));
+if (ge < 2.5 && h < max(pres * 0.8, uLiesse)) ge = h < 0.5 ? 2.0 : 1.0;
+float saut = (ge > 0.5 && ge < 2.5) ? abs(sin(uT * 7.0 + aPh * 6.2832)) * 0.08 : 0.0;
+vec2 droite = vec2(-sin(ang), cos(ang));
+vec3 transformed = aPos + vec3(droite * position.x * ${CARTE_L}, position.y * ${CARTE_H} + saut);
+vCase = vec2((sil * ${P_GESTES}.0 + ge + uv.x) / ${P_SIL * P_GESTES}.0, 1.0 - (ia + 1.0 - uv.y) / ${P_ANGLES}.0);
+vC1 = aC1; vC2 = aC2; vC3 = aC3; vC4 = aC4;`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+uniform sampler2D uAtlas; uniform vec3 uSiege; uniform float uLum;
+varying vec2 vCase; varying vec3 vC1, vC2, vC3, vC4;`)
+      .replace('#include <map_fragment>', `
+vec4 tx = texture2D(uAtlas, vCase);
+if (tx.a < 0.5) discard;
+float zo = floor(tx.r * 255.0 / 32.0 + 0.5);
+vec3 cz = zo < 0.5 ? vec3(0.05) : zo < 1.5 ? vC1 : zo < 2.5 ? vC2 : zo < 3.5 ? uSiege : zo < 4.5 ? vC3 : vC4;
+diffuseColor.rgb = cz * (0.28 + 0.9 * tx.g) * uLum;`);
+  };
+  const mesh = new THREE.Mesh(g, m);
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
 // --- LE STADE, AUX COULEURS DU THEME DU JEU ----------------------------------
 //
 // Chaque stade du jeu est un theme (THEMES, sprinter-app.js) : ciel, pelouse et
@@ -256,8 +339,6 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
   const lMarche = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.tread, [175, 177, 187]) }));
   const lContre = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.riser, [130, 135, 150]) }));
   const lSiege = new Lot(new THREE.BoxGeometry(0.46, 0.38, 0.34), new THREE.MeshLambertMaterial({ color: 0x2457b8 }));
-  const lBuste = new Lot(new THREE.BoxGeometry(0.36, 0.24, 0.5), new THREE.MeshLambertMaterial());
-  const lTete = new Lot(new THREE.IcosahedronGeometry(0.12, 0), new THREE.MeshLambertMaterial({ flatShading: false }));
   const lToit = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.roof, [76, 81, 100]) }), true);
   const lBeton = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0xc9c6c0 }));
   const lBlanc = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.barrier, [231, 234, 239]) }));
@@ -270,13 +351,25 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
   const maillots: number[][] = [...(th.panels || [[231, 60, 45], [28, 106, 202], [255, 203, 55], [50, 162, 121]]), lo, hi, [240, 240, 240]];
   const peaux = [[74, 46, 32], [120, 76, 50], [176, 122, 78], [224, 186, 142], [246, 220, 190]].map(couleur);
   const coulMaillots = maillots.map(couleur);
+  const coulCheveux = [[28, 20, 16], [58, 38, 24], [104, 70, 40], [196, 160, 98], [140, 136, 132]].map(couleur);
+  const coulPantalons = [[30, 38, 68], [24, 24, 28], [58, 84, 128], [196, 178, 142], [96, 98, 104]].map(couleur);
+  const cartes: number[] = [];
+  const _p = new THREE.Vector3(), _f = new THREE.Vector3();
+  const choix = (t: THREE.Color[]) => t[(hasard() * t.length) | 0];
   const UP = new THREE.Vector3(0, 0, 1);
   const repere = (x: number, y: number, a: number) => new THREE.Matrix4().makeRotationAxis(UP, a).setPosition(x, y, 0);
 
-  /** Un spectateur assis (ou debout) au point local (x, y, z) du repere M. */
-  const spectateur = (M: THREE.Matrix4, x: number, y: number, z: number) => {
-    boite(lBuste, M, x + (hasard() - 0.5) * 0.06, y, z + 0.5, 1, 1, 1, coulMaillots[(hasard() * coulMaillots.length) | 0]);
-    boite(lTete, M, x, y - 0.02, z + 0.88 + hasard() * 0.05, 1, 1, 1, peaux[(hasard() * peaux.length) | 0]);
+  /**
+   * Un spectateur au point local (x, y, z) du repere M, tourne vers -y (la piste) :
+   * une carte du public (voir LE PUBLIC, EN CARTES). `pied` : debout, bras le long
+   * du corps et sans siege (officiels, photographes) ; `face` force son cap.
+   */
+  const spectateur = (M: THREE.Matrix4, x: number, y: number, z: number, pied = false, face?: number) => {
+    _p.set(x, y, z).applyMatrix4(M);
+    if (face === undefined) { _f.set(0, -1, 0).transformDirection(M); face = Math.atan2(_f.y, _f.x); }
+    const u = hasard(), geste = pied ? 3 : u < 0.6 ? 0 : u < 0.85 ? 1 : 2;
+    cartes.push(_p.x, _p.y, _p.z, face, ((hasard() * 6) | 0) * 4 + geste, hasard());
+    for (const c of [choix(peaux), choix(coulMaillots), choix(coulCheveux), choix(coulPantalons)]) cartes.push(c.r, c.g, c.b);
   };
 
   /**
@@ -291,8 +384,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
       boite(lContre, M, L / 2, y + prof, z + monte / 2, L, 0.06, monte);
       for (let i = 0; i < n; i++) {
         const x = (i + 0.5) * (L / n);
-        boite(lSiege, M, x, y + prof * 0.55, z + 0.19, 1, 1, 1);
-        if (hasard() < 0.74 * PUBLIC) spectateur(M, x, y + prof * 0.5, z);
+        // la carte porte son siege ; un siege vide reste un siege
+        if (atlasPublic && hasard() < 0.74 * PUBLIC) spectateur(M, x, y + prof * 0.55, z);
+        else boite(lSiege, M, x, y + prof * 0.55, z + 0.19, 1, 1, 1);
       }
     }
     // le dessous, plein : on ne voit pas le jour entre les marches
@@ -408,9 +502,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
   stade.add(ch);
   boite(lBloc, M0, 103.1, W + 1.2, 1.0, 0.2, 2.6, 2.0);
   // une poignee de gens au bord de la piste : officiels a l'arrivee, photographes apres la ligne
-  for (let i = 0; i < 6; i++) spectateur(M0, 101 + i * 0.7, -1.6 - (i % 2) * 0.6, -0.1);
-  for (let i = 0; i < 7; i++) spectateur(M0, 105 + i * 0.8, -2.6 - (i % 2) * 0.5, -0.1);   // sur l'herbe, pas dans la piste
-  for (let i = 0; i < 4; i++) spectateur(M0, 30 + i * 18, -1.8, -0.1);
+  if (atlasPublic) {
+    // tournes vers la piste (+y) : officiels a l'arrivee, photographes sur l'herbe apres la ligne, commissaires
+    for (let i = 0; i < 6; i++) spectateur(M0, 101 + i * 0.7, -1.6 - (i % 2) * 0.6, 0, true, Math.PI / 2);
+    for (let i = 0; i < 7; i++) spectateur(M0, 105 + i * 0.8, -2.6 - (i % 2) * 0.5, 0, true, Math.PI * 0.75);
+    for (let i = 0; i < 4; i++) spectateur(M0, 30 + i * 18, -1.8, 0, true, Math.PI / 2);
+  }
 
   // LES ARBRES, autour du stade
   for (let i = 0; i < 70; i++) {
@@ -421,7 +518,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any) {
     boite(lFeuille, M0, x, y, h * 0.65 + r * 0.6, r, r, r * 1.2);
   }
 
-  for (const l of [lMarche, lContre, lSiege, lBuste, lTete, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille]) l.finir(stade);
+  if (cartes.length) stade.add(laFoule(cartes));
+  for (const l of [lMarche, lContre, lSiege, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille]) l.finir(stade);
 }
 
 function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
@@ -742,6 +840,7 @@ export function rendre(App: any, dt: number) {
     initialiserLesEffets();
     chargerLeCorps();
     chargerLeBloc();
+    chargerLePublic();
   }
   // le stade de l'etape en cours (le theme a l'heure ou l'on joue, comme le dessin 2D)
   // (l'eclairage de l'heure rend un nouvel objet : c'est le theme brut qui dit si l'etape a change)
@@ -823,6 +922,15 @@ export function rendre(App: any, dt: number) {
     camera.lookAt(camVise);
     soleil.position.set(p[0] - 10, p[1] - 18, 30);
     soleil.target.position.set(p[0] + 6, p[1], 0);
+  }
+  // la foule : ou est la camera (dans le repere du monde), ou est le joueur, l'arrivee passee
+  uFoule.uT.value = performance.now() / 1000;
+  monde.worldToLocal(uFoule.uCam.value.copy(camera.position));
+  if (pl) {
+    const q = ici(T.posDemi(pl.d, pl.lane, pl.demi || 0));
+    uFoule.uJoueur.value.set(q[0], q[1]);
+    const fini = pl.d >= T.total ? 0.9 : 0;
+    uFoule.uLiesse.value += (fini - uFoule.uLiesse.value) * Math.min(1, (dt || 0.016) * 1.5);
   }
   dessinerLesEffets(App);
   renderer!.render(scene, camera);
