@@ -9227,6 +9227,8 @@
     // profil, et surtout EN VIRAGE, ou la course elle-meme ne se laisse pas
     // arreter sur l'image qu'on veut regarder.
     personCapsules, drawFacetFigure, niveauDetail, repereDuCoureur,
+    // la posture des blocs, que la course en 3D (game/course-3d.ts) pose elle-meme
+    phaseBlocs,
     // les tenues des starters, pour tools/apercu-starter.html
     LOOK_PROF, LOOK_STARTER,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,
