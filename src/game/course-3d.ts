@@ -51,6 +51,7 @@ const P_DEBUT = nombre('pdebut', 0.08), P_FIN = Math.max(P_DEBUT + 0.05, nombre(
 const P_HAUT = nombre('phaut', 8), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.15)));
 const OMBRES = Q.get('ombres') !== '0';
 const STADE_FORCE = Q.get('stade');
+const POURSUITE = nombre('poursuite', 2600);   // la poursuite du Stade d'Or ; ?poursuite=0 l'eteint
 
 const MAX_TRONCS = 1400;
 const LANE_W = 1.22;
@@ -66,6 +67,8 @@ const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
 let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
+// le Stade d'Or : les faisceaux du depart (un par couloir) et la poursuite qui suit le groupe
+let faisceaux: THREE.Mesh[] = [], poursuite: THREE.SpotLight | null = null;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
 /** Un tronc de cone de rayon 1, axe Y de -0,5 a +0,5 : ses deux rayons viennent de l'instance. */
@@ -175,6 +178,21 @@ diffuseColor.rgb = cz * (0.28 + 0.9 * tx.g) * uLum;`);
   const mesh = new THREE.Mesh(g, m);
   mesh.frustumCulled = false;
   return mesh;
+}
+
+/**
+ * Un faisceau de lumiere dans la brume : un cone ouvert, additif, dense au pied (pres de
+ * l'athlete) et fondu vers le haut — dense en haut, vus de derriere, les huit faisceaux
+ * voilaient tout le ciel de bandes grises.
+ */
+function faisceauMat(force: number) {
+  const t = texteCanvas((c, w, h) => {
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, 'rgba(255,222,160,0)'); g.addColorStop(1, 'rgba(255,200,120,1)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  }, 4, 128);
+  return new THREE.MeshBasicMaterial({ map: t, transparent: true, opacity: force, blending: THREE.AdditiveBlending,
+    depthWrite: false, side: THREE.DoubleSide, fog: false });
 }
 
 // --- LES PIECES DE CHAQUE STADE ------------------------------------------------
@@ -388,7 +406,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
   const damier = texteCanvas((c, w, h) => {
     for (let i = 0; i < 4; i++) for (let j = 0; j < 40; j++) {
-      c.fillStyle = (i + j) % 2 ? '#111' : '#f4f4f4'; c.fillRect(i * w / 4, j * h / 40, w / 4, h / 40);
+      c.fillStyle = (i + j) % 2 ? '#111' : luxe ? '#d8b46a' : '#f4f4f4'; c.fillRect(i * w / 4, j * h / 40, w / 4, h / 40);
     }
   }, 64, 640);
   plan(0.5, W, new THREE.MeshBasicMaterial({ map: damier }), 100.25, W / 2, 0.003);
@@ -427,7 +445,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const lVitre = new Lot(cube, new THREE.MeshLambertMaterial(luxe ? { color: 0x2a2014, emissive: 0x4a3410 } : { color: 0x9fc4dc, emissive: 0x1a2a38 }));
   const OR = new THREE.Color(0xc9a45c);
   const lMetal = new Lot(new THREE.CylinderGeometry(0.5, 0.5, 1, 10), luxe
-    ? new THREE.MeshStandardMaterial({ color: OR, roughness: 0.3, metalness: 0.9, emissive: 0x3a2a10 })
+    // satine, pas miroir : sans ciel a refleter, un metal pur sortait noir (pylones en triangles noirs)
+    ? new THREE.MeshStandardMaterial({ color: OR, roughness: 0.45, metalness: 0.3, emissive: 0x5a3e14 })
     : new THREE.MeshLambertMaterial({ color: 0xd8dbe2 }), true);
   // les filets d'or (nez des gradins, muret) : sans lumiere propre, ils brillent dans le noir
   const lFilet = new Lot(cube, new THREE.MeshBasicMaterial({ color: new THREE.Color(0xe2bd6e) }));
@@ -506,6 +525,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const yFond = yLoges + 2.6 + 15 * 0.85;
   boite(lToit, Mp, LS / 2, yFond + 0.2, (z2 + 3.4) / 2, LS, 0.4, z2 + 3.4);  // la facade
   boite(lToit, Mp, LS / 2, yFond - 9, z2 + 3.4, LS + 2, 20, 0.35);          // le toit en porte-a-faux
+  if (luxe) boite(lFilet, Mp, LS / 2, yFond - 19, z2 + 3.4, LS + 2, 0.12, 0.4);
   for (let x = 0; x <= LS; x += 14) boite(lMetal, Mp, x, yFond - 1, z2 + 2, 0.35, 0.35, 3.0);
 
   // LES TRIBUNES DES VIRAGES ET DE LA LIGNE OPPOSEE, plus basses, en segments
@@ -522,12 +542,14 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       boite(lBlanc, M, L / 2, -0.15, 0.6, L, 0.25, 1.2);
       const z = gradins(M, L, 16, 0.4, 1.2);
       boite(lToit, M, L / 2, 0.4 + 16 * 0.85 + 0.2, (z + 2) / 2, L, 0.4, z + 2);
+      if (luxe) boite(lFilet, M, L / 2, 0.4 + 16 * 0.85, z + 2, L, 0.1, 0.1);
     }
   }
   const Mo = repere(DROITE1 + 4, yOppose - 3.2, Math.PI);                    // ligne opposee
   boite(lBlanc, Mo, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);
   const zo = gradins(Mo, LS, 16, 0.4, 1.2);
   boite(lToit, Mo, LS / 2, 0.4 + 16 * 0.85 + 0.2, (zo + 2) / 2, LS, 0.4, zo + 2);
+  if (luxe) boite(lFilet, Mo, LS / 2, 0.4 + 16 * 0.85, zo + 2, LS, 0.1, 0.1);
 
   // LES PANNEAUX LED, au bord de la piste, devant la tribune principale
   const pub = new THREE.TextureLoader().load(base + 'pubs/benbezi-logo-3d-cadre.webp');
@@ -593,6 +615,33 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   // SUR LA PISTE : les blocs, le portique du chrono, officiels et photographes
   const M0 = repere(0, 0, 0);
+  // AU LUXE, LE DEPART EST UNE PRESENTATION : un faisceau d'or tombe sur chaque couloir et
+  // une flaque de lumiere s'ouvre sous chaque athlete (« plus de visibilite sur les joueurs
+  // au depart sans casser le decor », l'auteur, 22/10). Ils s'eteignent dans les premiers
+  // metres (rendre). Et une poursuite suit le groupe toute la course : une seule vraie
+  // lumiere, etroite, qui eclaire les corps sans rallumer les tribunes.
+  faisceaux = []; poursuite = null;
+  if (luxe) {
+    const flaque = texteCanvas((c, w, h) => {
+      const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+      g.addColorStop(0, 'rgba(255,214,140,1)'); g.addColorStop(0.5, 'rgba(240,170,80,0.45)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }, 128, 128);
+    for (const [Md] of departs) {
+      const o = new THREE.Vector3(-0.3, 0, 0).applyMatrix4(Md);
+      const cone = new THREE.Mesh(new THREE.ConeGeometry(0.7, 7, 20, 1, true), faisceauMat(0.12));
+      cone.rotation.x = Math.PI / 2;
+      cone.position.set(o.x, o.y, 3.5);
+      const sol = plan(2.6, 2.6, new THREE.MeshBasicMaterial({ map: flaque, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.8 }), o.x, o.y, 0.012);
+      sol.receiveShadow = false;
+      stade.add(cone);
+      faisceaux.push(cone, sol);
+    }
+    poursuite = new THREE.SpotLight(0xffe2b0, 0, 70, 0.4, 0.7, 1.2);
+    poursuite.castShadow = false;
+    stade.add(poursuite, poursuite.target);
+  }
+
   // les blocs du jeu, la ou pose() met chaque coureur au coup de feu (voir drawBlocs)
   if (blocLots) for (const { geo, mat } of blocLots) {
     const l = new Lot(geo, mat, true);
@@ -1149,6 +1198,24 @@ export function rendre(App: any, dt: number) {
     soleil.target.position.set(p[0] + 6, p[1], 0);
   }
   // la foule : ou est la camera (dans le repere du monde), ou est le joueur, l'arrivee passee
+  // le Stade d'Or : les faisceaux du depart s'eteignent sur les douze premiers metres,
+  // la poursuite se resserre sur le groupe
+  if (pl && (faisceaux.length || poursuite)) {
+    const f = G.state === 'race' || G.state === 'count' || G.state === 'falseout' ? Math.max(0, 1 - pl.d / 12) : 0;
+    for (const m of faisceaux) { (m.material as THREE.MeshBasicMaterial).opacity = (m.geometry.type === 'ConeGeometry' ? 0.12 : 0.8) * f; m.visible = f > 0.01; }
+    if (poursuite) {
+      let sx = 0, sy = 0, n = 0;
+      for (const r of G.runners) if (r && r.look) { const q = ici(T.posDemi(r.d, r.lane, r.demi || 0)); sx += q[0]; sy += q[1]; n++; }
+      if (n) { sx /= n; sy /= n; }
+      const q = ici(T.posDemi(pl.d, pl.lane, pl.demi || 0));
+      // le joueur d'abord : la poursuite ne glisse qu'un peu vers le groupe
+      const cx = q[0] * 0.7 + sx * 0.3, cy = q[1] * 0.7 + sy * 0.3;
+      poursuite.position.set(cx - 6, cy - 14, 26);
+      poursuite.target.position.set(cx, cy, 0);
+      poursuite.angle = 0.26 + 0.12 * f;
+      poursuite.intensity = POURSUITE;
+    }
+  }
   uFoule.uT.value = performance.now() / 1000;
   monde.worldToLocal(uFoule.uCam.value.copy(camera.position));
   if (pl) {
