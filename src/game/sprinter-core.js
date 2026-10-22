@@ -3075,7 +3075,8 @@
     // maillage — les memes angles, pris aux memes endroits. Rien n'est calcule
     // deux fois, et le maillage ne peut pas faire un geste que les tubes ne
     // font pas.
-    const sq = L.maillage ? (r.squelette = {
+    // (r.squelette3D : la course en 3D, game/course-3d.ts, pose un maillage sur chaque coureur)
+    const sq = (L.maillage || r.squelette3D) ? (r.squelette = {
       hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt,
       jambes: [], bras: [],
       // (les poings du cri restent fermes, meme quand il sort des claps)
