@@ -511,6 +511,10 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   uFoule.uLum.value = luxe ? 0.42 : cyber ? 0.5 : nuit ? 0.7 : 1;
   uLisere.value = luxe || cyber ? 1 : 0;
   uLisereCoul.value.set(cyber ? 0x30e8ff : 0xffc76b);
+  // au Stade Neon, le lisere reste un fil (« les neons sur les personnages sont trop forts,
+  // un jeu de lumiere qui fait qu'on les voit clairement », 22/10) : la lumiere de face fait le reste
+  uLisereForce.value = cyber ? 0.22 : 0.9;
+  uLisereFace.value = cyber ? 1 : 0;   // le Stade d'Or garde le reglage valide
   uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : 0x2457b8);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
   if (cyber) scene.fog = new THREE.Fog(0x14061f, 60, 460);
@@ -1051,15 +1055,17 @@ const SANS_CHEVEUX = new Set(['ras', 'shaved']);
 // volontairement sombre, ce sont EUX qu'on eclaire, pas le decor : un contre-jour dore
 // sur leurs contours et un rien de lumiere propre. Des flaques et des faisceaux poses sur
 // la piste « cassaient le style du stade » (l'auteur, 22/10). Eteint (0) ailleurs.
-const uLisere = { value: 0 }, uLisereCoul = { value: new THREE.Color(0xffc76b) };
+const uLisere = { value: 0 }, uLisereCoul = { value: new THREE.Color(0xffc76b) }, uLisereForce = { value: 0.9 }, uLisereFace = { value: 0 };
 function lisere(m: THREE.MeshStandardMaterial) {
   m.onBeforeCompile = (sh) => {
-    sh.uniforms.uLisere = uLisere; sh.uniforms.uLisereCoul = uLisereCoul;
+    sh.uniforms.uLisere = uLisere; sh.uniforms.uLisereCoul = uLisereCoul; sh.uniforms.uLisereForce = uLisereForce; sh.uniforms.uLisereFace = uLisereFace;
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform float uLisere; uniform vec3 uLisereCoul;')
+      .replace('#include <common>', '#include <common>\nuniform float uLisere, uLisereForce, uLisereFace; uniform vec3 uLisereCoul;')
       .replace('#include <opaque_fragment>', `
 float bord = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 2.5);
-outgoingLight += uLisere * (uLisereCoul * bord * 0.9 + diffuseColor.rgb * 0.22);
+// une lumiere de face douce, venue d'en haut a gauche de la camera : le cote qu'on voit
+float face = max(dot(normalize(normal), normalize(vec3(-0.35, 0.55, 0.75))), 0.0);
+outgoingLight += uLisere * (uLisereCoul * bord * uLisereForce + diffuseColor.rgb * (0.22 - 0.08 * uLisereFace + 0.5 * uLisereFace * face));
 #include <opaque_fragment>`);
   };
 }
