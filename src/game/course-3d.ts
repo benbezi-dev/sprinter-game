@@ -60,6 +60,7 @@ let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
+let profilDecal = 0, profilEcart = 0, profilPret = false;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
 /** Un tronc de cone de rayon 1, axe Y de -0,5 a +0,5 : ses deux rayons viennent de l'instance. */
@@ -1050,20 +1051,28 @@ export function rendre(App: any, dt: number) {
     const vise = _b.set(p[0] + loin * ax - kc * ix, -(p[1] + loin * ay - kc * iy), DOS ? 0.9 : 0.6);
     // LE PROFIL (l'auteur, 22/10 : « le depart part comme actuellement et au fur et a
     // mesure de la course passe en vue de profil pour qu'on voie l'ecart entre les
-    // joueurs »). Le depart garde notre camera ; entre 6 et 31 % de la course, elle
+    // joueurs »). Le depart garde notre camera ; entre 8 et 60 % de la course (« trop
+    // rapide » sur 6-31 %, l'auteur, 22/10), elle
     // glisse cote pelouse, face aux couloirs, la tribune derriere eux — le plan de la
     // camera sur rail des retransmissions. Elle cadre ses voisins, sept metres devant
     // et derriere lui au plus — au-dela, en portrait, les coureurs deviendraient des
     // points : l'ecart au premier, lui, reste ecrit dans le bandeau.
     const total = T.total || 100;
-    const u = Math.min(1, Math.max(0, (pl.d - 0.06 * total) / (0.25 * total)));
+    const u = Math.min(1, Math.max(0, (pl.d - 0.08 * total) / (0.52 * total)));
     const b = u * u * (3 - 2 * u);
+    if (b <= 0) profilPret = false;
     if (b > 0 && !DOS) {
       let dMin = pl.d, dMax = pl.d;
       for (const r of G.runners) if (r && r.look && !r.retour) { dMin = Math.min(dMin, r.d); dMax = Math.max(dMax, r.d); }
       dMin = Math.max(dMin, pl.d - 7); dMax = Math.min(dMax, pl.d + 7);
       // le joueur d'abord : le cadre ne va qu'a mi-chemin vers le milieu de ses voisins
-      const centre = pl.d + 1.5 + ((dMin + dMax) / 2 - pl.d) * 0.5, ecart = dMax - dMin + 4;
+      // le recentrage et le recul se font lentement : un voisin qui entre dans le cadre
+      // ou en sort ne fait plus sauter le plan
+      const k = Math.min(1, (dt || 0.016) * 1.1);
+      const decalVoulu = 1.5 + ((dMin + dMax) / 2 - pl.d) * 0.5, ecartVoulu = dMax - dMin + 4;
+      if (!profilPret) { profilDecal = decalVoulu; profilEcart = ecartVoulu; profilPret = true; }
+      profilDecal += (decalVoulu - profilDecal) * k; profilEcart += (ecartVoulu - profilEcart) * k;
+      const centre = pl.d + profilDecal, ecart = profilEcart;
       const milieu = (nCouloirs - 1) / 2;
       const f = ici(T.pos(centre, milieu)), hf = capIci(T.heading(centre, milieu));
       const fx = Math.sin(hf), fy = -Math.cos(hf);                 // vers la pelouse
