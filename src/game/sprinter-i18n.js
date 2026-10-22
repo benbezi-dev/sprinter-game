@@ -1980,7 +1980,9 @@
     // decide qu'ici, et il ne reprend celui d'aucune piste existante.
     ['Piste Arc-en-ciel', 'Rainbow Track'],
     // Le Stade d'Or (Dark Luxury, n° 11 de la planche des styles, 22/10).
-    ["Stade d'Or", 'Golden Stadium']
+    ["Stade d'Or", 'Golden Stadium'],
+    // Le Stade Neon (cyberpunk, 22/10).
+    ['Stade Néon', 'Neon Stadium']
   ];
 
   const RACE_SUB = {

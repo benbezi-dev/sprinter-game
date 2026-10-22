@@ -727,6 +727,22 @@
       names: ['Auguste Varenne', 'Celeste Moreau', 'Leandre Saint-Ange', 'Ines de Valcourt',
               'Octave Marlowe', 'Margaux Delorme', 'Felix Aurelien'] },
 
+    // LE STADE NEON — cyberpunk (22/10). Une nuit de pluie dans une megapole : piste
+    // noire mouillee, couloirs cyan, bords magenta, une ville de tours tout autour,
+    // des panneaux holographiques. Cherche dans Unity (StadeCyber.cs), valide par
+    // l'auteur, construit pour la course 3D (course-3d.ts, `cyber`). Ferme, dernier
+    // de la liste, choisissable sur la branche de test 3D comme le Stade d'Or.
+    { cle: 'cyber', name: 'Stade Neon', theme: 'cyber',
+      pool: 'sprint',
+      horsSerie: true,
+      brancheTest: true,
+      noms: ['Stade Néon', 'Neon Stadium'],
+      foule: 0.9,
+      plateau: { '100': [9.45, 9.85], '200': [19.00, 19.80],
+                 '400': [42.90, 44.00], '4x100': [37.30, 38.40] },
+      names: ['Kai Voltaire', 'Nyx Arden', 'Rook Calder', 'Juno Vex',
+              'Axel Marrow', 'Sable Quinn', 'Orin Hale'] },
+
   ];
 
   // ---------------------------------------------------------------------

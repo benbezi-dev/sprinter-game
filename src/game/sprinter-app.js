@@ -269,6 +269,22 @@
       projecteurs: true, pubsLed: true,
       luxe: true
     },
+    // LE STADE NEON (cyberpunk) : `cyber` est lu par la course 3D (course-3d.ts) — piste
+    // mouillee, neons, ville de tours, hologrammes, pluie. Le 2D n'en reprend que les couleurs.
+    cyber: {
+      skyTop: [12, 4, 24], skyBot: [40, 10, 60], stars: 0,
+      grass: [8, 6, 14], grassEdge: [20, 10, 30],
+      trackA: [16, 14, 22], trackB: [12, 10, 18],
+      lane: [0, 229, 255], kerb: [255, 43, 214],
+      tread: [22, 20, 30], riser: [14, 12, 20], roof: [10, 8, 16],
+      barrier: [255, 43, 214],
+      panels: [[255, 43, 214], [0, 229, 255], [140, 60, 255], [255, 220, 30]],
+      crowdLo: [10, 10, 16], crowdHi: [120, 200, 230],
+      accent: [0, 229, 255], dust: [80, 40, 120],
+      neon: [255, 43, 214], neonExt: [255, 43, 214],
+      projecteurs: true, pubsLed: true,
+      cyber: true
+    },
     danube: {
       // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
       heure: 'nuit',
