@@ -44,6 +44,10 @@ BRAS = ('upperarm', 'lowerarm', 'hand', 'thumb', 'index', 'middle', 'ring', 'pin
 
 
 def zone_de_la_face(nom_os, c, H):
+    """UN DEBARDEUR D'ATHLETISME : tout le tronc jusqu'a la ceinture, deux
+    bretelles par-dessus les epaules, l'encolure plus ouverte devant que
+    derriere, les emmanchures sous l'aisselle. Le devant est en +x (repere du
+    jeu)."""
     z, y = c.z, abs(c.y)
     if nom_os.startswith(('foot', 'ball')):
         return 'pointes'
@@ -52,10 +56,11 @@ def zone_de_la_face(nom_os, c, H):
     if nom_os.startswith(BRAS) or nom_os.startswith('neck'):
         return 'peau'
     if z > H['ceinture']:
-        if not nom_os.startswith(('spine', 'clavicle', 'pelvis')) or z > H['cou']:
-            return 'peau'
-        # au-dessus de l'aisselle, l'emmanchure : un plan, pas la frontiere des poids
-        return 'peau' if (z > H['aisselle'] and y > H['epaule']) else 'maillot'
+        if y < H['col'] and z > H['cou'] - (H['decollete'] if c.x > 0 else 0.02):
+            return 'peau'                       # l'encolure
+        if y > H['bretelle'] and z > H['aisselle']:
+            return 'peau'                       # l'emmanchure
+        return 'maillot'
     if z > H['cuisse']:
         return 'short'
     return 'peau'
@@ -67,11 +72,14 @@ def zoner(h, rig):
     genou = rig.data.bones['calf_l'].head_local.z
     hanche = rig.data.bones['thigh_l'].head_local.z
     epaule = rig.data.bones['upperarm_l'].head_local
-    H = {'ceinture': hanche + 0.07, 'cuisse': genou + 0.17, 'aisselle': epaule.z - 0.09,
-         'epaule': abs(epaule.y) - 0.035, 'cou': rig.data.bones['neck_01'].head_local.z - 0.035}
+    cou = rig.data.bones['neck_01'].head_local.z
+    H = {'ceinture': hanche + 0.07, 'cuisse': genou + 0.17, 'aisselle': epaule.z - 0.07,
+         'bretelle': abs(epaule.y) - 0.045, 'col': 0.062, 'cou': cou, 'decollete': 0.085}
     bm = bmesh.new(); bm.from_mesh(h.data)
-    plans = [((0, 0, H[k]), (0, 0, 1)) for k in ('ceinture', 'cuisse', 'aisselle', 'cou')]
-    plans += [((0, H['epaule'], 0), (0, 1, 0)), ((0, -H['epaule'], 0), (0, 1, 0))]
+    plans = [((0, 0, z), (0, 0, 1)) for z in (H['ceinture'], H['cuisse'], H['aisselle'],
+                                              H['cou'] - 0.02, H['cou'] - H['decollete'])]
+    for k in ('bretelle', 'col'):
+        plans += [((0, H[k], 0), (0, 1, 0)), ((0, -H[k], 0), (0, 1, 0))]
     for co, no in plans:
         geo = bm.verts[:] + bm.edges[:] + bm.faces[:]
         bmesh.ops.bisect_plane(bm, geom=geo, plane_co=Vector(co), plane_no=Vector(no))

@@ -76,16 +76,30 @@ function texteCanvas(dessin: (c: CanvasRenderingContext2D, w: number, h: number)
 //
 // Chaque stade du jeu est un theme (THEMES, sprinter-app.js) : ciel, pelouse et
 // sa tonte, piste, marches et contremarches des gradins, toit, barriere,
-// panneaux, public. Le stade 3D se construit sur ces memes couleurs : le stade
-// de l'etape en cours a donc sa version 3D sans rien dessiner de plus, et un
+// panneaux, public, feuillage. Le stade 3D se construit sur ces memes couleurs :
+// l'etape en cours a donc sa version 3D sans rien dessiner de plus, et un
 // changement d'etape le reconstruit.
 //
-// On le voit comme dans le jeu : la camera se tient du cote des couloirs hauts,
-// les gradins sont en face, de l'autre cote de la piste, derriere leurs
-// panneaux. shortcut: une seule tribune, droite ; pas d'arbres ni de pieces de
-// decor par stade (les images Blender du jeu sont cuites pour sa vue 2D).
+// UN VRAI STADE, PAS UN DECOR DE THEATRE. La ligne droite tient dans un anneau
+// complet : deux virages, la ligne opposee, une tribune principale a deux
+// etages (loges vitrees, toit, facade), des tribunes qui suivent les virages et
+// la ligne opposee, quatre pylones d'eclairage, un ecran geant, des drapeaux,
+// des arbres et des nuages autour ; sur la piste, les blocs, le portique du
+// chrono, des officiels et des photographes a l'arrivee. La camera se tient du
+// cote de la corde : la tribune principale est en face, derriere ses panneaux.
+//
+// TOUT CE QUI SE REPETE EST INSTANCIE : marches, sieges, spectateurs, poteaux,
+// troncs, feuillages — un appel de dessin par sorte d'objet, quel que soit le
+// nombre. Le public est fait de deux formes basses (un buste, une tete de
+// vingt faces) : une dizaine de milliers de gens pour quelques centaines de
+// milliers de triangles. `?public=0.5` en met deux fois moins.
+// shortcut: les pieces de decor propres a chaque stade (images Blender du jeu,
+// cuites pour sa vue 2D) ne sont pas reprises : seul le theme l'est.
 let stade: THREE.Group | null = null;
 let themeVu: any = null;
+const PUBLIC = Math.max(0, Math.min(1, nombre('public', 1)));
+const R_CORDE = 36.5;                     // rayon de la corde dans les virages (m)
+const DROITE0 = -12, DROITE1 = 100;       // la ligne droite, de la sortie du virage a l'arrivee
 const c3 = (v: number[] | undefined, d: number[]) => {
   const a = v || d;
   return new THREE.Color().setRGB(a[0] / 255, a[1] / 255, a[2] / 255, THREE.SRGBColorSpace);
@@ -100,47 +114,99 @@ function plan(w: number, l: number, mat: THREE.Material, x: number, y: number, z
   return m;
 }
 
+/** Un lot d'objets identiques, poses un par un puis rendus en un seul InstancedMesh. */
+class Lot {
+  m: THREE.Matrix4[] = []; c: (THREE.Color | null)[] = [];
+  constructor(public geo: THREE.BufferGeometry, public mat: THREE.Material, public ombre = false) {}
+  poser(m: THREE.Matrix4, c: THREE.Color | null = null) { this.m.push(m.clone()); this.c.push(c ? c.clone() : null); }
+  finir(g: THREE.Group) {
+    if (!this.m.length) return;
+    const im = new THREE.InstancedMesh(this.geo, this.mat, this.m.length);
+    this.m.forEach((m, i) => { im.setMatrixAt(i, m); if (this.c[i]) im.setColorAt(i, this.c[i]!); });
+    im.frustumCulled = false; im.castShadow = this.ombre; im.receiveShadow = true;
+    g.add(im);
+  }
+}
+
+const _bx = new THREE.Matrix4(), _tr = new THREE.Matrix4(), _sc = new THREE.Matrix4();
+/** Une boite du repere local `M` : centre (x, y, z), cotes (lx, ly, lz). */
+function boite(lot: Lot, M: THREE.Matrix4, x: number, y: number, z: number, lx: number, ly: number, lz: number, c: THREE.Color | null = null) {
+  lot.poser(_bx.copy(M).multiply(_tr.makeTranslation(x, y, z)).multiply(_sc.makeScale(lx, ly, lz)), c);
+}
+
 function construireLeStade(nCouloirs: number, th: any) {
   if (stade) { monde.remove(stade); stade.traverse((o: any) => { o.geometry?.dispose?.(); }); }
   stade = new THREE.Group();
   monde.add(stade);
-  const largeur = nCouloirs * LANE_W;
-  const X0 = -30, X1 = 140, LX = X1 - X0, XM = (X0 + X1) / 2;
+  const W = nCouloirs * LANE_W;
+  let alea = 7;
+  const hasard = () => ((alea = (alea * 16807) % 2147483647) / 2147483647);
+  const couleur = (v: number[]) => new THREE.Color().setRGB(v[0] / 255, v[1] / 255, v[2] / 255, THREE.SRGBColorSpace);
+  const base = (import.meta as any).env?.BASE_URL || '/';
 
-  // le ciel, en degrade
+  // LE CIEL, en degrade, et ses nuages
   const ciel = texteCanvas((c, w, h) => {
     const g = c.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, css(th.skyTop || [57, 73, 178])); g.addColorStop(1, css(th.skyBot || [71, 87, 192], 1.25));
+    g.addColorStop(0, css(th.skyTop || [57, 73, 178])); g.addColorStop(1, css(th.skyBot || [71, 87, 192], 1.3));
     c.fillStyle = g; c.fillRect(0, 0, w, h);
   }, 4, 256);
   scene.background = ciel;
-  scene.fog = new THREE.Fog(c3(th.skyBot, [71, 87, 192]).getHex(), 120, 260);
+  scene.fog = new THREE.Fog(c3(th.skyBot, [71, 87, 192]).getHex(), 160, 420);
+  if (!th.stars) {
+    const nuage = texteCanvas((c, w, h) => {
+      for (let i = 0; i < 14; i++) {
+        const x = w * (0.2 + 0.6 * Math.random()), y = h * (0.45 + 0.2 * Math.random()), r = h * (0.18 + 0.2 * Math.random());
+        const g = c.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, 'rgba(255,255,255,0.85)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = g; c.fillRect(0, 0, w, h);
+      }
+    }, 256, 128);
+    const matN = new THREE.MeshBasicMaterial({ map: nuage, transparent: true, depthWrite: false, fog: false });
+    for (let i = 0; i < 9; i++) {
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(90, 45), matN);
+      const a = -0.9 + i * 0.22;
+      m.position.set(60 + 300 * Math.cos(a), -40 + 300 * Math.sin(a) * 0.6, 70 + 25 * hasard());
+      m.lookAt(40, -30, 30);
+      stade.add(m);
+    }
+  }
 
-  // la pelouse et sa tonte en bandes (les bandes traversent le stade)
+  // LA PELOUSE et sa tonte en bandes
   const herbe = th.grass || [29, 115, 17], bord = th.grassEdge || [18, 91, 9];
   const tonte = texteCanvas((c, w, h) => {
     for (let i = 0; i < 8; i++) { c.fillStyle = css(herbe, i % 2 ? 0.88 : 1.06); c.fillRect(i * w / 8, 0, w / 8, h); }
   }, 256, 8);
-  tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(LX / 40, 1);
-  plan(LX, 160, new THREE.MeshLambertMaterial({ map: tonte }), XM, largeur / 2, -0.02);
-  // le liseré d'herbe sombre le long de la piste
-  plan(LX, 0.8, new THREE.MeshLambertMaterial({ color: c3(bord, bord) }), XM, -0.4 - 1.2, -0.01);
-  plan(LX, 0.8, new THREE.MeshLambertMaterial({ color: c3(bord, bord) }), XM, largeur + 1.6, -0.01);
+  tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(10, 1);
+  plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.03);
 
-  // la piste : deux rouges qui alternent d'un couloir a l'autre, et ses lignes
+  // LA PISTE : les deux lignes droites et les deux virages, couloir par couloir
   const A = th.trackA || [148, 0, 0], B = th.trackB || A;
-  plan(LX, largeur + 2.4, new THREE.MeshLambertMaterial({ color: c3(A, A) }), XM, largeur / 2, 0);
-  const matB = new THREE.MeshLambertMaterial({ color: c3(B, B) });
-  for (let k = 1; k < nCouloirs; k += 2) plan(LX, LANE_W, matB, XM, (k + 0.5) * LANE_W, 0.001);
+  const matA = new THREE.MeshLambertMaterial({ color: c3(A, A) }), matB = new THREE.MeshLambertMaterial({ color: c3(B, B) });
   const ligne = new THREE.MeshBasicMaterial({ color: c3(th.lane, [247, 242, 233]) });
-  for (let k = 0; k <= nCouloirs; k++) plan(LX, 0.05, ligne, XM, k * LANE_W, 0.002);
-  plan(0.05, largeur, ligne, 0, largeur / 2, 0.003);
+  const LD = DROITE1 - DROITE0, XD = (DROITE0 + DROITE1) / 2;
+  const yOppose = -2 * R_CORDE - W;          // la ligne opposee, de l'autre cote de la pelouse
+  for (const y0 of [0, yOppose]) {
+    plan(LD, W + 1.6, matA, XD, y0 + W / 2, 0);
+    for (let k = 1; k < nCouloirs; k += 2) plan(LD, LANE_W, matB, XD, y0 + (k + 0.5) * LANE_W, 0.001);
+    for (let k = 0; k <= nCouloirs; k++) plan(LD, 0.05, ligne, XD, y0 + k * LANE_W, 0.002);
+  }
+  // les virages : des anneaux autour des deux centres, sur la pelouse
+  for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
+    const anneau = (r0: number, r1: number, mat: THREE.Material, z: number) => {
+      const m = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 64, 1, debut, Math.PI), mat);
+      m.position.set(xc, -R_CORDE, z); m.receiveShadow = true; stade!.add(m);
+    };
+    anneau(R_CORDE - 0.8, R_CORDE + W + 0.8, matA, 0);
+    for (let k = 1; k < nCouloirs; k += 2) anneau(R_CORDE + k * LANE_W, R_CORDE + (k + 1) * LANE_W, matB, 0.001);
+    for (let k = 0; k <= nCouloirs; k++) anneau(R_CORDE + k * LANE_W - 0.025, R_CORDE + k * LANE_W + 0.025, ligne, 0.002);
+  }
+  plan(0.05, W, ligne, 0, W / 2, 0.003);                       // la ligne de depart
   const damier = texteCanvas((c, w, h) => {
     for (let i = 0; i < 4; i++) for (let j = 0; j < 40; j++) {
       c.fillStyle = (i + j) % 2 ? '#111' : '#f4f4f4'; c.fillRect(i * w / 4, j * h / 40, w / 4, h / 40);
     }
   }, 64, 640);
-  plan(0.5, largeur, new THREE.MeshBasicMaterial({ map: damier }), 100.25, largeur / 2, 0.003);
+  plan(0.5, W, new THREE.MeshBasicMaterial({ map: damier }), 100.25, W / 2, 0.003);
   for (let k = 0; k < nCouloirs; k++) {
     const t = texteCanvas((c, w, h) => {
       c.fillStyle = css(th.lane || [247, 242, 233]); c.font = `900 ${h * 0.9}px system-ui, sans-serif`;
@@ -151,74 +217,177 @@ function construireLeStade(nCouloirs: number, th: any) {
     m.scale.x = -1;   // le monde est en miroir (voir initialiser) : le chiffre, lui, se lit a l'endroit
   }
 
-  // LA TRIBUNE, en face de la camera : panneaux, barriere, marches, sieges, public, toit
-  const yP = -2.2;                       // les panneaux, au bord de la piste
-  const base = (import.meta as any).env?.BASE_URL || '/';
-  const pub = new THREE.TextureLoader().load(base + 'pubs/benbezi-logo-3d-cadre.webp');
-  pub.colorSpace = THREE.SRGBColorSpace; pub.wrapS = THREE.RepeatWrapping; pub.repeat.set(LX / 5, 1);
-  const panneau = new THREE.Mesh(new THREE.PlaneGeometry(LX, 1.03),
-    new THREE.MeshBasicMaterial({ map: pub, color: 0xffffff }));
-  panneau.position.set(XM, yP, 0.55); panneau.rotation.x = Math.PI / 2; panneau.rotation.y = Math.PI;
-  panneau.scale.x = -1;
-  stade.add(panneau);
-  const dos = new THREE.Mesh(new THREE.BoxGeometry(LX, 0.12, 1.1), new THREE.MeshLambertMaterial({ color: 0x14161d }));
-  dos.position.set(XM, yP - 0.08, 0.55); stade.add(dos);
-
-  const RANGS = 12, PROF = 0.85, MONTE = 0.42, y0 = yP - 2.6;
-  const marche = new THREE.MeshLambertMaterial({ color: c3(th.tread, [175, 177, 187]) });
-  const contre = new THREE.MeshLambertMaterial({ color: c3(th.riser, [130, 135, 150]) });
-  const muret = new THREE.Mesh(new THREE.BoxGeometry(LX, 0.25, 1.15), new THREE.MeshLambertMaterial({ color: c3(th.barrier, [231, 234, 239]) }));
-  muret.position.set(XM, y0 + 0.3, 0.575); stade.add(muret);
-  for (let r = 0; r < RANGS; r++) {
-    const z = 1.0 + r * MONTE, y = y0 - r * PROF;
-    const t = new THREE.Mesh(new THREE.BoxGeometry(LX, PROF, 0.08), marche);
-    t.position.set(XM, y - PROF / 2, z); t.receiveShadow = true; stade.add(t);
-    const c = new THREE.Mesh(new THREE.BoxGeometry(LX, 0.06, MONTE), contre);
-    c.position.set(XM, y - PROF, z + MONTE / 2); stade.add(c);
-  }
-  // les sieges bleus et leur public : instancies, un appel de dessin chacun
-  const PAS = 0.55, parRang = Math.floor(LX / PAS), N = RANGS * parRang;
-  const sieges = new THREE.InstancedMesh(new THREE.BoxGeometry(0.46, 0.4, 0.34),
-    new THREE.MeshLambertMaterial({ color: 0x2457b8 }), N);
-  const bustes = new THREE.InstancedMesh(new THREE.CapsuleGeometry(0.17, 0.32, 3, 8), new THREE.MeshLambertMaterial(), N);
-  const tetes = new THREE.InstancedMesh(new THREE.SphereGeometry(0.12, 10, 8), new THREE.MeshLambertMaterial(), N);
+  // LES LOTS : tout ce qui se repete
+  const cube = new THREE.BoxGeometry(1, 1, 1);
+  const lMarche = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.tread, [175, 177, 187]) }));
+  const lContre = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.riser, [130, 135, 150]) }));
+  const lSiege = new Lot(new THREE.BoxGeometry(0.46, 0.38, 0.34), new THREE.MeshLambertMaterial({ color: 0x2457b8 }));
+  const lBuste = new Lot(new THREE.BoxGeometry(0.36, 0.24, 0.5), new THREE.MeshLambertMaterial());
+  const lTete = new Lot(new THREE.IcosahedronGeometry(0.12, 0), new THREE.MeshLambertMaterial({ flatShading: false }));
+  const lToit = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.roof, [76, 81, 100]) }), true);
+  const lBeton = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0xc9c6c0 }));
+  const lBlanc = new Lot(cube, new THREE.MeshLambertMaterial({ color: c3(th.barrier, [231, 234, 239]) }));
+  const lVitre = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0x9fc4dc, emissive: 0x1a2a38 }));
+  const lMetal = new Lot(new THREE.CylinderGeometry(0.5, 0.5, 1, 10), new THREE.MeshLambertMaterial({ color: 0xd8dbe2 }), true);
+  const lBloc = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0x8b9099 }));
+  const lTronc = new Lot(new THREE.CylinderGeometry(0.22, 0.3, 1, 7), new THREE.MeshLambertMaterial({ color: 0x5b4030 }));
+  const lFeuille = new Lot(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ color: c3(th.feuillage, [38, 111, 31]) }), true);
   const lo = th.crowdLo || [43, 38, 56], hi = th.crowdHi || [252, 242, 230];
-  const panneaux: number[][] = th.panels || [[231, 60, 45], [28, 106, 202], [255, 203, 55], [50, 162, 121]];
-  const peaux = [[74, 46, 32], [120, 76, 50], [176, 122, 78], [224, 186, 142], [246, 220, 190]];
-  const m4 = new THREE.Matrix4(), col = new THREE.Color();
-  let alea = 7;
-  const hasard = () => ((alea = (alea * 16807) % 2147483647) / 2147483647);
-  let n = 0, nb = 0;
-  for (let r = 0; r < RANGS; r++) {
-    const z = 1.0 + r * MONTE, y = y0 - r * PROF - PROF * 0.55;
-    for (let i = 0; i < parRang; i++, n++) {
-      const x = X0 + (i + 0.5) * PAS;
-      sieges.setMatrixAt(n, m4.makeTranslation(x, y, z + 0.2));
-      if (hasard() < 0.72) {          // trois places sur quatre sont prises
-        const u = hasard();
-        const mail = u < 0.5 ? panneaux[(hasard() * panneaux.length) | 0] : [lo, hi][(hasard() * 2) | 0];
-        bustes.setMatrixAt(nb, m4.makeRotationX(Math.PI / 2).setPosition(x + (hasard() - 0.5) * 0.08, y - 0.02, z + 0.62));
-        bustes.setColorAt(nb, col.setRGB(mail[0] / 255, mail[1] / 255, mail[2] / 255, THREE.SRGBColorSpace));
-        const pe = peaux[(hasard() * peaux.length) | 0];
-        tetes.setMatrixAt(nb, m4.makeTranslation(x, y - 0.03, z + 1.0 + hasard() * 0.05));
-        tetes.setColorAt(nb, col.setRGB(pe[0] / 255, pe[1] / 255, pe[2] / 255, THREE.SRGBColorSpace));
-        nb++;
+  const maillots: number[][] = [...(th.panels || [[231, 60, 45], [28, 106, 202], [255, 203, 55], [50, 162, 121]]), lo, hi, [240, 240, 240]];
+  const peaux = [[74, 46, 32], [120, 76, 50], [176, 122, 78], [224, 186, 142], [246, 220, 190]].map(couleur);
+  const coulMaillots = maillots.map(couleur);
+  const UP = new THREE.Vector3(0, 0, 1);
+  const repere = (x: number, y: number, a: number) => new THREE.Matrix4().makeRotationAxis(UP, a).setPosition(x, y, 0);
+
+  /** Un spectateur assis (ou debout) au point local (x, y, z) du repere M. */
+  const spectateur = (M: THREE.Matrix4, x: number, y: number, z: number) => {
+    boite(lBuste, M, x + (hasard() - 0.5) * 0.06, y, z + 0.5, 1, 1, 1, coulMaillots[(hasard() * coulMaillots.length) | 0]);
+    boite(lTete, M, x, y - 0.02, z + 0.88 + hasard() * 0.05, 1, 1, 1, peaux[(hasard() * peaux.length) | 0]);
+  };
+
+  /**
+   * DES GRADINS dans le repere local M : x le long de la tribune (0 -> L),
+   * y en s'eloignant de la piste, z en haut. Rend la hauteur atteinte.
+   */
+  const gradins = (M: THREE.Matrix4, L: number, rangs: number, y0: number, z0: number, prof = 0.85, monte = 0.42) => {
+    const pas = 0.55, n = Math.max(1, Math.floor(L / pas));
+    for (let r = 0; r < rangs; r++) {
+      const y = y0 + r * prof, z = z0 + r * monte;
+      boite(lMarche, M, L / 2, y + prof / 2, z - 0.04, L, prof, 0.08);
+      boite(lContre, M, L / 2, y + prof, z + monte / 2, L, 0.06, monte);
+      for (let i = 0; i < n; i++) {
+        const x = (i + 0.5) * (L / n);
+        boite(lSiege, M, x, y + prof * 0.55, z + 0.19, 1, 1, 1);
+        if (hasard() < 0.74 * PUBLIC) spectateur(M, x, y + prof * 0.5, z);
       }
     }
+    // le dessous, plein : on ne voit pas le jour entre les marches
+    boite(lBeton, M, L / 2, y0 + rangs * prof / 2, z0 / 2 - 0.1, L, rangs * prof, z0);
+    return z0 + rangs * monte;
+  };
+
+  // LA TRIBUNE PRINCIPALE, le long de la ligne droite, en face de la camera
+  const yS = W + 3.2, XA = DROITE0 - 4, LS = DROITE1 - DROITE0 + 8;
+  const Mp = repere(XA, yS, 0);
+  boite(lBlanc, Mp, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);                       // le muret
+  const z1 = gradins(Mp, LS, 13, 0.4, 1.2);
+  const yLoges = 0.4 + 13 * 0.85;
+  boite(lBeton, Mp, LS / 2, yLoges + 1.2, z1 + 0.3, LS, 2.4, 0.6);
+  boite(lVitre, Mp, LS / 2, yLoges + 1.9, z1 + 1.9, LS, 0.2, 2.6);           // les loges vitrees
+  boite(lBeton, Mp, LS / 2, yLoges + 1.2, z1 + 3.3, LS, 2.6, 0.3);
+  const z2 = gradins(Mp, LS, 15, yLoges + 2.6, z1 + 3.6, 0.85, 0.5);
+  const yFond = yLoges + 2.6 + 15 * 0.85;
+  boite(lToit, Mp, LS / 2, yFond + 0.2, (z2 + 3.4) / 2, LS, 0.4, z2 + 3.4);  // la facade
+  boite(lToit, Mp, LS / 2, yFond - 9, z2 + 3.4, LS + 2, 20, 0.35);          // le toit en porte-a-faux
+  for (let x = 0; x <= LS; x += 14) boite(lMetal, Mp, x, yFond - 1, z2 + 2, 0.35, 0.35, 3.0);
+
+  // LES TRIBUNES DES VIRAGES ET DE LA LIGNE OPPOSEE, plus basses, en segments
+  const rS = R_CORDE + W + 3.2;
+  for (const [xc, sens] of [[DROITE1, 1], [DROITE0, -1]] as const) {
+    const N = 18, L = Math.PI * (rS + 6) / N + 0.6;
+    for (let i = 0; i < N; i++) {
+      const t = (i + 0.5) / N * Math.PI;
+      const nx = sens * Math.sin(t), ny = Math.cos(t);       // la normale, vers l'exterieur
+      const px = xc + rS * nx, py = -R_CORDE + rS * ny;
+      // repere local : x le long (tangente), y vers l'exterieur
+      const a = Math.atan2(ny, nx) - Math.PI / 2;
+      const M = repere(px, py, a).multiply(_tr.makeTranslation(-L / 2, 0, 0));
+      boite(lBlanc, M, L / 2, -0.15, 0.6, L, 0.25, 1.2);
+      const z = gradins(M, L, 16, 0.4, 1.2);
+      boite(lToit, M, L / 2, 0.4 + 16 * 0.85 + 0.2, (z + 2) / 2, L, 0.4, z + 2);
+    }
   }
-  bustes.count = nb; tetes.count = nb;
-  for (const m of [sieges, bustes, tetes]) { m.frustumCulled = false; stade.add(m); }
-  // le toit, sur ses poteaux
-  const yT = y0 - RANGS * PROF, zT = 1.0 + RANGS * MONTE + 2.6;
-  const toit = new THREE.Mesh(new THREE.BoxGeometry(LX, RANGS * PROF + 2.5, 0.25), new THREE.MeshLambertMaterial({ color: c3(th.roof, [76, 81, 100]) }));
-  toit.position.set(XM, (y0 + yT) / 2 + 0.6, zT); stade.add(toit);
-  const fond = new THREE.Mesh(new THREE.BoxGeometry(LX, 0.3, zT), new THREE.MeshLambertMaterial({ color: c3(th.roof, [76, 81, 100]) }));
-  fond.position.set(XM, yT - 0.15, zT / 2); stade.add(fond);
-  const poteau = new THREE.MeshLambertMaterial({ color: 0xd8dbe2 });
-  for (let x = X0 + 6; x < X1; x += 18) {
-    const p = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, zT, 8), poteau);
-    p.rotation.x = Math.PI / 2; p.position.set(x, y0 + 0.2, zT / 2); stade.add(p);
+  const Mo = repere(DROITE1 + 4, yOppose - 3.2, Math.PI);                    // ligne opposee
+  boite(lBlanc, Mo, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);
+  const zo = gradins(Mo, LS, 16, 0.4, 1.2);
+  boite(lToit, Mo, LS / 2, 0.4 + 16 * 0.85 + 0.2, (zo + 2) / 2, LS, 0.4, zo + 2);
+
+  // LES PANNEAUX LED, au bord de la piste, devant la tribune principale
+  const pub = new THREE.TextureLoader().load(base + 'pubs/benbezi-logo-3d-cadre.webp');
+  pub.colorSpace = THREE.SRGBColorSpace; pub.wrapS = THREE.RepeatWrapping; pub.repeat.set(LS / 5, 1);
+  const panneau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 1.03), new THREE.MeshBasicMaterial({ map: pub }));
+  panneau.position.set(XA + LS / 2, W + 1.7, 0.55); panneau.rotation.x = Math.PI / 2; panneau.scale.x = -1;  // (monde en miroir)
+  stade.add(panneau);
+  boite(lBloc, repere(0, 0, 0), XA + LS / 2, W + 1.78, 0.55, LS, 0.12, 1.1);
+  // ... et le bandeau entre les deux etages
+  const bandeau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 0.7), new THREE.MeshBasicMaterial({ map: pub.clone() }));
+  (bandeau.material as THREE.MeshBasicMaterial).map!.repeat.set(LS / 3.4, 1);
+  bandeau.position.set(XA + LS / 2, yS + yLoges + 0.05, z1 + 0.3); bandeau.rotation.x = Math.PI / 2; bandeau.scale.x = -1;
+  stade.add(bandeau);
+
+  // L'ECRAN GEANT, au-dessus du virage d'arrivee, tourne vers la ligne droite
+  const ecran = texteCanvas((c, w, h) => {
+    c.fillStyle = '#05070d'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#ff7a1a'; c.font = `900 ${h * 0.42}px system-ui, sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('SPRINTER', w / 2, h * 0.42);
+    c.fillStyle = '#e8ecf4'; c.font = `700 ${h * 0.16}px system-ui, sans-serif`;
+    c.fillText('100 M  ·  LIVE', w / 2, h * 0.78);
+  }, 512, 256);
+  const xE = DROITE1 + rS + 22;
+  const ec = new THREE.Mesh(new THREE.PlaneGeometry(16, 8), new THREE.MeshBasicMaterial({ map: ecran, fog: false }));
+  ec.position.set(xE, -R_CORDE + 6, 22); ec.rotation.set(Math.PI / 2, -Math.PI / 2, 0); ec.scale.x = -1;
+  stade.add(ec);
+  boite(lBloc, repere(0, 0, 0), xE + 0.4, -R_CORDE + 6, 22, 0.6, 17, 9);
+  boite(lMetal, repere(0, 0, 0), xE + 0.6, -R_CORDE + 6, 9, 1.2, 1.2, 18);
+
+  // LES PYLONES D'ECLAIRAGE, aux quatre coins
+  const lampes = texteCanvas((c, w, h) => {
+    c.fillStyle = '#20242c'; c.fillRect(0, 0, w, h);
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 6; j++) {
+      c.fillStyle = '#fffbe8'; c.fillRect(4 + j * (w - 8) / 6, 4 + i * (h - 8) / 4, (w - 8) / 6 - 4, (h - 8) / 4 - 4);
+    }
+  }, 128, 96);
+  const matLampes = new THREE.MeshBasicMaterial({ map: lampes });
+  for (const [x, y] of [[DROITE1 + 30, W + 34], [DROITE0 - 30, W + 34], [DROITE1 + 30, yOppose - 34], [DROITE0 - 30, yOppose - 34]]) {
+    boite(lMetal, repere(0, 0, 0), x, y, 24, 1.4, 1.4, 48);
+    const p = new THREE.Mesh(new THREE.BoxGeometry(9, 1, 6), [matLampes, matLampes, matLampes, matLampes, matLampes, matLampes]);
+    p.position.set(x, y, 49); p.lookAt(44, -R_CORDE, 0); stade.add(p);
   }
+
+  // LES DRAPEAUX, sur la facade de la tribune principale
+  const lDrap = maillots.slice(0, 4).map(v => new THREE.MeshLambertMaterial({ color: couleur(v), side: THREE.DoubleSide }));
+  for (let i = 0, x = 4; x < LS; x += 9, i++) {
+    boite(lMetal, Mp, x, yFond + 0.1, z2 + 5.4, 0.08, 0.08, 4);
+    const d = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1), lDrap[i % lDrap.length]);
+    d.position.copy(new THREE.Vector3(x + 0.9, yFond + 0.1, z2 + 6.8).applyMatrix4(Mp));
+    d.rotation.x = Math.PI / 2; d.rotation.y = 0.25 * Math.sin(i);
+    stade.add(d);
+  }
+
+  // SUR LA PISTE : les blocs, le portique du chrono, officiels et photographes
+  const M0 = repere(0, 0, 0);
+  for (let k = 0; k < nCouloirs; k++) {
+    const y = (k + 0.5) * LANE_W;
+    boite(lBloc, M0, -0.55, y, 0.04, 0.6, 0.12, 0.05);
+    boite(lBloc, M0, -0.42, y + 0.14, 0.09, 0.08, 0.14, 0.16);
+    boite(lBloc, M0, -0.7, y - 0.14, 0.09, 0.08, 0.14, 0.16);
+  }
+  for (const y of [-0.9, W + 0.9]) boite(lMetal, M0, 100, y, 1.6, 0.18, 0.18, 3.2);
+  boite(lBlanc, M0, 100, W / 2, 3.25, 0.25, W + 1.8, 0.3);
+  const chrono = texteCanvas((c, w, h) => {
+    c.fillStyle = '#0a0a0a'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#ffd23a'; c.font = `700 ${h * 0.7}px ui-monospace, monospace`;
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('0.00', w / 2, h / 2);
+  }, 256, 96);
+  const ch = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.9), new THREE.MeshBasicMaterial({ map: chrono }));
+  ch.position.set(103, W + 1.2, 1.4); ch.rotation.set(Math.PI / 2, -Math.PI / 2, 0); ch.scale.x = -1;
+  stade.add(ch);
+  boite(lBloc, M0, 103.1, W + 1.2, 1.0, 0.2, 2.6, 2.0);
+  // une poignee de gens au bord de la piste : officiels a l'arrivee, photographes apres la ligne
+  for (let i = 0; i < 6; i++) spectateur(M0, 101 + i * 0.7, -1.6 - (i % 2) * 0.6, -0.1);
+  for (let i = 0; i < 7; i++) spectateur(M0, 104 + i * 0.8, W * (i / 6), -0.55);
+  for (let i = 0; i < 4; i++) spectateur(M0, 30 + i * 18, -1.8, -0.1);
+
+  // LES ARBRES, autour du stade
+  for (let i = 0; i < 70; i++) {
+    const a = hasard() * Math.PI * 2, rx = 150 + hasard() * 40, ry = 95 + hasard() * 30;
+    const x = 44 + rx * Math.cos(a), y = -R_CORDE + ry * Math.sin(a), h = 5 + hasard() * 5;
+    boite(lTronc, M0, x, y, h * 0.3, 1, 1, h * 0.6);
+    const r = 2.2 + hasard() * 1.6;
+    boite(lFeuille, M0, x, y, h * 0.65 + r * 0.6, r, r, r * 1.2);
+  }
+
+  for (const l of [lMarche, lContre, lSiege, lBuste, lTete, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille]) l.finir(stade);
 }
 
 function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
@@ -239,7 +408,7 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   monde = new THREE.Group();
   monde.scale.y = -1;
   scene.add(monde);
-  camera = new THREE.PerspectiveCamera(55, 1, 0.1, 400);
+  camera = new THREE.PerspectiveCamera(55, 1, 0.1, 600);
   camera.up.set(0, 0, 1);
   scene.add(new THREE.HemisphereLight(0xdfefff, 0x5a7a40, 1.6));
   soleil = new THREE.DirectionalLight(0xfff4e0, 2.2);
@@ -449,13 +618,13 @@ export function rendre(App: any, dt: number) {
   const pl = G.player;
   if (pl) {
     const p = T.posDemi(pl.d, pl.lane, pl.demi || 0);
-    // Centree sur le couloir du joueur, decalee vers l'exterieur (couloirs hauts) :
+    // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
     // il est au milieu de l'image, ses voisins des deux cotes. Y retourne : voir `monde`.
     const yAxe = p[1];
-    const voulu = _a.set(p[0] - RECUL, -(yAxe + COTE), HAUT);
+    const voulu = _a.set(p[0] - RECUL, -(yAxe - COTE), HAUT);
     // le point vise prolonge la droite camera -> joueur : il reste au centre de l'image
     const loin = DOS ? 14 : 7;
-    const vise = _b.set(p[0] + loin, -(yAxe - COTE * loin / RECUL), DOS ? 0.9 : 0.6);
+    const vise = _b.set(p[0] + loin, -(yAxe + COTE * loin / RECUL), DOS ? 0.9 : 0.6);
     const lisse = camPret ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
     camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
     camPret = true;
