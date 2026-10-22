@@ -329,10 +329,10 @@ function villeNeon(hasard: () => number, rS: number) {
   }, 64, 128);
   fenetres.wrapS = fenetres.wrapT = THREE.RepeatWrapping;
   fenetres.magFilter = THREE.NearestFilter;
-  const tours: THREE.BufferGeometry[] = [];
+  const tours: THREE.BufferGeometry[] = [], proches: number[][] = [];
   for (let i = 0; i < 110; i++) {
     const a = (i / 110) * Math.PI * 2 + hasard() * 0.04;
-    const r = rS + 55 + hasard() * 170;
+    const r = rS + 80 + hasard() * 150;   // au-dela du survol (orbite 125 x 95 m) : il traversait les premieres
     // le coin de l'ecran geant, au bout de la ligne droite, reste libre
     if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a))) < 0.3 && r < rS + 130) continue;
     const x = 44 + Math.cos(a) * r * 1.25, y = -R_CORDE + Math.sin(a) * r;
@@ -343,6 +343,7 @@ function villeNeon(hasard: () => number, rS: number) {
     g.rotateZ(hasard() * Math.PI);
     g.translate(x, y, h / 2);
     tours.push(g);
+    if (r < rS + 130) proches.push([x, y, h, Math.max(lx, ly)]);
   }
   const ville = new THREE.Mesh(mergeGeometries(tours)!, new THREE.MeshBasicMaterial({ map: fenetres }));
   stade!.add(ville);
@@ -366,6 +367,50 @@ function villeNeon(hasard: () => number, rS: number) {
     stade!.add(m);
     hologrammes.push(m);
   }
+  // PLUS CYBERPUNK (« accentue le cote cyberpunk », 22/10) : sous la ville et la pelouse, une
+  // grille de neon sur l'asphalte mouille ; aux tours proches, des enseignes verticales ; dans
+  // le ciel, la circulation des vehicules volants. Tout en addition, rien d'eclaire.
+  const grille = texteCanvas((c, w, h) => {
+    c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
+    c.fillStyle = '#00e5ff'; c.globalAlpha = 0.55; c.fillRect(0, 0, w, 2); c.fillRect(0, 0, 2, h);
+    c.fillStyle = '#ff2bd6'; c.globalAlpha = 0.25; c.fillRect(0, h / 2, w, 1); c.fillRect(w / 2, 0, 1, h);
+  }, 64, 64);
+  grille.wrapS = grille.wrapT = THREE.RepeatWrapping; grille.repeat.set(70, 70);
+  const sol = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), new THREE.MeshBasicMaterial({ map: grille, transparent: true,
+    blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+  sol.position.set(44, -R_CORDE, -0.09); stade!.add(sol);
+  const teintesEns = ['#ff2bd6', '#00e5ff', '#ffdc1e', '#ff4d4d', '#8c3cff'];
+  proches.slice(0, 26).forEach(([x, y, h, l], i) => {
+    const col = teintesEns[i % teintesEns.length];
+    const t = texteCanvas((c, w, hh) => {
+      c.fillStyle = '#05040a'; c.fillRect(0, 0, w, hh);
+      c.strokeStyle = col; c.lineWidth = 3; c.strokeRect(3, 3, w - 6, hh - 6);
+      c.fillStyle = col;
+      // des glyphes inventes, en colonne, comme des katakana de neon
+      for (let gy = 14; gy < hh - 16; gy += 26) for (let k = 0; k < 9; k++) if (hasard() < 0.6) c.fillRect(12 + (k % 3) * 6, gy + ((k / 3) | 0) * 7, 5, 5);
+    }, 40, 256);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(3.2, 20), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide, fog: false }));
+    const a = Math.atan2(-R_CORDE - y, 44 - x);
+    m.position.set(x + Math.cos(a) * (l / 2 + 0.6), y + Math.sin(a) * (l / 2 + 0.6), Math.min(h - 12, 18 + (i % 4) * 9));
+    m.rotation.set(Math.PI / 2, 0, 0); m.rotateY(a + Math.PI / 2);
+    stade!.add(m);
+  });
+  const feu = texteCanvas((c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.3, 'rgba(255,255,255,0.4)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  }, 32, 32);
+  const volants = Array.from({ length: 14 }, (_, i) => {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: feu, color: i % 3 ? 0xff3355 : 0xd8f4ff, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+    sp.scale.setScalar(2.6); stade!.add(sp);
+    return { sp, r: rS + 60 + hasard() * 120, h: 45 + hasard() * 70, v: (0.03 + hasard() * 0.04) * (i % 2 ? 1 : -1), a0: hasard() * 6.3 };
+  });
+  pubAnim.push(t => {
+    for (const o of volants) {
+      const a = o.a0 + t * o.v;
+      o.sp.position.set(44 + Math.cos(a) * o.r * 1.25, -R_CORDE + Math.sin(a) * o.r, o.h + Math.sin(t * 0.7 + o.a0) * 3);
+    }
+  });
   // LA PLUIE : des traits qui tombent autour de la camera (rendre la fait descendre)
   // chaque goutte deux fois, a trente metres d'ecart : la descente boucle sans saut
   const n = 800, pts = new Float32Array(n * 12);
@@ -876,6 +921,15 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       if (lg > w * 0.9) { px *= w * 0.9 / lg; cl.font = `900 ${Math.round(px)}px system-ui, sans-serif`; }   // tient dans le panneau
       cl.fillText(mot, w / 2, h / 2 + 2);
       cl.globalAlpha = 1;
+    }
+    if (cyber && Math.random() < 0.18) {
+      // le panneau du Stade Neon gresille : des tranches decalees, une frange magenta
+      for (let k = 0; k < 3; k++) {
+        const y = (Math.random() * (h - 12)) | 0, hh = 4 + ((Math.random() * 10) | 0);
+        cl.drawImage(toileLed, 0, y, w, hh, (Math.random() - 0.5) * 40, y, w, hh);
+      }
+      cl.globalCompositeOperation = 'lighter'; cl.fillStyle = 'rgba(255,43,214,0.25)'; cl.fillRect(0, 0, w, h);
+      cl.globalCompositeOperation = 'source-over';
     }
     pub.needsUpdate = true; pubHaut.needsUpdate = true;
   });
