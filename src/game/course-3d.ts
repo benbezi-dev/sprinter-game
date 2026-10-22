@@ -46,9 +46,11 @@ const RECUL = nombre('recul', DOS ? 5.5 : 8.5);
 const COTE = nombre('cote', DOS ? 0 : 2.4);
 // Le profil (voir la camera, dans rendre) : ou il commence et s'acheve (en part de la
 // course), sa hauteur et sa part d'arriere en portrait. A regler sur le telephone :
-// ?pdebut=0.08 ?pfin=0.92 ?phaut=8 ?parriere=0.3
+// ?pdebut=0.08 ?pfin=0.92 ?phaut=6 ?parriere=0.15 ?ploin=1
 const P_DEBUT = nombre('pdebut', 0.08), P_FIN = Math.max(P_DEBUT + 0.05, nombre('pfin', 0.92));
-const P_HAUT = nombre('phaut', 8), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.15)));
+// ?ploin : la distance du profil, 1 par defaut (0,8 plus pres, 1,2 plus loin)
+const P_LOIN = Math.max(0.4, nombre('ploin', 1));
+const P_HAUT = nombre('phaut', 6), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.15)));
 const OMBRES = Q.get('ombres') !== '0';
 const STADE_FORCE = Q.get('stade');
 
@@ -1144,8 +1146,9 @@ export function rendre(App: any, dt: number) {
       // hauteur ou plus une vue de profil ») : de haut, la piste garde sa place a l'image
       const arriere = camera.aspect >= 1 ? 0 : P_ARRIERE;
       const demiChamp = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect);
-      const D = arriere ? Math.min(22, Math.max(11, 8 + ecart * 0.9))
-        : Math.min(26, Math.max(10, ecart / (2 * Math.tan(demiChamp)) + nCouloirs * LANE_W / 2));
+      // « trop loin » a 11-22 m (l'auteur, 22/10) : 8 a 14 m en portrait, 8 a 18 m en large
+      const D = P_LOIN * (arriere ? Math.min(14, Math.max(8, 5 + ecart * 0.5))
+        : Math.min(18, Math.max(8, ecart / (2 * Math.tan(demiChamp)) + nCouloirs * LANE_W / 2)));
       const ax2 = Math.cos(hf), ay2 = Math.sin(hf);
       const lat = Math.sqrt(1 - arriere * arriere);
       voulu.lerp(_c3.set(f[0] + (fx * lat - ax2 * arriere) * D, -(f[1] + (fy * lat - ay2 * arriere) * D), camera.aspect >= 1 ? 4.2 : P_HAUT), b);
