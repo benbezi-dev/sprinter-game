@@ -331,3 +331,112 @@ export function pelouseAuPinceau(th: any, hasard: () => number) {
     }
   }, 256, 256);
 }
+
+/** 0.GAMES (etape 4) : le grand evenement, tout a fait distinct du Championnat du monde (etape
+ *  3), qui gardait le meme materiel sur la pelouse (« distingue-les completement », 23/10).
+ *  La vasque et sa flamme au bout du stade, une grande arche blanche haubanee au-dessus de la
+ *  tribune, l'anneau des drapeaux, un ruban LED vert qui court, le podium, et 0.GAMES peint
+ *  dans la pelouse. Rend la fonction d'animation (flamme, drapeaux, ruban). */
+export function zeroGames(o: ContexteClassique): (t: number) => void {
+  const { stade, th, W, R, D0, D1, hasard } = o;
+  const xc = (D0 + D1) / 2, yc = -R, rS = R + W + 3.2;
+  const ajoute = <M extends THREE.Object3D>(m: M) => { stade.add(m); return m; };
+  const vert = c3(th.kerb || [56, 196, 92]), blancMetal = new THREE.MeshStandardMaterial({ color: 0xf2f4f6, metalness: 0.4, roughness: 0.35 });
+  // L'ARCHE, de part et d'autre de la tribune principale, et ses haubans
+  const yA = W + 34;
+  const courbe = new THREE.CatmullRomCurve3([[D0 - 30, 0], [D0 + 5, 40], [xc, 64], [D1 - 5, 40], [D1 + 30, 0]]
+    .map(([x, z]) => new THREE.Vector3(x, yA, z)));
+  ajoute(new THREE.Mesh(new THREE.TubeGeometry(courbe, 80, 1.3, 12, false), blancMetal)).castShadow = false;
+  const haubans: number[] = [];
+  for (let i = 1; i < 12; i++) {
+    const p = courbe.getPoint(i / 12);
+    if (p.z < 8) continue;
+    haubans.push(p.x, p.y, p.z, p.x, W + 18, 21.6);
+  }
+  const gh = new THREE.BufferGeometry(); gh.setAttribute('position', new THREE.Float32BufferAttribute(haubans, 3));
+  ajoute(new THREE.LineSegments(gh, new THREE.LineBasicMaterial({ color: 0xdfe3e8 })));
+  // LA VASQUE, sur son trepied, au-dela du virage d'arrivee, et sa flamme
+  // dans l'axe de la ligne droite : la camera de depart l'a droit devant elle, au-dessus du virage
+  const xv = D1 + rS + 40, yv = W + 34, hv = 46;   // au-dessus de la ligne du toit, vue du depart
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2, bx = xv + Math.cos(a) * 9, by = yv + Math.sin(a) * 9;
+    const pied = new THREE.Vector3(bx, by, 0), haut = new THREE.Vector3(xv + Math.cos(a) * 2.5, yv + Math.sin(a) * 2.5, hv);
+    const l = pied.distanceTo(haut);
+    const m = ajoute(new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.8, l, 10), blancMetal));
+    m.position.copy(pied).add(haut).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), haut.clone().sub(pied).normalize());
+  }
+  const vasque = ajoute(new THREE.Mesh(new THREE.LatheGeometry([[0.5, 0], [3.2, 0.6], [5.2, 2.4], [5.6, 3.4], [5.0, 3.5]].map(([r, h]) => new THREE.Vector2(r, h)), 32)
+    .rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xd8a848, metalness: 0.8, roughness: 0.3 })));
+  vasque.position.set(xv, yv, hv);
+  const feu = toile((c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h * 0.8, 0, w / 2, h * 0.8, w / 2);
+    g.addColorStop(0, 'rgba(255,250,210,1)'); g.addColorStop(0.3, 'rgba(255,190,60,0.85)'); g.addColorStop(0.7, 'rgba(255,90,20,0.4)'); g.addColorStop(1, 'rgba(255,40,0,0)');
+    c.fillStyle = g; c.beginPath(); c.moveTo(w / 2, 0); c.quadraticCurveTo(w, h * 0.6, w / 2, h); c.quadraticCurveTo(0, h * 0.6, w / 2, 0); c.fill();
+  }, 128, 256);
+  const flammes = [0, 1, 2, 3].map(k => {
+    const s = ajoute(new THREE.Sprite(new THREE.SpriteMaterial({ map: feu, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false })));
+    s.center.set(0.5, 0.05); s.position.set(xv + (k - 1.5) * 1.2, yv, hv + 3.2); return s;
+  });
+  const halo = ajoute(new THREE.Sprite(new THREE.SpriteMaterial({ blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, fog: false, opacity: 0.55,
+    map: toile((c, w, h) => { const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); g.addColorStop(0, 'rgba(255,170,70,1)'); g.addColorStop(1, 'rgba(255,120,30,0)'); c.fillStyle = g; c.fillRect(0, 0, w, h); }, 128, 128) })));
+  halo.position.set(xv, yv, hv + 6); halo.scale.set(34, 34, 1);
+  // L'ANNEAU DES DRAPEAUX, en haut des tribunes : des bandes de couleurs, toutes differentes
+  const motifs = [[[0, 85, 164], [255, 255, 255], [239, 65, 53]], [[0, 140, 69], [244, 249, 255], [205, 33, 42]], [[0, 0, 0], [221, 0, 0], [255, 206, 0]],
+    [[0, 122, 61], [252, 209, 22], [206, 17, 38]], [[0, 56, 168], [252, 209, 22], [0, 56, 168]], [[220, 20, 60], [255, 255, 255], [220, 20, 60]],
+    [[0, 106, 167], [254, 204, 0], [0, 106, 167]], [[255, 153, 51], [255, 255, 255], [19, 136, 8]], [[0, 158, 96], [255, 255, 255], [0, 158, 96]]];
+  const mats = motifs.map((m, i) => new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, map: toile((c, w, h) => {
+    m.forEach((v, k) => { c.fillStyle = rgb(v); if (i % 2) c.fillRect(0, k * h / 3, w, h / 3); else c.fillRect(k * w / 3, 0, w / 3, h); });
+  }, 96, 64) }));
+  const fut = new Lot(new THREE.CylinderGeometry(0.06, 0.08, 6, 6).rotateX(Math.PI / 2).translate(0, 0, 3), new THREE.MeshLambertMaterial({ color: 0xd0d4da }));
+  const drapeaux: THREE.Mesh[] = [];
+  const mat = (x: number, y: number, z: number, i: number) => {
+    fut.poser(x, y, z);
+    const d = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.5).translate(1.2, 0, 0).rotateX(Math.PI / 2), mats[i % mats.length]));
+    d.position.set(x, y, z + 5.2); d.userData.ph = hasard() * 6; drapeaux.push(d);
+  };
+  let i = 0;
+  for (let x = D0 + 4; x < D1; x += 9) { mat(x, W + 3.2 + 27.5, 21.5, i++); mat(x, -2 * R - W - 3.2 - 14, 9.9, i++); }
+  for (const [cx, s] of [[D1, 1], [D0, -1]] as const) for (let k = 0; k <= 10; k++) {
+    const a = -Math.PI / 2 + (k / 10) * Math.PI, r = rS + 14;
+    mat(cx + s * Math.cos(a) * r, yc + Math.sin(a) * r, 9.9, i++);
+  }
+  fut.finir(stade);
+  // LE RUBAN LED, tout autour, au bord du toit : un vert qui court
+  const ruban = toile((c, w, h) => {
+    c.fillStyle = '#04100a'; c.fillRect(0, 0, w, h);
+    for (let x = 0; x < w; x += 32) { const g = c.createLinearGradient(x, 0, x + 32, 0); g.addColorStop(0, rgb([56, 196, 92], 1, 0)); g.addColorStop(0.8, rgb([120, 255, 150], 1, 1)); g.addColorStop(1, rgb([56, 196, 92], 1, 0)); c.fillStyle = g; c.fillRect(x, 2, 32, h - 4); }
+  }, 512, 16);
+  ruban.wrapS = THREE.RepeatWrapping; ruban.repeat.set(30, 1);
+  const pts: THREE.Vector3[] = [];
+  for (let k = 0; k <= 160; k++) {
+    const u = k / 160, L = 2 * (D1 - D0) + 2 * Math.PI * (rS + 13), s = u * L, S = D1 - D0, r = rS + 13;
+    let x: number, y: number;
+    if (s < S) { x = D0 + s; y = r - R; }
+    else if (s < S + Math.PI * r) { const a = Math.PI / 2 - (s - S) / r; x = D1 + r * Math.cos(a); y = yc + r * Math.sin(a); }
+    else if (s < 2 * S + Math.PI * r) { x = D1 - (s - S - Math.PI * r); y = yc - r; }
+    else { const a = -Math.PI / 2 - (s - 2 * S - Math.PI * r) / r; x = D0 + r * Math.cos(a); y = yc + r * Math.sin(a); }
+    pts.push(new THREE.Vector3(x, y, 10.6));
+  }
+  ajoute(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts, true), 320, 0.35, 6, true), new THREE.MeshBasicMaterial({ map: ruban, toneMapped: false })));
+  // LE PODIUM, pres de l'arrivee, dans la pelouse
+  const marche = (x: number, h: number, n: string) => {
+    const face = toile((c, w, hh) => { c.fillStyle = '#f6f8f6'; c.fillRect(0, 0, w, hh); c.fillStyle = rgb([56, 196, 92]); c.fillRect(0, 0, w, hh * 0.18);
+      c.fillStyle = '#10241a'; c.font = `900 ${hh * 0.55}px system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(n, w / 2, hh * 0.6); }, 128, 128);
+    const m = ajoute(new THREE.Mesh(new THREE.BoxGeometry(2.2, 2, h), [blancMetal, blancMetal, new THREE.MeshLambertMaterial({ map: face }), blancMetal,
+      new THREE.MeshLambertMaterial({ color: vert }), blancMetal]));
+    m.position.set(x, -15, h / 2);
+  };
+  marche(D1 - 12, 1.3, '1'); marche(D1 - 14.2, 0.95, '2'); marche(D1 - 9.8, 0.7, '3');
+  // 0.GAMES peint dans la pelouse
+  const mot = toile((c, w, h) => { c.clearRect(0, 0, w, h); c.fillStyle = 'rgba(255,255,255,0.85)'; c.font = `900 ${h * 0.8}px system-ui, sans-serif`;
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('0.GAMES', w / 2, h / 2 + h * 0.04); }, 1024, 200);
+  const sol = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(44, 8.6), new THREE.MeshLambertMaterial({ map: mot, transparent: true })));
+  sol.position.set(xc, yc, 0.02); sol.scale.x = -1;     // le monde est en miroir : le mot se lit a l'endroit
+  return (t: number) => {
+    flammes.forEach((f, k) => { const s = 1 + 0.18 * Math.sin(t * (9 + k * 2.3) + k) + 0.1 * Math.sin(t * 23 + k * 5); f.scale.set(8 * s, 19 * s * (k % 2 ? 0.8 : 1), 1); });
+    halo.material.opacity = 0.45 + 0.12 * Math.sin(t * 11);
+    ruban.offset.x = -t * 0.6;
+    for (const d of drapeaux) d.rotation.z = 0.35 * Math.sin(t * 2.2 + d.userData.ph);
+  };
+}

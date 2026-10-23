@@ -44,7 +44,7 @@ import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
 import { construireMenole } from './menole-3d';
 import { construireChamp, BLEU, BLANC, ROUGE } from './champ-de-mars-3d';
-import { arbresDuLieu, riviera, nuitEtoilee, pelouseAuPinceau } from './stades-classiques-3d';
+import { arbresDuLieu, riviera, nuitEtoilee, pelouseAuPinceau, zeroGames } from './stades-classiques-3d';
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
@@ -1100,6 +1100,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const Mp = repere(XA, yS, 0);
   let z1 = 0, yLoges = 0, z2 = 0, yFond = 0;
   const rS = R_CORDE + W + 3.2;
+  const basses = Q.get('tribunes') === 'basses' && th.toiture === false;
   if (cdm) {
     // LA TRIBUNE PROVISOIRE du Champ-de-Mars : un gradin, sans toit, qui s'arrete a l'arrivee —
     // assez pour porter le public et ses drapeaux, trop basse pour cacher le parc
@@ -1107,6 +1108,27 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     z1 = z2 = gradins(Mp, LS, 7, 0.4, 1.2);
     yFond = 0.4 + 7 * 0.85;
     boite(lBlanc, Mp, LS / 2, yFond + 0.05, z2 + 0.5, LS, 0.08, 1.0);        // la rambarde du haut
+  } else if (basses) {
+    // ?tribunes=basses : L'APERCU DES TRIBUNES DU 2D pour les stades a ciel ouvert (`toiture:false`,
+    // la Riviera, la Nuit etoilee) — basses et sans toit, pour laisser voir la mer et le ciel.
+    // A l'essai seulement (« montre-moi le resultat si on reduit », 23/10 ; reduire avait ete
+    // refuse le 22/10).
+    boite(lBlanc, Mp, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);
+    z1 = z2 = gradins(Mp, LS, 7, 0.4, 1.2);
+    yFond = 0.4 + 7 * 0.85;
+    boite(lBlanc, Mp, LS / 2, yFond + 0.05, z2 + 0.5, LS, 0.08, 1.0);
+    for (const [xc, sens] of [[DROITE1, 1], [DROITE0, -1]] as const) {
+      const N = 18, L = Math.PI * (rS + 6) / N + 0.6;
+      for (let i = 0; i < N; i++) {
+        const t = (i + 0.5) / N * Math.PI, nx = sens * Math.sin(t), ny = Math.cos(t);
+        const M = repere(xc + rS * nx, -R_CORDE + rS * ny, Math.atan2(ny, nx) - Math.PI / 2).multiply(_tr.makeTranslation(-L / 2, 0, 0));
+        boite(lBlanc, M, L / 2, -0.15, 0.6, L, 0.25, 1.2);
+        gradins(M, L, 5, 0.4, 1.2);
+      }
+    }
+    const Mo2 = repere(DROITE1, yOppose - 3.2, Math.PI);
+    boite(lBlanc, Mo2, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);
+    gradins(Mo2, LS, 5, 0.4, 1.2);
   } else if (!plage && !palais) {                // la plage et le palais n'ont pas de gradins
   boite(lBlanc, Mp, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);                       // le muret
   if (luxe || cyber) boite(cyber ? lFilet2 : lFilet, Mp, LS / 2, -0.15, 1.22, LS, 0.27, 0.04);
@@ -1213,7 +1235,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   stade.add(panneau);
   boite(lBloc, repere(0, 0, 0), XA + LS / 2, W + 1.78, 0.55, LS, 0.12, 1.1);
   // ... et le bandeau entre les deux etages (pas a la plage : pas de tribune)
-  if (!plage && !palais && !cdm) {
+  if (!plage && !palais && !cdm && !basses) {
   const bandeau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 0.7), new THREE.MeshBasicMaterial({ map: pubHaut }));
   bandeau.position.set(XA + LS / 2, yS + yLoges + 0.05, z1 + 0.3); bandeau.rotation.x = Math.PI / 2; bandeau.scale.x = -1;
   stade.add(bandeau);
@@ -1445,6 +1467,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const arbresPoses = !(luxe || cyber || plage || palais || cdm || espace) && arbresDuLieu(ctxClassique);
   if (th.piscine && !plage) pubAnim.push(riviera(ctxClassique));
   if (th.tourbillons) pubAnim.push(nuitEtoilee(ctxClassique));
+  // 0.Games : son decor propre, a la place du materiel du Championnat du monde (voir poserLesPieces)
+  if (stadeCle === 'mondiaux') pubAnim.push(zeroGames(ctxClassique));
   for (let i = 0; i < (arbresPoses || luxe || cyber || plage || palais || cdm || espace || (nuit && th.projecteurs) ? 0 : 70); i++) {
     const a = hasard() * Math.PI * 2, rx = 150 + hasard() * 40, ry = 95 + hasard() * 30;
     const x = 44 + rx * Math.cos(a), y = -R_CORDE + ry * Math.sin(a), h = 5 + hasard() * 5;
@@ -1455,7 +1479,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   if (cartes.length && Q.get('foule') !== '0') stade.add(laFoule(cartes));
   stade.traverse((o: any) => { if (o.isMesh) o.castShadow = false; });   // (voir pieceDuStade : seuls les coureurs projettent)
-  poserLesPieces(T, stadeCle, etape);
+  if (stadeCle !== 'mondiaux') poserLesPieces(T, stadeCle, etape);
   // LA CARRIERE LEGENDE : le monument du lieu, ses objets, sa guirlande (legende-3d.ts)
   if (stadeCle && stadeCle.startsWith('legende-')) {
     if (!legendeDecors) {
