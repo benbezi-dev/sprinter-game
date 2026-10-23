@@ -44,6 +44,7 @@ import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
 import { construireMenole } from './menole-3d';
 import { construireChamp, BLEU, BLANC, ROUGE } from './champ-de-mars-3d';
+import { pisteMouillee } from './piste-mouillee';
 import { arbresDuLieu, riviera, nuitEtoilee, pelouseAuPinceau, zeroGames } from './stades-classiques-3d';
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
@@ -124,6 +125,7 @@ let envPalais: THREE.Texture | null = null;
 // une ville de neons — barres magenta, cyan, violettes, enseignes jaunes — cuite une fois en
 // carte d'environnement, que la laque mouillee de la piste renvoie
 let envNeon: THREE.Texture | null = null;
+let miroir: { dispose(): void } | null = null;
 function carteNeon(r: THREE.WebGLRenderer) {
   const sc = new THREE.Scene();
   sc.background = new THREE.Color(0x07040e);
@@ -638,6 +640,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // le virage du depart : celui du stade sur un virage, plus loin derriere au 100 m (sa ligne droite est plus longue)
   const DROITE0 = T.curved ? DROITE1 - T.straight : DROITE0_100;
   if (stade) { monde.remove(stade); stade.traverse((o: any) => { o.geometry?.dispose?.(); }); }
+  if (miroir) { miroir.dispose(); miroir = null; }
   stade = new THREE.Group();
   monde.add(stade);
   const W = nCouloirs * LANE_W;
@@ -826,7 +829,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // ... et celle du palais, un cristal poli : reflet de la salle, une lueur bleutee
   const brillant = (c: THREE.Color) => palais ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.08, metalness: 0.35,
       envMap: envPalais, envMapIntensity: 1.1, emissive: c, emissiveIntensity: 0.12 }) : cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.06, metalness: 0.6,
-      envMap: envNeon, envMapIntensity: 2.4 })
+      envMap: envNeon, envMapIntensity: 0.8 })
     : luxe ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.32, metalness: 0.1 }) : new THREE.MeshLambertMaterial({ color: c });
   const matA = brillant(c3(A, A)), matB = brillant(c3(B, B));
   const ligne = new THREE.MeshBasicMaterial({ color: c3(th.lane, [247, 242, 233]) });
@@ -1477,42 +1480,13 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   if (cyber) {
     villeNeon(hasard, rS);
-    // LES TRAINEES DE NEON SUR LA PISTE MOUILLEE : sous chaque panneau LED, et le long des deux bords
-    // en neon, une longue nappe de couleur qui s'etire vers la camera et palpite avec eux (peintes
-    // en addition : un vrai miroir rendrait la scene deux fois)
-    const trainee = texteCanvas((c, w, h) => {
-      // un reflet de neon sur l'eau : des filets verticaux, vifs contre la source, qui s'eteignent
-      // en s'etirant, les bords fondus
-      for (let i = 0; i < 14; i++) {
-        const x = w * (0.2 + 0.6 * hasard()), lw = 1 + hasard() * 4, l = h * (0.45 + hasard() * 0.55);
-        const g = c.createLinearGradient(0, 0, 0, l);
-        g.addColorStop(0, `rgba(255,255,255,${0.5 + hasard() * 0.5})`); g.addColorStop(0.3, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
-        c.fillStyle = g; c.fillRect(x, 0, lw, l);
-      }
-      const voile = c.createLinearGradient(0, 0, 0, h);
-      voile.addColorStop(0, 'rgba(255,255,255,0.35)'); voile.addColorStop(0.5, 'rgba(255,255,255,0.08)'); voile.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = voile; c.fillRect(w * 0.15, 0, w * 0.7, h);
-      // les bords fondus
-      c.globalCompositeOperation = 'destination-in';
-      const cote = c.createLinearGradient(0, 0, w, 0);
-      cote.addColorStop(0, 'rgba(0,0,0,0)'); cote.addColorStop(0.3, 'rgba(0,0,0,1)'); cote.addColorStop(0.7, 'rgba(0,0,0,1)'); cote.addColorStop(1, 'rgba(0,0,0,0)');
-      c.fillStyle = cote; c.fillRect(0, 0, w, h);
-    }, 64, 256);
-    const teintes = (th.panels || [[255, 43, 214], [0, 229, 255]]).map((v: number[]) => c3(v, v));
-    const nappes: THREE.MeshBasicMaterial[] = [];
-    const nappe = (x: number, y: number, larg: number, long: number, col: THREE.Color, versY: number) => {
-      const m = new THREE.MeshBasicMaterial({ map: trainee, color: col, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending,
-        depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
-      const p = plan(larg, long, m, x, y + versY * long / 2, 0.006);
-      p.receiveShadow = false;
-      if (versY > 0) p.rotation.z = Math.PI;                  // le bord vif contre la source
-      nappes.push(m);
-    };
-    for (let x = XA + 1.5, i = 0; x < XA + LS; x += 2.6 + hasard() * 1.8, i++) nappe(x, W + 1.2, 1.4 + hasard() * 1.6, 9 + hasard() * 5, teintes[i % teintes.length], -1);
-    for (let x = XA + 1.5, i = 0; x < XA + LS; x += 3 + hasard() * 2, i++) nappe(x, yOppose - 0.3, 1.2 + hasard() * 1.4, 6 + hasard() * 4, teintes[(i + 1) % teintes.length], 1);
-    pubAnim.push(t => {
-      nappes.forEach((m, i) => { m.opacity = 0.38 + 0.22 * Math.sin(t * 2.3 + i * 0.9) + (Math.sin(t * 17 + i * 5) > 0.97 ? 0.25 : 0); });
-    });
+    // LA PISTE MOUILLEE (piste-mouillee.ts) : un vrai miroir sous la piste, ride et etire
+    if (renderer && matA instanceof THREE.MeshStandardMaterial) {
+      const mouille = pisteMouillee(stade, renderer, [matA, matB as THREE.MeshStandardMaterial], XD, -R_CORDE,
+        palier >= 3 ? 0.5 : palier === 2 ? 0.33 : 0.25);
+      miroir = mouille.miroir;
+      pubAnim.push(t => mouille.animer(t));
+    }
   }
   if (menole) pubAnim.push(construireMenole({ stade, W, D0: DROITE0, D1: DROITE1, hasard, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
@@ -1540,7 +1514,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     boite(lFeuille, M0, x, y, h * 0.65 + r * 0.6, r, r, r * 1.2);
   }
 
-  if (cartes.length && Q.get('foule') !== '0') stade.add(laFoule(cartes));
+  if (cartes.length && Q.get('foule') !== '0') { const f = laFoule(cartes); f.userData.sansReflet = true; stade.add(f); }
   stade.traverse((o: any) => { if (o.isMesh) o.castShadow = false; });   // (voir pieceDuStade : seuls les coureurs projettent)
   if (stadeCle !== 'mondiaux') poserLesPieces(T, stadeCle, etape);
   // LA CARRIERE LEGENDE : le monument du lieu, ses objets, sa guirlande (legende-3d.ts)
