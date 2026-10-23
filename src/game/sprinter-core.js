@@ -2149,6 +2149,15 @@
     }
     if (elapsed !== undefined && this.d - this.legStart < this.driveEnd)
       this.pressTimes.push(elapsed);
+    // LA CADENCE DES APPUIS, qui fait l'effort de la posture (voir pose) : une moyenne
+    // glissante de l'ecart entre deux appuis
+    if (elapsed !== undefined) {
+      if (this.dernierAppui != null) {
+        const ecart = Math.max(0.02, elapsed - this.dernierAppui);
+        if (ecart < 0.6) this.ecartAppuis = this.ecartAppuis ? this.ecartAppuis * 0.7 + ecart * 0.3 : ecart;
+      }
+      this.dernierAppui = elapsed;
+    }
     let stumbled = false;
     if (this.lastKey === key) {
       const risk = (C.STUMBLE_BASE +
@@ -2171,6 +2180,14 @@
   };
 
   Runner.prototype.stepPlayer = function (dt, elapsed) {
+    // L'EFFORT : dix appuis par seconde valent 1 (7,5 le neutre, 0,75) ; sans appui, il retombe
+    if (elapsed !== undefined) {
+      let cible = this.ecartAppuis ? Math.min(1.25, 0.1 / this.ecartAppuis) : 0.75;
+      const depuis = this.dernierAppui == null ? 0 : elapsed - this.dernierAppui;
+      if (depuis > 0.25) cible *= Math.exp(-(depuis - 0.25) * 3);
+      if (this.effort == null) this.effort = 0.75;
+      this.effort += (cible - this.effort) * (1 - Math.exp(-6 * dt));
+    }
     if (this.fallAnim > 0) {
       this.fallAnim = Math.max(0, this.fallAnim - dt / C.FALL_TIME);
     }
@@ -2247,6 +2264,8 @@
     // rebond — ce qu'on voit d'un sprinteur qui perd sa vitesse.
     if (K) this.fatigue = t <= K.ts ? 0
       : Math.max(0, Math.min(1, (K.pic - this.v) / Math.max(0.01, K.chute)));
+    // l'effort d'un adversaire : franc a la mise en action, qui s'use avec la fatigue
+    this.effort = Math.max(0.3, 0.98 + 0.1 * Math.sin(this.lane * 1.7) - 0.45 * (this.fatigue || 0));
     this.stride += this.v * dt * (Math.PI / this.strideLength());
   };
 
@@ -2667,8 +2686,17 @@
     // monte moins, le rebond s'appuie — la foulee s'alourdit sans changer de
     // rythme, parce que le rythme, lui, suit deja la vitesse qui baisse.
     const lourd = Math.max(0, Math.min(1, r.fatigue || 0));
+    // L'EFFORT (23/10, l'auteur : « je ne vois pas plus d'agressivite si j'appuie plus vite
+    // qu'un autre ... de changement de biomecanique par rapport a l'effort applique »). La
+    // posture ne lisait que la vitesse, qui plafonne : a fond, taper plus vite ne changeait
+    // plus rien au corps. `effort` (Runner.press, la cadence des appuis ; 0,75 = neutre,
+    // jusqu'a 1,25) penche le buste vers l'avant, monte les genoux, arme les bras et tourne
+    // les epaules ; un effort mou redresse le coureur et raccourcit sa gestuelle. Rien
+    // dans les blocs, ni apres la ligne.
+    const ef = r.finished ? 0.75 : Math.max(0, Math.min(1.25, r.effort == null ? 0.75 : r.effort));
+    const ke = (ef - 0.75) * (1 - wBloc) * Math.min(1, sp * 2.5);
     let lean = -(0.05 + 0.16 * sp) * P.lean * (1 - 0.55 * lourd) + 0.035 * lourd
-               + (r.buste || 0);
+               - 0.22 * ke + (r.buste || 0);
     const rot = (x, z, a) => [x * Math.cos(a) - z * Math.sin(a),
                               x * Math.sin(a) + z * Math.cos(a)];
 
@@ -2678,7 +2706,7 @@
     // segment sans le second cassait l'effet d'entrainement naturel d'un
     // membre (le bout semblait trainer derriere le haut), ce qui donnait
     // une impression de mouvement disloque plutot que coordonne.
-    const LIMB_BOOST = P.boost;
+    const LIMB_BOOST = P.boost * (1 + 0.32 * ke);
     // La part de sortie de blocs qu'ajoute le moteur a tout le monde — cuisse
     // lancee, genou haut, bras amples. Un frequenciel en garde moins
     // (P.departAmple) : sa puissance se lit a la cadence, pas a l'enjambee.
@@ -2726,9 +2754,10 @@
       return [th, th + kn, th + kn + an];
     }
     function arm(q) {
+      // a l'effort, les bras cognent : plus d'amplitude, de la hanche a la joue
       const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortieA
                                    + C.TRANSIT_ARM * transit)
-                 * LIMB_BOOST * P.armAmp;
+                 * LIMB_BOOST * P.armAmp * (1 + 0.28 * ke);
       const ef = gait(P.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
       return [ua, ua + ef];
     }
@@ -3045,10 +3074,10 @@
     // chaque frappe, et les epaules tournent un peu, une fois a gauche, une
     // fois a droite : un homme qui se motive, pas un metronome
     const wDc = Math.max(0, Math.min(1, r.debout || 0)) * fermeClap;
-    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * (1 + 0.8 * lourd) * calme
+    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * (1 + 0.8 * lourd) * (1 + 0.7 * ke) * calme
       - 0.025 * wDc;
-    const yawHip = -0.16 * A * Math.sin(p) * calme;
-    const yawTop = 0.21 * A * Math.sin(p) * calme + 0.08 * wDc * (kClap % 2 ? 1 : -1);
+    const yawHip = -0.16 * A * Math.sin(p) * (1 + 0.35 * ke) * calme;
+    const yawTop = 0.21 * A * Math.sin(p) * (1 + 0.45 * ke) * calme + 0.08 * wDc * (kClap % 2 ? 1 : -1);
     const sway = 0.016 * A * Math.sin(p) * calme;
 
     // Gabarit plus athletique qu'un mannequin filiforme : torse et epaules
@@ -3152,7 +3181,7 @@
     // font pas.
     // (r.squelette3D : la course en 3D, game/course-3d.ts, pose un maillage sur chaque coureur)
     const sq = (L.maillage || r.squelette3D) ? (r.squelette = {
-      hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt,
+      hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt - 0.12 * ke * calme,   // a l'effort, le menton rentre
       jambes: [], bras: [],
       // (les poings du cri restent fermes, meme quand il sort des claps)
       mains: wCl > 0.5 && wCl > Math.max(wCr, wCh) ? 'plat' : (wB > 0.5 ? 'sol' : 'poing'),

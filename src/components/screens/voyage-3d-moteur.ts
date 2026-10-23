@@ -5,6 +5,10 @@
 
 import * as THREE from 'three';
 
+const TELEPHONE = (() => {
+  try { return matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); } catch { return false; }
+})();
+
 let moteurVoyage: { r: THREE.WebGLRenderer; cv: HTMLCanvasElement } | null | false = null;
 export function moteur3D() {
   if (moteurVoyage === null) {
@@ -23,7 +27,9 @@ export function moteur3D() {
 export function poserLaScene(ctx: CanvasRenderingContext2D, scene: THREE.Scene, cam: THREE.PerspectiveCamera, W: number, H: number) {
   const m = moteur3D();
   if (!m) return;
-  const dpr = Math.min(2, window.devicePixelRatio || 1), w = Math.round(W * dpr), h = Math.round(H * dpr);
+  // un pixel et demi par point sur un telephone : a deux, un ecran de 2640 px de haut faisait
+  // repeindre et recopier pres de six millions de pixels a chaque image (Galaxy Flip, 23/10)
+  const dpr = Math.min(TELEPHONE ? 1.5 : 2, window.devicePixelRatio || 1), w = Math.round(W * dpr), h = Math.round(H * dpr);
   if (m.cv.width !== w || m.cv.height !== h) m.r.setSize(w, h, false);
   cam.aspect = W / H; cam.updateProjectionMatrix();
   m.r.render(scene, cam);

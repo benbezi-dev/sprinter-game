@@ -60,16 +60,56 @@ const P_LOIN = Math.max(0.4, nombre('ploin', 1.2));
 const P_HAUT = nombre('phaut', 6), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.15)));
 const OMBRES = Q.get('ombres') !== '0';
 const STADE_FORCE = Q.get('stade');
-// ?qualite=plein : sans l'ULTRA (definition plafonnee a 2, ombres 1024)
-let ULTRA = Q.get('qualite') !== 'plein';
-let lentes = 0;
-/** L'ULTRA cede si l'appareil ne tient pas la cadence : trois secondes d'images a plus de
- *  24 ms, et la definition redescend a deux pixels par point (une fois, pour la visite). */
-function tenirLaCadence(dt: number) {
-  // un a-coup (chargement, compilation d'un shader) n'est pas une cadence perdue
-  if (!ULTRA || !renderer || !dt || dt > 0.1) return;
-  lentes = dt > 0.024 ? lentes + dt : Math.max(0, lentes - dt * 0.5);
-  if (lentes > 3) { ULTRA = false; renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); dimensionner(); }
+// LES PALIERS DE QUALITE (23/10 : « ca rame beaucoup, ca manque de fluidite sur mon Galaxy
+// Flip »). 3 = l'ULTRA (jusqu'a 3 pixels par point, ombres 2048 adoucies, pieces et boss
+// pleins) ; 2 = deux pixels par point, ombres 1024, pieces et boss legers ; 1 = un pixel et
+// demi, ombres 512 ; 0 = un pixel, sans ombres. Un ordinateur part en ULTRA, un telephone au
+// palier 2 ; puis la cadence decide : deux secondes et demie sous 45 images/s et l'on
+// descend d'un palier, et l'appareil s'en souvient pour la fois suivante.
+// ?qualite=ultra force l'ULTRA, ?qualite=plein le palier 2.
+const TELEPHONE = (() => {
+  try { return matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); } catch { return false; }
+})();
+const PALIER_CLE = 'sprinter_palier3d';
+const palierRetenu = (() => { try { const v = localStorage.getItem(PALIER_CLE); return v == null ? null : Math.max(0, Math.min(3, +v | 0)); } catch { return null; } })();
+const QUALITE = Q.get('qualite');
+// ?palier=0..3 : un palier fixe, sans adaptation (pour mesurer)
+const PALIER_FORCE = Q.get('palier');
+let palier = PALIER_FORCE != null ? Math.max(0, Math.min(3, +PALIER_FORCE | 0))
+  : QUALITE === 'ultra' ? 3 : QUALITE === 'plein' ? 2 : Math.min(TELEPHONE ? 2 : 3, palierRetenu ?? 3);
+// les pieces et les boss se choisissent au chargement : pleins seulement en ULTRA
+let ULTRA = palier >= 3;
+const RATIO = [1, 1.5, 2, 3];
+let lentes = 0, mesure = 0;
+function appliquerLePalier() {
+  if (!renderer) return;
+  renderer.setPixelRatio(Math.min(RATIO[palier], window.devicePixelRatio || 1));
+  const t = palier >= 3 ? 2048 : palier === 2 ? 1024 : 512;
+  if (soleil && soleil.shadow.mapSize.x !== t) {
+    soleil.shadow.mapSize.set(t, t);
+    if (soleil.shadow.map) { soleil.shadow.map.dispose(); (soleil.shadow as any).map = null; }
+  }
+  if (soleil) soleil.castShadow = OMBRES && palier > 0;
+  dimensionner();
+}
+/** La cadence decide du palier : sur deux secondes et demie de course, si plus d'un cinquieme
+ *  du temps passe en images de plus de 22 ms, on descend d'un palier. */
+function tenirLaCadence(dt: number, enCourse: boolean) {
+  // un a-coup (chargement, compilation d'un shader) n'est pas une cadence perdue — et seule la
+  // course compte : le survol et le decompte chargent encore (au Galaxy Flip, ils faisaient
+  // tomber au palier 0 un appareil qui tient le palier 2 en course)
+  if (!renderer || !dt || dt > 0.1 || palier <= 0 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse) return;
+  mesure += dt; lentes += dt > 0.022 ? dt : 0;
+  if (mesure < 2.5) return;
+  // un cinquieme du temps en images lentes, c'est deja une course qui saccade (au Flip, en ULTRA :
+  // 40 images/s, une image sur six a 33 ms)
+  const trop = lentes / mesure > 0.2;
+  mesure = 0; lentes = 0;
+  if (!trop) return;
+  palier--;
+  ULTRA = false;
+  appliquerLePalier();
+  try { localStorage.setItem(PALIER_CLE, String(palier)); } catch { /* le palier vaut pour la visite */ }
 }
 // ?vue=survol : une vue aerienne fixe du stade entier, pour verifier le decor (rien ne s'y chevauche)
 const SURVOL = Q.get('vue') === 'survol';
@@ -1168,7 +1208,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // ... et le film de promotion (public/pubs/videos, tire du reel « course en direct »,
   // remonte en 2:1) : quinze secondes de film, six d'habillage du stade, en boucle
   const film = document.createElement('video');
-  film.src = base + 'pubs/videos/sprinter-direct.mp4';
+  // en ULTRA le film plein (1280 x 640) ; sinon sa version 640 x 320 : une image video se
+  // televerse a chaque image, et sur un telephone c'est autant de memoire a recopier
+  film.src = base + (ULTRA ? 'pubs/videos/sprinter-direct.mp4' : 'pubs/videos/sprinter-direct-640.mp4');
   film.muted = true; film.loop = true; film.playsInline = true; film.preload = 'auto'; film.setAttribute('playsinline', '');
   videoPub = film;
   const tFilm = new THREE.VideoTexture(film); tFilm.colorSpace = THREE.SRGBColorSpace;
@@ -1365,7 +1407,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     boite(lFeuille, M0, x, y, h * 0.65 + r * 0.6, r, r, r * 1.2);
   }
 
-  if (cartes.length) stade.add(laFoule(cartes));
+  if (cartes.length && Q.get('foule') !== '0') stade.add(laFoule(cartes));
   poserLesPieces(T, stadeCle, etape);
   // LA CARRIERE LEGENDE : le monument du lieu, ses objets, sa guirlande (legende-3d.ts)
   if (stadeCle && stadeCle.startsWith('legende-')) {
@@ -1393,17 +1435,22 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   // juste sous la toile du jeu, dans son conteneur : le fond de l'appli la cacherait sinon
   if (toileDuJeu && toileDuJeu.parentElement) toileDuJeu.parentElement.insertBefore(toile, toileDuJeu);
   else document.body.insertBefore(toile, document.body.firstChild);
-  renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: true, powerPreference: 'high-performance' });
+  // (?aa=0, ?foule=0, ?aces=0 : pour mesurer ce que coute chacun sur un telephone)
+  // pas d'anticrenelage sur un telephone (sauf en ULTRA force) : a deux pixels par point il ne se voit
+  // presque plus, et il coutait encore de la cadence au Galaxy Flip (23/10)
+  renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: Q.get('aa') === '0' ? false : !TELEPHONE || palier >= 3, powerPreference: 'high-performance' });
+  (globalThis as any).__palier3d = () => palier;
   // L'ULTRA (l'auteur, 23/10 : « mets le jeu en ultra ») : la definition pleine de l'ecran,
   // jusqu'a trois pixels par point, et des ombres deux fois plus fines. Comme l'ULTRA du
   // 2D (rendu-premium.js), il cede s'il fait perdre la cadence (voir tenirLaCadence).
-  renderer.setPixelRatio(Math.min(ULTRA ? 3 : 2, window.devicePixelRatio || 1));
+  renderer.setPixelRatio(Math.min(RATIO[palier], window.devicePixelRatio || 1));
   renderer.shadowMap.enabled = OMBRES;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  // les ombres adoucies coutent quatre lectures de plus par pixel : l'ULTRA seulement
+  renderer.shadowMap.type = palier >= 3 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
   // L'ESTHETIQUE CINEMATIQUE (l'auteur, 22/10) : une courbe filmique (ACES) plutot
   // que l'ecretage brut, et un vignettage peint en CSS sur la toile — il ne coute
   // rien au processeur graphique, meme sur le plus faible des telephones.
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = Q.get('aces') === '0' ? THREE.NoToneMapping : THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.12;
   const vignette = document.createElement('div');
   vignette.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:0;'
@@ -1423,8 +1470,8 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   hemi = new THREE.HemisphereLight(0xdfefff, 0x5a7a40, 1.6);
   scene.add(hemi);
   soleil = new THREE.DirectionalLight(0xfff4e0, 2.2);
-  soleil.castShadow = OMBRES;
-  soleil.shadow.mapSize.set(ULTRA ? 2048 : 1024, ULTRA ? 2048 : 1024);
+  soleil.castShadow = OMBRES && palier > 0;
+  soleil.shadow.mapSize.set(palier >= 3 ? 2048 : palier === 2 ? 1024 : 512, palier >= 3 ? 2048 : palier === 2 ? 1024 : 512);
   const sc = soleil.shadow.camera as THREE.OrthographicCamera;
   sc.left = -14; sc.right = 14; sc.top = 14; sc.bottom = -14; sc.near = 1; sc.far = 80;
   soleil.shadow.bias = -0.0005;
@@ -1617,7 +1664,7 @@ function chargerLaBete() {
   }).catch(() => { beteDemandee = false; });
 }
 // ?sonde : la bete et la chasse, lisibles depuis la console (verifier sans jouer la nuit)
-if (Q.get('sonde') !== null) (globalThis as any).__course3d = { get bete() { return bete; }, get chasse() { const o = (globalThis as any).SprinterApp?.G?.obstacles; return o && o.molosse ? o.chasse : null; }, get monde() { return monde; }, get camera() { return camera; } };
+if (Q.get('sonde') !== null) (globalThis as any).__course3d = { get bete() { return bete; }, get chasse() { const o = (globalThis as any).SprinterApp?.G?.obstacles; return o && o.molosse ? o.chasse : null; }, get monde() { return monde; }, get camera() { return camera; }, get rendu() { return renderer; } };
 function poserLaBete(G: any, T: any, nuit: boolean) {
   if (!bete) return;
   // la chasse, portee par l'obstacle que la nuit pose (molosseDe) : pas d'import du mode,
@@ -1864,7 +1911,7 @@ const AXE_Y = new THREE.Vector3(0, 1, 0);
 /** Une image de la course, lue sur l'etat du jeu. */
 export function rendre(App: any, dt: number) {
   const { G, C } = App;
-  tenirLaCadence(dt);
+  tenirLaCadence(dt, G.state === 'race' && G.elapsed > 1);
   const T = G.track;
   if (!renderer) {
     const lanes = (G.runners || []).map((r: any) => r.lane | 0);
