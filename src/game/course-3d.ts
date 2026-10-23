@@ -495,24 +495,28 @@ function villeNeon(hasard: () => number, rS: number) {
 // les exporte en GLB, construites par les memes fonctions Blender que leurs images.
 // Une piece pas encore chargee n'est pas posee ; son arrivee refait le stade.
 const pieces3D = new Map<string, THREE.Object3D | null>();
-function pieceDuStade(cle: string): THREE.Object3D | null {
-  if (!pieces3D.has(cle)) {
-    pieces3D.set(cle, null);
+function pieceDuStade(cleDemandee: string): THREE.Object3D | null {
+  // `cle@leger` : la piece legere, quel que soit le palier (la ruelle du molosse garde les deux)
+  const leger = cleDemandee.endsWith('@leger'), cle = leger ? cleDemandee.slice(0, -6) : cleDemandee;
+  if (!pieces3D.has(cleDemandee)) {
+    pieces3D.set(cleDemandee, null);
     const base = (import.meta as any).env?.BASE_URL || '/';
     const l = new GLTFLoader();
     l.setMeshoptDecoder(MeshoptDecoder);
     // en ULTRA, la piece pleine (tools/blender/stades_3d_glb.py --ultra), sinon la legere — et
     // la legere si la pleine manque (la copie GitHub du site ne les porte pas : son plafond)
     const charger = (dossier: string) => l.loadAsync(base + 'modeles/' + dossier + '/' + cle + '.glb');
-    (ULTRA ? charger('stades-ultra').catch(() => charger('stades')) : charger('stades')).then(g => {
+    // la ruelle du molosse prend toujours la piece pleine (« la qualite la plus haute », 23/10)
+    const plein = !leger && (ULTRA || /^halloween\//.test(cle));
+    (plein ? charger('stades-ultra').catch(() => charger('stades')) : charger('stades')).then(g => {
       // le decor recoit l'ombre des coureurs mais n'en projette pas : sa propre ombre n'existait que
       // dans les 28 m autour du joueur, et apparaissait puis disparaissait devant lui (Plage Paradis, 23/10)
       g.scene.traverse((o: any) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
-      pieces3D.set(cle, g.scene);
+      pieces3D.set(cleDemandee, g.scene);
       formeVue = '';
     }).catch(() => { /* la piece manque : le stade reste sans elle */ });
   }
-  return pieces3D.get(cle) || null;
+  return pieces3D.get(cleDemandee) || null;
 }
 function poserLesPieces(T: any, stadeCle: string | null, etape: number) {
   const D = (globalThis as any).DecorsStades;
@@ -1642,9 +1646,14 @@ function chargerLaBete() {
   beteDemandee = true;
   const f = Object.values(FICHIER_BETE)[0];
   if (!f) return;
+  // LA BETE EN HAUTE DEFINITION (23/10, « les decors du molosse avec la qualite la plus haute ») :
+  // 60 000 faces de la source TRELLIS au lieu de 9 000, sa texture d'origine en PNG
+  // (molosse_trellis.py --plein), la legere si elle manque
+  const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/?$/, '/');
   f().then((u) => {
     const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
-    l.load(u, (gltf) => {
+    const leger = () => new Promise<any>((ok, ko) => l.load(u, ok, undefined, ko));
+    l.loadAsync(base + 'modeles/boss-plein/molosse.glb').catch(leger).then((gltf: any) => {
       const racine = new THREE.Group(), corps = gltf.scene;
       corps.rotation.x = Math.PI / 2;      // le glTF a y en haut, le stade z
       racine.add(corps);
@@ -1676,7 +1685,7 @@ function chargerLaBete() {
       racine.visible = false;
       monde.add(racine);
       bete = { racine, melangeur, duree: clip ? clip.duration : 1 };
-    }, undefined, () => { beteDemandee = false; });
+    }).catch(() => { beteDemandee = false; });
   }).catch(() => { beteDemandee = false; });
 }
 // ?sonde : la bete et la chasse, lisibles depuis la console (verifier sans jouer la nuit)

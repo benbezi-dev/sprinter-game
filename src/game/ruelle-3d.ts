@@ -145,9 +145,13 @@ export function construireRuelle(o: ContexteRuelle): Ruelle {
   }
 
   // --- LES FACADES : une rangee en face de la camera, une autre reculee derriere elle --
-  type Rang = { im: THREE.InstancedMesh | null; cle: string; places: THREE.Matrix4[]; xy: number[][]; rayon: number };
+  // DEUX DEFINITIONS PAR RANG (23/10, « les decors avec la qualite la plus haute ») : la piece
+  // pleine (230 000 triangles) pour ce qui est pres de la camera, la legere au-dela — pleine
+  // tout le long de la rue, c'etaient quinze millions de triangles par image
+  type Rang = { im: THREE.InstancedMesh | null; pres: THREE.InstancedMesh | null; cle: string; places: THREE.Matrix4[]; xy: number[][]; rayon: number };
+  const PROCHE = 26;
   const rangs: Rang[] = [];
-  const rang = (cle: string, rayon: number) => { const r: Rang = { im: null, cle, places: [], xy: [], rayon }; rangs.push(r); return r; };
+  const rang = (cle: string, rayon: number) => { const r: Rang = { im: null, pres: null, cle, places: [], xy: [], rayon }; rangs.push(r); return r; };
   const maisons = rang('halloween/maison', 95), portes = rang('halloween/porte', 95), poubelles = rang('halloween/poubelles', 60);
   const tours = [0, 90, 270, 0, 270, 90].map(d => d * Math.PI / 180);
   const poser = (r: Rang, u: number, lat: number, tour: number) => {
@@ -162,23 +166,27 @@ export function construireRuelle(o: ContexteRuelle): Ruelle {
     poser(porte ? portes : maisons, u, porte ? DOS + 2 : DOS, Math.PI + (porte ? 0 : tours[(i + 2) % 6]));
   }
   for (let u = U0 + 10, i = 0; u <= U1; u += 23, i++) poser(poubelles, u, FACE - 3.2, tours[i % 6]);
+  const instance = (cle: string, n: number): THREE.InstancedMesh | null => {
+    const modele = o.piece(cle);
+    if (!modele) return null;
+    let mesh: THREE.Mesh | null = null;
+    modele.traverse((x: any) => { if (!mesh && x.isMesh) mesh = x; });
+    if (!mesh) return null;
+    const m = mesh as THREE.Mesh;
+    // la teinte de la nuit : les facades rendues au soleil (Tripo), assombries et bleuies
+    const mat = (m.material as THREE.MeshStandardMaterial).clone();
+    if ((mat as any).color) mat.color.multiply(new THREE.Color(0.55, 0.52, 0.68));
+    m.updateWorldMatrix(true, false);
+    const geo = m.geometry.clone().applyMatrix4(m.matrixWorld);
+    const im = new THREE.InstancedMesh(geo, mat, n);
+    im.count = 0; im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false;
+    ajoute(im);
+    return im;
+  };
   const instancier = () => {
     for (const r of rangs) {
-      if (r.im) continue;
-      const modele = o.piece(r.cle);
-      if (!modele) continue;
-      let mesh: THREE.Mesh | null = null;
-      modele.traverse((x: any) => { if (!mesh && x.isMesh) mesh = x; });
-      if (!mesh) continue;
-      const m = mesh as THREE.Mesh;
-      // la teinte de la nuit : les facades rendues au soleil (Tripo), assombries et bleuies
-      const mat = (m.material as THREE.MeshStandardMaterial).clone();
-      if ((mat as any).color) mat.color.multiply(new THREE.Color(0.55, 0.52, 0.68));
-      m.updateWorldMatrix(true, false);
-      const geo = m.geometry.clone().applyMatrix4(m.matrixWorld);
-      r.im = new THREE.InstancedMesh(geo, mat, r.places.length);
-      r.im.count = 0; r.im.castShadow = false; r.im.receiveShadow = true; r.im.frustumCulled = false;
-      ajoute(r.im);
+      if (!r.im) r.im = instance(r.cle + '@leger', r.places.length);
+      if (!r.pres) r.pres = instance(r.cle, r.places.length);
     }
   };
   instancier();
@@ -279,13 +287,17 @@ export function construireRuelle(o: ContexteRuelle): Ruelle {
     animer(camX, camY, jx, jy, t) {
       instancier();
       for (const r of rangs) {
-        if (!r.im) continue;
-        let n = 0;
+        if (!r.im && !r.pres) continue;
+        let n = 0, np = 0;
         for (let i = 0; i < r.places.length; i++) {
-          const dx = r.xy[i][0] - camX, dy = r.xy[i][1] - camY;
-          if (dx * dx + dy * dy < r.rayon * r.rayon) r.im.setMatrixAt(n++, r.places[i]);
+          const dx = r.xy[i][0] - camX, dy = r.xy[i][1] - camY, d2 = dx * dx + dy * dy;
+          if (d2 >= r.rayon * r.rayon) continue;
+          // pres de la camera, la piece pleine (sinon, tant qu'elle charge, la legere)
+          if (r.pres && d2 < PROCHE * PROCHE) r.pres.setMatrixAt(np++, r.places[i]);
+          else if (r.im) r.im.setMatrixAt(n++, r.places[i]);
         }
-        r.im.count = n; r.im.instanceMatrix.needsUpdate = true;
+        if (r.im) { r.im.count = n; r.im.instanceMatrix.needsUpdate = true; }
+        if (r.pres) { r.pres.count = np; r.pres.instanceMatrix.needsUpdate = true; }
       }
       // les quatre reverberes les plus proches du joueur portent les vraies lumieres
       const proches = lampes.map((l, i) => [(l[0] - jx) ** 2 + (l[1] - jy) ** 2, i]).sort((a, b) => a[0] - b[0]);

@@ -96,7 +96,7 @@ def arguments():
     return {'source': val('--source'), 'glb': val('--glb'), 'planche': val('--planche'),
             'blend': val('--blend'), 'garrot': float(val('--garrot', str(GARROT))),
             'faces': int(val('--faces', '9000')), 'texture': int(val('--texture', '512')),
-            'sens': val('--sens')}
+            'sens': val('--sens'), 'plein': '--plein' in a}
 
 
 # --- LE MAILLAGE --------------------------------------------------------------
@@ -719,7 +719,8 @@ def reduire_textures(h, cote):
                 n.image.scale(cote, cote)
 
 
-def exporter(h, rig, chemin):
+def exporter(h, rig, chemin, plein=False):
+    """`plein` (23/10, « les decors avec la qualite la plus haute ») : PNG, sans meshopt."""
     bpy.ops.object.select_all(action='DESELECT')
     h.select_set(True)
     bpy.context.view_layer.objects.active = h
@@ -733,8 +734,8 @@ def exporter(h, rig, chemin):
                               export_frame_range=True, export_force_sampling=True,
                               export_morph=False, export_yup=True, export_apply=False,
                               export_attributes=False, export_def_bones=False,
-                              export_image_format='JPEG', export_jpeg_quality=85,
-                              export_meshopt_compression_enable=True)
+                              export_image_format='AUTO' if plein else 'JPEG', export_jpeg_quality=85,
+                              export_meshopt_compression_enable=not plein)
     return os.path.getsize(chemin)
 
 
@@ -813,7 +814,7 @@ def main():
     galop(rig, mesure)
     reduire_textures(h, a['texture'])
     if a['glb']:
-        print('GLB : %s (%d Ko)' % (a['glb'], exporter(h, rig, a['glb']) // 1024))
+        print('GLB : %s (%d Ko)' % (a['glb'], exporter(h, rig, a['glb'], a['plein']) // 1024))
     if a['blend']:
         bpy.ops.wm.save_as_mainfile(filepath=os.path.abspath(a['blend']))
     if a['planche']:
