@@ -1083,6 +1083,31 @@
       departFrequence: 0.24, departAmple: 0.5, poussee: 1.10
     },
 
+    // ASAFA POWELL (« ajoute la technique de course, gestuelle et biomecanique d'Asafa Powell
+    // comme technique des coureurs », l'auteur, 23/10). RELEVEE COMME `canon` (tools/biomeca),
+    // sur un ralenti x2 de profil du dernier relais du 4 x 100 de Pekin 2008, en pleine vitesse
+    // lancee (de 6,4 a 10 s de la video, cote droit : le gauche, temoin en main, se confondait
+    // avec l'autre jambe a l'appui). 4,80 appuis/s, pres des 4,96 mesures a Osaka 2007. Ce qui
+    // le distingue de `canon` : le genou reste plie a l'appui (-0,65 a -0,95 rad, « pas de
+    // verrouillage », analyse d'Osaka), le talon remonte plus haut sous la fesse (-2,31), le
+    // bras part plus loin derriere (-1,50) et se ferme plus devant (2,18), le buste penche un
+    // peu plus (-0,31 rad). La cheville reste celle de `canon` : au ralenti, ses pieds sont
+    // flous et le releve s'y disperse. Sa foulee (1,26 fois sa taille) est deja celle du jeu.
+    powell: {
+      thigh: catmull([[0, 0.65], [0.79, -0.04], [1.57, -0.45], [2.36, -0.31],
+                      [3.14, 0.28], [3.93, 0.89], [4.71, 1.29], [5.50, 1.10]]),
+      knee: catmull([[0, -0.95], [0.79, -0.65], [1.57, -0.80], [2.36, -1.41],
+                     [3.14, -2.07], [3.93, -2.31], [4.71, -1.52], [5.50, -0.97]]),
+      ankle: catmull([[0, 0.05], [0.79, -0.03], [1.57, -0.56], [2.36, -0.42],
+                      [3.14, -0.37], [3.93, -0.17], [4.71, -0.04], [5.50, 0.00]]),
+      arm: catmull([[0, -0.88], [0.79, -0.07], [1.57, 0.31], [2.36, -0.22],
+                    [3.14, -0.59], [3.93, -0.76], [4.71, -1.50], [5.50, -1.37]]),
+      elbow: catmull([[0, 1.36], [0.79, 1.61], [1.57, 2.18], [2.36, 1.77],
+                      [3.14, 0.74], [3.93, 0.83], [4.71, 1.13], [5.50, 1.21]]),
+      boost: 1.0, armAmp: 1.0, lean: 1.45, bob: 0.92, stride: 0.97,
+      departFrequence: 0.24, departAmple: 0.5, poussee: 1.10
+    },
+
     // Foulee aerienne : suspension longue, genou qui monte haut et retombe
     // lentement, peu d'appuis. Silhouette longiligne qui semble planer.
     glide: {
@@ -1261,14 +1286,21 @@
   // cette mecanique mesuree, et leur amplification ramenee au tiers ; les bras, le buste, le
   // rebond et la longueur d'appui gardent le caractere de chacun. Le tour (foulee
   // academique) garde sa poulie.
+  // DEPUIS LE 23/10, CETTE MECANIQUE EST CELLE D'ASAFA POWELL (`powell`, relevee comme `canon`) :
+  // jambes, et aussi bras et buste, aux trois quarts sur lui — chaque profil en garde un quart.
   const melangeTable = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
   const SPRINT = {};
+  const MODELE = GAITS.powell, SUR_LUI = 0.75;
   for (const k of Object.keys(GAITS)) {
     const P = GAITS[k];
-    SPRINT[k] = k === 'canon' ? P : Object.assign({}, P, {
-      thigh: melangeTable(P.thigh, GAITS.canon.thigh, 0.75),
-      knee: melangeTable(P.knee, GAITS.canon.knee, 0.75),
-      ankle: melangeTable(P.ankle, GAITS.canon.ankle, 0.75),
+    SPRINT[k] = P === MODELE ? P : Object.assign({}, P, {
+      thigh: melangeTable(P.thigh, MODELE.thigh, SUR_LUI),
+      knee: melangeTable(P.knee, MODELE.knee, SUR_LUI),
+      ankle: melangeTable(P.ankle, MODELE.ankle, SUR_LUI),
+      arm: melangeTable(P.arm, MODELE.arm, SUR_LUI),
+      elbow: melangeTable(P.elbow, MODELE.elbow, SUR_LUI),
+      lean: P.lean + (MODELE.lean - P.lean) * SUR_LUI,
+      armAmp: P.armAmp + (MODELE.armAmp - P.armAmp) * SUR_LUI,
       boost: 1 + (P.boost - 1) * 0.35,
     });
   }

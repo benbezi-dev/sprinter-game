@@ -151,6 +151,8 @@ let profilBas = false;
 // le meme de suite ; ?plan=3d, ?plan=2d ou ?plan=rail l'impose.
 const PLANS = ['3d', '2d', 'rail'] as const;
 let planCam: typeof PLANS[number] = PLANS[Math.floor(Math.random() * PLANS.length)], planPour: unknown = null;
+// le rail : ou il centre le peloton (metres devant le joueur) et de combien il recule
+let railPret = false, railC = 0, railD = 10;
 // le champ du plan 2D : etroit, pour tenir l'echelle fixe de l'axonometrie
 const CHAMP_2D = 28;
 // une entree de boss a eu lieu dans ce decompte : pas de survol (voir rendre)
@@ -853,6 +855,11 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     : luxe ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.32, metalness: 0.1 }) : new THREE.MeshLambertMaterial({ color: c });
   const matA = brillant(c3(A, A)), matB = brillant(c3(B, B));
   const ligne = new THREE.MeshBasicMaterial({ color: c3(th.lane, [247, 242, 233]) });
+  // LES LIGNES EN POINTILLES (« les lignes blanches au sol en pointille genent », l'auteur, 23/10) :
+  // a un ou deux millimetres de la piste, vues au ras du sol (le rail), la profondeur ne les
+  // departageait plus et la piste les coupait par endroits. Un decalage de profondeur les tient dessus.
+  matB.polygonOffset = true; matB.polygonOffsetFactor = -1; matB.polygonOffsetUnits = -2;
+  ligne.polygonOffset = true; ligne.polygonOffsetFactor = -2; ligne.polygonOffsetUnits = -4;
   const LD = DROITE1 - DROITE0, XD = (DROITE0 + DROITE1) / 2;
   const yOppose = -2 * R_CORDE - W;          // la ligne opposee, de l'autre cote de la pelouse
   // UNE PISTE PEINTE (arc-en-ciel, Champ-de-Mars) : une bande par couloir, en couleurs de sommet,
@@ -2241,12 +2248,34 @@ export function rendre(App: any, dt: number) {
     // 23/10, d'apres la vue de cote des 100 m de 2008-2016) : cote pelouse, a hauteur d'homme,
     // elle roule avec le joueur, un peu devant lui — il vient vers elle, de trois quarts —, au
     // teleobjectif, la tribune en fond ; les couloirs interieurs passent devant elle.
+    // TOUT LE PELOTON DANS LE CADRE (« un cadrage qui permet de voir tout le monde dans la course
+    // en direct », l'auteur, 23/10) : elle mesure le peloton le long de la piste, du dernier au
+    // premier — le decalage des couloirs en virage compris —, se tient au milieu et recule juste
+    // assez pour qu'il tienne dans l'image ; recul et centre glissent, sans a-coup.
     if (rail) {
-      const devant = pl.d + 1.6, f = ouCourt(T, pl, devant), hf = capIci(T.heading(Math.max(0, devant), pl.lane));
-      const D = camera.aspect < 1 ? 10 : 8;
-      voulu.set(f[0] + Math.sin(hf) * D, -(f[1] - Math.cos(hf) * D), 1.3);
-      vise.set(p[0], -p[1], 1.0);
-    }
+      const axe = (nCouloirs - 1) / 2, s0 = Math.max(0, pl.d);
+      const f0 = ici(T.pos(s0, axe)), hf = capIci(T.heading(s0, axe));
+      const tx = Math.cos(hf), ty = Math.sin(hf), nx = Math.sin(hf), ny = -Math.cos(hf);
+      let sMin = 0, sMax = 0;
+      for (const r of G.runners) if (r && r.look && !r.retour) {
+        const q = ouCourt(T, r), s = (q[0] - f0[0]) * tx + (q[1] - f0[1]) * ty;
+        sMin = Math.min(sMin, s); sMax = Math.max(sMax, s);
+      }
+      // EN PORTRAIT, DE TROIS QUARTS ARRIERE ET PLUS HAUT : de pur profil, un peloton etale ne
+      // tenait dans un telephone tenu droit qu'a 60 m, les coureurs en points ; de biais, l'ecart
+      // passe dans la profondeur (le premier en haut). Ecran large : profil pur.
+      const portrait = camera.aspect < 1, biais = portrait ? 0.6 : 0, cb = Math.cos(biais), sb = Math.sin(biais);
+      const demiH = Math.atan(Math.tan((portrait ? 40 : 24) * Math.PI / 360) * camera.aspect);
+      const Dv = Math.min(portrait ? 40 : 60, Math.max(8, ((sMax - sMin) * cb + 6) / (2 * Math.tan(demiH)))), cv = (sMin + sMax) / 2 + 0.8;
+      if (!railPret) { railC = cv; railD = Dv; railPret = true; }
+      const k = Math.min(1, (dt || 0.016) * 1.5);
+      railC += (cv - railC) * k; railD += (Dv - railD) * k;
+      const cx = f0[0] + tx * railC, cy = f0[1] + ty * railC;
+      // de plus loin, un peu plus haut : les couloirs interieurs ne cachent pas tout le reste
+      const vx = nx * cb - tx * sb, vy = ny * cb - ty * sb;
+      voulu.set(cx + vx * railD, -(cy + vy * railD), portrait ? 2 + railD * 0.22 : 1.3 + railD * 0.06);
+      vise.set(cx, -cy, 1.0);
+    } else railPret = false;
     // LA NUIT DU MOLOSSE, L'AUTRE PLAN : UNE CAMERA DE POURSUITE (« recree l'evenement le molosse
     // en full 3D », l'auteur, 23/10). De face, le coureur vient vers nous et la bete grandit dans
     // son dos, les yeux dans la brume. Le depart garde notre camera, la bascule se fait sur les
@@ -2314,7 +2343,7 @@ export function rendre(App: any, dt: number) {
       } else volPlonge = -2;                                // fini : la camera de course reprend
     }
     if (!survol) {
-      // le rail est fixe au coureur : lisse, il trainait d'un metre et demi et le sortait du cadre serre
+      // le rail roule avec le peloton, ses cibles glissent deja (railC, railD) : lisse en plus, il trainait d'un metre et demi
       const lisse = camPret && !(rail && G.state === 'race') ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
       camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
       camPret = true;
