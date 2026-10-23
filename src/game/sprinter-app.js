@@ -8416,13 +8416,14 @@
     while (fin.length > 1 && ctx.measureText(fin + '…').width > largeurMax) fin = fin.slice(0, -1);
     return [lignes[0], fin.trimEnd() + '…'];
   }
-  function drawBulle(ctx, vis, m) {
+  // `ecran` (course 3D) : le point de l'ecran au-dessus de sa tete, projete par course-3d.ts
+  function drawBulle(ctx, vis, m, ecran) {
     const texte = G.presBulle;
     if (!texte || !G.presente || G.state !== 'count') return;
-    const vu = vis.find(v => v[0] === G.presente);
-    if (!vu) return;
-    const r = vu[0];
-    const x = vu[1][0], y = vu[1][1];
+    const vu = ecran ? null : vis.find(v => v[0] === G.presente);
+    if (!vu && !ecran) return;
+    const r = ecran ? G.presente : vu[0];
+    const x = ecran ? ecran.x : vu[1][0], y = ecran ? ecran.y : vu[1][1];
     const u = ui();
     // Lisible sur un telephone tenu en portrait : treize pixels au moins, et
     // la bulle grandit avec le plan qui se resserre, comme l'athlete.
@@ -8449,9 +8450,9 @@
     // pastille « TOI » quand elle est dessinee (memes calculs que
     // drawNomRepere, qui la place).
     const s = m * (r.look.h / C.MODEL_H);
-    let pointe = y - s * BULLE_BRAS_LEVES;
+    let pointe = ecran ? ecran.y : y - s * BULLE_BRAS_LEVES;
     const rep = r.repere;
-    if (rep && rep.nom && (rep.moi || !(G.champDirect || G.rejeu || G.echauffementChamp))) {
+    if (!ecran && rep && rep.nom && (rep.moi || !(G.champDirect || G.rejeu || G.echauffementChamp))) {
       const tNom = Math.max(9, 11 * u);
       const hNom = tNom + 6 * u;
       const hautNom = (G.champDirect || G.rejeu || G.echauffementChamp)
@@ -9286,7 +9287,7 @@
     REC_STEP, goHome,
     CUT_DUREE, CUT_CROISEMENT,
     raceHistory,
-    drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
+    drawAthletes, drawIcon, drawBulle3D: (ctx, ecran) => drawBulle(ctx, null, 1, ecran), scaleM, originX, originY, rgb, clamp, lerp, mix,
     // Ce qu'il faut pour dessiner un obstacle hors d'une course : l'accueil
     // de Hurdlers montre ses haies, et le passage les y installe.
     apiObstacles,

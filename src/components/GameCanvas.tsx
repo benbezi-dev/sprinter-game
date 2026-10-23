@@ -393,6 +393,11 @@ export function GameCanvas() {
         // vides.
         if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') {
           if (!en3D) drawAthletes(ctx);
+          // en 3D, la bulle de l'entree se pose sur la toile du jeu, au-dessus de sa tete
+          else if (G.presBulle && G.presente && rendu3D.ecranDe) {
+            const e = rendu3D.ecranDe(SprinterApp, G.presente);
+            if (e) SprinterApp.drawBulle3D(ctx, e);
+          }
         } else if (G.state === 'title') {
           // Les trois coureurs de l'accueil : sur la piste, hors des cartes.
           dessinerLesCoureursDeLAccueil(ctx, SprinterApp, theme);

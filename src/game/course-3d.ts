@@ -81,6 +81,8 @@ let renderer: THREE.WebGLRenderer | null = null;
 let envPalais: THREE.Texture | null = null;
 // le Champ-de-Mars porte `angle: 15` en 2D pour que la tour tienne dans le ciel : en 3D, un profil plus bas qui vise plus haut
 let profilBas = false;
+// une entree de boss a eu lieu dans ce decompte : pas de survol (voir rendre)
+let entreeVue = false;
 const _camLocale = new THREE.Vector3(), _camCap = new THREE.Vector3();
 let hemi: THREE.HemisphereLight;
 let scene: THREE.Scene, monde: THREE.Group, camera: THREE.PerspectiveCamera, soleil: THREE.DirectionalLight;
@@ -302,6 +304,8 @@ const PLANETES_3D = [
   { f: 0.95, couloir: -18, R: 6.4, col: [130, 110, 236], anneau: true },
 ];
 function planetesSousLaPiste(T: any, hasard: () => number) {
+  const g = new THREE.Group();
+  stade!.add(g);
   for (const pl of PLANETES_3D) {
     const p = ici(T.pos(pl.f * (T.total || 100), pl.couloir));
     const R = pl.R * 2.4, z = -(20 + R * 3.2);
@@ -315,7 +319,7 @@ function planetesSousLaPiste(T: any, hasard: () => number) {
       new THREE.MeshLambertMaterial({ map: bandes, emissive: c3(pl.col, pl.col).multiplyScalar(0.18), fog: false }));
     astre.position.set(p[0], p[1], z);
     astre.rotation.set(0.4, 0.2, 0);
-    stade!.add(astre);
+    g.add(astre);
     // le halo autour, et l'anneau
     const halo = texteCanvas((c, w, h) => {
       const g = c.createRadialGradient(w / 2, h / 2, w * 0.3, w / 2, h / 2, w / 2);
@@ -324,16 +328,17 @@ function planetesSousLaPiste(T: any, hasard: () => number) {
     }, 128, 128);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: halo, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
     sp.position.copy(astre.position); sp.scale.set(R * 3.4, R * 3.4, 1);
-    stade!.add(sp);
+    g.add(sp);
     if (pl.anneau) {
       const a = new THREE.Mesh(new THREE.RingGeometry(R * 1.4, R * 2.2, 96),
         new THREE.MeshBasicMaterial({ color: c3(pl.col, pl.col).lerp(new THREE.Color(0xffffff), 0.4), transparent: true, opacity: 0.55,
           side: THREE.DoubleSide, depthWrite: false, fog: false }));
       a.position.copy(astre.position);
       a.rotation.set(1.15, 0.3, 0);
-      stade!.add(a);
+      g.add(a);
     }
   }
+  return g;
 }
 
 // --- LE STADE NEON (cyberpunk) ------------------------------------------------------
@@ -838,7 +843,15 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       }
     }
   }
-  if (espace && !arc) planetesSousLaPiste(T, hasard);
+  if (espace && !arc) {
+    // LA PARALLAXE de decor-cosmos.js : les planetes defilent a 55 % de la piste, les etoiles a
+    // 30 % — elles suivent la camera de 45 % et 70 % : la piste FLOTTE devant le vide
+    const planetes = planetesSousLaPiste(T, hasard), v = voute as THREE.Object3D | null, dep = ici(T.pos(0, 0));
+    pubAnim.push((t, cx, cy) => {
+      planetes.position.set((cx - dep[0]) * 0.45, (cy - dep[1]) * 0.45, 0);
+      if (v) v.position.set(44 + (cx - 44) * 0.7, -R_CORDE + (cy + R_CORDE) * 0.7, 0);
+    });
+  }
   if (arc) {
     // LES GUIRLANDES : une ampoule tous les 1,5 m sur les deux bords, les couleurs qui
     // defilent (sept decalages par seconde, piste-arc-en-ciel.js)
@@ -1624,12 +1637,21 @@ function poserLaBete(G: any, T: any, nuit: boolean) {
 // leur GLB Tripo (vedette_tripo.py) a le squelette du coureur du jeu — il se pose pareil.
 // Ses textures restent les siennes. Tant qu'il charge, les tubes tiennent sa place.
 const maillages = new Map<string, THREE.Object3D | null | false>();
+const PLEINS = 'anansi|chidi|damion|hermes|inti|jayden|kerem|kouassi|marc|oliver|sora|theo|wukong|yassine|zenith|meba|manga-corps';
 function maillageDe(chemin: string): THREE.Object3D | null | false {
   if (!maillages.has(chemin)) {
     maillages.set(chemin, null);
     const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/?$/, '/');
     const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
-    l.loadAsync(base + chemin.replace(/^\//, '')).then((g) => { maillages.set(chemin, g.scene); })
+    const leger = () => l.loadAsync(base + chemin.replace(/^\//, ''));
+    // EN ULTRA, LA PLEINE RESOLUTION (« les assets dans leur plein potentiel », 23/10) : la meme
+    // vedette, texture Tripo a sa taille d'origine en PNG, sans meshopt (boss_pleine_resolution.py) ;
+    // la legere si elle manque
+    // (pas sur un appareil a moins de 4 Go : une texture de 4096 px y pese pres de 90 Mo de memoire graphique)
+    const memoire = (navigator as any).deviceMemory;
+    const nom = ULTRA && !(memoire && memoire < 4) && (chemin.match(new RegExp('(?:^|/)(' + PLEINS + ')(?:[-.][^/]*)?\\.glb$')) || [])[1];
+    (nom ? l.loadAsync(base + 'modeles/boss-plein/' + nom + '.glb').catch(leger) : leger())
+      .then((g) => { maillages.set(chemin, g.scene); })
       .catch(() => { maillages.set(chemin, false); });
   }
   return maillages.get(chemin)!;
@@ -1814,6 +1836,18 @@ function dessinerLesEffets(App: any) {
 }
 
 /** Montrer ou cacher la scene 3D (le dessin 2D reprend la main hors course). */
+/** LA BULLE DE PAROLE EN 3D (sprinter-app.js, drawBulle) : ou tombe, a l'ecran, le point juste
+ *  au-dessus de la tete de `r` — en pixels de la toile du jeu (G.VW x G.VH). */
+export function ecranDe(App: any, r: any): { x: number; y: number } | null {
+  const G = App.G, T = G.track;
+  if (!camera || !r || !T || !toile || toile.style.display === 'none') return null;
+  const p = ici(T.posDemi(r.d, r.lane, r.demi || 0));
+  const v = _ecran.set(p[0], -p[1], (r.look && r.look.h ? r.look.h : 1.75) * 1.28).project(camera);
+  if (v.z > 1 || v.z < -1) return null;
+  return { x: (v.x + 1) / 2 * G.VW, y: (1 - v.y) / 2 * G.VH };
+}
+const _ecran = new THREE.Vector3();
+
 export function afficher(oui: boolean) {
   if (oui === visible || !renderer) { visible = oui && !!renderer; if (renderer) toile.style.display = visible ? 'block' : 'none'; return; }
   visible = oui;
@@ -2009,9 +2043,26 @@ export function rendre(App: any, dt: number) {
     // `intro`), la camera tourne lentement au-dessus du stade ; quand le decompte commence
     // — ou tout de suite s'il n'y a pas de presentation —, elle plonge en 1,8 s sur la
     // camera de depart, qu'elle rejoint exactement, avant le coup de pistolet.
+    // L'ENTREE DU BOSS, LE CRI DE MEBA (engine.ts, viserLEntree, applaudir) : le moteur pose
+    // `viseCamera` et `zoomPres` — un plan serre, a hauteur d'homme, face a lui, cote pelouse.
+    // Pas de survol ce decompte-la : de son entree, la camera glisse droit sur celle du depart.
+    const entree = G.state === 'count' && typeof G.viseCamera === 'function' && !nuitDuMolosse;
+    if (entree) {
+      entreeVue = true;
+      const z = Math.max(1, G.zoomPres || 1.6);
+      const nom = G.avantDepart && G.avantDepart.entree && G.avantDepart.entree.coureur;
+      const lui = (nom && (G.runners || []).find((r: any) => r.name === nom)) || G.presente || pl;
+      // lui, au centre : le moteur vise en 2D un point de son couloir ; en 3D, c'est son corps
+      const c = ici(T.posDemi(lui.d, lui.lane, lui.demi || 0)), h = capIci(T.heading(Math.max(0, lui.d || 0), lui.lane | 0));
+      const ex = Math.sin(h), ey = -Math.cos(h), axe = Math.cos(h), aye = Math.sin(h);
+      const D = 11 / z;
+      voulu.set(c[0] + ex * D + axe * D * 0.3, -(c[1] + ey * D + aye * D * 0.3), 1.6);
+      vise.set(c[0], -c[1], 1.0);
+    }
+    if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
     // pas de survol pour la nuit du molosse (« pas de vue aerienne de presentation », l'auteur, 23/10)
-    const avant = (intro || G.state === 'count') && !nuitDuMolosse;
+    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue;
     if (!avant && G.state !== 'race' && G.state !== 'falseout') { volLance = false; volPlonge = -1; }
     if (avant && !volLance) { volLance = true; volT = 0; volPlonge = -1; }
     let survol = false;

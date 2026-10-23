@@ -20,6 +20,9 @@ import { citeCeleste, W as CITE_W, AX as CITE_AX, AY as CITE_AY } from '@/game/l
 import { cumulus, chargerLesCumulus, poserCumulus } from '@/game/legende/nuages';
 import { dieuxSpectateurs } from '@/game/legende/decors';
 import { mot } from '@/game/legende/mots';
+import * as THREE from 'three';
+import terreUrl from '@/assets/legende/carte/terre.jpg';
+import { moteur3D, poserLaScene, panneau, FOV_VOYAGE } from './voyage-3d-moteur';
 
 const DUREE = 12.5;
 
@@ -104,6 +107,76 @@ function nuage(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, a
   ctx.fill();
 }
 
+
+/** LA MONTEE EN 3D (23/10, « tout ce qui vient avant le stade ... bascule en 3D ») : la
+ *  Terre est une vraie sphere (la carte NASA du globe de l'affiche), vue du nez de la fusee
+ *  qui monte ; l'horizon s'arrondit tout seul avec l'altitude, aux memes hauteurs d'ecran
+ *  que le 2D (86 % au pas de tir, 94 % a 100 km), sous son liseré d'atmosphere — orange au
+ *  passage de l'ozone — et la fusee traverse de vrais cumulus. Le ciel, les etoiles, les
+ *  noctulescents, la fusee, l'Olympe et le texte restent ceux du 2D. En kilometres. */
+type Karman3D = { rendre: (ctx: CanvasRenderingContext2D, W: number, H: number, t: number, alt: number, ozone: number) => void };
+function karmanEn3D(): Karman3D | null {
+  if (!moteur3D()) return null;
+  const R = 6371;
+  const scene = new THREE.Scene();
+  const cam = new THREE.PerspectiveCamera(FOV_VOYAGE, 1, 0.01, 40000);
+  cam.up.set(0, 0, 1);
+  const tex = new THREE.TextureLoader().load(terreUrl);
+  tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  // la Terre, tournee pour que le pas de tir soit sous la fusee, l'Atlantique devant elle
+  const terre = new THREE.Mesh(new THREE.SphereGeometry(R, 128, 96), new THREE.MeshBasicMaterial({ map: tex }));
+  terre.rotation.set(Math.PI / 2, 0, 0);
+  scene.add(terre);
+  // l'atmosphere : un liseré qui s'allume au bord du disque (et rougit a l'ozone)
+  const atmo = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    uniforms: { uCoul: { value: new THREE.Color(0x96d2ff) }, uForce: { value: 0.6 } },
+    vertexShader: 'varying vec3 vN; varying vec3 vV; void main(){ vec4 p = modelViewMatrix * vec4(position,1.0); vN = normalize(normalMatrix * normal); vV = normalize(-p.xyz); gl_Position = projectionMatrix * p; }',
+    fragmentShader: 'uniform vec3 uCoul; uniform float uForce; varying vec3 vN; varying vec3 vV; void main(){ float r = pow(1.0 - abs(dot(vN, vV)), 2.5); gl_FragColor = vec4(uCoul * r * uForce, r * uForce); }',
+  });
+  // (une coque juste au-dessus du sol, vue de dehors : vue de dedans, a 115 km, elle barrait le ciel)
+  scene.add(new THREE.Mesh(new THREE.SphereGeometry(R + 4, 128, 96), atmo));
+  // un voile de brume au ras du sol : la Terre vue du pas de tir n'est pas une carte
+  const brume = new THREE.Mesh(new THREE.SphereGeometry(R + 1.5, 96, 64),
+    new THREE.MeshBasicMaterial({ color: 0xc8dcf0, transparent: true, opacity: 0.6, depthWrite: false }));
+  scene.add(brume);
+  // LES CUMULUS DE LA TROPOSPHERE, de 2 a 10 km, devant et autour de la fusee
+  const nuages: { slot: THREE.Group; i: number; x: number; y: number; z: number; l: number }[] = [];
+  for (let i = 0; i < 26; i++) {
+    const g = Math.imul(i + 3, 2246822519) >>> 0;
+    const slot = new THREE.Group(); scene.add(slot);
+    nuages.push({ slot, i, x: ((g % 1000) / 1000 - 0.5) * 9, y: 2.5 + ((g >>> 10) % 1000) / 1000 * 10, z: R + 1.8 + (i / 26) * 8.5, l: 1.2 + ((g >>> 20) % 100) / 60 });
+  }
+  return {
+    rendre(ctx, W, H, t, alt, ozone) {
+      for (const n of nuages) {
+        if (n.slot.children.length) continue;
+        const im = cumulus(n.i);
+        if (!im) continue;
+        const m = panneau(im, im.naturalWidth, im.naturalHeight, im.naturalWidth / 2, im.naturalHeight * 0.6, n.l, false);
+        if (n.i % 2) m.scale.x = -1;
+        m.position.set(n.x, n.y, n.z);
+        (m.material as THREE.MeshBasicMaterial).depthWrite = false;
+        n.slot.add(m);
+      }
+      const f = H / (2 * Math.tan(FOV_VOYAGE * Math.PI / 360));
+      const courbe = Math.min(1, Math.max(0, (alt - 8) / 92));
+      const yH = 0.86 + 0.08 * courbe;                         // l'horizon a la meme hauteur que le 2D
+      const plonge = Math.acos(R / (R + Math.max(0.002, alt)));
+      const leve = Math.atan((yH - 0.5) * H / f) - plonge;
+      const z = R + Math.max(0.002, alt);
+      cam.near = Math.max(0.01, alt * 0.05);                 // la precision du tampon de profondeur suit l'altitude
+      cam.position.set(0, 0, z);
+      cam.lookAt(0, 100, z + 100 * Math.tan(leve));
+      atmo.uniforms.uCoul.value.set(0x96d2ff).lerp(new THREE.Color(0xffa050), ozone * 0.7);
+      atmo.uniforms.uForce.value = 0.35 + 0.6 * courbe;
+      (brume.material as THREE.MeshBasicMaterial).opacity = 0.6 * (1 - Math.min(1, alt / 12));
+      terre.rotation.z = 1.9 + t * 0.002;                     // devant la fusee, des terres (le Sahara, la cote) plutot que le large
+      poserLaScene(ctx, scene, cam, W, H);
+    },
+  };
+}
+
 export function CinematiqueKarman({ lieu, onFin }: { lieu: string; onFin: () => void }) {
   const toile = useRef<HTMLCanvasElement | null>(null);
   const fini = useRef(false);
@@ -126,6 +199,7 @@ export function CinematiqueKarman({ lieu, onFin }: { lieu: string; onFin: () => 
       const g = Math.imul(i + 3, 2246822519) >>> 0;
       return { x: (g % 1000) / 1000, t: 1.7 + (i / 12) * 1.8, r: 0.07 + ((g >>> 12) % 100) / 1200 };
     });
+    const k3 = karmanEn3D();
     const t0 = performance.now();
     let raf = 0;
     const finir = () => { if (fini.current) return; fini.current = true; surFin.current(); };
@@ -149,8 +223,11 @@ export function CinematiqueKarman({ lieu, onFin }: { lieu: string; onFin: () => 
         ctx.fillRect(x * W, y * H * 0.85, r, r);
       }
 
-      // la Terre : au pas de tir, le sol ; puis l'horizon qui s'arrondit
+      // la Terre : au pas de tir, le sol ; puis l'horizon qui s'arrondit (en 3D : karmanEn3D)
+      const ozone = fenetre(t, 4.0, 4.8) * (1 - fenetre(t, 6.4, 7.2));
+      if (k3) k3.rendre(ctx, W, H, t, alt, ozone);
       const courbe = fenetre(alt, 8, 100);
+      if (!k3) {
       const R = W * (14 - 12.4 * courbe);
       const sommet = H * (0.86 + 0.08 * courbe);
       ctx.fillStyle = alt < 4 ? css(melange([40, 52, 70], [26, 70, 128], fenetre(alt, 0, 4))) : '#1E5AA0';
@@ -158,14 +235,14 @@ export function CinematiqueKarman({ lieu, onFin }: { lieu: string; onFin: () => 
       // l'atmosphere en liseret, et la lueur orangee de l'ozone
       ctx.strokeStyle = `rgba(150,210,255,${0.25 + 0.5 * courbe})`; ctx.lineWidth = 3 + 4 * courbe;
       ctx.beginPath(); ctx.arc(W / 2, sommet + R, R + 2, Math.PI * 1.02, Math.PI * 1.98); ctx.stroke();
-      const ozone = fenetre(t, 4.0, 4.8) * (1 - fenetre(t, 6.4, 7.2));
       if (ozone > 0) {
         ctx.strokeStyle = `rgba(255,160,80,${0.55 * ozone})`; ctx.lineWidth = 6;
         ctx.beginPath(); ctx.arc(W / 2, sommet + R, R + 10, Math.PI * 1.02, Math.PI * 1.98); ctx.stroke();
       }
+      }
 
       // la troposphere : les cumulus traverses, de haut en bas
-      nuages.forEach((n, i) => {
+      if (!k3) nuages.forEach((n, i) => {
         const u = (t - n.t) / 1.0;
         if (u < 0 || u > 1) return;
         const im = cumulus(i);
