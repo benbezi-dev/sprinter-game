@@ -603,6 +603,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // la lumiere qui porte les ombres vient de la mer, des yachts : chaude ; la lune ne fait que l'ambiance
     hemi.color.set(0x5a6a9a); hemi.groundColor.set(0x3a3024); hemi.intensity = 0.7;
     soleil.color.set(0xffc890); soleil.intensity = 1.6;
+    // a Menole, pas de yachts : la lumiere qui porte les ombres est celle de la lune
+    if (menole) { soleil.color.set(0xb8c8ff); soleil.intensity = 1.2; }
   }
   uLisere.value = luxe || cyber ? 1 : 0;
   uLisereCoul.value.set(cyber ? 0x30e8ff : 0xffc76b);
@@ -1118,7 +1120,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
 
   if (cyber) villeNeon(hasard, rS);
-  if (menole) pubAnim.push(construireMenole({ stade, W, D0: DROITE0, D1: DROITE1, hasard,
+  if (menole) pubAnim.push(construireMenole({ stade, W, D0: DROITE0, D1: DROITE1, hasard, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
   else if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
