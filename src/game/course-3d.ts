@@ -148,8 +148,8 @@ let profilBas = false;
 // LES PLANS DE CAMERA (« plusieurs plans de camera sur les courses, choisis au hasard » ;
 // « garde cette vue aussi », « alterne entre les vues », l'auteur, 23/10) : la camera 3D (a la
 // nuit du molosse, sa poursuite) et celle du jeu 2D. Tire a chaque decompte, jamais deux fois
-// le meme de suite ; ?plan=3d ou ?plan=2d l'impose.
-const PLANS = ['3d', '2d'] as const;
+// le meme de suite ; ?plan=3d, ?plan=2d ou ?plan=rail l'impose.
+const PLANS = ['3d', '2d', 'rail'] as const;
 let planCam: typeof PLANS[number] = PLANS[Math.floor(Math.random() * PLANS.length)], planPour: unknown = null;
 // le champ du plan 2D : etroit, pour tenir l'echelle fixe de l'axonometrie
 const CHAMP_2D = 28;
@@ -2140,10 +2140,11 @@ export function rendre(App: any, dt: number) {
   if ((G.state === 'count' || G.state === 'race') && planPour !== G.track) {
     planPour = G.track;
     const force = Q.get('plan') as any;
-    const autres = PLANS.filter(k => k !== planCam);
+    // la ruelle du molosse est bordee de murs : pas de rail
+    const autres = PLANS.filter(k => k !== planCam && !(nuitDuMolosse && k === 'rail'));
     planCam = PLANS.includes(force) ? force : autres[Math.floor(Math.random() * autres.length)];
   }
-  const plan2D = !DOS && planCam === '2d';
+  const plan2D = !DOS && planCam === '2d', rail = !DOS && planCam === 'rail' && !nuitDuMolosse;
   if (pl) {
     const p = ouCourt(T, pl);
     // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
@@ -2180,7 +2181,7 @@ export function rendre(App: any, dt: number) {
     else profilB += (cible - profilB) * Math.min(1, (dt || 0.016) * 0.7);
     const b = profilB;
     if (b <= 0) profilPret = false;
-    if (b > 0 && !DOS && !plan2D && !nuitDuMolosse) {
+    if (b > 0 && !DOS && !plan2D && !rail && !nuitDuMolosse) {
       let dMin = pl.d, dMax = pl.d;
       for (const r of G.runners) if (r && r.look && !r.retour) { dMin = Math.min(dMin, r.d); dMax = Math.max(dMax, r.d); }
       dMin = Math.max(dMin, pl.d - 7); dMax = Math.min(dMax, pl.d + 7);
@@ -2236,11 +2237,21 @@ export function rendre(App: any, dt: number) {
       voulu.set(c[0] + dx * D * Math.cos(elev), -(c[1] + dy * D * Math.cos(elev)), D * Math.sin(elev));
       vise.set(c[0], -c[1], 0);
     }
+    // LA CAMERA SUR RAIL des finales olympiques (« ajoute ce type de plan de camera », l'auteur,
+    // 23/10, d'apres la vue de cote des 100 m de 2008-2016) : cote pelouse, a hauteur d'homme,
+    // elle roule avec le joueur, un peu devant lui — il vient vers elle, de trois quarts —, au
+    // teleobjectif, la tribune en fond ; les couloirs interieurs passent devant elle.
+    if (rail) {
+      const devant = pl.d + 1.6, f = ouCourt(T, pl, devant), hf = capIci(T.heading(Math.max(0, devant), pl.lane));
+      const D = camera.aspect < 1 ? 10 : 8;
+      voulu.set(f[0] + Math.sin(hf) * D, -(f[1] - Math.cos(hf) * D), 1.3);
+      vise.set(p[0], -p[1], 1.0);
+    }
     // LA NUIT DU MOLOSSE, L'AUTRE PLAN : UNE CAMERA DE POURSUITE (« recree l'evenement le molosse
     // en full 3D », l'auteur, 23/10). De face, le coureur vient vers nous et la bete grandit dans
     // son dos, les yeux dans la brume. Le depart garde notre camera, la bascule se fait sur les
     // six premiers metres ; plus la bete est loin, plus la camera recule et vise derriere.
-    if (nuitDuMolosse && !DOS && !plan2D) {
+    if (nuitDuMolosse && !DOS && !plan2D && !rail) {
       const ch = G.obstacles && G.obstacles.molosse ? G.obstacles.chasse : null;
       const e = ch ? Math.min(22, Math.max(0, pl.d - ch.d)) : 12;
       const v = Math.min(1, Math.max(0, pl.d / 6)), nb = v * v * (3 - 2 * v);
@@ -2303,7 +2314,8 @@ export function rendre(App: any, dt: number) {
       } else volPlonge = -2;                                // fini : la camera de course reprend
     }
     if (!survol) {
-      const lisse = camPret ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
+      // le rail est fixe au coureur : lisse, il trainait d'un metre et demi et le sortait du cadre serre
+      const lisse = camPret && !(rail && G.state === 'race') ? 1 - Math.exp(-(dt || 0.016) * 6) : 1;
       camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
       camPret = true;
     }
@@ -2318,7 +2330,7 @@ export function rendre(App: any, dt: number) {
       camera.position.x += (Math.random() - 0.5) * f; camera.position.z += (Math.random() - 0.5) * f;
     }
     camera.lookAt(camVise);
-    const fov = plan2D ? CHAMP_2D : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
+    const fov = plan2D ? CHAMP_2D : rail ? (camera.aspect < 1 ? 40 : 24) : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
     if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3); camera.updateProjectionMatrix(); }
     // LA ZONE D'OMBRE AVANCE PAR PAS D'UN TEXEL : collee au joueur au pixel pres, ses bords
     // « nageaient » a chaque image — le sable de la Plage Paradis clignotait sous les panneaux
