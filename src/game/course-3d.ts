@@ -165,7 +165,8 @@ let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
-const soleilDecal = new THREE.Vector3(-10, -18, 30), solPlan2D = new THREE.Vector3();
+const soleilDecal = new THREE.Vector3(-10, -18, 30), solCam = new THREE.Vector3(), _solVoulu = new THREE.Vector3();
+let solPret = false;
 // LE SURVOL d'avant-course (voir rendre) : ou il en est, et ou il plonge
 let volLance = false, volT = 0, volPlonge = -1;
 const volDepart = new THREE.Vector3(), volVise0 = new THREE.Vector3();
@@ -610,6 +611,17 @@ function caler(T: any) {
 }
 const ici = (p: number[]) => [x0 + sx * p[0], y0 + sx * p[1]];
 const capIci = (c: number) => (sx < 0 ? c + Math.PI : c);
+// LE DEPART AU MILIEU DU COULOIR (« les starting blocks ne sont pas au centre du couloir », l'auteur,
+// 23/10) : en virage, le moteur fait courir sur la ligne de mesure, a 20-30 cm du bord interieur.
+// La 3D pose blocs et coureurs au milieu du couloir, puis les ramene sur la ligne en dix metres.
+const milieu = (T: any, k: number) => {
+  const C = (globalThis as any).SprinterApp?.C;
+  return T.curved && C ? LANE_W / 2 - (k ? C.MES_N : C.MES_1) : 0;
+};
+const ouCourt = (T: any, r: any, d: number = r.d) => {
+  const u = Math.min(1, Math.max(0, d / 10)), garde = 1 - u * u * (3 - 2 * u);
+  return ici(T.posDemi(d, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde));
+};
 const c3 = (v: number[] | undefined, d: number[]) => {
   const a = v || d;
   return new THREE.Color().setRGB(a[0] / 255, a[1] / 255, a[2] / 255, THREE.SRGBColorSpace);
@@ -1024,7 +1036,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   for (let k = 0; k < nCouloirs; k++) {
     const p = ici(T.pos(0, k)), a = capIci(T.heading(0, k));
     // le coureur court sur la ligne de mesure, pres du bord interieur : le milieu du couloir est plus loin
-    const mil = T.curved ? LANE_W / 2 - (k ? C.MES_N : C.MES_1) : 0;
+    const mil = milieu(T, k);
     departs.push([new THREE.Matrix4().makeRotationAxis(UP0, a).setPosition(p[0], p[1], 0), a, mil]);
   }
   for (let k = 0; k < nCouloirs; k++) {
@@ -1355,7 +1367,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // les blocs du jeu, la ou pose() met chaque coureur au coup de feu (voir drawBlocs)
   if (blocLots) for (const { geo, mat } of blocLots) {
     const l = new Lot(geo, mat, true);
-    for (const [Md] of departs) l.poser(Md);
+    // au milieu du couloir, sous les pieds du coureur (voir ouCourt)
+    for (const [Md, , mil] of departs) l.poser(Md.clone().multiply(_T.makeTranslation(0, mil, 0)));
     l.finir(stade);
   }
   for (const y of [-0.9, W + 0.9]) boite(lMetal, M0, 100, y, 1.6, 0.18, 0.18, 3.2);
@@ -1970,7 +1983,7 @@ function dessinerLesEffets(App: any) {
   for (const e of echos) if (e) e.m.racine.visible = false;
   onde.visible = aura.visible = false;
   if (age < 0 || !p) return;
-  const T = G.track, q = ici(T.posDemi(p.d, p.lane, p.demi || 0));
+  const T = G.track, q = ouCourt(T, p);
   // l'onde s'ouvre sous ses appuis
   const r = 0.5 + 3.6 * age;
   onde.position.set(q[0], q[1], 0.02); onde.scale.set(r, r, 1);
@@ -1992,7 +2005,7 @@ function dessinerLesEffets(App: any) {
     const e = echoDe(k - 1);
     if (!e) continue;
     poser(e.m, p.squelette);
-    const pq = ici(T.posDemi(d, p.lane, p.demi || 0));
+    const pq = ouCourt(T, p, d);
     const [ex, ey, ez] = App.repereDuCoureur(p, cap, lean, false, false);
     _M.set(ex[0], ey[0], ez[0], 0, ex[1], ey[1], ez[1], 0, ex[2], ey[2], ez[2], 0, 0, 0, 0, 1);
     e.m.racine.matrix.multiplyMatrices(_T.makeTranslation(pq[0], pq[1], 0), _S.makeScale(k0, k0, k0)).multiply(_M).multiply(Qgl);
@@ -2009,7 +2022,7 @@ function dessinerLesEffets(App: any) {
 export function ecranDe(App: any, r: any): { x: number; y: number } | null {
   const G = App.G, T = G.track;
   if (!camera || !r || !T || !toile || toile.style.display === 'none') return null;
-  const p = ici(T.posDemi(r.d, r.lane, r.demi || 0));
+  const p = ouCourt(T, r);
   const v = _ecran.set(p[0], -p[1], (r.look && r.look.h ? r.look.h : 1.75) * 1.28).project(camera);
   if (v.z > 1 || v.z < -1) return null;
   return { x: (v.x + 1) / 2 * G.VW, y: (1 - v.y) / 2 * G.VH };
@@ -2076,7 +2089,7 @@ export function rendre(App: any, dt: number) {
   let n = 0, nj = 0;
   for (const r of tous) {
     if (!r || !r.look) continue;
-    const p = ici(T.posDemi(r.d, r.lane, r.demi || 0));
+    const p = ouCourt(T, r);
     const cap = capIci(T.heading(r.d, r.lane)) + (r.retour ? Math.PI : 0) + (r.cap || 0);
     const k = (r.look.h || C.MODEL_H) / C.MODEL_H;
     const lean = T.lean(r.d, r.lane, r.v) + (r.roulis || 0);
@@ -2132,7 +2145,7 @@ export function rendre(App: any, dt: number) {
   }
   const plan2D = !DOS && planCam === '2d';
   if (pl) {
-    const p = ici(T.posDemi(pl.d, pl.lane, pl.demi || 0));
+    const p = ouCourt(T, pl);
     // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
     // il est au milieu de l'image, ses voisins des deux cotes. Dans un virage, elle tourne
     // avec lui. Y retourne : voir `monde`.
@@ -2220,9 +2233,6 @@ export function rendre(App: any, dt: number) {
       const rot = T.curved ? -14 * Math.PI / 180 : 0, wc = Math.cos(rot), ws = Math.sin(rot);
       const dx = sx * (-wc - ws) / Math.SQRT2, dy = sx * (ws - wc) / Math.SQRT2;
       const c = ici(T.pos(pl.d, 3));
-      // le soleil passe du cote de la camera (un peu de biais, pour le modele) : face a lui,
-      // les coureurs n'etaient que des silhouettes noires
-      solPlan2D.set((dx * 0.87 - dy * 0.5) * 20, (dx * 0.5 + dy * 0.87) * 20, soleilDecal.z);
       voulu.set(c[0] + dx * D * Math.cos(elev), -(c[1] + dy * D * Math.cos(elev)), D * Math.sin(elev));
       vise.set(c[0], -c[1], 0);
     }
@@ -2254,7 +2264,7 @@ export function rendre(App: any, dt: number) {
       const nom = G.avantDepart && G.avantDepart.entree && G.avantDepart.entree.coureur;
       const lui = (nom && (G.runners || []).find((r: any) => r.name === nom)) || G.presente || pl;
       // lui, au centre : le moteur vise en 2D un point de son couloir ; en 3D, c'est son corps
-      const c = ici(T.posDemi(lui.d, lui.lane, lui.demi || 0)), h = capIci(T.heading(Math.max(0, lui.d || 0), lui.lane | 0));
+      const c = ouCourt(T, lui), h = capIci(T.heading(Math.max(0, lui.d || 0), lui.lane | 0));
       const ex = Math.sin(h), ey = -Math.cos(h), axe = Math.cos(h), aye = Math.sin(h);
       const D = 11 / z;
       voulu.set(c[0] + ex * D + axe * D * 0.3, -(c[1] + ey * D + aye * D * 0.3), 1.6);
@@ -2314,7 +2324,16 @@ export function rendre(App: any, dt: number) {
     // « nageaient » a chaque image — le sable de la Plage Paradis clignotait sous les panneaux
     const texel = 28 / Math.max(256, soleil.shadow.mapSize.x);
     const ox = Math.round((p[0] + 6) / texel) * texel - 6, sy = Math.round(p[1] / texel) * texel;
-    const sd = plan2D && !nuitDuMolosse ? solPlan2D : soleilDecal;
+    // LE SOLEIL DU COTE DE LA CAMERA, un peu de biais pour le modele (« les personnages sont trop
+    // sombres », l'auteur, 23/10) : face a lui, les coureurs n'etaient que des silhouettes noires.
+    // Chaque stade garde la hauteur de son soleil ; il tourne avec la camera, sans a-coup.
+    // Le repere du soleil est celui du 2D (y non retourne), celui de la camera est retourne.
+    const vx = camPos.x - camVise.x, vy = camVise.y - camPos.y, vn = Math.hypot(vx, vy) || 1;
+    const sh = Math.hypot(soleilDecal.x, soleilDecal.y);
+    _solVoulu.set((vx * 0.87 - vy * 0.5) / vn * sh, (vx * 0.5 + vy * 0.87) / vn * sh, soleilDecal.z);
+    if (solPret) solCam.lerp(_solVoulu, 1 - Math.exp(-(dt || 0.016) * 2)); else solCam.copy(_solVoulu);
+    solPret = true;
+    const sd = nuitDuMolosse ? soleilDecal : solCam;
     soleil.position.set(ox + sd.x, sy + sd.y, sd.z);
     soleil.target.position.set(ox + 6, sy, 0);
   }
@@ -2361,7 +2380,7 @@ export function rendre(App: any, dt: number) {
   uFoule.uT.value = performance.now() / 1000;
   monde.worldToLocal(uFoule.uCam.value.copy(camera.position));
   if (pl) {
-    const q = ici(T.posDemi(pl.d, pl.lane, pl.demi || 0));
+    const q = ouCourt(T, pl);
     uFoule.uJoueur.value.set(q[0], q[1]);
     const fini = pl.d >= T.total ? 0.9 : 0;
     uFoule.uLiesse.value += (fini - uFoule.uLiesse.value) * Math.min(1, (dt || 0.016) * 1.5);
