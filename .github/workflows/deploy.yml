@@ -128,7 +128,7 @@ jobs:
       # LA COPIE POUR GITHUB PAGES, sous son plafond d'1 Go : la version 3D y laisse les
       # videos anglaises du molosse et les images 2D de la ruelle (~160 Mo).
       - name: Alleger la version 3D pour GitHub Pages
-        run: rm -rf dist/test3d/decors-ultra/halloween-* dist/test3d/halloween/*-en.mp4 dist/test3d/halloween/*-en.jpg dist/test3d/halloween/*-en.webp
+        run: rm -rf dist/test3d/modeles/stades-ultra dist/test3d/decors-ultra/halloween-* dist/test3d/halloween/*-en.mp4 dist/test3d/halloween/*-en.jpg dist/test3d/halloween/*-en.webp
 
       - uses: actions/upload-pages-artifact@v3
         with:
