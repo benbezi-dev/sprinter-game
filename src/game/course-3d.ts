@@ -145,6 +145,14 @@ function carteNeon(r: THREE.WebGLRenderer) {
 }
 // le Champ-de-Mars porte `angle: 15` en 2D pour que la tour tienne dans le ciel : en 3D, un profil plus bas qui vise plus haut
 let profilBas = false;
+// LES PLANS DE CAMERA (« plusieurs plans de camera sur les courses, choisis au hasard » ;
+// « garde cette vue aussi », « alterne entre les vues », l'auteur, 23/10) : la camera 3D (a la
+// nuit du molosse, sa poursuite) et celle du jeu 2D. Tire a chaque decompte, jamais deux fois
+// le meme de suite ; ?plan=3d ou ?plan=2d l'impose.
+const PLANS = ['3d', '2d'] as const;
+let planCam: typeof PLANS[number] = PLANS[Math.floor(Math.random() * PLANS.length)], planPour: unknown = null;
+// le champ du plan 2D : etroit, pour tenir l'echelle fixe de l'axonometrie
+const CHAMP_2D = 28;
 // une entree de boss a eu lieu dans ce decompte : pas de survol (voir rendre)
 let entreeVue = false;
 const _camLocale = new THREE.Vector3(), _camCap = new THREE.Vector3();
@@ -157,7 +165,7 @@ let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
-const soleilDecal = new THREE.Vector3(-10, -18, 30);
+const soleilDecal = new THREE.Vector3(-10, -18, 30), solPlan2D = new THREE.Vector3();
 // LE SURVOL d'avant-course (voir rendre) : ou il en est, et ou il plonge
 let volLance = false, volT = 0, volPlonge = -1;
 const volDepart = new THREE.Vector3(), volVise0 = new THREE.Vector3();
@@ -1777,7 +1785,7 @@ function chargerLaBete() {
   }).catch(() => { beteDemandee = false; });
 }
 // ?sonde : la bete et la chasse, lisibles depuis la console (verifier sans jouer la nuit)
-if (Q.get('sonde') !== null) (globalThis as any).__course3d = { get bete() { return bete; }, get chasse() { const o = (globalThis as any).SprinterApp?.G?.obstacles; return o && o.molosse ? o.chasse : null; }, get monde() { return monde; }, get camera() { return camera; }, get rendu() { return renderer; } };
+if (Q.get('sonde') !== null) (globalThis as any).__course3d = { get bete() { return bete; }, get chasse() { const o = (globalThis as any).SprinterApp?.G?.obstacles; return o && o.molosse ? o.chasse : null; }, get monde() { return monde; }, get camera() { return camera; }, get rendu() { return renderer; }, get plan() { return planCam; } };
 function poserLaBete(G: any, T: any, nuit: boolean) {
   if (!bete) return;
   // la chasse, portee par l'obstacle que la nuit pose (molosseDe) : pas d'import du mode,
@@ -2115,6 +2123,14 @@ export function rendre(App: any, dt: number) {
   // LA CAMERA, derriere le joueur dans l'axe de son couloir, un peu en hauteur
   // (en meute, un mordu regarde la poursuite : la camera suit sa proie, `G.suivi`, comme le 2D)
   const pl = G.spectateur && G.suivi ? G.suivi : G.player;
+  // un plan par course : la piste est neuve a chaque depart (le moteur 3D ne voit pas les ecrans d'entre deux)
+  if ((G.state === 'count' || G.state === 'race') && planPour !== G.track) {
+    planPour = G.track;
+    const force = Q.get('plan') as any;
+    const autres = PLANS.filter(k => k !== planCam);
+    planCam = PLANS.includes(force) ? force : autres[Math.floor(Math.random() * autres.length)];
+  }
+  const plan2D = !DOS && planCam === '2d';
   if (pl) {
     const p = ici(T.posDemi(pl.d, pl.lane, pl.demi || 0));
     // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
@@ -2151,7 +2167,7 @@ export function rendre(App: any, dt: number) {
     else profilB += (cible - profilB) * Math.min(1, (dt || 0.016) * 0.7);
     const b = profilB;
     if (b <= 0) profilPret = false;
-    if (b > 0 && !DOS && !nuitDuMolosse) {
+    if (b > 0 && !DOS && !plan2D && !nuitDuMolosse) {
       let dMin = pl.d, dMax = pl.d;
       for (const r of G.runners) if (r && r.look && !r.retour) { dMin = Math.min(dMin, r.d); dMax = Math.max(dMax, r.d); }
       dMin = Math.max(dMin, pl.d - 7); dMax = Math.min(dMax, pl.d + 7);
@@ -2184,12 +2200,37 @@ export function rendre(App: any, dt: number) {
       // visant sous les coureurs : ils montent dans l'image, au-dessus des touches
       vise.lerp(_d3.set(f[0] + ax2 * arriere * 3, -(f[1] + ay2 * arriere * 3), camera.aspect >= 1 ? -0.6 : profilBas ? 1.3 : 0), b);
     }
-    // LA NUIT DU MOLOSSE : UNE CAMERA DE POURSUITE (« recree l'evenement le molosse en full
-    // 3D », l'auteur, 23/10). De profil, la bete qui court derriere sort du cadre d'un
-    // telephone tenu droit ; de face, le coureur vient vers nous et elle grandit dans son
-    // dos, les yeux dans la brume. Le depart garde notre camera, la bascule se fait sur les
+    // LE PLAN DU JEU 2D (« garde le plan de camera du jeu 2D et integre-le dans la version 3D »,
+    // l'auteur, 23/10 ; les nuits du molosse le gardent toujours). La projection du 2D
+    // (sprinter-app.js, ground) regarde le monde en diagonale, de l'angle de `C.ISO_*` (26,6° au
+    // sprint, celui de la nuit au molosse), a l'echelle de scaleM : la camera se tient dans la
+    // diagonale du monde 2D (tourne de 14° sur un tour, comme lui), vise comme lui le couloir 3 a
+    // la hauteur du coureur, au centre de l'image, et un champ etroit de loin tient l'echelle
+    // a peu pres fixe, comme l'axonometrie.
+    if (plan2D) {
+      const Cj = (globalThis as any).SprinterApp?.C;
+      const deg = Cj ? Math.atan2(Cj.ISO_SIN, Cj.ISO_COS) : Math.atan(0.5);
+      // la profondeur s'y ecrase de tan(angle) : c'est le sinus de la hauteur d'une vraie camera
+      const elev = Math.asin(Math.min(0.9, Math.tan(deg)));
+      const VW = renderer!.domElement.clientWidth || 375, VH = renderer!.domElement.clientHeight || 812;
+      const ui = Math.max(0.62, Math.min(1.7, Math.min(VW / 430, VH / 660)));
+      const haut = VH / (ui * (G.race && G.race.arc > 0 ? 44 : 30) * (G.zoomMode || 1));
+      const D = haut / (2 * Math.tan(CHAMP_2D * Math.PI / 360));
+      // vers la camera : (-1, -1) dans le repere tourne du 2D, ramene au monde, puis en 3D
+      const rot = T.curved ? -14 * Math.PI / 180 : 0, wc = Math.cos(rot), ws = Math.sin(rot);
+      const dx = sx * (-wc - ws) / Math.SQRT2, dy = sx * (ws - wc) / Math.SQRT2;
+      const c = ici(T.pos(pl.d, 3));
+      // le soleil passe du cote de la camera (un peu de biais, pour le modele) : face a lui,
+      // les coureurs n'etaient que des silhouettes noires
+      solPlan2D.set((dx * 0.87 - dy * 0.5) * 20, (dx * 0.5 + dy * 0.87) * 20, soleilDecal.z);
+      voulu.set(c[0] + dx * D * Math.cos(elev), -(c[1] + dy * D * Math.cos(elev)), D * Math.sin(elev));
+      vise.set(c[0], -c[1], 0);
+    }
+    // LA NUIT DU MOLOSSE, L'AUTRE PLAN : UNE CAMERA DE POURSUITE (« recree l'evenement le molosse
+    // en full 3D », l'auteur, 23/10). De face, le coureur vient vers nous et la bete grandit dans
+    // son dos, les yeux dans la brume. Le depart garde notre camera, la bascule se fait sur les
     // six premiers metres ; plus la bete est loin, plus la camera recule et vise derriere.
-    if (nuitDuMolosse && !DOS) {
+    if (nuitDuMolosse && !DOS && !plan2D) {
       const ch = G.obstacles && G.obstacles.molosse ? G.obstacles.chasse : null;
       const e = ch ? Math.min(22, Math.max(0, pl.d - ch.d)) : 12;
       const v = Math.min(1, Math.max(0, pl.d / 6)), nb = v * v * (3 - 2 * v);
@@ -2267,14 +2308,15 @@ export function rendre(App: any, dt: number) {
       camera.position.x += (Math.random() - 0.5) * f; camera.position.z += (Math.random() - 0.5) * f;
     }
     camera.lookAt(camVise);
-    const fov = champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
+    const fov = plan2D ? CHAMP_2D : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
     if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3); camera.updateProjectionMatrix(); }
     // LA ZONE D'OMBRE AVANCE PAR PAS D'UN TEXEL : collee au joueur au pixel pres, ses bords
     // « nageaient » a chaque image — le sable de la Plage Paradis clignotait sous les panneaux
     const texel = 28 / Math.max(256, soleil.shadow.mapSize.x);
-    const sx = Math.round((p[0] + 6) / texel) * texel - 6, sy = Math.round(p[1] / texel) * texel;
-    soleil.position.set(sx + soleilDecal.x, sy + soleilDecal.y, soleilDecal.z);
-    soleil.target.position.set(sx + 6, sy, 0);
+    const ox = Math.round((p[0] + 6) / texel) * texel - 6, sy = Math.round(p[1] / texel) * texel;
+    const sd = plan2D && !nuitDuMolosse ? solPlan2D : soleilDecal;
+    soleil.position.set(ox + sd.x, sy + sd.y, sd.z);
+    soleil.target.position.set(ox + 6, sy, 0);
   }
   if (SURVOL) {
     camera.position.set(-40, R_CORDE + 75, 95);     // y retourne : voir `monde` ; au-dessus des tours proches
