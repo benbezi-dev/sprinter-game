@@ -120,6 +120,27 @@ const LANE_W = 1.22;
 
 let renderer: THREE.WebGLRenderer | null = null;
 let envPalais: THREE.Texture | null = null;
+// LE REFLET DU STADE NEON (23/10, « plus de reflets de ce type sur la piste du stade cyberpunk ») :
+// une ville de neons — barres magenta, cyan, violettes, enseignes jaunes — cuite une fois en
+// carte d'environnement, que la laque mouillee de la piste renvoie
+let envNeon: THREE.Texture | null = null;
+function carteNeon(r: THREE.WebGLRenderer) {
+  const sc = new THREE.Scene();
+  sc.background = new THREE.Color(0x07040e);
+  const couleurs = [0xff2bd6, 0x00e5ff, 0x8c3cff, 0xffdc1e, 0xff2bd6, 0x00e5ff];
+  let g = 7;
+  const h = () => ((g = (g * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 70; i++) {
+    const a = h() * Math.PI * 2, d = 8 + h() * 4, haut = (h() - 0.35) * 6;
+    const m = new THREE.Mesh(new THREE.BoxGeometry(0.4 + h() * 2.2, 0.12 + h() * 0.25, 0.1),
+      new THREE.MeshBasicMaterial({ color: couleurs[i % couleurs.length] }));
+    m.position.set(Math.cos(a) * d, haut, Math.sin(a) * d); m.lookAt(0, haut, 0);
+    if (i % 3 === 0) m.scale.set(0.15, 6, 1);           // des enseignes debout
+    sc.add(m);
+  }
+  const tex = new THREE.PMREMGenerator(r).fromScene(sc, 0.02).texture;
+  return tex;
+}
 // le Champ-de-Mars porte `angle: 15` en 2D pour que la tour tienne dans le ciel : en 3D, un profil plus bas qui vise plus haut
 let profilBas = false;
 // une entree de boss a eu lieu dans ce decompte : pas de survol (voir rendre)
@@ -713,6 +734,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     uLisere.value = 1; uLisereCoul.value.set(0xffd890); uLisereForce.value = 0.22; uLisereFace.value = 0;
     if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   }
+  if (cyber && !envNeon && renderer) envNeon = carteNeon(renderer);
   if (plage) scene.fog = nuit ? new THREE.Fog(0x0c1530, 220, 1100) : new THREE.Fog(0xf3c9a2, 260, 1300);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
   if (cyber) {
@@ -803,7 +825,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // ... et celle du Stade Neon, une chaussee mouillee qui renvoie les neons
   // ... et celle du palais, un cristal poli : reflet de la salle, une lueur bleutee
   const brillant = (c: THREE.Color) => palais ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.08, metalness: 0.35,
-      envMap: envPalais, envMapIntensity: 1.1, emissive: c, emissiveIntensity: 0.12 }) : cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.16, metalness: 0.35 })
+      envMap: envPalais, envMapIntensity: 1.1, emissive: c, emissiveIntensity: 0.12 }) : cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.06, metalness: 0.6,
+      envMap: envNeon, envMapIntensity: 2.4 })
     : luxe ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.32, metalness: 0.1 }) : new THREE.MeshLambertMaterial({ color: c });
   const matA = brillant(c3(A, A)), matB = brillant(c3(B, B));
   const ligne = new THREE.MeshBasicMaterial({ color: c3(th.lane, [247, 242, 233]) });
@@ -1452,7 +1475,45 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     stade.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xe8c47a, size: 0.05, transparent: true, opacity: 0.7, depthWrite: false })));
   }
 
-  if (cyber) villeNeon(hasard, rS);
+  if (cyber) {
+    villeNeon(hasard, rS);
+    // LES TRAINEES DE NEON SUR LA PISTE MOUILLEE : sous chaque panneau LED, et le long des deux bords
+    // en neon, une longue nappe de couleur qui s'etire vers la camera et palpite avec eux (peintes
+    // en addition : un vrai miroir rendrait la scene deux fois)
+    const trainee = texteCanvas((c, w, h) => {
+      // un reflet de neon sur l'eau : des filets verticaux, vifs contre la source, qui s'eteignent
+      // en s'etirant, les bords fondus
+      for (let i = 0; i < 14; i++) {
+        const x = w * (0.2 + 0.6 * hasard()), lw = 1 + hasard() * 4, l = h * (0.45 + hasard() * 0.55);
+        const g = c.createLinearGradient(0, 0, 0, l);
+        g.addColorStop(0, `rgba(255,255,255,${0.5 + hasard() * 0.5})`); g.addColorStop(0.3, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        c.fillStyle = g; c.fillRect(x, 0, lw, l);
+      }
+      const voile = c.createLinearGradient(0, 0, 0, h);
+      voile.addColorStop(0, 'rgba(255,255,255,0.35)'); voile.addColorStop(0.5, 'rgba(255,255,255,0.08)'); voile.addColorStop(1, 'rgba(255,255,255,0)');
+      c.fillStyle = voile; c.fillRect(w * 0.15, 0, w * 0.7, h);
+      // les bords fondus
+      c.globalCompositeOperation = 'destination-in';
+      const cote = c.createLinearGradient(0, 0, w, 0);
+      cote.addColorStop(0, 'rgba(0,0,0,0)'); cote.addColorStop(0.3, 'rgba(0,0,0,1)'); cote.addColorStop(0.7, 'rgba(0,0,0,1)'); cote.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = cote; c.fillRect(0, 0, w, h);
+    }, 64, 256);
+    const teintes = (th.panels || [[255, 43, 214], [0, 229, 255]]).map((v: number[]) => c3(v, v));
+    const nappes: THREE.MeshBasicMaterial[] = [];
+    const nappe = (x: number, y: number, larg: number, long: number, col: THREE.Color, versY: number) => {
+      const m = new THREE.MeshBasicMaterial({ map: trainee, color: col, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending,
+        depthWrite: false, toneMapped: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+      const p = plan(larg, long, m, x, y + versY * long / 2, 0.006);
+      p.receiveShadow = false;
+      if (versY > 0) p.rotation.z = Math.PI;                  // le bord vif contre la source
+      nappes.push(m);
+    };
+    for (let x = XA + 1.5, i = 0; x < XA + LS; x += 2.6 + hasard() * 1.8, i++) nappe(x, W + 1.2, 1.4 + hasard() * 1.6, 9 + hasard() * 5, teintes[i % teintes.length], -1);
+    for (let x = XA + 1.5, i = 0; x < XA + LS; x += 3 + hasard() * 2, i++) nappe(x, yOppose - 0.3, 1.2 + hasard() * 1.4, 6 + hasard() * 4, teintes[(i + 1) % teintes.length], 1);
+    pubAnim.push(t => {
+      nappes.forEach((m, i) => { m.opacity = 0.38 + 0.22 * Math.sin(t * 2.3 + i * 0.9) + (Math.sin(t * 17 + i * 5) > 0.97 ? 0.25 : 0); });
+    });
+  }
   if (menole) pubAnim.push(construireMenole({ stade, W, D0: DROITE0, D1: DROITE1, hasard, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
   else if (cdm) pubAnim.push(construireChamp({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard,
