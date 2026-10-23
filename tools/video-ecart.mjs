@@ -295,12 +295,14 @@ window.rendre(0);
 /* ------------------------------------------------------------------- le rendu */
 const TMP = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'sprinter-ecart-'));
 const navigateur = await puppeteer.launch({
-  executablePath: CHROME,
+  executablePath: process.env.CHROME || CHROME,
   args: ['--no-sandbox', '--hide-scrollbars', '--force-color-profile=srgb',
          '--font-render-hinting=none', '--disable-lcd-text'],
 });
 const onglet = await navigateur.newPage();
-await onglet.setViewport({ width: 1080, height: 1920, deviceScaleFactor: 1 });
+// Scene en 1080x1920, photographiee a 4/3 : la video sort en 2K (1440x2560).
+const ECHELLE = Number(process.env.SPRINTER_ECHELLE) || 4 / 3;
+await onglet.setViewport({ width: 1080, height: 1920, deviceScaleFactor: ECHELLE });
 await onglet.setContent(scene(), { waitUntil: 'load' });
 
 process.stdout.write(`  rendu ${nbImages} images `);
@@ -319,7 +321,8 @@ fs.mkdirSync(SORTIE_VIDEO, { recursive: true });
 const sortie = path.join(SORTIE_VIDEO, `${nom}.mp4`);
 execFileSync(FFMPEG, ['-y', '-loglevel', 'error',
   '-framerate', String(args.fps), '-i', path.join(TMP, 'f%04d.png'),
-  '-c:v', 'libx264', '-preset', 'slow', '-crf', '19', '-pix_fmt', 'yuv420p',
+  '-c:v', 'libx264', '-profile:v', 'high', '-level', '5.1', '-preset', 'slow', '-crf', '17',
+  '-pix_fmt', 'yuv420p',
   '-movflags', '+faststart', sortie], { stdio: 'inherit' });
 fs.rmSync(TMP, { recursive: true, force: true });
 
