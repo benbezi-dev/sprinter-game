@@ -448,7 +448,10 @@ function pieceDuStade(cle: string): THREE.Object3D | null {
     const base = (import.meta as any).env?.BASE_URL || '/';
     const l = new GLTFLoader();
     l.setMeshoptDecoder(MeshoptDecoder);
-    l.loadAsync(base + 'modeles/stades/' + cle + '.glb').then(g => {
+    // en ULTRA, la piece pleine (tools/blender/stades_3d_glb.py --ultra), sinon la legere — et
+    // la legere si la pleine manque (la copie GitHub du site ne les porte pas : son plafond)
+    const charger = (dossier: string) => l.loadAsync(base + 'modeles/' + dossier + '/' + cle + '.glb');
+    (ULTRA ? charger('stades-ultra').catch(() => charger('stades')) : charger('stades')).then(g => {
       g.scene.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
       pieces3D.set(cle, g.scene);
       formeVue = '';

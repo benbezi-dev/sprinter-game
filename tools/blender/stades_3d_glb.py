@@ -30,7 +30,12 @@ import pieces_arcenciel  # noqa: F401  (ajoute ses pieces a DEBOUT)
 import pieces_tripo      # noqa: F401
 
 RACINE = os.path.abspath(os.path.join(ICI, '..', '..'))
-SORTIE = os.path.join(RACINE, 'public', 'modeles', 'stades')
+# --ultra : le palier ULTRA de la course 3D (« les assets dans leur plein potentiel, sans
+# compression ni reduction de qualite », l'auteur, 23/10) — textures d'origine, sans perte,
+# geometrie non compressee ; seul plafond, 250 000 faces par piece (une maison Tripo en a
+# 1,8 million, et la ruelle en aligne des dizaines : aucun appareil ne les tiendrait)
+ULTRA = '--ultra' in sys.argv
+SORTIE = os.path.join(RACINE, 'public', 'modeles', 'stades-ultra' if ULTRA else 'stades')
 
 _peinture = matiere.peinture
 
@@ -75,8 +80,8 @@ def vider():
 
 # Les textures Tripo font 2 a 4 k : sept megaoctets la piece. Vue de la piste,
 # une piece ne depasse pas quelques centaines de pixels a l'ecran.
-TEXTURE_MAX = 1024
-FACES_MAX = 30000
+TEXTURE_MAX = None if ULTRA else 1024
+FACES_MAX = 250000 if ULTRA else 30000
 
 
 def exporter(chemin):
@@ -90,14 +95,15 @@ def exporter(chemin):
             d.ratio = FACES_MAX / len(o.data.polygons)
     for im in bpy.data.images:
         w, h = im.size
-        if max(w, h) > TEXTURE_MAX:
+        if TEXTURE_MAX and max(w, h) > TEXTURE_MAX:
             k = TEXTURE_MAX / max(w, h)
             im.scale(max(1, int(w * k)), max(1, int(h * k)))
     for o in bpy.data.objects:
         o.select_set(True)
     bpy.ops.export_scene.gltf(filepath=chemin, export_format='GLB', use_selection=True,
                               export_yup=False, export_apply=True, export_animations=False,
-                              export_image_format='WEBP', export_meshopt_compression_enable=True)
+                              export_image_format='AUTO' if ULTRA else 'WEBP',
+                              export_meshopt_compression_enable=not ULTRA)
     print('ECRIT', os.path.relpath(chemin, RACINE), os.path.getsize(chemin) // 1024, 'Ko')
 
 
@@ -113,7 +119,7 @@ def piece(stade, nom):
 
 
 def main():
-    args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+    args = [a for a in (sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []) if not a.startswith('--')]
     stades = [s for s in palettes.STADES if s != 'materiel']
     for st in (args or stades):
         S = palettes.STADES[st]
