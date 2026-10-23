@@ -57,6 +57,17 @@ const P_LOIN = Math.max(0.4, nombre('ploin', 1.2));
 const P_HAUT = nombre('phaut', 6), P_ARRIERE = Math.min(0.9, Math.max(0, nombre('parriere', 0.15)));
 const OMBRES = Q.get('ombres') !== '0';
 const STADE_FORCE = Q.get('stade');
+// ?qualite=plein : sans l'ULTRA (definition plafonnee a 2, ombres 1024)
+let ULTRA = Q.get('qualite') !== 'plein';
+let lentes = 0;
+/** L'ULTRA cede si l'appareil ne tient pas la cadence : trois secondes d'images a plus de
+ *  24 ms, et la definition redescend a deux pixels par point (une fois, pour la visite). */
+function tenirLaCadence(dt: number) {
+  // un a-coup (chargement, compilation d'un shader) n'est pas une cadence perdue
+  if (!ULTRA || !renderer || !dt || dt > 0.1) return;
+  lentes = dt > 0.024 ? lentes + dt : Math.max(0, lentes - dt * 0.5);
+  if (lentes > 3) { ULTRA = false; renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); dimensionner(); }
+}
 // ?vue=survol : une vue aerienne fixe du stade entier, pour verifier le decor (rien ne s'y chevauche)
 const SURVOL = Q.get('vue') === 'survol';
 
@@ -1163,7 +1174,10 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   if (toileDuJeu && toileDuJeu.parentElement) toileDuJeu.parentElement.insertBefore(toile, toileDuJeu);
   else document.body.insertBefore(toile, document.body.firstChild);
   renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  // L'ULTRA (l'auteur, 23/10 : « mets le jeu en ultra ») : la definition pleine de l'ecran,
+  // jusqu'a trois pixels par point, et des ombres deux fois plus fines. Comme l'ULTRA du
+  // 2D (rendu-premium.js), il cede s'il fait perdre la cadence (voir tenirLaCadence).
+  renderer.setPixelRatio(Math.min(ULTRA ? 3 : 2, window.devicePixelRatio || 1));
   renderer.shadowMap.enabled = OMBRES;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   // L'ESTHETIQUE CINEMATIQUE (l'auteur, 22/10) : une courbe filmique (ACES) plutot
@@ -1190,7 +1204,7 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   scene.add(hemi);
   soleil = new THREE.DirectionalLight(0xfff4e0, 2.2);
   soleil.castShadow = OMBRES;
-  soleil.shadow.mapSize.set(1024, 1024);
+  soleil.shadow.mapSize.set(ULTRA ? 2048 : 1024, ULTRA ? 2048 : 1024);
   const sc = soleil.shadow.camera as THREE.OrthographicCamera;
   sc.left = -14; sc.right = 14; sc.top = 14; sc.bottom = -14; sc.near = 1; sc.far = 80;
   soleil.shadow.bias = -0.0005;
@@ -1232,7 +1246,10 @@ function dimensionner() {
 const Qgl = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
 let gabarit: THREE.Object3D | null = null;
 let chargement: Promise<void> | null = null;
-type Corps = { m: Modele; mats: Record<string, THREE.MeshStandardMaterial> };
+// echelle : un maillage Tripo n'a pas la taille du corps du jeu (Kouassi : 1,82 m au repos
+// contre 1,54) — ramene a lui, il a la taille de son look comme les autres
+type Corps = { m: Modele; mats: Record<string, THREE.MeshStandardMaterial>; echelle?: number };
+const hauteurDe = (o: THREE.Object3D) => { const b = new THREE.Box3().setFromObject(o); return b.max.y - b.min.y; };
 const corps = new Map<any, Corps>();
 
 // LE BLOC DE DEPART : la piece Blender des images 2D (pieces.blocs), exportee par
@@ -1426,7 +1443,8 @@ function corpsDe(r: any): Corps | null {
         lisere(m);
         o.material = m;
       });
-      c = { m: modeleDe(copie), mats: {} };
+      const hGabarit = gabarit ? hauteurDe(gabarit) : 1.54, hMaillage = hauteurDe(sc);
+      c = { m: modeleDe(copie), mats: {}, echelle: hMaillage > 0.5 ? hGabarit / hMaillage : 1 };
       monde.add(c.m.racine);
       corps.set(r, c);
       return c;
@@ -1467,7 +1485,8 @@ function poserLeCorps(App: any, r: any, p: number[], cap: number, lean: number, 
   poser(c.m, r.squelette);
   const [ex, ey, ez] = App.repereDuCoureur(r, cap, lean, false, false);
   _M.set(ex[0], ey[0], ez[0], 0, ex[1], ey[1], ez[1], 0, ex[2], ey[2], ez[2], 0, 0, 0, 0, 1);
-  c.m.racine.matrix.multiplyMatrices(_T.makeTranslation(p[0], p[1], 0), _S.makeScale(k, k, k))
+  const ke = k * (c.echelle || 1);
+  c.m.racine.matrix.multiplyMatrices(_T.makeTranslation(p[0], p[1], 0), _S.makeScale(ke, ke, ke))
     .multiply(_M).multiply(Qgl);
   c.m.racine.matrixWorldNeedsUpdate = true;
   c.m.racine.visible = true;
@@ -1604,6 +1623,7 @@ const AXE_Y = new THREE.Vector3(0, 1, 0);
 /** Une image de la course, lue sur l'etat du jeu. */
 export function rendre(App: any, dt: number) {
   const { G, C } = App;
+  tenirLaCadence(dt);
   const T = G.track;
   if (!renderer) {
     const lanes = (G.runners || []).map((r: any) => r.lane | 0);
