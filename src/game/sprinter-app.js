@@ -306,9 +306,10 @@
     palais: {
       skyTop: [58, 40, 30], skyBot: [150, 112, 70], stars: 0,
       grass: [236, 226, 206], grassEdge: [214, 198, 170],
-      // le cristal : un bleu de glace franc — plus pale, sous les lustres, il sortait blanc
-      trackA: [84, 158, 214], trackB: [126, 190, 232],
-      lane: [214, 172, 72], kerb: [214, 172, 72],
+      // LE CRISTAL BLEU DE SEVRES, laque, aux filets d'or (« la piste manque de force, de prestance
+      // et de classe », 23/10) : le bleu de glace pale du premier jet sortait presque blanc
+      trackA: [20, 40, 104], trackB: [30, 58, 140],
+      lane: [236, 190, 86], kerb: [236, 190, 86],
       tread: [236, 226, 206], riser: [138, 15, 30], roof: [120, 84, 40],
       barrier: [214, 172, 72],
       panels: [[138, 15, 30], [214, 172, 72], [30, 40, 90], [236, 226, 206]],

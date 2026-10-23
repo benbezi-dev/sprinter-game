@@ -505,7 +505,9 @@ function pieceDuStade(cle: string): THREE.Object3D | null {
     // la legere si la pleine manque (la copie GitHub du site ne les porte pas : son plafond)
     const charger = (dossier: string) => l.loadAsync(base + 'modeles/' + dossier + '/' + cle + '.glb');
     (ULTRA ? charger('stades-ultra').catch(() => charger('stades')) : charger('stades')).then(g => {
-      g.scene.traverse((o: any) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      // le decor recoit l'ombre des coureurs mais n'en projette pas : sa propre ombre n'existait que
+      // dans les 28 m autour du joueur, et apparaissait puis disparaissait devant lui (Plage Paradis, 23/10)
+      g.scene.traverse((o: any) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });
       pieces3D.set(cle, g.scene);
       formeVue = '';
     }).catch(() => { /* la piece manque : le stade reste sans elle */ });
@@ -786,8 +788,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // la piste du luxe est une laque : elle prend un reflet des projecteurs
   // ... et celle du Stade Neon, une chaussee mouillee qui renvoie les neons
   // ... et celle du palais, un cristal poli : reflet de la salle, une lueur bleutee
-  const brillant = (c: THREE.Color) => palais ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.12, metalness: 0.2,
-      envMap: envPalais, envMapIntensity: 0.7, emissive: c, emissiveIntensity: 0.08 }) : cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.16, metalness: 0.35 })
+  const brillant = (c: THREE.Color) => palais ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.08, metalness: 0.35,
+      envMap: envPalais, envMapIntensity: 1.1, emissive: c, emissiveIntensity: 0.12 }) : cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.16, metalness: 0.35 })
     : luxe ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.32, metalness: 0.1 }) : new THREE.MeshLambertMaterial({ color: c });
   const matA = brillant(c3(A, A)), matB = brillant(c3(B, B));
   const ligne = new THREE.MeshBasicMaterial({ color: c3(th.lane, [247, 242, 233]) });
@@ -840,7 +842,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     };
     const PISTE = [BLEU, BLANC, ROUGE], LIGNE = [[255, 255, 255], [22, 40, 96], [255, 255, 255]];
     // sans eclairage a l'arc-en-ciel : « une piste de lumiere n'a pas de gris »
-    const matP = arc ? new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide })
+    // (hors de la courbe ACES : elle delavait les teintes pures en pastel — « trop pales », 23/10)
+    const matP = arc ? new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false })
       : new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
     for (let k = 0; k < nCouloirs; k++) {
       const r0 = R_CORDE + k * LANE_W - (k === 0 ? 0.8 : 0), r1 = R_CORDE + (k + 1) * LANE_W + (k === nCouloirs - 1 ? 0.8 : 0);
@@ -851,10 +854,13 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       bande(r - e, r + e, 0.002, (x, y) => tricolore(LIGNE, avance(x, y)), new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide }));
     }
   }
+  // au Palais, des filets d'or plus larges, et l'or qui brille (voir plus bas, la bordure)
+  const largeL = palais ? 0.085 : 0.05;
+  if (palais) { (ligne as any).toneMapped = false; ligne.color.multiplyScalar(1.15); }
   for (const y0 of peinte ? [] : [0, yOppose]) {
     plan(LD, W + 1.6, matA, XD, y0 + W / 2, 0);
     for (let k = 1; k < nCouloirs; k += 2) plan(LD, LANE_W, matB, XD, y0 + (k + 0.5) * LANE_W, 0.001);
-    for (let k = 0; k <= nCouloirs; k++) plan(LD, 0.05, ligne, XD, y0 + k * LANE_W, 0.002);
+    for (let k = 0; k <= nCouloirs; k++) plan(LD, largeL, ligne, XD, y0 + k * LANE_W, 0.002);
   }
   if (arc) for (const y0 of [0, yOppose]) for (let k = 0; k <= nCouloirs; k++) plan(LD, 0.05, ligne, XD, y0 + k * LANE_W, 0.002);
   // les virages : des anneaux autour des deux centres, sur la pelouse
@@ -865,7 +871,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     };
     if (!peinte) anneau(R_CORDE - 0.8, R_CORDE + W + 0.8, matA, 0);
     for (let k = 1; !peinte && k < nCouloirs; k += 2) anneau(R_CORDE + k * LANE_W, R_CORDE + (k + 1) * LANE_W, matB, 0.001);
-    for (let k = 0; !cdm && k <= nCouloirs; k++) anneau(R_CORDE + k * LANE_W - 0.025, R_CORDE + k * LANE_W + 0.025, ligne, 0.002);
+    for (let k = 0; !cdm && k <= nCouloirs; k++) if (palais) anneau(R_CORDE + k * LANE_W - largeL / 2, R_CORDE + k * LANE_W + largeL / 2, ligne, 0.002); else anneau(R_CORDE + k * LANE_W - 0.025, R_CORDE + k * LANE_W + 0.025, ligne, 0.002);
   }
   // LES BORDS EN NEON (th.neon, th.neonExt) : une surface qui flotte dans le noir doit
   // avoir une limite qui se voie. Un trait vif et deux halos additifs de chaque cote.
@@ -881,6 +887,15 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
           g.position.set(xc, -R_CORDE, 0.004); stade.add(g);
         }
       }
+    }
+  }
+  if (palais) {
+    // LA BORDURE D'OR, de part et d'autre de la piste : un listel de vingt centimetres, poli
+    const or = new THREE.MeshStandardMaterial({ color: 0xd8a848, metalness: 0.85, roughness: 0.22, envMap: envPalais, envMapIntensity: 1.2 });
+    for (const y0 of [0, yOppose]) for (const yy of [y0 - 0.8, y0 + W + 0.8]) plan(LD, 0.22, or, XD, yy, 0.003).receiveShadow = true;
+    for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) for (const r of [R_CORDE - 0.8, R_CORDE + W + 0.8]) {
+      const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.11, r + 0.11, 96, 1, debut, Math.PI), or);
+      m.position.set(xc, -R_CORDE, 0.003); m.receiveShadow = true; stade.add(m);
     }
   }
   if (espace && !arc) {
@@ -1408,6 +1423,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
 
   if (cartes.length && Q.get('foule') !== '0') stade.add(laFoule(cartes));
+  stade.traverse((o: any) => { if (o.isMesh) o.castShadow = false; });   // (voir pieceDuStade : seuls les coureurs projettent)
   poserLesPieces(T, stadeCle, etape);
   // LA CARRIERE LEGENDE : le monument du lieu, ses objets, sa guirlande (legende-3d.ts)
   if (stadeCle && stadeCle.startsWith('legende-')) {
@@ -2156,8 +2172,12 @@ export function rendre(App: any, dt: number) {
     camera.lookAt(camVise);
     const fov = champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
     if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3); camera.updateProjectionMatrix(); }
-    soleil.position.set(p[0] + soleilDecal.x, p[1] + soleilDecal.y, soleilDecal.z);
-    soleil.target.position.set(p[0] + 6, p[1], 0);
+    // LA ZONE D'OMBRE AVANCE PAR PAS D'UN TEXEL : collee au joueur au pixel pres, ses bords
+    // « nageaient » a chaque image — le sable de la Plage Paradis clignotait sous les panneaux
+    const texel = 28 / Math.max(256, soleil.shadow.mapSize.x);
+    const sx = Math.round((p[0] + 6) / texel) * texel - 6, sy = Math.round(p[1] / texel) * texel;
+    soleil.position.set(sx + soleilDecal.x, sy + soleilDecal.y, soleilDecal.z);
+    soleil.target.position.set(sx + 6, sy, 0);
   }
   if (SURVOL) {
     camera.position.set(-40, R_CORDE + 75, 95);     // y retourne : voir `monde` ; au-dessus des tours proches

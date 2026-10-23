@@ -1250,8 +1250,31 @@
     }
   }
 
+  // LA MECANIQUE AVANT DU SPRINT (23/10, l'auteur : « le cycle de course du sprinter est en
+  // cycle arriere et pas un cycle avant ; la poulie ne correspond pas au sprinter mais aux
+  // demi-fondeurs et aux coureurs de 400 m a la limite »). Les profils dessines a l'oeil
+  // montaient le genou a 0,8 rad et repliaient le talon tres haut DERRIERE, la cuisse encore
+  // en arriere — une poulie de coureur de tour — et le moteur l'amplifiait encore de 14 a
+  // 26 %. Le seul profil releve sur un vrai sprinteur (`canon`, MediaPipe, tools/biomeca)
+  // court tout devant : genou a 1,30 rad, jambe qui traine a peine (-0,46). En foulee veloce
+  // (100, 200, 4 x 100), les jambes de chaque profil sont donc calees aux trois quarts sur
+  // cette mecanique mesuree, et leur amplification ramenee au tiers ; les bras, le buste, le
+  // rebond et la longueur d'appui gardent le caractere de chacun. Le tour (foulee
+  // academique) garde sa poulie.
+  const melangeTable = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+  const SPRINT = {};
+  for (const k of Object.keys(GAITS)) {
+    const P = GAITS[k];
+    SPRINT[k] = k === 'canon' ? P : Object.assign({}, P, {
+      thigh: melangeTable(P.thigh, GAITS.canon.thigh, 0.75),
+      knee: melangeTable(P.knee, GAITS.canon.knee, 0.75),
+      ankle: melangeTable(P.ankle, GAITS.canon.ankle, 0.75),
+      boost: 1 + (P.boost - 1) * 0.35,
+    });
+  }
   function gaitOf(look) {
-    return (look && GAITS[look.gait]) || GAITS.base;
+    const T = allure === 'veloce' ? SPRINT : GAITS;
+    return (look && T[look.gait]) || T.base;
   }
 
   const ARM_PHASE = armPhaseOf(GAITS.base);
@@ -2706,7 +2729,10 @@
     // segment sans le second cassait l'effet d'entrainement naturel d'un
     // membre (le bout semblait trainer derriere le haut), ce qui donnait
     // une impression de mouvement disloque plutot que coordonne.
-    const LIMB_BOOST = P.boost * (1 + 0.32 * ke);
+    const LIMB_BOOST = P.boost;
+    // l'effort arme DEVANT (genou, bras) bien plus que derriere : un sprinteur qui force monte
+    // le genou, il ne balaie pas plus loin derriere lui
+    const EF_AV = 1 + 0.34 * ke, EF_AR = 1 + 0.08 * ke;
     // La part de sortie de blocs qu'ajoute le moteur a tout le monde — cuisse
     // lancee, genou haut, bras amples. Un frequenciel en garde moins
     // (P.departAmple) : sa puissance se lit a la cadence, pas a l'enjambee.
@@ -2728,7 +2754,7 @@
       // contenue pour tout le reste (P.arriere) : c'est elle, la puissance
       let th = (gt * (A + C.DRIVE_THIGH * (gt > 0 ? sortieA : sortieP) + C.TRANSIT_AMPL * transit)
                 + C.DRIVE_FRONT * sortieA * devant - 0.20 * lourd * devant) * LIMB_BOOST
-               * (gt < 0 ? (P.arriere || 1) : 1);
+               * (gt < 0 ? (P.arriere || 1) * EF_AR : EF_AV);
       // LE TALON SOUS LA FESSE. Le repli de genou est deja au plus fort a
       // l'arriere du cycle : on l'y accentue pendant la transition, la ou il
       // se voit et ou il veut dire quelque chose — une jambe qui se replie
@@ -2738,7 +2764,7 @@
       const replie = Math.max(0, -gk) / 2.05;     // 1 au talon-fesse du cycle
       let kn = (gk * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortieA
                       + C.TRANSIT_TALON * transit * replie)
-                - C.DRIVE_SHANK * sortieA * devant) * LIMB_BOOST;
+                - C.DRIVE_SHANK * sortieA * devant) * LIMB_BOOST * (gt > 0 ? EF_AV : EF_AR);
       // LA LIGNE DE POUSSEE. La part ARRIERE du cycle tire la cuisse et le
       // genou vers l'axe du corps : les deux du meme facteur, sans quoi on
       // redresserait la cuisse en laissant le tibia casse dessous. Le pied
@@ -2757,7 +2783,7 @@
       // a l'effort, les bras cognent : plus d'amplitude, de la hanche a la joue
       const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortieA
                                    + C.TRANSIT_ARM * transit)
-                 * LIMB_BOOST * P.armAmp * (1 + 0.28 * ke);
+                 * LIMB_BOOST * P.armAmp * (1 + 0.28 * ke);   // les bras, eux, cognent dans les deux sens
       const ef = gait(P.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
       return [ua, ua + ef];
     }
