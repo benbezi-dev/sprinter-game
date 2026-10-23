@@ -813,6 +813,8 @@
   // `etat` : pour la console d'un telephone branche.
   root.Tribune = {
     dessiner, pret: () => charger(), images: () => Object.values(atlas), enAttente, composerDAvance,
+    // la couleur des sieges par stade, que la course 3D reprend (course-3d.ts)
+    SIEGES,
     etat: () => ({ atlas: jeu === JEUX.ultra ? 'ultra' : 'ordinaire', caps: capsVus.size,
                    composees: cache.size, plafond: plafondImages(), inacheve,
                    reserve: [...reserve.values()].map(r => r.cache.size) }),

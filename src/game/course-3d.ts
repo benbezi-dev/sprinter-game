@@ -44,6 +44,7 @@ import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
 import { construireMenole } from './menole-3d';
 import { construireChamp, BLEU, BLANC, ROUGE } from './champ-de-mars-3d';
+import { arbresDuLieu, riviera, nuitEtoilee, pelouseAuPinceau } from './stades-classiques-3d';
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
@@ -699,6 +700,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     uLisere.value = 1; uLisereCoul.value.set(0xffc890); uLisereForce.value = 0.35; uLisereFace.value = 1;
   }
   uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : plage ? 0xec7860 : palais ? 0x8a0f1e : 0x2457b8);
+  // la couleur des sieges du stade (tribune.js, SIEGES) : un stade a UNE couleur de sieges
+  const siegeDuStade = stadeCle && (globalThis as any).Tribune?.SIEGES?.[stadeCle];
+  if (siegeDuStade && !luxe && !cyber && !plage && !palais) uFoule.uSiege.value.copy(c3(siegeDuStade, siegeDuStade));
   if (palais) {
     // la lumiere chaude des lustres, de haut ; une brume doree qui fond le fond de la galerie
     hemi.color.set(0xfff0d8); hemi.groundColor.set(0x9a7448); hemi.intensity = 1.2;
@@ -785,7 +789,13 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(10, 1);
   // (au Champ-de-Mars, le parc s'etend jusqu'aux facades)
   if (cdm) tonte.repeat.set(30, 1);
-  if (!espace && !plage && !palais) plan(cdm ? 1200 : 400, cdm ? 1200 : 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.1);
+  // la Nuit etoilee peint sa pelouse a coups de pinceau ; la tonte « en long » suit la piste
+  const pinceau = th.pinceau ? pelouseAuPinceau(th, hasard) : null;
+  if (pinceau) { pinceau.wrapS = pinceau.wrapT = THREE.RepeatWrapping; pinceau.repeat.set(40, 40); }
+  if (!espace && !plage && !palais) {
+    const pel = plan(cdm ? 1200 : 400, cdm ? 1200 : 400, new THREE.MeshLambertMaterial({ map: pinceau || tonte }), 44, -R_CORDE, -0.1);
+    if (th.tonte === 'long' && !pinceau) pel.rotation.z = Math.PI / 2;
+  }
 
   // LA PISTE : les deux lignes droites et les deux virages, couloir par couloir
   const A = th.trackA || [148, 0, 0], B = th.trackB || A;
@@ -876,6 +886,18 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     if (!peinte) anneau(R_CORDE - 0.8, R_CORDE + W + 0.8, matA, 0);
     for (let k = 1; !peinte && k < nCouloirs; k += 2) anneau(R_CORDE + k * LANE_W, R_CORDE + (k + 1) * LANE_W, matB, 0.001);
     for (let k = 0; !cdm && k <= nCouloirs; k++) if (palais) anneau(R_CORDE + k * LANE_W - largeL / 2, R_CORDE + k * LANE_W + largeL / 2, ligne, 0.002); else anneau(R_CORDE + k * LANE_W - 0.025, R_CORDE + k * LANE_W + 0.025, ligne, 0.002);
+  }
+  // LA LISSE DE CORDE (`kerb`) : un filet saillant au bord interieur du couloir 1 — blanc au
+  // stade de jour, vert a 0.Games, turquoise a la Riviera, or a la Nuit etoilee
+  if (th.kerb && !peinte && !palais && !espace) {
+    const mk = new THREE.MeshLambertMaterial({ color: c3(th.kerb, th.kerb) });
+    for (const y of [-0.1, yOppose + W + 0.1]) {
+      const b = new THREE.Mesh(new THREE.BoxGeometry(LD, 0.14, 0.06), mk); b.position.set(XD, y, 0.03); b.castShadow = false; b.receiveShadow = true; stade.add(b);
+    }
+    for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
+      const g = new THREE.Mesh(new THREE.RingGeometry(R_CORDE - 0.17, R_CORDE - 0.03, 96, 1, debut, Math.PI), mk);
+      g.position.set(xc, -R_CORDE, 0.06); stade.add(g);
+    }
   }
   // LES BORDS EN NEON (th.neon, th.neonExt) : une surface qui flotte dans le noir doit
   // avoir une limite qui se voie. Un trait vif et deux halos additifs de chaque cote.
@@ -1418,7 +1440,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   // LES ARBRES, autour du stade (pas au luxe : autour, c'est le noir ; pas au Stade Neon : la ville)
   // (ni dans le vide de l'espace, ni autour d'un stade de nuit au sol noir, ni au Champ-de-Mars : ses rideaux de tilleuls)
-  for (let i = 0; i < (luxe || cyber || plage || palais || cdm || espace || (nuit && th.projecteurs) ? 0 : 70); i++) {
+  // LES ARBRES DU LIEU (stades-classiques-3d.ts) : platanes, palmiers, cypres — a la place des blocs
+  const ctxClassique = { stade, th, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard };
+  const arbresPoses = !(luxe || cyber || plage || palais || cdm || espace) && arbresDuLieu(ctxClassique);
+  if (th.piscine && !plage) pubAnim.push(riviera(ctxClassique));
+  if (th.tourbillons) pubAnim.push(nuitEtoilee(ctxClassique));
+  for (let i = 0; i < (arbresPoses || luxe || cyber || plage || palais || cdm || espace || (nuit && th.projecteurs) ? 0 : 70); i++) {
     const a = hasard() * Math.PI * 2, rx = 150 + hasard() * 40, ry = 95 + hasard() * 30;
     const x = 44 + rx * Math.cos(a), y = -R_CORDE + ry * Math.sin(a), h = 5 + hasard() * 5;
     boite(lTronc, M0, x, y, h * 0.3, 1, 1, h * 0.6);
