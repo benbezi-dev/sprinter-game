@@ -5,6 +5,7 @@ import './coureur-hd.js';
 import './coureur-vedettes.js';
 import './coureur-premium.js';
 import './sprinter-core.js';
+import { echauffer, finirLEchauffement } from './echauffement';
 import './chiffres-piste.js';
 // Le registre des images de decor : les modules qui suivent y prennent les
 // leurs, decodees, et le decompte attend celles qui manquent (chargement.ts).
@@ -993,6 +994,8 @@ export function updateLogic(dt: number) {
     return;
   }
 
+  // la presentation finie (ou passee), chacun revient derriere ses blocs
+  if (G.state !== 'cut' && G.runners && G.runners.some((r: any) => r && r.echauffe)) finirLEchauffement(G);
   G.skipArm = Math.max(0, G.skipArm - dt);
   G.reactFlash = Math.max(0, G.reactFlash - dt);
   G.transFlash = Math.max(0, G.transFlash - dt);
@@ -1053,6 +1056,8 @@ export function updateLogic(dt: number) {
     if (G.openT > OUVERTURE_FIN && chargementFini()) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
+    // pendant la carte de l'adversaire, les coureurs s'echauffent (game/echauffement.ts)
+    if (G.cut.kind === 'intro') echauffer(G, SprinterCore.C, dt);
     G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11
       : G.cut.kind === 'ending' ? 7.5 : 3.2);
     // Le sacre qui s'efface par-dessus le generique continue de vivre le temps
