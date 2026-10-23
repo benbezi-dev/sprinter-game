@@ -39,6 +39,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
+import { construireLegende } from './legende-3d';
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
@@ -82,6 +83,9 @@ let voute: THREE.Object3D | null = null, filante: THREE.Mesh | null = null, fila
 let hologrammes: THREE.Mesh[] = [], pluie: THREE.LineSegments | null = null;
 // la nuit du molosse : sa ruelle (ruelle-3d.ts) et sa bete (molosse.glb)
 let ruelle: Ruelle | null = null;
+// la Carriere Legende : ses decors (legende/decors.ts), charges a la demande — le canal de test seul les sert
+let legendeDecors: typeof import('./legende/decors') | null = null, legendeNuages: typeof import('./legende/nuages') | null = null;
+let legendeDemande = false, legendeEssais = 0;
 // les panneaux animes et le film de l'ecran geant (voir LES PANNEAUX LED)
 let pubAnim: ((t: number) => void)[] = [], videoPub: HTMLVideoElement | null = null;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
@@ -1124,6 +1128,23 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   if (cartes.length) stade.add(laFoule(cartes));
   poserLesPieces(T, stadeCle, etape);
+  // LA CARRIERE LEGENDE : le monument du lieu, ses objets, sa guirlande (legende-3d.ts)
+  if (stadeCle && stadeCle.startsWith('legende-')) {
+    if (!legendeDecors) {
+      if (!legendeDemande) {
+        legendeDemande = true;
+        Promise.all([import('./legende/decors'), import('./legende/nuages')])
+          .then(([d, n]) => { legendeDecors = d; legendeNuages = n; formeVue = ''; })
+          .catch(() => { legendeDemande = false; });
+      }
+    } else {
+      const manque = construireLegende({ stade, lieu: stadeCle.slice('legende-'.length), W, D0: DROITE0, D1: DROITE1, R1: R_CORDE,
+        hasard, decors: legendeDecors, nuages: legendeNuages });
+      // une image pas encore chargee : on reconstruit un peu plus tard (six fois au plus)
+      if (manque && legendeEssais++ < 6) setTimeout(() => { formeVue = ''; }, 1500);
+      else if (!manque) legendeEssais = 0;
+    }
+  }
   for (const l of [lMarche, lContre, lSiege, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille, lFilet, lFilet2]) l.finir(stade);
 }
 
@@ -1367,9 +1388,42 @@ function poserLaBete(G: any, T: any, nuit: boolean) {
   bete.melangeur.setTime(((((d * 0.45) % 1) + 1) % 1) * bete.duree);
 }
 
+// LES ATHLETES EN VRAI MAILLAGE (look.maillage : les boss de la Legende, les vedettes) :
+// leur GLB Tripo (vedette_tripo.py) a le squelette du coureur du jeu — il se pose pareil.
+// Ses textures restent les siennes. Tant qu'il charge, les tubes tiennent sa place.
+const maillages = new Map<string, THREE.Object3D | null | false>();
+function maillageDe(chemin: string): THREE.Object3D | null | false {
+  if (!maillages.has(chemin)) {
+    maillages.set(chemin, null);
+    const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/?$/, '/');
+    const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+    l.loadAsync(base + chemin.replace(/^\//, '')).then((g) => { maillages.set(chemin, g.scene); })
+      .catch(() => { maillages.set(chemin, false); });
+  }
+  return maillages.get(chemin)!;
+}
+
 function corpsDe(r: any): Corps | null {
   let c = corps.get(r);
   if (c) return c;
+  const chemin = r.look && r.look.maillage;
+  const sc = chemin ? maillageDe(chemin) : false;
+  if (sc === null) return null;                // il charge : les tubes en attendant
+  if (sc) {
+    try {
+      const copie = clonerSquelette(sc);
+      copie.traverse((o: any) => {
+        if (!o.isMesh) return;
+        const m = (o.material as THREE.MeshStandardMaterial).clone();
+        lisere(m);
+        o.material = m;
+      });
+      c = { m: modeleDe(copie), mats: {} };
+      monde.add(c.m.racine);
+      corps.set(r, c);
+      return c;
+    } catch { maillages.set(chemin, false); }    // pas le squelette du jeu : le corps generique
+  }
   if (!gabarit) return null;
   const copie = clonerSquelette(gabarit);
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
