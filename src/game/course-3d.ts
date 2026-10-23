@@ -38,6 +38,8 @@ import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
+import { construirePalais } from './palais-3d';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
 import { construireMenole } from './menole-3d';
@@ -75,6 +77,7 @@ const MAX_TRONCS = 1400;
 const LANE_W = 1.22;
 
 let renderer: THREE.WebGLRenderer | null = null;
+let envPalais: THREE.Texture | null = null;
 let hemi: THREE.HemisphereLight;
 let scene: THREE.Scene, monde: THREE.Group, camera: THREE.PerspectiveCamera, soleil: THREE.DirectionalLight;
 let troncs: THREE.InstancedMesh, joints: THREE.InstancedMesh, aR: THREE.InstancedBufferAttribute;
@@ -576,7 +579,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // LA NUIT : un ciel sombre (ou etoile) eteint le soleil et allume les projecteurs du
   // stade — une lumiere froide et dure, une ambiance basse, la foule dans la penombre.
   const ct = th.skyTop || [68, 81, 167];
-  const nuit = !!th.stars || 0.3 * ct[0] + 0.59 * ct[1] + 0.11 * ct[2] < 60;
+  // LE PALAIS ROYAL (palais-3d.ts) : un interieur — ni ciel, ni heure, ni gradins ; la lumiere des lustres
+  const palais = !!th.palais;
+  const nuit = !palais && (!!th.stars || 0.3 * ct[0] + 0.59 * ct[1] + 0.11 * ct[2] < 60);
   // LE LUXE (Stade d'Or) : la nuit y est chaude — des projecteurs couleur d'or sur une
   // piste laquee, une ambiance presque nulle, la foule dans l'ombre (StadeOr.cs, Unity).
   const luxe = !!th.luxe;
@@ -631,7 +636,17 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // contre-jour — un liseré chaud (les bateaux) et la lumiere de face du Stade Neon
     uLisere.value = 1; uLisereCoul.value.set(0xffc890); uLisereForce.value = 0.35; uLisereFace.value = 1;
   }
-  uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : plage ? 0xec7860 : 0x2457b8);
+  uFoule.uSiege.value.set(luxe ? 0x1a1714 : cyber ? 0x14121e : plage ? 0xec7860 : palais ? 0x8a0f1e : 0x2457b8);
+  if (palais) {
+    // la lumiere chaude des lustres, de haut ; une brume doree qui fond le fond de la galerie
+    hemi.color.set(0xfff0d8); hemi.groundColor.set(0x9a7448); hemi.intensity = 1.2;
+    soleil.color.set(0xffdcaa); soleil.intensity = 2.0; soleilDecal.set(-8, -10, 40);
+    scene.background = new THREE.Color(0x2a1c12);
+    scene.fog = new THREE.Fog(0xcaa878, 150, 560);
+    uFoule.uLum.value = 0.95;
+    uLisere.value = 1; uLisereCoul.value.set(0xffd890); uLisereForce.value = 0.22; uLisereFace.value = 0;
+    if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+  }
   if (plage) scene.fog = nuit ? new THREE.Fog(0x0c1530, 220, 1100) : new THREE.Fog(0xf3c9a2, 260, 1300);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
   if (cyber) {
@@ -665,7 +680,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     g.setAttribute('position', new THREE.BufferAttribute(pts, 3));
     stade.add(new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false })));
   }
-  if (!th.stars && !luxe && !cyber && !plage) {
+  if (!th.stars && !luxe && !cyber && !plage && !palais) {
     // Des sprites loin autour du stade, comme a la plage : des plaques fixes a 300 m se
     // voyaient de biais et de pres pendant le survol — des taches blanches coupees net.
     // Les bouffees restent dans la toile (x 0,2-0,8, rayon <= 0,34 h) : aucun bord droit.
@@ -706,13 +721,15 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let i = 0; i < 8; i++) { c.fillStyle = css(herbe, i % 2 ? 0.88 : 1.06); c.fillRect(i * w / 8, 0, w / 8, h); }
   }, 256, 8);
   tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(10, 1);
-  if (!espace && !plage) plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.1);
+  if (!espace && !plage && !palais) plan(400, 400, new THREE.MeshLambertMaterial({ map: tonte }), 44, -R_CORDE, -0.1);
 
   // LA PISTE : les deux lignes droites et les deux virages, couloir par couloir
   const A = th.trackA || [148, 0, 0], B = th.trackB || A;
   // la piste du luxe est une laque : elle prend un reflet des projecteurs
   // ... et celle du Stade Neon, une chaussee mouillee qui renvoie les neons
-  const brillant = (c: THREE.Color) => cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.16, metalness: 0.35 })
+  // ... et celle du palais, un cristal poli : reflet de la salle, une lueur bleutee
+  const brillant = (c: THREE.Color) => palais ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.12, metalness: 0.2,
+      envMap: envPalais, envMapIntensity: 0.7, emissive: c, emissiveIntensity: 0.08 }) : cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.16, metalness: 0.35 })
     : luxe ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.32, metalness: 0.1 }) : new THREE.MeshLambertMaterial({ color: c });
   const matA = brillant(c3(A, A)), matB = brillant(c3(B, B));
   const ligne = new THREE.MeshBasicMaterial({ color: c3(th.lane, [247, 242, 233]) });
@@ -873,7 +890,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const Mp = repere(XA, yS, 0);
   let z1 = 0, yLoges = 0, z2 = 0, yFond = 0;
   const rS = R_CORDE + W + 3.2;
-  if (!plage) {                                  // la plage n'a pas de gradins
+  if (!plage && !palais) {                       // la plage et le palais n'ont pas de gradins
   boite(lBlanc, Mp, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);                       // le muret
   if (luxe || cyber) boite(cyber ? lFilet2 : lFilet, Mp, LS / 2, -0.15, 1.22, LS, 0.27, 0.04);
   z1 = gradins(Mp, LS, 13, 0.4, 1.2);
@@ -979,14 +996,14 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   stade.add(panneau);
   boite(lBloc, repere(0, 0, 0), XA + LS / 2, W + 1.78, 0.55, LS, 0.12, 1.1);
   // ... et le bandeau entre les deux etages (pas a la plage : pas de tribune)
-  if (!plage) {
+  if (!plage && !palais) {
   const bandeau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 0.7), new THREE.MeshBasicMaterial({ map: pubHaut }));
   bandeau.position.set(XA + LS / 2, yS + yLoges + 0.05, z1 + 0.3); bandeau.rotation.x = Math.PI / 2; bandeau.scale.x = -1;
   stade.add(bandeau);
   }
 
   // L'ECRAN GEANT, au-dessus du virage d'arrivee, tourne vers la ligne droite (pas a la plage)
-  if (!plage) {
+  if (!plage && !palais) {
   const ecran = texteCanvas((c, w, h) => {
     c.fillStyle = '#05070d'; c.fillRect(0, 0, w, h);
     c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -1036,7 +1053,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }
   }, 128, 96);
   const matLampes = new THREE.MeshBasicMaterial({ map: lampes });
-  for (const [x, y] of cyber || plage ? [] : [[DROITE1 + 30, W + 34], [DROITE0 - 30, W + 34], [DROITE1 + 30, yOppose - 34], [DROITE0 - 30, yOppose - 34]]) {
+  for (const [x, y] of cyber || plage || palais ? [] : [[DROITE1 + 30, W + 34], [DROITE0 - 30, W + 34], [DROITE1 + 30, yOppose - 34], [DROITE0 - 30, yOppose - 34]]) {
     boite(lMetal, repere(0, 0, 0), x, y, 24, 1.4, 1.4, 48);
     const p = new THREE.Mesh(new THREE.BoxGeometry(9, 1, 6), [matLampes, matLampes, matLampes, matLampes, matLampes, matLampes]);
     p.position.set(x, y, 49); p.lookAt(44, -R_CORDE, 0); stade.add(p);
@@ -1044,7 +1061,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
 
   // LES DRAPEAUX, sur la facade de la tribune principale
   const lDrap = maillots.slice(0, 4).map(v => new THREE.MeshLambertMaterial({ color: couleur(v), side: THREE.DoubleSide }));
-  for (let i = 0, x = 4; !plage && x < LS; x += 9, i++) {
+  for (let i = 0, x = 4; !plage && !palais && x < LS; x += 9, i++) {
     boite(lMetal, Mp, x, yFond + 0.1, z2 + 5.4, 0.08, 0.08, 4);
     const d = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1), lDrap[i % lDrap.length]);
     d.position.copy(new THREE.Vector3(x + 0.9, yFond + 0.1, z2 + 6.8).applyMatrix4(Mp));
@@ -1136,11 +1153,13 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   if (cyber) villeNeon(hasard, rS);
   if (menole) pubAnim.push(construireMenole({ stade, W, D0: DROITE0, D1: DROITE1, hasard, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
+  else if (palais) pubAnim.push(construirePalais({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, env: envPalais,
+    spectateur: (x, y, z, geste, face) => { if (atlasPublic) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
   else if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 
   // LES ARBRES, autour du stade (pas au luxe : autour, c'est le noir ; pas au Stade Neon : la ville)
-  for (let i = 0; i < (luxe || cyber || plage ? 0 : 70); i++) {
+  for (let i = 0; i < (luxe || cyber || plage || palais ? 0 : 70); i++) {
     const a = hasard() * Math.PI * 2, rx = 150 + hasard() * 40, ry = 95 + hasard() * 30;
     const x = 44 + rx * Math.cos(a), y = -R_CORDE + ry * Math.sin(a), h = 5 + hasard() * 5;
     boite(lTronc, M0, x, y, h * 0.3, 1, 1, h * 0.6);

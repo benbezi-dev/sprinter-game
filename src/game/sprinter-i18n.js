@@ -1984,7 +1984,9 @@
     // Le Stade Neon (cyberpunk, 22/10).
     ['Stade Néon', 'Neon Stadium'],
     // La plage (22/10).
-    ['Plage Paradis', 'Paradise Beach']
+    ['Plage Paradis', 'Paradise Beach'],
+    // Le Palais Royal (23/10).
+    ['Palais Royal', 'Royal Palace']
   ];
 
   const RACE_SUB = {

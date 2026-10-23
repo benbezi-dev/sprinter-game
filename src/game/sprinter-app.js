@@ -301,6 +301,21 @@
       heure: true,
       plage: true
     },
+    // LE PALAIS ROYAL : `palais` est lu par la course 3D (palais-3d.ts) — galerie de
+    // glaces, marbre, lustres, invites a table. Un interieur : pas d'heure, pas de ciel.
+    palais: {
+      skyTop: [58, 40, 30], skyBot: [150, 112, 70], stars: 0,
+      grass: [236, 226, 206], grassEdge: [214, 198, 170],
+      // le cristal : un bleu de glace franc — plus pale, sous les lustres, il sortait blanc
+      trackA: [84, 158, 214], trackB: [126, 190, 232],
+      lane: [214, 172, 72], kerb: [214, 172, 72],
+      tread: [236, 226, 206], riser: [138, 15, 30], roof: [120, 84, 40],
+      barrier: [214, 172, 72],
+      panels: [[138, 15, 30], [214, 172, 72], [30, 40, 90], [236, 226, 206]],
+      crowdLo: [40, 30, 30], crowdHi: [250, 240, 226],
+      accent: [214, 172, 72], dust: [236, 226, 206],
+      palais: true
+    },
     danube: {
       // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
       heure: 'nuit',

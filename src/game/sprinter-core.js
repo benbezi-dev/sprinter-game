@@ -759,6 +759,21 @@
       names: ['Kai Moana', 'Leilani Sol', 'Teva Marin', 'Ines Coral',
               'Malo Riviera', 'Nalu Ferreira', 'Sofia Lagos'] },
 
+    // LE PALAIS ROYAL (23/10). « Un stade a l'interieur d'un chateau : la piste couleur
+    // cristal, pas de gradins, des invites assis sur des chaises, d'autres a table,
+    // d'autres a la mezzanine. » Cherche dans Unity (StadeChateau.cs, Galerie des Glaces,
+    // valide par l'auteur), construit pour la course 3D (palais-3d.ts).
+    { cle: 'palais', name: 'Palais Royal', theme: 'palais',
+      pool: 'sprint',
+      horsSerie: true,
+      brancheTest: true,
+      noms: ['Palais Royal', 'Royal Palace'],
+      foule: 0.85,
+      plateau: { '100': [9.60, 9.95], '200': [19.30, 20.00],
+                 '400': [43.40, 44.60], '4x100': [37.60, 38.60] },
+      names: ['Louis Beaumont', 'Adele Versant', 'Victor Lisle', 'Margaux Ormel',
+              'Gaspard Roy', 'Clemence Doré', 'Hugo Fontaine'] },
+
   ];
 
   // ---------------------------------------------------------------------
