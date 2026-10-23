@@ -27,6 +27,8 @@ export type ContextePlage = {
   base: string;
   /** La nuit (?heure=nuit, ou l'heure qu'il est) : la lune au lieu du soleil, la mer sombre, les torches allumees. */
   nuit?: boolean;
+  /** Sans les yachts BENBEZI : la plage de Menole (Carriere Legende) a ses barques a elle. */
+  sansYachts?: boolean;
 };
 
 /** La ligne de la mer : la plage s'arrete la, au-dela de la ligne droite d'arrivee. */
@@ -415,7 +417,7 @@ export function construirePlage(o: ContextePlage) {
       c.fillStyle = g; c.fillRect(0, 0, w, h);
     }, 4, 128) });
   const guirlandes: number[] = [];
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < (o.sansYachts ? 0 : 8); i++) {
     const L = 24 + hasard() * 8, l = L * 0.24, y = yE + 16 + hasard() * 18;
     const g = new THREE.Group(); g.position.set(D0 - 45 + i * 26 + hasard() * 6, y, 0.25); g.rotation.z = (hasard() - 0.5) * 0.5; ajoute(g);
     const m = (geo: THREE.BufferGeometry, mt: THREE.Material, x: number, yy: number, z: number) => {

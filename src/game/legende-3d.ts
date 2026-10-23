@@ -152,7 +152,9 @@ export function construireLegende(o: ContexteLegende): number {
   if (P) {
     const im = decors.imageDuDecor(P.img);
     if (!im) manque++;
-    else for (let x = D0 - 4; x <= D1 + 16; x += P.pas * 4 * 2) ajoute(decoupe(im, P.largeur, x, -0.9 - P.recul - 14, 0));
+    // a flot, a quelques metres du rivage (plage-3d.ts : il est a W + 30) : sur le sable,
+    // le public de la plage les cachait ; sur l'eau, la camera de profil les voit au-dessus des tetes
+    else for (let x = D0 - 10; x <= D1 + 30; x += 15 + hasard() * 6) ajoute(decoupe(im, P.largeur, x, W + 38 + hasard() * 14, 0));
   }
 
   // --- L'OLYMPE : une mer de nuages autour du stade, sous la piste -----------------------

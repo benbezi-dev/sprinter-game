@@ -568,7 +568,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // LE STADE NEON (cyberpunk, StadeCyber.cs) : une nuit violette, des neons, la pluie
   const cyber = !!th.cyber;
   // LA PLAGE (plage-3d.ts) : un soleil bas et dore de fin d'apres-midi, pas de gradins
-  const plage = !!th.plage;
+  // la plage de Menole (Carriere Legende) court sur la Plage Paradis, sans ses yachts
+  const menole = stadeCle === 'legende-menole';
+  const plage = !!th.plage || menole;
   if (plage) chargerLaPlage();
   uFoule.uAtlas.value = plage ? atlasPlage : atlasPublic;
   hemi.color.set(luxe ? 0x6a5638 : cyber ? 0x9a38d8 : plage ? 0xffe2c0 : nuit ? 0x7a88c0 : 0xdfefff);
@@ -1114,7 +1116,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
 
   if (cyber) villeNeon(hasard, rS);
-  if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
+  if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit, sansYachts: menole,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 
   // LES ARBRES, autour du stade (pas au luxe : autour, c'est le noir ; pas au Stade Neon : la ville)
