@@ -1100,7 +1100,10 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const Mp = repere(XA, yS, 0);
   let z1 = 0, yLoges = 0, z2 = 0, yFond = 0;
   const rS = R_CORDE + W + 3.2;
-  const basses = Q.get('tribunes') === 'basses' && th.toiture === false;
+  // LES TRIBUNES BASSES DE LA RIVIERA ET DE LA NUIT ETOILEE (ciel ouvert en 2D, `toiture:false`),
+  // par defaut depuis le 23/10 (« oui, mets les tribunes basses par defaut ») ; ?tribunes=hautes
+  // remet la grande tribune couverte
+  const basses = Q.get('tribunes') !== 'hautes' && (stadeCle === 'riviera' || stadeCle === 'nuit');
   if (cdm) {
     // LA TRIBUNE PROVISOIRE du Champ-de-Mars : un gradin, sans toit, qui s'arrete a l'arrivee —
     // assez pour porter le public et ses drapeaux, trop basse pour cacher le parc
@@ -1109,10 +1112,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     yFond = 0.4 + 7 * 0.85;
     boite(lBlanc, Mp, LS / 2, yFond + 0.05, z2 + 0.5, LS, 0.08, 1.0);        // la rambarde du haut
   } else if (basses) {
-    // ?tribunes=basses : L'APERCU DES TRIBUNES DU 2D pour les stades a ciel ouvert (`toiture:false`,
-    // la Riviera, la Nuit etoilee) — basses et sans toit, pour laisser voir la mer et le ciel.
-    // A l'essai seulement (« montre-moi le resultat si on reduit », 23/10 ; reduire avait ete
-    // refuse le 22/10).
+    // les tribunes du 2D pour les stades a ciel ouvert — basses et sans toit, pour laisser voir
+    // la mer et le ciel (essayees le 23/10, « montre-moi le resultat si on reduit », puis
+    // adoptees ; reduire les autres reste refuse, 22/10)
     boite(lBlanc, Mp, LS / 2, -0.15, 0.6, LS, 0.25, 1.2);
     z1 = z2 = gradins(Mp, LS, 7, 0.4, 1.2);
     yFond = 0.4 + 7 * 0.85;
