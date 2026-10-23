@@ -40,6 +40,7 @@ import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
+import { construireMenole } from './menole-3d';
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
@@ -568,7 +569,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // LE STADE NEON (cyberpunk, StadeCyber.cs) : une nuit violette, des neons, la pluie
   const cyber = !!th.cyber;
   // LA PLAGE (plage-3d.ts) : un soleil bas et dore de fin d'apres-midi, pas de gradins
-  // la plage de Menole (Carriere Legende) court sur la Plage Paradis, sans ses yachts
+  // la plage de Menole (Carriere Legende) : la lumiere et l'absence de gradins d'une plage,
+  // mais son decor a elle (menole-3d.ts), pas celui de la Plage Paradis
   const menole = stadeCle === 'legende-menole';
   const plage = !!th.plage || menole;
   if (plage) chargerLaPlage();
@@ -1116,7 +1118,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
 
   if (cyber) villeNeon(hasard, rS);
-  if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit, sansYachts: menole,
+  if (menole) pubAnim.push(construireMenole({ stade, W, D0: DROITE0, D1: DROITE1, hasard,
+    spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
+  else if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 
   // LES ARBRES, autour du stade (pas au luxe : autour, c'est le noir ; pas au Stade Neon : la ville)

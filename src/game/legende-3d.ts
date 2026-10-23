@@ -147,15 +147,7 @@ export function construireLegende(o: ContexteLegende): number {
     ajoute(lot);
   }
 
-  // --- LE PREMIER PLAN DE MENOLE : les barques peintes, sur le sable de la pelouse ------
-  const P = D.premierPlan;
-  if (P) {
-    const im = decors.imageDuDecor(P.img);
-    if (!im) manque++;
-    // a flot, a quelques metres du rivage (plage-3d.ts : il est a W + 30) : sur le sable,
-    // le public de la plage les cachait ; sur l'eau, la camera de profil les voit au-dessus des tetes
-    else for (let x = D0 - 10; x <= D1 + 30; x += 15 + hasard() * 6) ajoute(decoupe(im, P.largeur, x, W + 38 + hasard() * 14, 0));
-  }
+  // (Menole n'a plus ses barques peintes ici : menole-3d.ts pose de vraies pirogues)
 
   // --- L'OLYMPE : une mer de nuages autour du stade, sous la piste -----------------------
   if (D.monument === 'karman' && o.nuages) {
