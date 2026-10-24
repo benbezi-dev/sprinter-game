@@ -1771,9 +1771,12 @@ function chargerLaBete() {
   f().then((u) => {
     const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
     const leger = () => new Promise<any>((ok, ko) => l.load(u, ok, undefined, ko));
-    // la pleine court en chien (molosse_trellis.py --chien) : une foulee tous les 3,5 m ; la legere,
-    // celle du trace 2D, tous les 2,22 m
-    l.loadAsync(base + 'modeles/boss-plein/molosse.glb').then((g: any) => ({ ...g, foulee: 0.285 })).catch(leger).then((gltf: any) => {
+    // LE GALOP DE CHIEN (molosse_trellis.py --chien) : une foulee tous les 3,5 m. La pleine, puis sa
+    // version legere (test3d ne publie pas boss-plein : sans elle, la bete en ligne gardait le
+    // galop du trace), puis la legere du trace 2D, tous les 2,22 m.
+    const chien = (g: any) => ({ ...g, foulee: 0.285 });
+    l.loadAsync(base + 'modeles/boss-plein/molosse.glb').then(chien)
+      .catch(() => l.loadAsync(base + 'modeles/molosse-chien.glb').then(chien)).catch(leger).then((gltf: any) => {
       const racine = new THREE.Group(), corps = gltf.scene;
       corps.rotation.x = Math.PI / 2;      // le glTF a y en haut, le stade z
       racine.add(corps);
