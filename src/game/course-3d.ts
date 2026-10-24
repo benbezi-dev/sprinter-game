@@ -38,13 +38,14 @@ import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
-import { construirePalais } from './palais-3d';
+import { construirePalais, cristalTaille } from './palais-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
 import { construireMenole } from './menole-3d';
 import { construireChamp, BLEU, BLANC, ROUGE } from './champ-de-mars-3d';
 import { pisteMouillee } from './piste-mouillee';
+import { flotter, toileDeDrapeau, uVent } from './drapeau-3d';
 import { arbresDuLieu, riviera, nuitEtoilee, pelouseAuPinceau, zeroGames } from './stades-classiques-3d';
 // TOUTE TEXTURE FILTREE AU MIEUX DE L'APPAREIL (24/10, pas de crenelage) : sans cela, celles des
 // modeles charges (coureurs, pieces des stades) scintillaient vues de biais ; three ramene 16 au maximum
@@ -894,8 +895,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // la piste du luxe est une laque : elle prend un reflet des projecteurs
   // ... et celle du Stade Neon, une chaussee mouillee qui renvoie les neons
   // ... et celle du palais, un cristal poli : reflet de la salle, une lueur bleutee
-  const brillant = (c: THREE.Color) => palais ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.08, metalness: 0.35,
-      envMap: envPalais, envMapIntensity: 1.1, emissive: c, emissiveIntensity: 0.12 }) : cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.06, metalness: 0.6,
+  const brillant = (c: THREE.Color) => palais ? cristalTaille(c, envPalais) : cyber ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.06, metalness: 0.6,
       envMap: envNeon, envMapIntensity: 0.8 })
     : luxe ? new THREE.MeshStandardMaterial({ color: c, roughness: 0.32, metalness: 0.1 }) : new THREE.MeshLambertMaterial({ color: c });
   const matA = brillant(c3(A, A)), matB = brillant(c3(B, B));
@@ -1406,12 +1406,13 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // LES DRAPEAUX, sur la facade de la tribune principale
   const lDrap = cdm
     // au Champ-de-Mars, de grands pavillons tricolores hisses tous les seize metres
-    ? [new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, map: texteCanvas((c, w, h) => {
-        [BLEU, BLANC, ROUGE].forEach((v, i) => { c.fillStyle = css(v); c.fillRect(i * w / 3, 0, w / 3, h); }); }, 96, 64) })]
-    : maillots.slice(0, 4).map(v => new THREE.MeshLambertMaterial({ color: couleur(v), side: THREE.DoubleSide }));
+    ? [flotter(new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, map: texteCanvas((c, w, h) => {
+        [BLEU, BLANC, ROUGE].forEach((v, i) => { c.fillStyle = css(v); c.fillRect(i * w / 3, 0, w / 3, h); }); }, 96, 64) }), 0.3)]
+    : maillots.slice(0, 4).map(v => flotter(new THREE.MeshLambertMaterial({ color: couleur(v), side: THREE.DoubleSide })));
   for (let i = 0, x = 4; !plage && !palais && x < LS; x += cdm ? 16 : 9, i++) {
     boite(lMetal, Mp, x, yFond + 0.1, z2 + 5.4, 0.08, 0.08, 4);
-    const d = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.1), lDrap[i % lDrap.length]);
+    // une toile qui flotte (drapeau-3d.ts), le mat a gauche
+    const d = new THREE.Mesh(toileDeDrapeau(1.8, 1.1), lDrap[i % lDrap.length]);
     d.position.copy(new THREE.Vector3(x + 0.9, yFond + 0.1, z2 + 6.8).applyMatrix4(Mp));
     d.rotation.x = Math.PI / 2; d.rotation.y = 0.25 * Math.sin(i);
     stade.add(d);
@@ -1898,7 +1899,13 @@ function maillageDe(chemin: string): THREE.Object3D | null | false {
     // (pas sur un appareil a moins de 4 Go : une texture de 4096 px y pese pres de 90 Mo de memoire graphique)
     const memoire = (navigator as any).deviceMemory;
     const nom = ULTRA && !(memoire && memoire < 4) && (chemin.match(new RegExp('(?:^|/)(' + PLEINS + ')(?:[-.][^/]*)?\\.glb$')) || [])[1];
-    (nom ? l.loadAsync(base + 'modeles/boss-plein/' + nom + '.glb').catch(leger) : leger())
+    // MEBA-MICKAEL ZEZE AU MAXIMUM, A TOUS LES PALIERS (« rends le skin de Mickael au maximum de sa
+    // qualite », l'auteur, 24/10) : sa texture 2048 en PNG, ses sommets sans la compression qui les
+    // arrondit, et une subdivision lissee (31 000 faces au lieu de 10 000, coutures ressoudees).
+    // Hors de boss-plein, que test3d ne publie pas.
+    const meba = /(?:^|\/)meba\.glb$/.test(chemin);
+    (meba ? l.loadAsync(base + 'vedettes/meba-plein.glb').catch(leger)
+      : nom ? l.loadAsync(base + 'modeles/boss-plein/' + nom + '.glb').catch(leger) : leger())
       .then((g) => { maillages.set(chemin, g.scene); })
       .catch(() => { maillages.set(chemin, false); });
   }
@@ -2378,18 +2385,37 @@ export function rendre(App: any, dt: number) {
     // L'ENTREE DU BOSS, LE CRI DE MEBA (engine.ts, viserLEntree, applaudir) : le moteur pose
     // `viseCamera` et `zoomPres` — un plan serre, a hauteur d'homme, face a lui, cote pelouse.
     // Pas de survol ce decompte-la : de son entree, la camera glisse droit sur celle du depart.
-    const entree = G.state === 'count' && typeof G.viseCamera === 'function' && !nuitDuMolosse;
+    // (24/10) la presentation de celui qui crie commence avec sa sequence d'avant-depart, pas au
+    // moment ou le moteur pose sa camera (0,6 s plus tard) : on le voit plus longtemps
+    const criEnCours = G.state === 'count' && !!(G.avantDepart && G.avantDepart.cri && G.avantDepart.reste > 0);
+    const entree = G.state === 'count' && (typeof G.viseCamera === 'function' || criEnCours) && !nuitDuMolosse;
     if (entree) {
       entreeVue = true;
+      // le cri arrive pendant le survol deja lance : le survol cede, la camera glisse vers lui
+      if (volLance) volPlonge = -2;
       const z = Math.max(1, G.zoomPres || 1.6);
       const nom = G.avantDepart && G.avantDepart.entree && G.avantDepart.entree.coureur;
-      const lui = (nom && (G.runners || []).find((r: any) => r.name === nom)) || G.presente || pl;
+      // CELUI QUI CRIE (engine.ts, applaudir : la camera du cri porte `.cri`) : celui qui applaudit et
+      // n'est pas le joueur. Sans cela la camera retombait sur notre coureur, en plan serre (« la
+      // presentation, on ne le voit pas assez », l'auteur, 24/10)
+      const crieur = ((G.viseCamera as any)?.cri || criEnCours) ? (G.runners || []).find((r: any) => r.look && r.look.clap && !r.isPlayer) : null;
+      const lui = (nom && (G.runners || []).find((r: any) => r.name === nom)) || crieur || G.presente || pl;
       // lui, au centre : le moteur vise en 2D un point de son couloir ; en 3D, c'est son corps
       const c = ouCourt(T, lui), h = capIci(T.heading(Math.max(0, lui.d || 0), lui.lane | 0));
       const ex = Math.sin(h), ey = -Math.cos(h), axe = Math.cos(h), aye = Math.sin(h);
-      const D = 11 / z;
-      voulu.set(c[0] + ex * D + axe * D * 0.3, -(c[1] + ey * D + aye * D * 0.3), 1.6);
-      vise.set(c[0], -c[1], 1.0);
+      if (crieur && lui === crieur) {
+        // SA PRESENTATION : dans son couloir, devant lui et face a lui — ses voisins restent sur les
+        // cotes au lieu de passer devant —, assez loin pour le voir en pied, poings au ciel compris,
+        // et un lent travelling qui tourne autour de lui pendant qu'il crie et applaudit
+        const tt = (G.avantDepart && G.avantDepart.t) || 0, D = camera.aspect < 1 ? 4.8 : 4.0;
+        const tour = 0.32 + 0.3 * Math.sin(tt * 0.55 - 0.6), dx = axe * Math.cos(tour) + ex * Math.sin(tour), dy = aye * Math.cos(tour) + ey * Math.sin(tour);
+        voulu.set(c[0] + dx * D, -(c[1] + dy * D), 1.45 + 0.15 * Math.sin(tt * 0.4));
+        vise.set(c[0], -c[1], 1.15);
+      } else {
+        const D = 11 / z;
+        voulu.set(c[0] + ex * D + axe * D * 0.3, -(c[1] + ey * D + aye * D * 0.3), 1.6);
+        vise.set(c[0], -c[1], 1.0);
+      }
     }
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
@@ -2514,6 +2540,7 @@ export function rendre(App: any, dt: number) {
     }
   }
   uFoule.uT.value = performance.now() / 1000;
+  uVent.value = uFoule.uT.value;
   monde.worldToLocal(uFoule.uCam.value.copy(camera.position));
   if (pl) {
     const q = ouCourt(T, pl);

@@ -306,9 +306,10 @@
     palais: {
       skyTop: [58, 40, 30], skyBot: [150, 112, 70], stars: 0,
       grass: [236, 226, 206], grassEdge: [214, 198, 170],
-      // LE CRISTAL BLEU DE SEVRES, laque, aux filets d'or (« la piste manque de force, de prestance
-      // et de classe », 23/10) : le bleu de glace pale du premier jet sortait presque blanc
-      trackA: [20, 40, 104], trackB: [30, 58, 140],
+      // LE BLEU DE GLACE DU PREMIER JET, de retour (« reviens sur la couleur de piste d'avant mais
+      // ameliore la qualite et les details », 24/10) : le bleu de Sevres du 23/10 (« manque de force »)
+      // est rendu ; la force vient desormais de la taille du cristal (palais-3d.ts, cristalTaille)
+      trackA: [84, 158, 214], trackB: [126, 190, 232],
       lane: [236, 190, 86], kerb: [236, 190, 86],
       tread: [236, 226, 206], riser: [138, 15, 30], roof: [120, 84, 40],
       barrier: [214, 172, 72],

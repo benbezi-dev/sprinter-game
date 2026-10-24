@@ -61,6 +61,37 @@ const place = (x: number, y: number, z: number, rz = 0, sx = 1, sy = 1, sz = 1) 
 // les couleurs du palais (StadeChateau.cs)
 const CREME = '#efe6d4', GRIOTTE = '#7d1424', GRIOTTE_C = '#a3263a', OR = '#d4a64a', OR_C = '#f3d58a', OR_F = '#8a6424';
 
+/**
+ * LA PISTE EN CRISTAL TAILLE (24/10 : « la couleur de piste d'avant, mais ameliore la qualite et les
+ * details »). Le bleu de glace revient ; ce qui lui manquait de force vient de la taille : des facettes
+ * en losange de quatre-vingts centimetres, chacune d'une nuance, leurs aretes qui accrochent la lumiere, et
+ * un vernis (clearcoat) qui renvoie la salle. Calcule dans le repere du monde — les bandes droites et
+ * les anneaux des virages se raccordent sans couture —, et les aretes s'adoucissent a la largeur
+ * d'un pixel (fwidth) : aucun crenelage.
+ */
+export function cristalTaille(c: THREE.Color, env: THREE.Texture | null) {
+  const m = new THREE.MeshPhysicalMaterial({ color: c, roughness: 0.14, metalness: 0.05, clearcoat: 1, clearcoatRoughness: 0.04,
+    envMap: env, envMapIntensity: 1.25, emissive: c, emissiveIntensity: 0.08 });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vCristal;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvCristal = (modelMatrix * vec4(transformed, 1.0)).xy;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vCristal;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+vec2 q = vec2(vCristal.x + vCristal.y, vCristal.x - vCristal.y) * 0.85;
+vec2 f = abs(fract(q) - 0.5);
+float bord = 0.5 - max(f.x, f.y);
+float largeur = max(fwidth(bord) * 1.5, 1e-4);
+float arete = 1.0 - smoothstep(0.0, largeur + 0.012, bord);
+float face = fract(sin(dot(floor(q), vec2(12.9898, 78.233))) * 43758.5453);
+diffuseColor.rgb *= 0.93 + 0.12 * face;
+diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.97, 1.0), arete * 0.16);`);
+  };
+  m.customProgramCacheKey = () => 'cristal-taille';
+  return m;
+}
+
 /** Un degrade d'or, de haut en bas, pour peindre les cadres. */
 function or(c: CanvasRenderingContext2D, y0: number, y1: number) {
   const g = c.createLinearGradient(0, y0, 0, y1);
@@ -92,30 +123,65 @@ export function construirePalais(o: ContextePalais) {
   const matVelours = new THREE.MeshStandardMaterial({ color: c3(138, 15, 30), roughness: 0.9 });
 
   // --- LE SOL : des panneaux de marbre creme, des bandes de griotte, un filet d'or ----
+  // LE SOL NE SE REPETE PLUS EN GRILLE (« le decor est trop plat et sans ame », 24/10) : le carreau de
+  // 4 m, aux memes veines partout, faisait un grand quadrillage rouge. Une dalle de 8 m porte quatre
+  // panneaux de marbre, chacun ses teintes et ses veines, des bandes de griotte plus fines a double
+  // filet d'or, des rosaces aux croisements et un losange incruste au coeur de chaque panneau.
   const sol = toile((c, w, h) => {
-    c.fillStyle = CREME; c.fillRect(0, 0, w, h);
-    // les veines du marbre
-    for (let i = 0; i < 26; i++) {
-      c.strokeStyle = `rgba(${150 + hasard() * 40 | 0},${130 + hasard() * 30 | 0},${100 + hasard() * 30 | 0},${0.08 + hasard() * 0.12})`;
-      c.lineWidth = 1 + hasard() * 2.5;
-      c.beginPath(); let x = hasard() * w, y = hasard() * h; c.moveTo(x, y);
-      for (let k = 0; k < 5; k++) { x += (hasard() - 0.5) * 260; y += (hasard() - 0.3) * 200; c.quadraticCurveTo(x + 40, y - 30, x, y); }
-      c.stroke();
+    const P = w / 2, tons = ['#f1e8d6', '#ece0cb', '#f4ede0', '#e9ddc6'];
+    for (let i = 0; i < 4; i++) {
+      const x0 = (i % 2) * P, y0 = Math.floor(i / 2) * P;
+      c.save(); c.beginPath(); c.rect(x0, y0, P, P); c.clip();
+      const g = c.createLinearGradient(x0, y0, x0 + P, y0 + P);
+      g.addColorStop(0, tons[i]); g.addColorStop(0.5, tons[(i + 1) % 4]); g.addColorStop(1, tons[i]);
+      c.fillStyle = g; c.fillRect(x0, y0, P, P);
+      // les veines : un fil principal, ses affluents, des nuages laiteux
+      const ang = hasard() * Math.PI;
+      for (let n = 0; n < 9; n++) {
+        c.fillStyle = `rgba(255,252,246,${0.05 + hasard() * 0.06})`;
+        c.beginPath(); c.ellipse(x0 + hasard() * P, y0 + hasard() * P, 40 + hasard() * 160, 20 + hasard() * 60, ang, 0, Math.PI * 2); c.fill();
+      }
+      for (let v = 0; v < 14; v++) {
+        const fort = v < 3;
+        c.strokeStyle = fort ? `rgba(${120 + hasard() * 30 | 0},${96 + hasard() * 24 | 0},${78 + hasard() * 20 | 0},${0.22 + hasard() * 0.18})`
+          : `rgba(${150 + hasard() * 40 | 0},${126 + hasard() * 30 | 0},${104 + hasard() * 30 | 0},${0.06 + hasard() * 0.1})`;
+        c.lineWidth = fort ? 1.6 + hasard() * 2.2 : 0.6 + hasard() * 1.2;
+        let x = x0 + hasard() * P, y = y0 + hasard() * P, a = ang + (hasard() - 0.5) * 0.9;
+        c.beginPath(); c.moveTo(x, y);
+        for (let k = 0; k < 9; k++) {
+          a += (hasard() - 0.5) * 0.7; const l = 40 + hasard() * 90;
+          const nx = x + Math.cos(a) * l, ny = y + Math.sin(a) * l;
+          c.quadraticCurveTo(x + Math.cos(a + 0.6) * l * 0.5, y + Math.sin(a + 0.6) * l * 0.5, nx, ny); x = nx; y = ny;
+        }
+        c.stroke();
+      }
+      // le losange incruste : marbre rose de Languedoc, cerne d'un filet d'or
+      const cx = x0 + P / 2, cy = y0 + P / 2, r = P * 0.27;
+      c.beginPath(); c.moveTo(cx, cy - r); c.lineTo(cx + r, cy); c.lineTo(cx, cy + r); c.lineTo(cx - r, cy); c.closePath();
+      c.fillStyle = 'rgba(196,128,118,0.55)'; c.fill();
+      c.strokeStyle = OR; c.lineWidth = 5; c.stroke();
+      c.beginPath(); c.arc(cx, cy, r * 0.22, 0, Math.PI * 2); c.fillStyle = OR_C; c.fill();
+      c.restore();
     }
-    const b = w * 0.07;                          // la bande de griotte (0,28 m sur 4 m)
+    // les bandes de griotte (0,18 m) a double filet d'or, sur les bords de chaque panneau
+    const b = w * 0.0225;
     c.fillStyle = GRIOTTE;
-    c.fillRect(0, 0, w, b); c.fillRect(0, 0, b, h);
-    c.fillStyle = OR; c.fillRect(0, b, w, 4); c.fillRect(b, 0, 4, h);
-    c.fillRect(0, 0, w, 2); c.fillRect(0, 0, 2, h);
-    // une rosace d'or au croisement des bandes
-    c.fillStyle = OR_C; c.beginPath(); c.arc(b / 2, b / 2, b * 0.34, 0, Math.PI * 2); c.fill();
-    c.fillStyle = GRIOTTE_C; c.beginPath(); c.arc(b / 2, b / 2, b * 0.16, 0, Math.PI * 2); c.fill();
-    // un losange de marbre plus clair au milieu du panneau
-    c.fillStyle = 'rgba(255,252,244,0.55)';
-    c.beginPath(); c.moveTo(w * 0.535, h * 0.2); c.lineTo(w * 0.87, h * 0.535); c.lineTo(w * 0.535, h * 0.87); c.lineTo(w * 0.2, h * 0.535); c.fill();
-    c.strokeStyle = OR; c.lineWidth = 3; c.stroke();
-  }, 1024, 1024);
-  sol.wrapS = sol.wrapT = THREE.RepeatWrapping; sol.repeat.set(lx / 4, ly / 4);
+    for (const k of [0, P]) { c.fillRect(0, k - b / 2, w, b); c.fillRect(k - b / 2, 0, b, h); }
+    c.fillRect(0, h - b / 2, w, b / 2); c.fillRect(w - b / 2, 0, b / 2, h);
+    c.fillStyle = OR;
+    for (const k of [0, P, w]) for (const e of [-b / 2 - 4, b / 2]) { c.fillRect(0, k + e, w, 4); c.fillRect(k + e, 0, 4, h); }
+    // les rosaces d'or aux croisements : huit petales autour d'un coeur de griotte
+    for (const [rx, ry] of [[0, 0], [P, 0], [0, P], [P, P], [w, 0], [0, h], [w, h], [w, P], [P, h]]) {
+      c.fillStyle = OR_C;
+      for (let k = 0; k < 8; k++) {
+        const a = k * Math.PI / 4;
+        c.beginPath(); c.ellipse(rx + Math.cos(a) * b * 0.9, ry + Math.sin(a) * b * 0.9, b * 0.55, b * 0.24, a, 0, Math.PI * 2); c.fill();
+      }
+      c.beginPath(); c.arc(rx, ry, b * 0.6, 0, Math.PI * 2); c.fill();
+      c.fillStyle = GRIOTTE_C; c.beginPath(); c.arc(rx, ry, b * 0.3, 0, Math.PI * 2); c.fill();
+    }
+  }, 2048, 2048);
+  sol.wrapS = sol.wrapT = THREE.RepeatWrapping; sol.repeat.set(lx / 8, ly / 8);
   const plancher = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(lx, ly),
     new THREE.MeshStandardMaterial({ map: sol, roughness: 0.16, envMap: env, envMapIntensity: 0.55 })));
   plancher.position.set(xc, yc, -0.1); plancher.receiveShadow = true;
@@ -454,6 +520,56 @@ export function construirePalais(o: ContextePalais) {
     o.spectateur(xc + Math.cos(a) * r, yc + Math.sin(a) * r, 0, 3, Math.atan2(-Math.sin(a), -Math.cos(a)));
   }
 
+  // --- LE TAPIS ROUGE ET LES GIRANDOLES, entre la piste et les chaises (24/10, « sans ame ») ---
+  // Un velours de griotte borde d'or court tout autour de la piste ; des girandoles d'or le jalonnent,
+  // trois bougies chacune, et posent au sol une flaque de lumiere chaude.
+  const velours = toile((c, w, h) => {
+    c.fillStyle = '#7a0f1f'; c.fillRect(0, 0, w, h);
+    for (let i = 0; i < 900; i++) { c.fillStyle = `rgba(${hasard() < 0.5 ? '40,0,8' : '170,40,60'},${0.08 + hasard() * 0.08})`; c.fillRect(hasard() * w, hasard() * h, 2, 2); }
+    c.fillStyle = OR; c.fillRect(0, 0, w * 0.07, h); c.fillRect(w * 0.93, 0, w * 0.07, h);
+    c.fillStyle = OR_F; c.fillRect(w * 0.07, 0, w * 0.015, h); c.fillRect(w * 0.915, 0, w * 0.015, h);
+    // une fleur de lys d'or au milieu, tous les deux metres
+    c.fillStyle = OR_C; const cx = w / 2, cy = h / 2, k = w * 0.12;
+    c.beginPath(); c.ellipse(cx, cy - k * 0.6, k * 0.28, k * 0.75, 0, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(cx - k * 0.55, cy - k * 0.2, k * 0.22, k * 0.55, -0.7, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.ellipse(cx + k * 0.55, cy - k * 0.2, k * 0.22, k * 0.55, 0.7, 0, Math.PI * 2); c.fill();
+    c.fillRect(cx - k * 0.6, cy + k * 0.15, k * 1.2, k * 0.18);
+  }, 256, 256);
+  velours.wrapS = velours.wrapT = THREE.RepeatWrapping;
+  {
+    const r0 = R + W + 0.5, r1 = R + W + 2.5, N = 720, pos: number[] = [], uv: number[] = [], ix: number[] = [];
+    const S = D1 - D0, Lr = 2 * S + Math.PI * (r0 + r1);
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, [xa, ya] = ovale(r0, t), [xb, yb] = ovale(r1, t);
+      pos.push(xa, ya, 0.006, xb, yb, 0.006); uv.push(0, t * Lr / 2, 1, t * Lr / 2);
+      if (i < N) { const a = i * 2; ix.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setIndex(ix); g.computeVertexNormals();
+    const tapis = ajoute(new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: velours, roughness: 0.95, side: THREE.DoubleSide,
+      polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 })));
+    tapis.receiveShadow = true;
+  }
+  const lGirandole = new Lot(mergeGeometries([
+    new THREE.LatheGeometry([[0.0, 0], [0.26, 0], [0.24, 0.06], [0.1, 0.12], [0.07, 0.5], [0.11, 0.62], [0.05, 0.75], [0.05, 1.5], [0.09, 1.56], [0.0, 1.62]]
+      .map(([r, z]) => new THREE.Vector2(r, z)), 16).rotateX(Math.PI / 2),
+    new THREE.TorusGeometry(0.32, 0.025, 6, 24, Math.PI).rotateY(Math.PI / 2).rotateZ(Math.PI / 2).translate(0, 0, 1.58),
+    ...[-0.32, 0, 0.32].map(dx => new THREE.CylinderGeometry(0.06, 0.04, 0.06, 10).rotateX(Math.PI / 2).translate(dx, 0, dx === 0 ? 1.66 : 1.58))]), matOr, true);
+  const lCierge = new Lot(mergeGeometries([-0.32, 0, 0.32].map(dx => new THREE.CylinderGeometry(0.025, 0.025, 0.22, 8).rotateX(Math.PI / 2).translate(dx, 0, (dx === 0 ? 1.69 : 1.61) + 0.11))),
+    new THREE.MeshStandardMaterial({ color: c3(250, 246, 236), roughness: 0.6 }));
+  const lFlammeG = new Lot(mergeGeometries([-0.32, 0, 0.32].map(dx => new THREE.SphereGeometry(0.035, 6, 4).scale(1, 1, 1.9).translate(dx, 0, (dx === 0 ? 1.69 : 1.61) + 0.27))), matFlamme);
+  {
+    const r = R + W + 1.5, S = D1 - D0, L = 2 * S + 2 * Math.PI * r, n = Math.round(L / 10);
+    for (let i = 0; i < n; i++) {
+      const [x, y, a] = ovale(r, (i + 0.5) / n);
+      if (Math.abs(x - xDais) < 7 && Math.abs(y - yDais) < 5) continue;
+      for (const l of [lGirandole, lCierge, lFlammeG]) l.poser(place(x, y, 0, a));
+      const s = ajoute(new THREE.Sprite(matHalo)); s.position.set(x, y, 1.95); s.scale.set(1.1, 1.1, 1);
+      flaques.poser(place(x, y, 0.009, 0, 5, 5, 1));
+    }
+  }
+
   // --- LA POUSSIERE DE CRISTAL qui scintille au-dessus de la piste ---------------------
   const nEclats = 700, eclats = new Float32Array(nEclats * 3);
   for (let i = 0; i < nEclats; i++) {
@@ -465,7 +581,7 @@ export function construirePalais(o: ContextePalais) {
   ajoute(new THREE.Points(ge, matEclat));
 
   for (const l of [pilastres, dores, nervures, dalles, colonnes, balustres, lLustre, lCristal, lBougie, flaques, lNappe, lFleurs, lFlambeau, lFlamme,
-    estrade, lStatue, lCaisse, lFeuille, lOrange]) l.finir(stade);
+    estrade, lStatue, lCaisse, lFeuille, lOrange, lGirandole, lCierge, lFlammeG]) l.finir(stade);
 
   // les jets de la fontaine retombent en gerbe ; les bougies et le cristal frissonnent
   return (t: number) => {

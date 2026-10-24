@@ -16,6 +16,7 @@
 // principale, z en haut ; le centre de l'ovale est en (xc, -R).
 
 import * as THREE from 'three';
+import { flotter, toileDeDrapeau } from './drapeau-3d';
 
 export type ContexteClassique = {
   stade: THREE.Group;
@@ -385,14 +386,14 @@ export function zeroGames(o: ContexteClassique): (t: number) => void {
   const motifs = [[[0, 85, 164], [255, 255, 255], [239, 65, 53]], [[0, 140, 69], [244, 249, 255], [205, 33, 42]], [[0, 0, 0], [221, 0, 0], [255, 206, 0]],
     [[0, 122, 61], [252, 209, 22], [206, 17, 38]], [[0, 56, 168], [252, 209, 22], [0, 56, 168]], [[220, 20, 60], [255, 255, 255], [220, 20, 60]],
     [[0, 106, 167], [254, 204, 0], [0, 106, 167]], [[255, 153, 51], [255, 255, 255], [19, 136, 8]], [[0, 158, 96], [255, 255, 255], [0, 158, 96]]];
-  const mats = motifs.map((m, i) => new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, map: toile((c, w, h) => {
+  const mats = motifs.map((m, i) => flotter(new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, map: toile((c, w, h) => {
     m.forEach((v, k) => { c.fillStyle = rgb(v); if (i % 2) c.fillRect(0, k * h / 3, w, h / 3); else c.fillRect(k * w / 3, 0, w / 3, h); });
-  }, 96, 64) }));
+  }, 96, 64) }), 0.3));
   const fut = new Lot(new THREE.CylinderGeometry(0.06, 0.08, 6, 6).rotateX(Math.PI / 2).translate(0, 0, 3), new THREE.MeshLambertMaterial({ color: 0xd0d4da }));
   const drapeaux: THREE.Mesh[] = [];
   const mat = (x: number, y: number, z: number, i: number) => {
     fut.poser(x, y, z);
-    const d = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.5).translate(1.2, 0, 0).rotateX(Math.PI / 2), mats[i % mats.length]));
+    const d = ajoute(new THREE.Mesh(toileDeDrapeau(2.4, 1.5).translate(1.2, 0, 0).rotateX(Math.PI / 2), mats[i % mats.length]));
     d.position.set(x, y, z + 5.2); d.userData.ph = hasard() * 6; drapeaux.push(d);
   };
   let i = 0;
@@ -433,10 +434,20 @@ export function zeroGames(o: ContexteClassique): (t: number) => void {
     c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('0.GAMES', w / 2, h / 2 + h * 0.04); }, 1024, 200);
   const sol = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(44, 8.6), new THREE.MeshLambertMaterial({ map: mot, transparent: true })));
   sol.position.set(xc, yc, 0.02); sol.scale.x = -1;     // le monde est en miroir : le mot se lit a l'endroit
+  // LE RUBAN RALENTIT AU DEPART (« l'ecran au-dessus du stade au depart du 200 m et du 400 m tourne
+  // trop vite », l'auteur, 24/10) : un cinquieme de sa vitesse pendant le decompte et les vingt
+  // premiers metres, puis il reprend la sienne — celle d'un sprinteur — quand la course passe devant
+  let avant = -1, vitesse = 0.2, decale = 0;
   return (t: number) => {
+    const G = (globalThis as any).SprinterApp?.G;
+    const lancee = !!G && G.state === 'race' && !!G.player && G.player.d > 20;
+    const dt = avant < 0 ? 0 : Math.min(0.1, Math.max(0, t - avant)); avant = t;
+    vitesse += ((lancee ? 1 : 0.2) - vitesse) * Math.min(1, dt * 0.8);
+    decale -= dt * 0.6 * vitesse;
     flammes.forEach((f, k) => { const s = 1 + 0.18 * Math.sin(t * (9 + k * 2.3) + k) + 0.1 * Math.sin(t * 23 + k * 5); f.scale.set(8 * s, 19 * s * (k % 2 ? 0.8 : 1), 1); });
     halo.material.opacity = 0.45 + 0.12 * Math.sin(t * 11);
-    ruban.offset.x = -t * 0.6;
-    for (const d of drapeaux) d.rotation.z = 0.35 * Math.sin(t * 2.2 + d.userData.ph);
+    ruban.offset.x = decale;
+    // la toile flotte (drapeau-3d.ts) ; le drapeau ne fait plus que tourner un peu au vent
+    for (const d of drapeaux) d.rotation.z = 0.12 * Math.sin(t * 0.9 + d.userData.ph);
   };
 }
