@@ -2173,8 +2173,11 @@ export function rendre(App: any, dt: number) {
   if ((G.state === 'count' || G.state === 'race') && planPour !== G.track) {
     planPour = G.track;
     const force = Q.get('plan') as any;
-    // la ruelle du molosse est bordee de murs : pas de rail
-    const autres = PLANS.filter(k => k !== planCam && !(nuitDuMolosse && k === 'rail'));
+    // la ruelle du molosse est bordee de murs : pas de rail. ET LE RAIL VEUT UN ECRAN LARGE (« garde ce
+    // plan pour le smartphone en paysage, la tablette ou le pc portable », l'auteur, 24/10) : un
+    // telephone tenu droit ne le tire plus (?plan=rail l'impose encore)
+    const large = camera.aspect >= 1 || Math.min(innerWidth, innerHeight) >= 600;
+    const autres = PLANS.filter(k => k !== planCam && !(k === 'rail' && (nuitDuMolosse || !large)));
     planCam = PLANS.includes(force) ? force : autres[Math.floor(Math.random() * autres.length)];
   }
   const plan2D = !DOS && planCam === '2d', rail = !DOS && planCam === 'rail' && !nuitDuMolosse;
@@ -2296,8 +2299,9 @@ export function rendre(App: any, dt: number) {
       // tenait dans un telephone tenu droit qu'a 60 m, les coureurs en points ; de biais, l'ecart
       // passe dans la profondeur (le premier en haut). Ecran large : profil pur.
       const portrait = camera.aspect < 1, biais = portrait ? 0.6 : 0, cb = Math.cos(biais), sb = Math.sin(biais);
-      const demiH = Math.atan(Math.tan((portrait ? 40 : 24) * Math.PI / 360) * camera.aspect);
-      const Dv = Math.min(portrait ? 40 : 60, Math.max(8, ((sMax - sMin) * cb + 6) / (2 * Math.tan(demiH)))), cv = (sMin + sMax) / 2 + 0.8;
+      // ecran large : un champ plus ouvert et plus de marge (« agrandis la zone de la camera », 24/10)
+      const demiH = Math.atan(Math.tan((portrait ? 40 : 32) * Math.PI / 360) * camera.aspect);
+      const Dv = Math.min(portrait ? 40 : 60, Math.max(portrait ? 8 : 10, ((sMax - sMin) * cb + (portrait ? 6 : 10)) / (2 * Math.tan(demiH)))), cv = (sMin + sMax) / 2 + 0.8;
       if (!railPret) { railC = cv; railD = Dv; railPret = true; }
       const k = Math.min(1, (dt || 0.016) * 1.5);
       railC += (cv - railC) * k; railD += (Dv - railD) * k;
@@ -2389,8 +2393,12 @@ export function rendre(App: any, dt: number) {
       const f = secousse * 0.22;
       camera.position.x += (Math.random() - 0.5) * f; camera.position.z += (Math.random() - 0.5) * f;
     }
-    camera.lookAt(camVise);
-    const fov = plan2D ? CHAMP_2D : rail ? (camera.aspect < 1 ? 40 : 24) : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
+    // AU FAUX DEPART, LE JOUEUR DESCEND SOUS LE TEXTE de la cinematique (voir originY, sprinter-app.js) :
+    // la camera leve les yeux, en glissant
+    const fo = G.state === 'falseout' ? Math.min(1, (G.falseOutT || 0) / 0.8) : 0;
+    if (fo > 0) camera.lookAt(camVise.x, camVise.y, camVise.z + fo * fo * (3 - 2 * fo) * 0.2 * camera.position.distanceTo(camVise));
+    else camera.lookAt(camVise);
+    const fov = plan2D ? CHAMP_2D : rail ? (camera.aspect < 1 ? 40 : 32) : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
     if (Math.abs(camera.fov - fov) > 0.05) camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3);
     // LE PIXEL DU 2D N'EST PAS CARRE (vue.py) : un metre en largeur y vaut cos.racine2/racine(2 sin2+1)
     // fois un metre en hauteur — 1,07 au sprint, 1,38 a la nuit du molosse a 7°. Le plan 2D etire
@@ -2410,7 +2418,9 @@ export function rendre(App: any, dt: number) {
     // Le repere du soleil est celui du 2D (y non retourne), celui de la camera est retourne.
     const vx = camPos.x - camVise.x, vy = camVise.y - camPos.y, vn = Math.hypot(vx, vy) || 1;
     const sh = Math.hypot(soleilDecal.x, soleilDecal.y);
-    _solVoulu.set((vx * 0.87 - vy * 0.5) / vn * sh, (vx * 0.5 + vy * 0.87) / vn * sh, soleilDecal.z);
+    // au rail, au ras du sol, un soleil haut n'eclairait que le dessus des tetes (« ca manque de
+    // lumiere », 24/10) : il descend vers la camera et prend les coureurs de face
+    _solVoulu.set((vx * 0.87 - vy * 0.5) / vn * sh, (vx * 0.5 + vy * 0.87) / vn * sh, soleilDecal.z * (rail ? 0.45 : 1));
     if (solPret) solCam.lerp(_solVoulu, 1 - Math.exp(-(dt || 0.016) * 2)); else solCam.copy(_solVoulu);
     solPret = true;
     const sd = nuitDuMolosse ? soleilDecal : solCam;
@@ -2467,4 +2477,8 @@ export function rendre(App: any, dt: number) {
   }
   dessinerLesEffets(App);
   renderer!.render(scene, camera);
+  // LE FILM D'APRES COURSE (review.ts) recopie l'image 3D ici, juste apres son trace : plus tard
+  // dans l'image, le navigateur a deja vide le tampon WebGL et la copie sortait noire
+  const filmer = (globalThis as any).__filmer3D;
+  if (filmer) filmer(renderer!.domElement);
 }

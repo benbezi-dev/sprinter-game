@@ -58,6 +58,7 @@ export function peindreLeHud(ctx: CanvasRenderingContext2D, l: number, h: number
   // Le HUD n'existe qu'en course : `App.tsx` ne le monte que pour 'count' et
   // 'race'. Le film suit exactement la meme regle — sans quoi il porterait un
   // chrono par-dessus l'ecran de resultat.
+  if (etat === 'falseout') { fauxDepartDuFilm(ctx, l, h, G, N); return; }
   if (etat !== 'count' && etat !== 'race') return;
   const p = G.player;
   if (!p || !N || !C) return;
@@ -526,6 +527,27 @@ function departAuMilieu(ctx: CanvasRenderingContext2D, l: number, h: number, o: 
            cx, y + t * 0.75, { taille: t, gras: 700, couleur: OR, alpha: 0.8,
                                espace: 1, aligne: 'center', ombre: true });
   }
+}
+
+/**
+ * LE FAUX DEPART DU FILM (24/10, « faux depart compris »). A l'ecran, c'est FalseStartCut qui
+ * l'annonce — du HTML, que `captureStream` ne voit pas : le film filmait un coureur qui part seul,
+ * sans un mot. On lui en peint l'essentiel, aux memes places : le coup de rouge qui retombe, la
+ * bande sombre du milieu (32 a 68 % de la hauteur), « parti avant le coup de pistolet » et
+ * FAUX DEPART. Le joueur, lui, est descendu sous la bande (voir originY, sprinter-app.js).
+ */
+function fauxDepartDuFilm(ctx: CanvasRenderingContext2D, l: number, h: number, G: any, N: any) {
+  const t = G.falseOutT || 0;
+  const rouge = t < 0.35 ? 0.6 * (1 - t / 0.35) : 0.08;
+  ctx.fillStyle = `rgba(220, 38, 38, ${rouge})`; ctx.fillRect(0, 0, l, h);
+  const a = Math.min(1, Math.max(0, (t - 0.3) / 0.6));
+  ctx.fillStyle = `rgba(0, 0, 0, ${0.6 * a})`; ctx.fillRect(0, h * 0.32, l, h * 0.36);
+  const md = l >= MD, sm = l >= SM;
+  const tT = md ? 58 : sm ? 48 : 40, tS = md ? 14 : 11;
+  ecrire(ctx, String(N.t('false_out_gun')).toUpperCase(), l / 2, h * 0.5 - tT * 0.9,
+         { taille: tS, gras: 800, couleur: ROUGE, espace: tS * 0.35, alpha: a, aligne: 'center' });
+  ecrire(ctx, String(N.t('false_out')).toUpperCase(), l / 2, h * 0.5,
+         { taille: tT, gras: 900, couleur: ROUGE, espace: tT * 0.04, alpha: a, aligne: 'center', ombre: true });
 }
 
 /**

@@ -3782,7 +3782,14 @@
     return G.VW * (G.portrait ? 0.58 : 0.60);
   }
   function originY() {
-    if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') return G.VH * 0.5;
+    // AU FAUX DEPART, LE JOUEUR DESCEND SOUS LE TEXTE (24/10) : il jaillit des blocs puis se prend la
+    // tete (faux-depart.ts), et la cinematique (FalseStartCut) assombrit la bande du milieu, de 32 a
+    // 68 % de la hauteur. Il y glisse en huit dixiemes de seconde, sans sauter.
+    if (G.state === 'falseout') {
+      const u = Math.min(1, (G.falseOutT || 0) / 0.8);
+      return G.VH * (0.5 + 0.2 * u * u * (3 - 2 * u));
+    }
+    if (G.state === 'race' || G.state === 'count') return G.VH * 0.5;
     return G.VH * (G.portrait ? 0.44 : 0.56);
   }
 

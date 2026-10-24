@@ -64,6 +64,7 @@ import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
 import { DUEL_MARQUES_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
+import { jouerLeFauxDepart, rangerLeFauxDepart } from './faux-depart';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
          courseLancee } from './chargement';
 
@@ -1003,6 +1004,8 @@ export function updateLogic(dt: number) {
   G.shake = Math.max(0, G.shake - dt * 3.2);
   G.flash = Math.max(0, G.flash - dt * 1.4);
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
+  // le faux depart se joue (faux-depart.ts) ; hors de lui, le joueur rend sa posture
+  if (G.state === 'falseout') jouerLeFauxDepart(dt); else rangerLeFauxDepart();
 
   // Le championnat en direct joue son propre morceau, cale sur la salle (voir
   // game/musique-championnat.ts) : la musique de course ferait deux morceaux a
