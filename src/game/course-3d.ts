@@ -72,19 +72,22 @@ const STADE_FORCE = Q.get('stade');
 const TELEPHONE = (() => {
   try { return matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); } catch { return false; }
 })();
-// v2 (24/10) : les paliers retenus avant l'anticrenelage au telephone repartent de zero
-const PALIER_CLE = 'sprinter_palier3d-v2';
+// v3 (24/10) : les paliers retenus sous l'ancien seuil (45 images/s) repartent de zero
+const PALIER_CLE = 'sprinter_palier3d-v3';
 const palierRetenu = (() => { try { const v = localStorage.getItem(PALIER_CLE); return v == null ? null : Math.max(0, Math.min(3, +v | 0)); } catch { return null; } })();
 const QUALITE = Q.get('qualite');
 // ?palier=0..3 : un palier fixe, sans adaptation (pour mesurer)
 const PALIER_FORCE = Q.get('palier');
 let palier = PALIER_FORCE != null ? Math.max(0, Math.min(3, +PALIER_FORCE | 0))
-  : QUALITE === 'ultra' ? 3 : QUALITE === 'plein' ? 2 : Math.min(TELEPHONE ? 2 : 3, palierRetenu ?? 3);
+  : QUALITE === 'ultra' ? 3 : QUALITE === 'plein' ? 2 : Math.max(TELEPHONE ? 1 : 0, Math.min(TELEPHONE ? 2 : 3, palierRetenu ?? 3));
 // les pieces et les boss se choisissent au chargement : pleins seulement en ULTRA
 let ULTRA = palier >= 3;
 const RATIO = [1, 1.5, 2, 3];
 let lentes = 0, mesure = 0, fluide = 0, aBaisse = false;
-const PALIER_MAX = TELEPHONE ? 2 : 3;
+// LE PALIER NE S'EFFONDRE PLUS (« les lignes ne sont toujours pas droites », l'auteur, 24/10) : au
+// palier 0 — un pixel par point, sans ombres —, les lignes de couloir se crenelaient en escaliers.
+// Un telephone ne descend pas sous le palier 1, et ne descend que sous 30 images par seconde.
+const PALIER_MAX = TELEPHONE ? 2 : 3, PALIER_MIN = TELEPHONE ? 1 : 0, IMAGE_LENTE = 0.034;
 function appliquerLePalier() {
   if (!renderer) return;
   renderer.setPixelRatio(Math.min(RATIO[palier], window.devicePixelRatio || 1));
@@ -103,11 +106,11 @@ function tenirLaCadence(dt: number, enCourse: boolean) {
   // course compte : le survol et le decompte chargent encore (au Galaxy Flip, ils faisaient
   // tomber au palier 0 un appareil qui tient le palier 2 en course)
   if (!renderer || !dt || dt > 0.1 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse) return;
-  mesure += dt; lentes += dt > 0.022 ? dt : 0;
+  mesure += dt; lentes += dt > IMAGE_LENTE ? dt : 0;
   if (mesure < 2.5) return;
   // un cinquieme du temps en images lentes, c'est deja une course qui saccade (au Flip, en ULTRA :
   // 40 images/s, une image sur six a 33 ms)
-  const part = lentes / mesure, trop = part > 0.2;
+  const part = lentes / mesure, trop = part > 0.25;
   mesure = 0; lentes = 0;
   // ON REMONTE AUSSI (« la qualite du jeu est basse meme en ultra », l'auteur, 24/10) : un
   // telephone qui avait saccade une fois restait au palier bas pour toujours. Dix secondes de
@@ -123,7 +126,7 @@ function tenirLaCadence(dt: number, enCourse: boolean) {
     return;
   }
   aBaisse = true; fluide = 0;
-  if (palier <= 0) return;
+  if (palier <= PALIER_MIN) return;
   palier--;
   ULTRA = false;
   appliquerLePalier();
@@ -134,6 +137,8 @@ const SURVOL = Q.get('vue') === 'survol';
 
 const MAX_TRONCS = 1400;
 const LANE_W = 1.22;
+// les segments d'un demi-tour de piste (anneaux, lignes, bandes du virage)
+const VIRAGE_SEG = 192;
 
 let renderer: THREE.WebGLRenderer | null = null;
 let envPalais: THREE.Texture | null = null;
@@ -649,6 +654,10 @@ const c3 = (v: number[] | undefined, d: number[]) => {
 const css = (v: number[], k = 1) => `rgb(${Math.min(255, v[0] * k) | 0},${Math.min(255, v[1] * k) | 0},${Math.min(255, v[2] * k) | 0})`;
 
 function plan(w: number, l: number, mat: THREE.Material, x: number, y: number, z = 0) {
+  // CE QUI EST PEINT SUR LA PISTE PASSE DEVANT ELLE (24/10) : les couloirs alternes sont tires en avant
+  // (polygonOffset, voir LES LIGNES EN POINTILLES) ; sans le meme reglage, plus fort, le damier
+  // d'arrivee, les numeros et les halos n'apparaissaient plus qu'un couloir sur deux
+  if (z > 0 && !mat.polygonOffset) { mat.polygonOffset = true; mat.polygonOffsetFactor = -2; mat.polygonOffsetUnits = -4; }
   const m = new THREE.Mesh(new THREE.PlaneGeometry(w, l), mat);
   m.position.set(x, y, z);
   m.receiveShadow = true;
@@ -914,8 +923,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
         quad([x, r0 - R_CORDE], [x2, r0 - R_CORDE], [x2, r1 - R_CORDE], [x, r1 - R_CORDE]);
         quad([x, -R_CORDE - r1], [x2, -R_CORDE - r1], [x2, -R_CORDE - r0], [x, -R_CORDE - r0]);
       }
-      for (const [xc, a0] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) for (let i = 0; i < 64; i++) {
-        const a = a0 + (i / 64) * Math.PI, b = a0 + ((i + 1) / 64) * Math.PI;
+      for (const [xc, a0] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) for (let i = 0; i < VIRAGE_SEG; i++) {
+        const a = a0 + (i / VIRAGE_SEG) * Math.PI, b = a0 + ((i + 1) / VIRAGE_SEG) * Math.PI;
         const P = (r: number, t: number) => [xc + r * Math.cos(t), -R_CORDE + r * Math.sin(t)];
         quad(P(r0, a), P(r0, b), P(r1, b), P(r1, a));
       }
@@ -952,7 +961,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // les virages : des anneaux autour des deux centres, sur la pelouse
   for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
     const anneau = (r0: number, r1: number, mat: THREE.Material, z: number) => {
-      const m = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 64, 1, debut, Math.PI), mat);
+      // 192 segments par demi-tour, pas 64 : au couloir exterieur, un coude tous les 2,3 m se voyait
+      // dans les lignes du virage (« des bandes dans le virage », 24/10)
+      const m = new THREE.Mesh(new THREE.RingGeometry(r0, r1, VIRAGE_SEG, 1, debut, Math.PI), mat);
       m.position.set(xc, -R_CORDE, z); m.receiveShadow = true; stade!.add(m);
     };
     if (!peinte) anneau(R_CORDE - 0.8, R_CORDE + W + 0.8, matA, 0);
@@ -967,7 +978,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       const b = new THREE.Mesh(new THREE.BoxGeometry(LD, 0.14, 0.06), mk); b.position.set(XD, y, 0.03); b.castShadow = false; b.receiveShadow = true; stade.add(b);
     }
     for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
-      const g = new THREE.Mesh(new THREE.RingGeometry(R_CORDE - 0.17, R_CORDE - 0.03, 96, 1, debut, Math.PI), mk);
+      const g = new THREE.Mesh(new THREE.RingGeometry(R_CORDE - 0.17, R_CORDE - 0.03, VIRAGE_SEG, 1, debut, Math.PI), mk);
       g.position.set(xc, -R_CORDE, 0.06); stade.add(g);
     }
   }
@@ -981,7 +992,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
           blending: op < 1 ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: false });
         for (const y0 of [0, yOppose]) plan(LD, demi * 2, m, XD, y0 + (e as number) * LANE_W, 0.004).receiveShadow = false;
         for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
-          const g = new THREE.Mesh(new THREE.RingGeometry(r - demi, r + demi, 96, 1, debut, Math.PI), m);
+          const g = new THREE.Mesh(new THREE.RingGeometry(r - demi, r + demi, VIRAGE_SEG, 1, debut, Math.PI), m);
           g.position.set(xc, -R_CORDE, 0.004); stade.add(g);
         }
       }
@@ -992,7 +1003,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     const or = new THREE.MeshStandardMaterial({ color: 0xd8a848, metalness: 0.85, roughness: 0.22, envMap: envPalais, envMapIntensity: 1.2 });
     for (const y0 of [0, yOppose]) for (const yy of [y0 - 0.8, y0 + W + 0.8]) plan(LD, 0.22, or, XD, yy, 0.003).receiveShadow = true;
     for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) for (const r of [R_CORDE - 0.8, R_CORDE + W + 0.8]) {
-      const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.11, r + 0.11, 96, 1, debut, Math.PI), or);
+      const m = new THREE.Mesh(new THREE.RingGeometry(r - 0.11, r + 0.11, VIRAGE_SEG, 1, debut, Math.PI), or);
       m.position.set(xc, -R_CORDE, 0.003); m.receiveShadow = true; stade.add(m);
     }
   }
@@ -1468,10 +1479,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   if (nuit && th.projecteurs && !luxe && !cyber && !plage && !palais && !cdm && !espace) {
     const tache = texteCanvas((c, w, h) => {
       const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-      g.addColorStop(0, 'rgba(255,250,236,1)'); g.addColorStop(0.4, 'rgba(255,240,215,0.4)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      // (24/10) un centre moins blanc et un fondu plus large, a moitie moins fort : sur une piste claire,
+      // le blanc pur en addition saturait — des taches blanches sous les projecteurs
+      g.addColorStop(0, 'rgba(255,244,222,0.75)'); g.addColorStop(0.5, 'rgba(255,236,205,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
       c.fillStyle = g; c.fillRect(0, 0, w, h);
     }, 256, 256);
-    const nappe = new THREE.MeshBasicMaterial({ map: tache, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.32,
+    const nappe = new THREE.MeshBasicMaterial({ map: tache, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.18,
       polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
     for (let x = DROITE0 + 8; x < DROITE1; x += 16) for (const y of [W * 0.6, yOppose + W * 0.4]) plan(20, W * 1.3, nappe, x, y, 0.006).receiveShadow = false;
     for (const [xc, a0, sens] of [[DROITE1, -Math.PI / 2, 1], [DROITE0, Math.PI / 2, 1]] as const) {
@@ -1595,7 +1608,9 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   // lignes blanches sont en pointille », l'auteur, 24/10) : sans lui, une ligne de couloir plus fine
   // qu'un pixel au loin se cassait en tirets, et la foule crenelait. Il coutait de la cadence au
   // Galaxy Flip (23/10) : tenirLaCadence redescend si besoin. Il se decide a la creation.
-  renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: Q.get('aa') !== '0' && palier >= 2, powerPreference: 'high-performance' });
+  // (24/10) et a tous les paliers : il se decide ici, une fois pour la partie — un telephone qui
+  // demarrait au palier bas le perdait jusqu'au bout, et c'est au palier bas qu'il manque le plus
+  renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: Q.get('aa') !== '0', powerPreference: 'high-performance' });
   (globalThis as any).__palier3d = () => palier;
   // L'ULTRA (l'auteur, 23/10 : « mets le jeu en ultra ») : la definition pleine de l'ecran,
   // jusqu'a trois pixels par point, et des ombres deux fois plus fines. Comme l'ULTRA du
@@ -2290,26 +2305,38 @@ export function rendre(App: any, dt: number) {
       const axe = (nCouloirs - 1) / 2, s0 = Math.max(0, pl.d);
       const f0 = ici(T.pos(s0, axe)), hf = capIci(T.heading(s0, axe));
       const tx = Math.cos(hf), ty = Math.sin(hf), nx = Math.sin(hf), ny = -Math.cos(hf);
-      let sMin = 0, sMax = 0;
+      const qj = ouCourt(T, pl), sj = (qj[0] - f0[0]) * tx + (qj[1] - f0[1]) * ty;
+      let sMin = sj, sMax = sj;
       for (const r of G.runners) if (r && r.look && !r.retour) {
         const q = ouCourt(T, r), s = (q[0] - f0[0]) * tx + (q[1] - f0[1]) * ty;
         sMin = Math.min(sMin, s); sMax = Math.max(sMax, s);
       }
+      // UNE FENETRE DE 24 M AUTOUR DU JOUEUR (« meme probleme et pire », l'auteur, 24/10, sur un 400 m
+      // couche avec 90 m d'avance) : le peloton entier tant qu'il est groupe ; etale, la camera reculait
+      // jusqu'a 60 m et les coureurs n'etaient plus que des points
+      sMin = Math.max(sMin, sj - 12); sMax = Math.min(sMax, sj + 12);
       // EN PORTRAIT, DE TROIS QUARTS ARRIERE ET PLUS HAUT : de pur profil, un peloton etale ne
       // tenait dans un telephone tenu droit qu'a 60 m, les coureurs en points ; de biais, l'ecart
       // passe dans la profondeur (le premier en haut). Ecran large : profil pur.
       const portrait = camera.aspect < 1, biais = portrait ? 0.6 : 0, cb = Math.cos(biais), sb = Math.sin(biais);
       // ecran large : un champ plus ouvert et plus de marge (« agrandis la zone de la camera », 24/10)
       const demiH = Math.atan(Math.tan((portrait ? 40 : 32) * Math.PI / 360) * camera.aspect);
-      const Dv = Math.min(portrait ? 40 : 60, Math.max(portrait ? 8 : 10, ((sMax - sMin) * cb + (portrait ? 6 : 10)) / (2 * Math.tan(demiH)))), cv = (sMin + sMax) / 2 + 0.8;
+      // EN PAYSAGE, LE CLASSEMENT COUVRE LE TIERS GAUCHE (24/10 : le joueur y passait dessous). Au rail,
+      // on court vers la gauche de l'image : la camera vise un peu devant, et la course tient dans les
+      // sept dixiemes de droite.
+      const utile = portrait ? 1 : 0.7, devant = portrait ? 0 : 0.13;
+      const Dv = Math.min(portrait ? 40 : 60, Math.max(portrait ? 8 : 10, ((sMax - sMin) * cb + (portrait ? 6 : 10)) / (2 * Math.tan(demiH) * utile)));
+      const cv = (sMin + sMax) / 2 + 0.8 + devant * 2 * Dv * Math.tan(demiH);
       if (!railPret) { railC = cv; railD = Dv; railPret = true; }
       const k = Math.min(1, (dt || 0.016) * 1.5);
       railC += (cv - railC) * k; railD += (Dv - railD) * k;
       const cx = f0[0] + tx * railC, cy = f0[1] + ty * railC;
       // de plus loin, un peu plus haut : les couloirs interieurs ne cachent pas tout le reste
       const vx = nx * cb - tx * sb, vy = ny * cb - ty * sb;
-      voulu.set(cx + vx * railD, -(cy + vy * railD), portrait ? 2 + railD * 0.22 : 1.3 + railD * 0.06);
-      vise.set(cx, -cy, 1.0);
+      // ecran large : plus haut et visant plus bas — a hauteur d'homme, les tribunes prenaient les deux
+      // tiers de l'image et la piste n'etait qu'une bande derriere les touches
+      voulu.set(cx + vx * railD, -(cy + vy * railD), portrait ? 2 + railD * 0.22 : 1.6 + railD * 0.14);
+      vise.set(cx, -cy, portrait ? 1.0 : 0.5);
     } else railPret = false;
     // LA NUIT DU MOLOSSE, L'AUTRE PLAN : UNE CAMERA DE POURSUITE (« recree l'evenement le molosse
     // en full 3D », l'auteur, 23/10). De face, le coureur vient vers nous et la bete grandit dans
