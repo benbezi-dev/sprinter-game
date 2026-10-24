@@ -21,6 +21,21 @@ const RENDU_3D = (() => { try { return new URLSearchParams(location.search).get(
 // les autres (haies, relais, concours) restent en 2D.
 const EPREUVES_3D = new Set(['100', '200', '400']);
 let rendu3D: any = null;
+// LE REPERE DU JOUEUR EN 3D : un chevron jaune et « TOI » au-dessus de sa tete — le seul nom
+// ecrit sur la piste, comme en championnat
+function marquerLeJoueur(ctx: CanvasRenderingContext2D, e: { x: number; y: number }) {
+  const y = e.y - 6;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = '#ffd23a';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(e.x - 7, y - 9); ctx.lineTo(e.x + 7, y - 9); ctx.lineTo(e.x, y); ctx.closePath();
+  ctx.stroke(); ctx.fill();
+  ctx.font = '800 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.strokeText('TOI', e.x, y - 12); ctx.fillText('TOI', e.x, y - 12);
+  ctx.restore();
+}
 if (RENDU_3D) import('@/game/course-3d').then(m => { rendu3D = m; }).catch(() => { /* reste en 2D */ });
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
@@ -393,10 +408,19 @@ export function GameCanvas() {
         // vides.
         if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') {
           if (!en3D) drawAthletes(ctx);
-          // en 3D, la bulle de l'entree se pose sur la toile du jeu, au-dessus de sa tete
-          else if (G.presBulle && G.presente && rendu3D.ecranDe) {
-            const e = rendu3D.ecranDe(SprinterApp, G.presente);
-            if (e) SprinterApp.drawBulle3D(ctx, e);
+          else {
+            // en 3D, la bulle de l'entree se pose sur la toile du jeu, au-dessus de sa tete
+            if (G.presBulle && G.presente && rendu3D.ecranDe) {
+              const e = rendu3D.ecranDe(SprinterApp, G.presente);
+              if (e) SprinterApp.drawBulle3D(ctx, e);
+            }
+            // et le joueur se reconnait parmi huit (« un indicateur pour que le joueur sache qui
+            // il est sur la piste », l'auteur, 24/10)
+            if (G.player && rendu3D.ecranDe) {
+              // juste au-dessus de la tete : plus haut, de loin, il semblait pose sur le coureur du fond
+              const e = rendu3D.ecranDe(SprinterApp, G.player, 1.1);
+              if (e) marquerLeJoueur(ctx, e);
+            }
           }
         } else if (G.state === 'title') {
           // Les trois coureurs de l'accueil : sur la piste, hors des cartes.

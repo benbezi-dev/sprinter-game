@@ -72,7 +72,8 @@ const STADE_FORCE = Q.get('stade');
 const TELEPHONE = (() => {
   try { return matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); } catch { return false; }
 })();
-const PALIER_CLE = 'sprinter_palier3d';
+// v2 (24/10) : les paliers retenus avant l'anticrenelage au telephone repartent de zero
+const PALIER_CLE = 'sprinter_palier3d-v2';
 const palierRetenu = (() => { try { const v = localStorage.getItem(PALIER_CLE); return v == null ? null : Math.max(0, Math.min(3, +v | 0)); } catch { return null; } })();
 const QUALITE = Q.get('qualite');
 // ?palier=0..3 : un palier fixe, sans adaptation (pour mesurer)
@@ -82,7 +83,8 @@ let palier = PALIER_FORCE != null ? Math.max(0, Math.min(3, +PALIER_FORCE | 0))
 // les pieces et les boss se choisissent au chargement : pleins seulement en ULTRA
 let ULTRA = palier >= 3;
 const RATIO = [1, 1.5, 2, 3];
-let lentes = 0, mesure = 0;
+let lentes = 0, mesure = 0, fluide = 0, aBaisse = false;
+const PALIER_MAX = TELEPHONE ? 2 : 3;
 function appliquerLePalier() {
   if (!renderer) return;
   renderer.setPixelRatio(Math.min(RATIO[palier], window.devicePixelRatio || 1));
@@ -100,14 +102,28 @@ function tenirLaCadence(dt: number, enCourse: boolean) {
   // un a-coup (chargement, compilation d'un shader) n'est pas une cadence perdue — et seule la
   // course compte : le survol et le decompte chargent encore (au Galaxy Flip, ils faisaient
   // tomber au palier 0 un appareil qui tient le palier 2 en course)
-  if (!renderer || !dt || dt > 0.1 || palier <= 0 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse) return;
+  if (!renderer || !dt || dt > 0.1 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse) return;
   mesure += dt; lentes += dt > 0.022 ? dt : 0;
   if (mesure < 2.5) return;
   // un cinquieme du temps en images lentes, c'est deja une course qui saccade (au Flip, en ULTRA :
   // 40 images/s, une image sur six a 33 ms)
-  const trop = lentes / mesure > 0.2;
+  const part = lentes / mesure, trop = part > 0.2;
   mesure = 0; lentes = 0;
-  if (!trop) return;
+  // ON REMONTE AUSSI (« la qualite du jeu est basse meme en ultra », l'auteur, 24/10) : un
+  // telephone qui avait saccade une fois restait au palier bas pour toujours. Dix secondes de
+  // course fluide (moins d'une image lente sur trente), sans avoir baisse dans la visite : un
+  // palier de plus, jusqu'a celui de l'appareil.
+  if (!trop) {
+    fluide = part < 0.03 ? fluide + 2.5 : 0;
+    if (fluide >= 10 && !aBaisse && palier < PALIER_MAX) {
+      palier++; fluide = 0;
+      appliquerLePalier();
+      try { localStorage.setItem(PALIER_CLE, String(palier)); } catch { /* le palier vaut pour la visite */ }
+    }
+    return;
+  }
+  aBaisse = true; fluide = 0;
+  if (palier <= 0) return;
   palier--;
   ULTRA = false;
   appliquerLePalier();
@@ -924,14 +940,15 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }
   }
   // au Palais, des filets d'or plus larges, et l'or qui brille (voir plus bas, la bordure)
-  const largeL = palais ? 0.085 : 0.05;
+  // 8 cm, pas 5 : au loin, une ligne plus fine qu'un pixel se casse en tirets (24/10)
+  const largeL = palais ? 0.085 : 0.08;
   if (palais) { (ligne as any).toneMapped = false; ligne.color.multiplyScalar(1.15); }
   for (const y0 of peinte ? [] : [0, yOppose]) {
     plan(LD, W + 1.6, matA, XD, y0 + W / 2, 0);
     for (let k = 1; k < nCouloirs; k += 2) plan(LD, LANE_W, matB, XD, y0 + (k + 0.5) * LANE_W, 0.001);
     for (let k = 0; k <= nCouloirs; k++) plan(LD, largeL, ligne, XD, y0 + k * LANE_W, 0.002);
   }
-  if (arc) for (const y0 of [0, yOppose]) for (let k = 0; k <= nCouloirs; k++) plan(LD, 0.05, ligne, XD, y0 + k * LANE_W, 0.002);
+  if (arc) for (const y0 of [0, yOppose]) for (let k = 0; k <= nCouloirs; k++) plan(LD, largeL, ligne, XD, y0 + k * LANE_W, 0.002);
   // les virages : des anneaux autour des deux centres, sur la pelouse
   for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
     const anneau = (r0: number, r1: number, mat: THREE.Material, z: number) => {
@@ -940,7 +957,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     };
     if (!peinte) anneau(R_CORDE - 0.8, R_CORDE + W + 0.8, matA, 0);
     for (let k = 1; !peinte && k < nCouloirs; k += 2) anneau(R_CORDE + k * LANE_W, R_CORDE + (k + 1) * LANE_W, matB, 0.001);
-    for (let k = 0; !cdm && k <= nCouloirs; k++) if (palais) anneau(R_CORDE + k * LANE_W - largeL / 2, R_CORDE + k * LANE_W + largeL / 2, ligne, 0.002); else anneau(R_CORDE + k * LANE_W - 0.025, R_CORDE + k * LANE_W + 0.025, ligne, 0.002);
+    for (let k = 0; !cdm && k <= nCouloirs; k++) if (palais) anneau(R_CORDE + k * LANE_W - largeL / 2, R_CORDE + k * LANE_W + largeL / 2, ligne, 0.002); else anneau(R_CORDE + k * LANE_W - largeL / 2, R_CORDE + k * LANE_W + largeL / 2, ligne, 0.002);
   }
   // LA LISSE DE CORDE (`kerb`) : un filet saillant au bord interieur du couloir 1 — blanc au
   // stade de jour, vert a 0.Games, turquoise a la Riviera, or a la Nuit etoilee
@@ -1574,9 +1591,11 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   if (toileDuJeu && toileDuJeu.parentElement) toileDuJeu.parentElement.insertBefore(toile, toileDuJeu);
   else document.body.insertBefore(toile, document.body.firstChild);
   // (?aa=0, ?foule=0, ?aces=0 : pour mesurer ce que coute chacun sur un telephone)
-  // pas d'anticrenelage sur un telephone (sauf en ULTRA force) : a deux pixels par point il ne se voit
-  // presque plus, et il coutait encore de la cadence au Galaxy Flip (23/10)
-  renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: Q.get('aa') === '0' ? false : !TELEPHONE || palier >= 3, powerPreference: 'high-performance' });
+  // L'ANTICRENELAGE AUSSI AU TELEPHONE, des le palier 2 (« la qualite est basse meme en ultra, les
+  // lignes blanches sont en pointille », l'auteur, 24/10) : sans lui, une ligne de couloir plus fine
+  // qu'un pixel au loin se cassait en tirets, et la foule crenelait. Il coutait de la cadence au
+  // Galaxy Flip (23/10) : tenirLaCadence redescend si besoin. Il se decide a la creation.
+  renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: Q.get('aa') !== '0' && palier >= 2, powerPreference: 'high-performance' });
   (globalThis as any).__palier3d = () => palier;
   // L'ULTRA (l'auteur, 23/10 : « mets le jeu en ultra ») : la definition pleine de l'ecran,
   // jusqu'a trois pixels par point, et des ombres deux fois plus fines. Comme l'ULTRA du
@@ -2033,11 +2052,11 @@ function dessinerLesEffets(App: any) {
 /** Montrer ou cacher la scene 3D (le dessin 2D reprend la main hors course). */
 /** LA BULLE DE PAROLE EN 3D (sprinter-app.js, drawBulle) : ou tombe, a l'ecran, le point juste
  *  au-dessus de la tete de `r` — en pixels de la toile du jeu (G.VW x G.VH). */
-export function ecranDe(App: any, r: any): { x: number; y: number } | null {
+export function ecranDe(App: any, r: any, haut = 1.28): { x: number; y: number } | null {
   const G = App.G, T = G.track;
   if (!camera || !r || !T || !toile || toile.style.display === 'none') return null;
   const p = ouCourt(T, r);
-  const v = _ecran.set(p[0], -p[1], (r.look && r.look.h ? r.look.h : 1.75) * 1.28).project(camera);
+  const v = _ecran.set(p[0], -p[1], (r.look && r.look.h ? r.look.h : 1.75) * haut).project(camera);
   if (v.z > 1 || v.z < -1) return null;
   return { x: (v.x + 1) / 2 * G.VW, y: (1 - v.y) / 2 * G.VH };
 }

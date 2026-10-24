@@ -1093,6 +1093,7 @@
     // bras part plus loin derriere (-1,50) et se ferme plus devant (2,18), le buste penche un
     // peu plus (-0,31 rad). La cheville reste celle de `canon` : au ralenti, ses pieds sont
     // flous et le releve s'y disperse. Sa foulee (1,26 fois sa taille) est deja celle du jeu.
+    // Ses bras sont gardes pour memoire mais ne servent pas : voir SPRINT.
     powell: {
       thigh: catmull([[0, 0.65], [0.79, -0.04], [1.57, -0.45], [2.36, -0.31],
                       [3.14, 0.28], [3.93, 0.89], [4.71, 1.29], [5.50, 1.10]]),
@@ -1287,7 +1288,10 @@
   // rebond et la longueur d'appui gardent le caractere de chacun. Le tour (foulee
   // academique) garde sa poulie.
   // DEPUIS LE 23/10, CETTE MECANIQUE EST CELLE D'ASAFA POWELL (`powell`, relevee comme `canon`) :
-  // jambes, et aussi bras et buste, aux trois quarts sur lui — chaque profil en garde un quart.
+  // jambes et buste aux trois quarts sur lui — chaque profil en garde un quart. PAS LES BRAS
+  // (« les mouvements de bras et de jambe ne sont pas synchronises », l'auteur, 24/10) : son bras
+  // releve est celui du cote loin de la camera, cache par le buste quand il passe devant ; melange,
+  // il n'allait plus qu'a 0,21 rad devant pour 1,20 derriere, les mains collees aux hanches.
   const melangeTable = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
   const SPRINT = {};
   const MODELE = GAITS.powell, SUR_LUI = 0.75;
@@ -1297,10 +1301,7 @@
       thigh: melangeTable(P.thigh, MODELE.thigh, SUR_LUI),
       knee: melangeTable(P.knee, MODELE.knee, SUR_LUI),
       ankle: melangeTable(P.ankle, MODELE.ankle, SUR_LUI),
-      arm: melangeTable(P.arm, MODELE.arm, SUR_LUI),
-      elbow: melangeTable(P.elbow, MODELE.elbow, SUR_LUI),
       lean: P.lean + (MODELE.lean - P.lean) * SUR_LUI,
-      armAmp: P.armAmp + (MODELE.armAmp - P.armAmp) * SUR_LUI,
       boost: 1 + (P.boost - 1) * 0.35,
     });
   }
