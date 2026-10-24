@@ -2078,7 +2078,7 @@
     if (this.lastKey === key) {
       const risk = (C.STUMBLE_BASE +
         C.STUMBLE_SPEED * Math.min(1, this.v / this.maxSpeed)) *
-        C.STUMBLE_INPUT_SCALE;
+        C.STUMBLE_INPUT_SCALE * (this.coefChute || 1);
       if (alea() < risk) {
         this.v *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;
@@ -2086,10 +2086,10 @@
         if (this.d - this.legStart < this.driveEnd) this.stumbledInDrive = true;
         stumbled = true;
       } else {
-        this.v = Math.min(this.maxSpeed, this.v + C.BOOST * 0.3);
+        this.v = Math.min(this.maxSpeed, this.v + C.BOOST * 0.3 * (this.coefBoost || 1));
       }
     } else {
-      this.v = Math.min(this.maxSpeed, this.v + C.BOOST);
+      this.v = Math.min(this.maxSpeed, this.v + C.BOOST * (this.coefBoost || 1));
     }
     this.lastKey = key;
     return stumbled;
@@ -2115,7 +2115,7 @@
       this.v *= Math.exp(-6 * dt);
     } else {
       // le freinage est allege quelques secondes apres une bonne transition
-      const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1);
+      const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1) * (this.coefDrag || 1);
       this.v *= Math.exp(-drag * dt);
     }
     const before = this.d;

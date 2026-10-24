@@ -1956,7 +1956,9 @@
     challenge: null,     // defi en cours (voir challenge.ts)
     // Le vrai mode de la course pour le tableau de bord, quand les drapeaux
     // ci-dessus ne le disent pas (vedette, Legende...). Voir contexte-course.ts.
-    etiquette: null
+    etiquette: null,
+    // Les coefficients du corps de l'athlete de la carriere, ou null. Voir buildLevel.
+    reglagesJoueur: null
   };
   // pas de trace ultra-fine : 12,5 relevés par seconde suffisent a rejouer
   // une course de maniere fluide, et gardent la trace assez courte pour
@@ -2268,6 +2270,18 @@
     G.runners = [];
     const pl = new Runner('TOI', 3, { isPlayer: true, maxSpeed: R.maxSpeed,
       best: R.best, total: G.track.total });
+    // LE CORPS DE L'ATHLETE DE LA CARRIERE (game/athlete/) : ses stats, son
+    // materiel et sa forme reglent sa vitesse de pointe, sa poussee, ce qu'il
+    // perd entre deux appuis et son risque de faux pas. Des coefficients
+    // proches de 1 : c'est toujours la frequence des appuis qui fait la course.
+    // Pose par le mode avant `startOneShot`, retire au retour a l'accueil.
+    if (G.reglagesJoueur) {
+      const rj = G.reglagesJoueur;
+      pl.maxSpeed *= rj.vitesse || 1;
+      pl.coefBoost = rj.boost || 1;
+      pl.coefDrag = rj.drag || 1;
+      pl.coefChute = rj.chute || 1;
+    }
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
     const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
