@@ -1289,7 +1289,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   pub.colorSpace = THREE.SRGBColorSpace; pub.wrapS = THREE.RepeatWrapping; pub.repeat.set(LS / 5, 1);
   const pubHaut = pub.clone(); pubHaut.repeat.set(LS / 3.4, 1);
   const accent = css(th.accent || [255, 122, 26]);
-  const accroches = ['SPRINTER', 'DÉFIE TES AMIS', (T.fullLap ? '400' : T.curved ? '200' : '100') + ' M EN DIRECT', 'BENBEZI'];
+  const accroches = ['SPRINTER', 'DÉFIE TES AMIS', (T.fullLap ? '400' : T.curved ? '200' : '100') + ' M EN DIRECT'];   // plus le mot BENBEZI en vert (« retire ce logo », 24/10)
   let imageLed = -1;
   pubAnim.push(t => {
     const img = Math.floor(t * 20);          // 20 images/s suffisent a un panneau
