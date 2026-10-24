@@ -41,7 +41,7 @@ const HAUTEUR: Record<string, number> = {
 function texture(im: CanvasImageSource): THREE.Texture {
   const t = im instanceof HTMLCanvasElement ? new THREE.CanvasTexture(im) : new THREE.Texture(im as HTMLImageElement);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 16;
   t.needsUpdate = true;
   return t;
 }

@@ -34,7 +34,7 @@ function toile(dessin: (c: CanvasRenderingContext2D, w: number, h: number) => vo
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   dessin(cv.getContext('2d')!, w, h);
   const t = new THREE.CanvasTexture(cv);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
   return t;
 }
 const rgb = (v: number[], k = 1) => `rgb(${Math.min(255, v[0] * k) | 0},${Math.min(255, v[1] * k) | 0},${Math.min(255, v[2] * k) | 0})`;
@@ -60,7 +60,7 @@ class Lot {
 function decoupe(dossier: string, cle: keyof typeof MANIFESTE.pieces, haut: number) {
   const p = MANIFESTE.pieces[cle] as { f: string; w: number; h: number; ax: number; ay: number };
   const t = new THREE.TextureLoader().load(dossier + p.f);
-  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 16;
   const L = haut * p.w / p.h;
   const g = new THREE.PlaneGeometry(L, haut).rotateX(Math.PI / 2)
     .translate(-(p.ax / p.w - 0.5) * L, 0, (p.ay / p.h - 0.5) * haut);

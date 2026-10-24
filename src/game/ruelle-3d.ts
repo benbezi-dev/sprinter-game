@@ -48,7 +48,7 @@ function toile(dessin: (c: CanvasRenderingContext2D, w: number, h: number) => vo
   dessin(cv.getContext('2d')!, w, h);
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 16;
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   return t;
 }

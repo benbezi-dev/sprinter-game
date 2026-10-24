@@ -46,6 +46,9 @@ import { construireMenole } from './menole-3d';
 import { construireChamp, BLEU, BLANC, ROUGE } from './champ-de-mars-3d';
 import { pisteMouillee } from './piste-mouillee';
 import { arbresDuLieu, riviera, nuitEtoilee, pelouseAuPinceau, zeroGames } from './stades-classiques-3d';
+// TOUTE TEXTURE FILTREE AU MIEUX DE L'APPAREIL (24/10, pas de crenelage) : sans cela, celles des
+// modeles charges (coureurs, pieces des stades) scintillaient vues de biais ; three ramene 16 au maximum
+THREE.Texture.DEFAULT_ANISOTROPY = 16;
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
@@ -82,7 +85,9 @@ let palier = PALIER_FORCE != null ? Math.max(0, Math.min(3, +PALIER_FORCE | 0))
   : QUALITE === 'ultra' ? 3 : QUALITE === 'plein' ? 2 : Math.max(TELEPHONE ? 1 : 0, Math.min(TELEPHONE ? 2 : 3, palierRetenu ?? 3));
 // les pieces et les boss se choisissent au chargement : pleins seulement en ULTRA
 let ULTRA = palier >= 3;
-const RATIO = [1, 1.5, 2, 3];
+// (24/10, « je ne veux pas de crenelage ») : au telephone, jamais sous deux pixels par point —
+// les paliers bas n'y allegent plus que les ombres
+const RATIO = TELEPHONE ? [2, 2, 2, 3] : [1, 1.5, 2, 3];
 let lentes = 0, mesure = 0, fluide = 0, aBaisse = false;
 // LE PALIER NE S'EFFONDRE PLUS (« les lignes ne sont toujours pas droites », l'auteur, 24/10) : au
 // palier 0 — un pixel par point, sans ombres —, les lignes de couloir se crenelaient en escaliers.
@@ -227,7 +232,7 @@ function texteCanvas(dessin: (c: CanvasRenderingContext2D, w: number, h: number)
   dessin(c.getContext('2d')!, w, h);
   const t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 16;
   return t;
 }
 
@@ -288,7 +293,12 @@ function laFoule(cartes: number[]) {
   at('aPos', 3, 0); at('aFace', 1, 3); at('aVar', 1, 4); at('aPh', 1, 5);
   at('aC1', 3, 6); at('aC2', 3, 9); at('aC3', 3, 12); at('aC4', 3, 15);
   g.instanceCount = cartes.length / 18;
-  const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+  // LE PUBLIC SANS CRENELAGE (« extremement important, je ne veux pas de crenelage », l'auteur, 24/10).
+  // L'atlas se lit au plus proche (ses zones sont des codes, pas des couleurs a melanger) et la carte
+  // etait decoupee au seuil : ses bords echappaient a l'anticrenelage et ses teintes scintillaient au
+  // loin — le moire des gradins. Chaque pixel lit donc la carte en quatre points, decode chacun, et
+  // moyenne ; la part couverte va a l'anticrenelage (alphaToCoverage), qui lisse les silhouettes.
+  const m = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, alphaToCoverage: true });
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, uFoule);
     sh.vertexShader = sh.vertexShader
@@ -320,13 +330,21 @@ vC1 = aC1; vC2 = aC2; vC3 = aC3; vC4 = aC4;`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
 uniform sampler2D uAtlas; uniform vec3 uSiege; uniform float uLum;
-varying vec2 vCase; varying vec3 vC1, vC2, vC3, vC4;`)
+varying vec2 vCase; varying vec3 vC1, vC2, vC3, vC4;
+vec4 carte(vec2 uv) {
+  vec4 tx = texture2D(uAtlas, uv);
+  float zo = floor(tx.r * 255.0 / 32.0 + 0.5);
+  vec3 cz = zo < 0.5 ? vec3(0.05) : zo < 1.5 ? vC1 : zo < 2.5 ? vC2 : zo < 3.5 ? uSiege : zo < 4.5 ? vC3 : vC4;
+  return vec4(cz * (0.28 + 0.9 * tx.g), step(0.5, tx.a));
+}`)
       .replace('#include <map_fragment>', `
-vec4 tx = texture2D(uAtlas, vCase);
-if (tx.a < 0.5) discard;
-float zo = floor(tx.r * 255.0 / 32.0 + 0.5);
-vec3 cz = zo < 0.5 ? vec3(0.05) : zo < 1.5 ? vC1 : zo < 2.5 ? vC2 : zo < 3.5 ? uSiege : zo < 4.5 ? vC3 : vC4;
-diffuseColor.rgb = cz * (0.28 + 0.9 * tx.g) * uLum;`);
+vec2 ex = dFdx(vCase), ey = dFdy(vCase);
+vec4 c0 = carte(vCase - 0.125 * ex - 0.375 * ey), c1 = carte(vCase + 0.375 * ex - 0.125 * ey);
+vec4 c2 = carte(vCase + 0.125 * ex + 0.375 * ey), c3 = carte(vCase - 0.375 * ex + 0.125 * ey);
+float couvre = c0.a + c1.a + c2.a + c3.a;
+if (couvre < 0.5) discard;
+diffuseColor.rgb = (c0.rgb * c0.a + c1.rgb * c1.a + c2.rgb * c2.a + c3.rgb * c3.a) / couvre * uLum;
+diffuseColor.a = couvre * 0.25;`);
   };
   const mesh = new THREE.Mesh(g, m);
   mesh.frustumCulled = false;
@@ -1618,7 +1636,8 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   renderer.setPixelRatio(Math.min(RATIO[palier], window.devicePixelRatio || 1));
   renderer.shadowMap.enabled = OMBRES;
   // les ombres adoucies coutent quatre lectures de plus par pixel : l'ULTRA seulement
-  renderer.shadowMap.type = palier >= 3 ? THREE.PCFSoftShadowMap : THREE.PCFShadowMap;
+  // adoucies a tous les paliers (24/10) : un bord d'ombre en escalier est un crenelage aussi
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   // L'ESTHETIQUE CINEMATIQUE (l'auteur, 22/10) : une courbe filmique (ACES) plutot
   // que l'ecretage brut, et un vignettage peint en CSS sur la toile — il ne coute
   // rien au processeur graphique, meme sur le plus faible des telephones.
