@@ -65,7 +65,7 @@ import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
 import { Regarder } from '@/components/screens/Regarder';
 import { demandeDeLUrl } from '@/game/regarder';
-import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT } from '@/game/canal';
+import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
 
 /* LA NUIT DU MOLOSSE SE CHARGE A LA DEMANDE, ET C'EST UNE CONDITION POUR
    QU'ELLE SORTE DU BUILD PUBLIC.
@@ -117,6 +117,9 @@ const FinDEtapeLegende = /* @__PURE__ */ lazy(() => import('@/components/screens
   .then(m => ({ default: m.FinDEtapeLegende })));
 const PresentationBoss = /* @__PURE__ */ lazy(() => import('@/components/screens/Legende')
   .then(m => ({ default: m.PresentationBoss })));
+// La fin d'une competition de la carriere d'athlete (canal de test seulement).
+const FinDeCourseAthlete = /* @__PURE__ */ lazy(() => import('@/components/screens/CarriereAthlete')
+  .then(m => ({ default: m.FinDeCourseAthlete })));
 // Le duel des marques : ce qu'un duel contre un fantome change a la bataille
 // (K.O., revanche), annonce par-dessus l'ecran de fin. Charge a la demande.
 const AnnonceDuelMarques = /* @__PURE__ */ lazy(() => import('@/components/screens/DuelMarques')
@@ -425,12 +428,14 @@ function MainGame() {
             seul homme se conclut par un verdict et, peut-etre, un skin — pas
             par un tableau de huit choses (voir game/vedettes.ts). */}
         {/* UNE ETAPE DE LA LEGENDE AUSSI : sa fin decide de la suite — l'etape
-            d'apres, ou la plage (game/legende/legende.ts). */}
+            d'apres, ou la plage (game/legende/legende.ts). Et une competition
+            de la carriere d'athlete : place, prime, qualification (game/athlete/). */}
         {state === 'winall' && (
           DUELS_OUVERTS && SprinterApp.G.defiDemie ? <FinDuDefi />
             : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}>{nuitAPlusieurs() ? <FinDeLaMeute /> : <FinDeLaNuit />}</Suspense>
             : DEFI_VEDETTE_OUVERT && defiVedetteEnCours() ? <Suspense fallback={null}><FinDuDefiVedette /></Suspense>
             : LEGENDE_OUVERTE && finDEtapeLegende(SprinterApp.G) ? <Suspense fallback={null}><FinDEtapeLegende /></Suspense>
+            : CARRIERE_ATHLETE_OUVERTE && SprinterApp.G.etiquette === 'athlete' ? <Suspense fallback={null}><FinDeCourseAthlete /></Suspense>
             : defiEnCours && programmeDuDefi() ? <Revanche />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>

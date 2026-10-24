@@ -51,12 +51,19 @@ const ChoixDeCarriere = /* @__PURE__ */ lazy(() => import('./Legende')
   .then(m => ({ default: m.ChoixDeCarriere })));
 const RetourAuChoix = /* @__PURE__ */ lazy(() => import('./Legende')
   .then(m => ({ default: m.RetourAuChoix })));
+// La carriere d'athlete : canal de test seulement (CARRIERE_ATHLETE_OUVERTE).
+const CarteAthlete = /* @__PURE__ */ lazy(() => import('./CarriereAthlete')
+  .then(m => ({ default: m.CarteAthlete })));
+const RetourAthlete = /* @__PURE__ */ lazy(() => import('./CarriereAthlete')
+  .then(m => ({ default: m.RetourAthlete })));
+const PanneauAthlete = /* @__PURE__ */ lazy(() => import('./CarriereAthlete')
+  .then(m => ({ default: m.PanneauAthlete })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { premierLancement, phasePremiersPas, premiereCourseLancee, apresLaPremiereArrivee, premiersPasFaits, nomDejaDemande } from '@/game/premiers-pas';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
-import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT } from '@/game/canal';
+import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
@@ -166,8 +173,12 @@ export function TitleScreen() {
   const choisirCarriere = (c: ChoixCarriere | null) => { carriereDeLaVisite = c; setCarriere(c); };
   const legendeOffre = LEGENDE_OUVERTE && !haies;
   const legendeOuverte = legendeOffre && legendeAccessible();
-  const auChoix = legendeOffre && carriere === null;
+  // La carriere d'athlete, troisieme carte du choix (canal de test, Sprinter).
+  const athleteOffre = CARRIERE_ATHLETE_OUVERTE && !haies;
+  const choixOffert = legendeOffre || athleteOffre;
+  const auChoix = choixOffert && carriere === null;
   const legendeChoisie = legendeOuverte && carriere === 'legende';
+  const athleteChoisie = athleteOffre && carriere === 'athlete';
   const [showDuels, setShowDuels] = useState(false);
   // Combien sont la, sur le bouton qui mene a eux. Voir game/presence.ts.
   const presences = usePresences();
@@ -417,6 +428,8 @@ export function TitleScreen() {
                       ? <>{N.getLang() === 'en' ? 'CAREER — PICK YOUR MODE' : 'CARRIÈRE — CHOISIS TON MODE'}</>
                       : legendeChoisie
                       ? <>{RACES['100'].label} &mdash; {N.getLang() === 'en' ? 'LEGEND' : 'LÉGENDE'}</>
+                      : athleteChoisie
+                      ? <>{N.getLang() === 'en' ? 'ATHLETE CAREER' : 'CARRIÈRE D’ATHLÈTE'}</>
                       : <>{RACES[raceKey].label} &mdash; {N.t('six_stages_bare')}</>)
                   : N.t(tab === 'oneshot' ? 'oneshot_desc' : 'versus_desc')}
               </p>
@@ -499,7 +512,7 @@ export function TitleScreen() {
               {TABS.map(t => (
                 <button
                   key={t.id}
-                  onClick={() => { if (t.id === 'career' && legendeOffre) choisirCarriere(null); setTab(t.id); }}
+                  onClick={() => { if (t.id === 'career' && choixOffert) choisirCarriere(null); setTab(t.id); }}
                   className={`flex-1 py-2 rounded-xl font-bold tracking-widest text-[10px] md:text-xs transition-all
                     ${tab === t.id
                       ? 'bg-primary text-background shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.25)]'
@@ -602,10 +615,18 @@ export function TitleScreen() {
             {tab === 'career' && auChoix && (
               <Suspense fallback={null}>
                 <ChoixDeCarriere ouverte={legendeOuverte} onChoisir={choisirCarriere} />
+                {athleteOffre && <div className="mt-2 md:mt-3"><CarteAthlete onChoisir={() => choisirCarriere('athlete')} /></div>}
               </Suspense>
             )}
 
-            {tab === 'career' && legendeOffre && !auChoix && (
+            {tab === 'career' && athleteChoisie && (
+              <Suspense fallback={null}>
+                <RetourAthlete onRetour={() => choisirCarriere(null)} />
+                <PanneauAthlete />
+              </Suspense>
+            )}
+
+            {tab === 'career' && legendeOffre && !auChoix && !athleteChoisie && (
               <Suspense fallback={null}>
                 <RetourAuChoix mode={legendeChoisie ? 'legende' : 'classique'} onRetour={() => choisirCarriere(null)} />
               </Suspense>
@@ -615,7 +636,7 @@ export function TitleScreen() {
               <Suspense fallback={null}><PanneauLegende /></Suspense>
             )}
 
-            {tab === 'career' && !auChoix && !legendeChoisie && <>
+            {tab === 'career' && !auChoix && !legendeChoisie && !athleteChoisie && <>
             {/* Les meilleurs parcours, resserres.
                 Cette carte poussait COMMENCER sous la ligne de flottaison : il
                 fallait derouler pour lancer une course, sur l'ecran dont c'est
