@@ -153,6 +153,8 @@ const PLANS = ['3d', '2d', 'rail'] as const;
 let planCam: typeof PLANS[number] = PLANS[Math.floor(Math.random() * PLANS.length)], planPour: unknown = null;
 // le rail : ou il centre le peloton (metres devant le joueur) et de combien il recule
 let railPret = false, railC = 0, railD = 10;
+// l'etirement horizontal de la vue 2D (voir LE PIXEL DU 2D N'EST PAS CARRE)
+let etire2D = 1;
 // le champ du plan 2D : etroit, pour tenir l'echelle fixe de l'axonometrie
 const CHAMP_2D = 28;
 // une entree de boss a eu lieu dans ce decompte : pas de survol (voir rendre)
@@ -1755,7 +1757,7 @@ outgoingLight += uLisere * (uLisereCoul * bord * uLisereForce + diffuseColor.rgb
 // La chasse est lue sur G.obstacles (molosseDe la porte) : la 3D n'importe pas le mode.
 const FICHIER_BETE = import.meta.glob('/src/assets/molosse.glb', { query: '?url', import: 'default' }) as
   Record<string, () => Promise<string>>;
-type Bete = { racine: THREE.Group; melangeur: THREE.AnimationMixer; duree: number };
+type Bete = { racine: THREE.Group; melangeur: THREE.AnimationMixer; duree: number; foulee: number };
 let bete: Bete | null = null, beteDemandee = false;
 function chargerLaBete() {
   if (beteDemandee) return;
@@ -1769,7 +1771,9 @@ function chargerLaBete() {
   f().then((u) => {
     const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
     const leger = () => new Promise<any>((ok, ko) => l.load(u, ok, undefined, ko));
-    l.loadAsync(base + 'modeles/boss-plein/molosse.glb').catch(leger).then((gltf: any) => {
+    // la pleine court en chien (molosse_trellis.py --chien) : une foulee tous les 3,5 m ; la legere,
+    // celle du trace 2D, tous les 2,22 m
+    l.loadAsync(base + 'modeles/boss-plein/molosse.glb').then((g: any) => ({ ...g, foulee: 0.285 })).catch(leger).then((gltf: any) => {
       const racine = new THREE.Group(), corps = gltf.scene;
       corps.rotation.x = Math.PI / 2;      // le glTF a y en haut, le stade z
       racine.add(corps);
@@ -1800,7 +1804,7 @@ function chargerLaBete() {
       if (clip) melangeur.clipAction(clip).play();
       racine.visible = false;
       monde.add(racine);
-      bete = { racine, melangeur, duree: clip ? clip.duration : 1 };
+      bete = { racine, melangeur, duree: clip ? clip.duration : 1, foulee: gltf.foulee || 0.45 };
     }).catch(() => { beteDemandee = false; });
   }).catch(() => { beteDemandee = false; });
 }
@@ -1818,7 +1822,7 @@ function poserLaBete(G: any, T: any, nuit: boolean) {
   bete.racine.position.set(p[0], p[1], 0);
   bete.racine.rotation.z = capIci(T.heading(d, lane));
   bete.racine.visible = d > -14;          // elle sort de l'ombre, derriere la ligne
-  bete.melangeur.setTime(((((d * 0.45) % 1) + 1) % 1) * bete.duree);
+  bete.melangeur.setTime(((((d * bete.foulee) % 1) + 1) % 1) * bete.duree);
 }
 
 // LES ATHLETES EN VRAI MAILLAGE (look.maillage : les boss de la Legende, les vedettes) :
@@ -2231,8 +2235,13 @@ export function rendre(App: any, dt: number) {
     if (plan2D) {
       const Cj = (globalThis as any).SprinterApp?.C;
       const deg = Cj ? Math.atan2(Cj.ISO_SIN, Cj.ISO_COS) : Math.atan(0.5);
-      // la profondeur s'y ecrase de tan(angle) : c'est le sinus de la hauteur d'une vraie camera
-      const elev = Math.asin(Math.min(0.9, Math.tan(deg)));
+      // LA HAUTEUR EXACTE DE LA VUE 2D (tools/blender/decors/vue.py) : une orthographique qui
+      // regarde le long de (1, 1, -2 sin) — tan(hauteur) = racine2 . sin(angle), 32,3° au sprint.
+      // L'ancienne formule, asin(tan), tombait juste au sprint (30°) mais a 7° la nuit au lieu
+      // de 9,8° : le plan 2D du molosse se couchait au ras du sol, comme la camera de depart
+      // (« elle n'a pas recupere le plan de la 2D », l'auteur, 23/10). Voir aussi `etire2D`.
+      const elev = Math.atan(Math.SQRT2 * Math.sin(deg));
+      etire2D = Math.cos(deg) * Math.SQRT2 / Math.sqrt(2 * Math.sin(deg) ** 2 + 1);
       const VW = renderer!.domElement.clientWidth || 375, VH = renderer!.domElement.clientHeight || 812;
       const ui = Math.max(0.62, Math.min(1.7, Math.min(VW / 430, VH / 660)));
       const haut = VH / (ui * (G.race && G.race.arc > 0 ? 44 : 30) * (G.zoomMode || 1));
@@ -2360,7 +2369,15 @@ export function rendre(App: any, dt: number) {
     }
     camera.lookAt(camVise);
     const fov = plan2D ? CHAMP_2D : rail ? (camera.aspect < 1 ? 40 : 24) : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
-    if (Math.abs(camera.fov - fov) > 0.05) { camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3); camera.updateProjectionMatrix(); }
+    if (Math.abs(camera.fov - fov) > 0.05) camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3);
+    // LE PIXEL DU 2D N'EST PAS CARRE (vue.py) : un metre en largeur y vaut cos.racine2/racine(2 sin2+1)
+    // fois un metre en hauteur — 1,07 au sprint, 1,38 a la nuit du molosse a 7°. Le plan 2D etire
+    // donc l'image d'autant ; les autres plans gardent un pixel carre.
+    camera.updateProjectionMatrix();
+    if (plan2D && etire2D !== 1) {
+      camera.projectionMatrix.elements[0] *= etire2D;
+      camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    }
     // LA ZONE D'OMBRE AVANCE PAR PAS D'UN TEXEL : collee au joueur au pixel pres, ses bords
     // « nageaient » a chaque image — le sable de la Plage Paradis clignotait sous les panneaux
     const texel = 28 / Math.max(256, soleil.shadow.mapSize.x);

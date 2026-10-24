@@ -88,6 +88,26 @@ TETE_RELEVE = -10.0
 # reserver_la_queue.)
 QUEUE_LEVE = (-14.0, -6.0, -4.0)
 IMAGES = 24
+# LE GALOP D'UN CHIEN, POUR LA 3D (`--chien`, 23/10 : « les mouvements du molosse doivent etre
+# ceux d'un chien, on dirait un carton qui bouge en bloc »). Vu de pres en 3D, le galop du trace
+# 2D ne marchait pas : pied qui ne balayait que 0,53 m pour une bete de 1,60 m au garrot, echine
+# a +-10/12 degres, pattes par paires, une foulee tous les 2,22 m (4,5 par seconde a sa vitesse).
+# Un grand chien lance fait l'inverse : un galop croise (posterieur gauche, posterieur droit,
+# anterieur droit, anterieur gauche), une foulee de 3,5 m (moins de 3 par seconde), les
+# anterieurs lances loin devant et les posterieurs loin derriere, ramasses sous le ventre en
+# l'air, l'echine qui se voute et s'etire franchement, la tete et la queue qui suivent.
+# Le trace 2D garde le sien : sans `--chien`, rien ne change.
+CHIEN = {
+    'FOULEE': 0.285, 'CONTACT': 0.26, 'GLISSE': 0.90,
+    'PHASES': {('ar', 'g'): 0.00, ('ar', 'd'): 0.09, ('av', 'd'): 0.45, ('av', 'g'): 0.55},
+    'LEVEE': (0.30, 0.26),
+    # le centre du balayage : les anterieurs portent devant l'epaule, les posterieurs derriere la hanche
+    'PORTEE': (0.25, -0.10),
+    # amplitudes du corps, en degres et en part du garrot
+    'BASSIN': 15.0, 'DOS': 18.0, 'REBOND': 0.10, 'COU': 9.0, 'TETE': 7.0, 'QUEUE': 9.0,
+}
+PORTEE = (0.0, 0.0)
+BASSIN, DOS, REBOND, COU, TETE, QUEUE = 10.0, 12.0, 0.06, 8.0, 5.0, 3.0
 
 
 def arguments():
@@ -96,7 +116,7 @@ def arguments():
     return {'source': val('--source'), 'glb': val('--glb'), 'planche': val('--planche'),
             'blend': val('--blend'), 'garrot': float(val('--garrot', str(GARROT))),
             'faces': int(val('--faces', '9000')), 'texture': int(val('--texture', '512')),
-            'sens': val('--sens'), 'plein': '--plein' in a}
+            'sens': val('--sens'), 'plein': '--plein' in a, 'chien': '--chien' in a}
 
 
 # --- LE MAILLAGE --------------------------------------------------------------
@@ -636,6 +656,7 @@ def galop(rig, mesure):
         # au repos : c'est la que la patte porte le plus loin des deux cotes
         boulet = pts[-2].copy()
         boulet.x = pts[1].x if bout == 'av' else pts[0].x
+        boulet.x += (PORTEE[0] if bout == 'av' else PORTEE[1]) * amplitude
         t = bpy.data.objects.new('cible_%s_%s' % (bout, c), None)
         sc.collection.objects.link(t); t.location = boulet
         # LA PATTE NE PLIE QUE DANS UN SENS A CHAQUE ARTICULATION, et c'est ce
@@ -676,15 +697,15 @@ def galop(rig, mesure):
         # quand les posterieurs reviennent sous le ventre, detendue quand les
         # anterieurs se lancent. Le corps monte au temps de suspension.
         w = 2 * math.pi * cy
-        bassin.rotation_euler = (math.radians(10) * math.sin(w), 0, 0)
+        bassin.rotation_euler = (math.radians(BASSIN) * math.sin(w), 0, 0)
         # (en coordonnees de l'os : son axe y suit l'echine, z monte)
-        bassin.location = (0, 0, (0.06 * math.sin(w - 0.8) - ACCROUPI) * Hw)
-        dos.rotation_euler = (-math.radians(12) * math.cos(w), 0, 0)
+        bassin.location = (0, 0, (REBOND * math.sin(w - 0.8) - ACCROUPI) * Hw)
+        dos.rotation_euler = (-math.radians(DOS) * math.cos(w), 0, 0)
         # la tete basse, qui se jette en avant a la detente
-        cou.rotation_euler = (math.radians(COU_BAS - 8 * math.cos(w + 0.6)), 0, 0)
-        tete.rotation_euler = (math.radians(TETE_RELEVE + 5 * math.cos(w + 0.6)), 0, 0)
+        cou.rotation_euler = (math.radians(COU_BAS - COU * math.cos(w + 0.6)), 0, 0)
+        tete.rotation_euler = (math.radians(TETE_RELEVE + TETE * math.cos(w + 0.6)), 0, 0)
         for i, b in enumerate(queue):
-            b.rotation_euler = (math.radians(QUEUE_LEVE[i] + 3 * math.sin(w - 0.9 - 0.6 * i)),
+            b.rotation_euler = (math.radians(QUEUE_LEVE[i] + QUEUE * math.sin(w - 0.9 - 0.6 * i)),
                                 0, 0)
         for b in [bassin, dos, cou, tete] + queue:
             b.keyframe_insert('rotation_euler', frame=f + 1)
@@ -801,6 +822,8 @@ def planche(h, rig, chemin, mesure):
 
 def main():
     a = arguments()
+    if a['chien']:
+        globals().update(CHIEN)
     h = importer(a['source'])
     garder_le_corps(h)
     orienter(h, a['sens'])
