@@ -500,6 +500,61 @@ function GardeRobe({ a, changer }: { a: Athlete; changer: (f: () => void) => voi
 }
 
 /**
+ * LA MESURE SUR TELEPHONE (?mesure=1 ; l'auteur, 25/10 : « mesure la fluidite sur un vrai
+ * telephone, fais le necessaire »). Trente secondes de jeu sans les mains — marcher, courir,
+ * passer derriere le joueur — pendant que la ville note le temps de chaque image ; puis une
+ * fiche a copier : images par seconde, temps au pire, l'appareil et sa puce graphique.
+ */
+const MESURE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('mesure');
+function Mesure({ ville }: { ville: React.MutableRefObject<Ville | null> }) {
+  const [etat, setEtat] = useState<'pret' | 'mesure' | 'fini'>('pret');
+  const [fiche, setFiche] = useState('');
+  const lancer = async () => {
+    const v = ville.current; if (!v) return;
+    setEtat('mesure');
+    const pause = (ms: number) => new Promise(r => setTimeout(r, ms));
+    v.ecouter(true);
+    v.changerDeVue('dessus');
+    for (const [x, y, ms] of [[0.6, 0, 6000], [-0.6, 0.2, 4000], [1, 0, 5000]] as [number, number, number][]) { v.joystick(x, y); await pause(ms); }
+    v.changerDeVue('derriere');
+    for (const [x, y, ms] of [[0, 0.6, 6000], [0, 1, 6000]] as [number, number, number][]) { v.joystick(x, y); await pause(ms); }
+    v.joystick(0, 0); await pause(3000);
+    const t = v.temps().filter(x => x > 0 && x < 1000).sort((a, b) => a - b);
+    v.ecouter(false); v.changerDeVue('dessus');
+    const q = (k: number) => t[Math.min(t.length - 1, Math.floor(t.length * k))] || 0;
+    const moy = t.reduce((a, b) => a + b, 0) / Math.max(1, t.length);
+    const ap = v.appareil();
+    const lignes = [
+      `SPRINTER · mesure de la ville · ${new Date().toLocaleString('fr-FR')}`,
+      `images : ${t.length} en ~30 s · ${(1000 / moy).toFixed(1)} i/s en moyenne`,
+      `médiane ${q(0.5).toFixed(1)} ms · 95 % sous ${q(0.95).toFixed(1)} ms · pire ${q(1).toFixed(1)} ms`,
+      `images > 33 ms : ${t.filter(x => x > 33.4).length} · > 50 ms : ${t.filter(x => x > 50).length}`,
+      `puce : ${ap.gpu}`,
+      `écran : ${ap.pixels} px · rapport ${ap.dpr} · ombres ${ap.ombres ? 'oui' : 'coupées'} · corps 3D ${ap.corps3d}`,
+      `appareil : ${navigator.userAgent}`,
+    ];
+    setFiche(lignes.join('\n')); setEtat('fini');
+  };
+  return (
+    <div className="absolute left-1/2 -translate-x-1/2 top-[45%] z-20 w-[min(92vw,22rem)] rounded-2xl bg-[rgba(8,18,14,0.92)] border border-white/15 p-3 flex flex-col gap-2 text-white shadow-2xl">
+      <p className="text-[11px] font-black tracking-widest" style={{ color: VERT }}>{dans(['MESURE DE FLUIDITÉ', 'SMOOTHNESS TEST'])}</p>
+      {etat === 'pret' && <>
+        <p className="text-xs text-white/70">{dans(['30 secondes sans toucher l’écran : l’athlète marche, court, puis la caméra passe derrière lui.', '30 seconds hands-off: the athlete walks, runs, then the camera moves behind them.'])}</p>
+        <Bouton plein onClick={lancer}>{dans(['MESURER LA FLUIDITÉ', 'RUN THE TEST'])}</Bouton>
+      </>}
+      {etat === 'mesure' && <p className="text-xs text-white/80">{dans(['Mesure en cours… ne touche pas l’écran.', 'Measuring… don’t touch the screen.'])}</p>}
+      {etat === 'fini' && <>
+        <pre className="text-[10px] leading-snug whitespace-pre-wrap break-words text-white/85 max-h-56 overflow-auto">{fiche}</pre>
+        <div className="flex gap-2">
+          <Bouton plein className="flex-1" onClick={() => { navigator.clipboard?.writeText(fiche).catch(() => {}); }}>{dans(['COPIER', 'COPY'])}</Bouton>
+          {typeof navigator !== 'undefined' && (navigator as any).share && <Bouton className="flex-1" onClick={() => { (navigator as any).share({ text: fiche }).catch(() => {}); }}>{dans(['ENVOYER', 'SEND'])}</Bouton>}
+        </div>
+      </>}
+    </div>
+  );
+}
+
+/**
  * LE JOYSTICK (25/10, d'apres Lagos Life). Un disque sous le pouce : la direction fait marcher
  * le long des trottoirs (ville.ts, comme les fleches), pousser au bord fait courir. Le bouton
  * revient au centre en ressort quand on lache.
@@ -758,6 +813,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
         </div>
       </div>
 
+      {MESURE && pret && !lieu && !tel && <Mesure ville={ville} />}
       {/* le joystick : glisser pour marcher, pousser a fond pour courir */}
       {!lieu && !tel && !personne && !seance && pret && <Joystick surDirection={(x, y) => ville.current?.joystick(x, y)} />}
 

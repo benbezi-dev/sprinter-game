@@ -782,6 +782,21 @@ export class Ville {
   /** La porte d'un lieu (metres), ou null s'il n'existe pas ici. */
   /** Le joueur est-il en chemin ? (l'horloge ralentit pendant les trajets) */
   enMarche() { return !!this.moi && this.moi.route.length > 0; }
+  /** LA SONDE DE FLUIDITE (?mesure=1) : les temps d'image en millisecondes, tant qu'elle ecoute. */
+  private sonde: number[] | null = null;
+  ecouter(oui: boolean) { this.sonde = oui ? [] : null; }
+  temps() { return this.sonde ? this.sonde.slice() : []; }
+  /** Ce que l'appareil dit de lui : puce graphique, resolution, ombres, corps 3D charges. */
+  appareil() {
+    const gl = this.rendu.getContext();
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return {
+      gpu: ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : 'inconnu',
+      pixels: `${this.rendu.domElement.width}×${this.rendu.domElement.height}`,
+      dpr: this.rendu.getPixelRatio(), ombres: this.rendu.shadowMap.enabled,
+      corps3d: [this.moi, ...this.passants].filter(p => p && (p as any).m3).length,
+    };
+  }
   /** Le bouton « Courir » : tous les trajets a pied se font en courant. */
   courir(oui: boolean) { this.enCourse = oui; if (this.moi) this.moi.court = oui; }
   /** Les metres courus depuis la derniere lecture (ils coutent de l'energie, CarriereAthlete). */
@@ -1109,6 +1124,7 @@ export class Ville {
 
   private boucle = (t: number) => {
     if (this.arrete) return;
+    if (this.sonde && this.dernier) this.sonde.push(t - this.dernier);
     const dt = Math.min(0.05, this.dernier ? (t - this.dernier) / 1000 : 0);
     this.dernier = t;
     const moi = this.moi!;
