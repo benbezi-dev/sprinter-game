@@ -18,7 +18,7 @@
 // des partenaires reels (docs/carriere-athlete.md). Ce fichier n'importe que
 // les regles, et rien qui dessine.
 
-import { type Athlete, type Epreuve, type Objectif, club, noter } from './regles';
+import { type Athlete, type Epreuve, type Objectif, club, noter, NATIONAL } from './regles';
 
 type Texte = [string, string];
 
@@ -167,7 +167,7 @@ export const EVENEMENTS: Evenement[] = [
   },
   {
     id: 'reseaux',
-    force: a => a.niveau >= 2 && a.abonnes >= 500,
+    force: a => a.niveau >= NATIONAL && a.abonnes >= 500,
     qui: ['Ton téléphone', 'Your phone'],
     texte: () => ['Ta dernière course tourne sur les réseaux. Des milliers de vues. Il faut poster quelque chose.',
                   'Your last race is going around online. Thousands of views. You need to post something.'],

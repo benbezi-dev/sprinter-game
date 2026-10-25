@@ -6,7 +6,7 @@
 
 import type { Jour } from './regles';
 
-const MOTS: Record<string, [string, string]> = {
+export const MOTS: Record<string, [string, string]> = {
   titre:        ['CARRIÈRE D’ATHLÈTE', 'ATHLETE CAREER'],
   sous:         ['De la compétition scolaire aux Mondiaux. Ton club, ton coach, ta vie.', 'From the school meet to the Worlds. Your club, your coach, your life.'],
   creer:        ['CRÉER MON ATHLÈTE', 'CREATE MY ATHLETE'],
@@ -58,6 +58,7 @@ const MOTS: Record<string, [string, string]> = {
   pic:          ['PIC DE FORME', 'PEAK FORM'],
   assiduite:    ['Assiduité du cycle : {f}/{p}', 'Cycle attendance: {f}/{p}'],
   scolaire:     ['Compétition scolaire', 'School meet'],
+  departementaux: ['Championnats départementaux', 'County championships'],
   regionaux:    ['Championnats régionaux', 'Regional championships'],
   france:       ['Championnats de France', 'French championships'],
   europe:       ['Championnats d’Europe', 'European championships'],
@@ -119,7 +120,7 @@ const MOTS: Record<string, [string, string]> = {
   droite:       ['DROITE', 'RIGHT'],
   // la fin de course
   qualifie:     ['QUALIFIÉ·E POUR : {c}', 'QUALIFIED FOR: {c}'],
-  pas_qualifie: ['Pas de podium. Prochaine chance dans 4 semaines.', 'No podium. Next chance in 4 weeks.'],
+  pas_qualifie: ['Pas de podium. Prochaine chance dans {n} semaines.', 'No podium. Next chance in {n} weeks.'],
   prime:        ['Prime : {n} €', 'Prize: €{n}'],
   rep_plus:     ['Réputation +{n}', 'Reputation +{n}'],
   sommet:       ['CHAMPION·NE DU MONDE', 'WORLD CHAMPION'],

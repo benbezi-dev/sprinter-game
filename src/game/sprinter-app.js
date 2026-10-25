@@ -2261,7 +2261,9 @@
     // Danube lisait `plateau['110h']`, qui n'existe pas, et la construction
     // tombait. On court alors au plateau olympique de l'epreuve, comme un
     // index hors du tableau court au stade olympique.
-    const [lo, hi] = (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
+    // Une marche de la carriere d'athlete peut porter ses chronos (game/athlete/regles.ts).
+    const impose = G.reglagesJoueur && G.reglagesJoueur.plateau;
+    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
     // UN CHRONO FIXE, pour qui en a un. Un athlete reel qu'on vient defier
     // (voir `cibles`, STADES_HORS_SERIE) court le meme temps a chaque
     // tentative : sans cela, « le battre » dependrait du tirage.

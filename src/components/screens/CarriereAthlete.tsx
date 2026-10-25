@@ -10,7 +10,7 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
   type Athlete, type Jour, type Stat, type Epreuve, type Origine, type Voie,
-  STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF,
+  STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
   bonusMateriel, coutDuDeplacement, jourDeCompetition, declarerForfait, picDeForme,
   type Seance as ResultatSeance, type Resultat,
@@ -176,6 +176,7 @@ function Barres({ a, compact = false }: { a: Athlete; compact?: boolean }) {
             <span>{mot(s).toUpperCase()}</span>
             <span className="tabular-nums">
               {Math.floor(a.stats[s])}{m[s] ? <span className="text-white/45"> +{m[s]}</span> : null}
+              {!compact && <span className="text-white/35"> / {COMPETITIONS[a.niveau].plafond}</span>}
             </span>
           </span>
           <Jauge v={a.stats[s]} couleur={COULEUR[s]} />
@@ -717,7 +718,7 @@ export function FinDeCourseAthlete() {
             </span>
             {r.chrono !== null && <span className="font-black tabular-nums text-xl">{r.chrono.toFixed(2)} s</span>}
             <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
-              {suivant ? mot('qualifie', { c: mot(suivant.cle) }) : !r.sommet ? mot('pas_qualifie') : null}
+              {suivant ? mot('qualifie', { c: mot(suivant.cle) }) : !r.sommet ? mot('pas_qualifie', { n: ecart(r.niveau) }) : null}
             </span>
             <span className="text-xs text-white/60">
               {r.prime > 0 && `${mot('prime', { n: r.prime })} · `}{mot('rep_plus', { n: r.reputation })}

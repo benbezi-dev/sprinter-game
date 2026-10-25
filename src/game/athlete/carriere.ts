@@ -17,13 +17,22 @@ import {
   conclureLaCompetition, finirLaSemaine, noter, declarerForfait, type Resultat,
 } from './regles';
 import { tirerLaSemaine } from './recit';
+import { MOTS } from './mots';
 
 const CLE = 'sprinter_athlete_v1';
 
 export function charger(): Athlete | null {
   try {
     const d = JSON.parse(localStorage.getItem(CLE) || 'null');
-    return d && d.v === 1 && d.stats ? d as Athlete : null;
+    if (!d || !d.stats) return null;
+    // v1 n'avait pas les departementaux : tout ce qui depasse le scolaire monte d'un cran.
+    if (d.v === 1) {
+      const cran = (n: number) => (n >= 1 ? n + 1 : n);
+      d.niveau = cran(d.niveau);
+      for (const p of d.palmares || []) p.niveau = cran(p.niveau);
+      d.v = 2;
+    }
+    return d.v === 2 ? d as Athlete : null;
   } catch { return null; }
 }
 
@@ -64,7 +73,7 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve): boolean {
   sauver(a);
   const G = SprinterApp.G;
   enCourse = { a, epreuve, niveau: a.niveau };
-  G.reglagesJoueur = reglages(a, a.niveau);
+  G.reglagesJoueur = { ...reglages(a, a.niveau), plateau: COMPETITIONS[a.niveau].chronos || null };
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLaCourse;
   (SprinterApp as any).startOneShot([epreuve], { levelIdx: COMPETITIONS[a.niveau].plateau, etiquette: 'athlete' });
   return true;
@@ -103,9 +112,9 @@ export function conclureLaCourse(a: Athlete): Resultat | null {
   const ordre: any[] = G.ranking || [];
   const place = moi === null ? (G.runners || []).length : Math.max(1, ordre.indexOf(G.player) + 1);
   const r = conclureLaCompetition(a, enCourse.epreuve, place, moi);
-  const nom = COMPETITIONS[r.niveau].cle;
-  noter(a, `${nom} — ${r.epreuve} m : ${place}e${moi !== null ? ` en ${moi.toFixed(2)} s` : ''}`,
-           `${nom} — ${r.epreuve} m: P${place}${moi !== null ? ` in ${moi.toFixed(2)} s` : ''}`);
+  const [fr, en] = MOTS[COMPETITIONS[r.niveau].cle];
+  noter(a, `${fr} — ${r.epreuve} m : ${moi === null ? 'faux départ' : `${place === 1 ? '1er' : `${place}e`} en ${moi.toFixed(2)} s`}`,
+           `${en} — ${r.epreuve} m: ${moi === null ? 'false start' : `P${place} in ${moi.toFixed(2)} s`}`);
   semaineSuivante(a);
   enCourse = null;
   concluPour = G.runners;

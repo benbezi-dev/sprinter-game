@@ -36,7 +36,7 @@ export type Chapitre = 'debut' | 'club';
 export type Ligne = { s: number; fr: string; en: string };
 
 export type Athlete = {
-  v: 1;
+  v: 2;
   nom: string;
   origine: Origine;
   voie: Voie;
@@ -143,21 +143,33 @@ export type Competition = {
   deplacement: number;
   prime: number;
   reputation: number;
+  /** Semaines jusqu'a la suivante : le local revient vite, le national se prepare. */
+  ecart: number;
+  /** Le plafond des qualites a ce niveau : on ne s'entraine pas au-dela de sa marche. */
+  plafond: number;
+  /** Les chronos du plateau, par epreuve, quand aucun plateau du moteur ne convient. */
+  chronos?: Record<string, [number, number]>;
 };
 
 export const COMPETITIONS: Competition[] = [
-  { cle: 'scolaire', plateau: 0, deplacement: 0, prime: 0, reputation: 5 },
-  { cle: 'regionaux', plateau: 1, deplacement: 40, prime: 0, reputation: 12 },
-  { cle: 'france', plateau: 2, deplacement: 150, prime: 400, reputation: 30 },
-  { cle: 'europe', plateau: 3, deplacement: 600, prime: 1500, reputation: 70 },
-  { cle: 'monde', plateau: 4, deplacement: 1500, prime: 5000, reputation: 160 },
+  { cle: 'scolaire', plateau: 0, deplacement: 0, prime: 0, reputation: 5, ecart: 2, plafond: 36 },
+  // Entre le scolaire (12,50-15,00) et les regionaux (11,20-12,50) : aucun
+  // plateau du moteur n'y tombe, la marche se donne ses chronos.
+  { cle: 'departementaux', plateau: 0, deplacement: 15, prime: 0, reputation: 8, ecart: 2, plafond: 40,
+    chronos: { '100': [11.80, 13.40], '200': [23.60, 27.00], '400': [51.00, 57.00] } },
+  { cle: 'regionaux', plateau: 1, deplacement: 40, prime: 0, reputation: 12, ecart: 2, plafond: 45 },
+  { cle: 'france', plateau: 2, deplacement: 150, prime: 400, reputation: 30, ecart: 4, plafond: 50 },
+  { cle: 'europe', plateau: 3, deplacement: 600, prime: 1500, reputation: 70, ecart: 4, plafond: 55 },
+  { cle: 'monde', plateau: 4, deplacement: 1500, prime: 5000, reputation: 160, ecart: 4, plafond: 60 },
 ];
 
 /** Le niveau vise par chaque objectif du programme. */
-export const NIVEAU_OBJECTIF: Record<Objectif, number> = { france: 2, europe: 3, monde: 4 };
+export const NIVEAU_OBJECTIF: Record<Objectif, number> = { france: 3, europe: 4, monde: 5 };
+/** Le premier niveau national : la ou les abonnes et les medias arrivent. */
+export const NATIONAL = 3;
 
-/** Semaines entre deux competitions. */
-export const ECART = 4;
+/** Semaines avant la competition suivante, au niveau `niveau`. */
+export const ecart = (niveau: number) => COMPETITIONS[Math.min(niveau, COMPETITIONS.length - 1)].ecart;
 /** Les trois premiers passent au niveau du dessus. */
 export const QUALIFIES = 3;
 
@@ -188,7 +200,7 @@ export function noter(a: Athlete, fr: string, en: string) {
 export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, specialite: Epreuve | null): Athlete {
   const aisee = origine === 'aisee';
   return {
-    v: 1,
+    v: 2,
     nom: nom || 'TOI',
     origine,
     voie,
@@ -207,7 +219,7 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
     // Une famille aisee equipe son enfant des le premier jour.
     materiel: aisee ? ['pointes1', 'tenue'] : [],
     niveau: 0,
-    prochaine: 4,
+    prochaine: 3,
     reputation: 0,
     abonnes: 0,
     relations: { coach: 0, club: 0, rival: 0 },
@@ -277,7 +289,13 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
     return { gains: {}, blessure: true };
   }
   const gains = gainDeSeance(a, j, score);
-  for (const k of Object.keys(gains) as Stat[]) a.stats[k] = borne(rond(a.stats[k] + (gains[k] || 0)), 0, 100);
+  // Au plafond du niveau, la seance entretient sans faire monter : c'est la competition qui ouvre la suite.
+  const plafond = COMPETITIONS[a.niveau].plafond;
+  for (const k of Object.keys(gains) as Stat[]) {
+    const v = Math.max(a.stats[k], borne(rond(a.stats[k] + (gains[k] || 0)), 0, plafond));
+    gains[k] = rond(v - a.stats[k]);
+    a.stats[k] = v;
+  }
   a.fatigue = borne(a.fatigue + SEANCES[j].fatigue, 0, 100);
   return { gains, blessure: false };
 }
@@ -343,22 +361,37 @@ export function picDeForme(a: Athlete, niveau: number): boolean {
 }
 
 /**
+ * Ce que vaut une qualite au-dessus de 50, rapporte a ce qu'elle coute en
+ * dessous. L'auteur, 25/10 : l'athlete au sommet ne doit jamais gagner plus
+ * d'un dixieme sur un joueur qui ne joue pas a ce mode. 50 partout, c'est le
+ * coureur de tout le monde ; en dessous on perd franchement (c'est ce que
+ * l'entrainement rattrape), au-dessus on gagne a peine. Verifie par
+ * tools/athlete-test.mjs, au pire cas (110 partout, pic de forme), sur les
+ * trois epreuves et toutes les cadences.
+ */
+export const HAUT = 0.009;
+
+/**
  * Les coefficients poses sur le coureur du joueur (G.reglagesJoueur, lu par
- * buildLevel). 50 partout et sans materiel : a peu pres 1 partout.
+ * buildLevel). 50 partout et sans materiel : 1 partout.
  */
 export function reglages(a: Athlete, niveau: number): Reglages {
   const m = bonusMateriel(a);
-  const st = (k: Stat) => borne(a.stats[k] + m[k], 0, 110) / 100;
+  const pic = picDeForme(a, niveau) ? 0.1 : 0;
+  // L'ecart a 50, de -0,5 a +0,6 ; le pic de forme compte comme 10 points de vitesse.
+  const d = (k: Stat, plus = 0) => {
+    const v = borne(a.stats[k] + m[k], 0, 110) / 100 - 0.5 + plus;
+    return v < 0 ? v : v * HAUT;
+  };
   const forme = a.fatigue > 60 ? -0.03 * (a.fatigue - 60) / 40 : 0;
-  const pic = picDeForme(a, niveau) ? 0.015 : 0;
   return {
-    vitesse: rond3(0.95 + 0.10 * st('vitesse') + forme + pic),
-    boost: rond3(0.85 + 0.30 * st('force')),
-    drag: rond3(1.15 - 0.30 * st('endurance')),
-    chute: rond3(1.3 - 0.6 * st('technique')),
+    vitesse: rond5(1 + 0.05 * d('vitesse', pic) + forme),
+    boost: rond5(1 + 0.15 * d('force')),
+    drag: rond5(1 - 0.15 * d('endurance')),
+    chute: rond5(1 - 0.6 * d('technique')),
   };
 }
-function rond3(v: number) { return Math.round(v * 1000) / 1000; }
+function rond5(v: number) { return Math.round(v * 1e5) / 1e5; }
 
 export type Resultat = {
   niveau: number;
@@ -374,7 +407,7 @@ export type Resultat = {
 
 /**
  * Ranger une competition courue. Les trois premiers montent d'un niveau ;
- * les autres retentent le meme dans ECART semaines.
+ * les autres retentent le meme `ecart` semaines plus tard.
  */
 export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: number, chrono: number | null): Resultat {
   const niveau = a.niveau;
@@ -384,12 +417,12 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   const rep = podium ? Math.round(c.reputation * (place === 1 ? 1 : 0.6)) : Math.round(c.reputation * 0.15);
   a.argent += prime;
   a.reputation += rep;
-  a.abonnes += rep * (a.niveau >= 2 ? 40 : 10);
+  a.abonnes += rep * (a.niveau >= NATIONAL ? 40 : 10);
   a.moral = borne(a.moral + (place === 1 ? 15 : podium ? 8 : -10), 0, 100);
   a.palmares.unshift({ s: a.semaine, niveau, epreuve, place, chrono });
   const sommet = niveau === COMPETITIONS.length - 1 && place === 1 && chrono !== null;
   if (podium && niveau < COMPETITIONS.length - 1) a.niveau += 1;
-  a.prochaine = a.semaine + ECART;
+  a.prochaine = a.semaine + ecart(a.niveau);
   // Un nouveau cycle commence : l'assiduite se recompte jusqu'a la prochaine.
   a.assiduite = { proposees: 0, faites: 0 };
   return { niveau, epreuve, place, chrono, qualifie: podium && niveau < COMPETITIONS.length - 1, prime, reputation: rep, sommet };
@@ -397,7 +430,7 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
 
 /** Ne pas aller a la competition (pas les moyens, blesse, ou choix). */
 export function declarerForfait(a: Athlete) {
-  a.prochaine = a.semaine + ECART;
+  a.prochaine = a.semaine + ecart(a.niveau);
   a.moral = borne(a.moral - 8, 0, 100);
   noter(a, 'Forfait : la compétition se fera sans toi.', 'Withdrawn: the meet goes on without you.');
 }

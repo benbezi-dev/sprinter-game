@@ -50,6 +50,12 @@ titre('les seances');
   R.finirLaSemaine(a); R.finirLaSemaine(a);
   ok('deux semaines plus tard, gueri', a.blessure === 0);
   const s = R.nouvelAthlete('T', 'aisee', 'specialiste', '100');
+  const p = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); p.evenement = null; p.stats.vitesse = 35.5;
+  R.faireLaSeance(p, 'lundi', 1, toujours(0.99));
+  ok('pas au-dela du plafond du niveau', p.stats.vitesse === R.COMPETITIONS[0].plafond);
+  p.niveau = 1; p.faites = [];
+  R.faireLaSeance(p, 'lundi', 1, toujours(0.99));
+  ok('le niveau du dessus rouvre la progression', p.stats.vitesse > R.COMPETITIONS[0].plafond);
   ok('le specialiste gagne plus sur sa qualite cle',
      R.gainDeSeance(s, 'lundi', 1).vitesse > R.gainDeSeance(R.nouvelAthlete('T', 'aisee', 'polyvalent', null), 'lundi', 1).vitesse);
 }
@@ -75,10 +81,10 @@ titre('l\'argent');
 {
   const riche = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);
   const pauvre = R.nouvelAthlete('T', 'modeste', 'polyvalent', null);
-  ok('l\'aisee ne paie pas ses deplacements', R.coutDuDeplacement(riche, 2) === 0);
-  ok('la modeste paie le sien', R.coutDuDeplacement(pauvre, 2) === 150);
+  ok('l\'aisee ne paie pas ses deplacements', R.coutDuDeplacement(riche, 3) === 0);
+  ok('la modeste paie le sien', R.coutDuDeplacement(pauvre, 3) === 150);
   pauvre.club = 'quartier';
-  ok('le club en prend la moitie', R.coutDuDeplacement(pauvre, 2) === 75);
+  ok('le club en prend la moitie', R.coutDuDeplacement(pauvre, 3) === 75);
   ok('un boulot rapporte', R.prendreUnBoulot(pauvre, 'marche') && pauvre.argent === 80);
   ok('un seul par semaine', !R.prendreUnBoulot(pauvre, 'livraison'));
   ok('le marche prend le samedi', R.seancePossible(pauvre, 'samedi') === 'boulot');
@@ -94,12 +100,16 @@ titre('les competitions');
   ok('semaine 4 : jour de competition', R.jourDeCompetition(a));
   const r = R.conclureLaCompetition(a, '100', 2, 12.3);
   ok('le podium qualifie', r.qualifie && a.niveau === 1);
-  ok('prochaine dans 4 semaines', a.prochaine === 8);
+  ok('aux departementaux, la suivante dans 2 semaines', a.prochaine === 6);
+  const dep = R.COMPETITIONS[1].chronos['100'], reg = [11.2, 12.5];
+  ok('les departementaux entre scolaire et regionaux', dep[0] > reg[0] && dep[1] < 15 && dep[1] > reg[1]);
   const r2 = R.conclureLaCompetition(a, '100', 5, 12.9);
   ok('hors podium : meme niveau', !r2.qualifie && a.niveau === 1);
   const f = R.conclureLaCompetition(a, '100', 1, null);
   ok('un faux depart ne qualifie pas', !f.qualifie && a.niveau === 1);
-  a.niveau = 4;
+  a.niveau = 3; R.conclureLaCompetition(a, '100', 1, 10.2);
+  ok('au national, 4 semaines de preparation', a.prochaine === a.semaine + 4);
+  a.niveau = 5;
   ok('premier aux mondiaux : le sommet', R.conclureLaCompetition(a, '100', 1, 9.9).sommet);
 }
 
@@ -128,6 +138,41 @@ titre('l\'histoire');
   for (let i = 0; i < 200; i++) if (R.tirerLaSemaine(a, Math.random)) n++;
   ok('la vie du club arrive une semaine sur deux environ', n > 70 && n < 150, `${n}/200`);
   ok('chaque evenement a au moins un choix', R.EVENEMENTS.every(x => x.choix.length > 0));
+}
+
+titre('le plafond : un dixieme au plus');
+{
+  // L'auteur, 25/10 : jamais plus d'un dixieme sur qui ne joue pas a ce mode.
+  // Le pire cas — 110 partout, materiel complet, pic de forme — contre le
+  // coureur neutre, a la cadence de chacun, sur les trois epreuves.
+  await import('../src/game/sprinter-core.js');
+  const { RACES, Track, Runner } = globalThis.SprinterCore;
+  const chrono = (cle, f, rj) => {
+    const race = RACES[cle], track = new Track(race);
+    const p = new Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: track.total });
+    if (rj) { p.maxSpeed *= rj.vitesse; p.coefBoost = rj.boost; p.coefDrag = rj.drag; p.coefChute = rj.chute; }
+    const dt = 1 / 120; let t = 0, prochain = 0.18, cote = 0;
+    while (!p.finished && t < 90) {
+      while (t >= prochain) { p.press(cote ? 'R' : 'L', prochain); cote ^= 1; prochain += 1 / f; }
+      p.stepPlayer(dt, t); t += dt;
+    }
+    return p.finishTime ?? t;
+  };
+  const a = R.nouvelAthlete('T', 'aisee', 'specialiste', '100');
+  for (const k of R.STATS) a.stats[k] = 110;
+  a.materiel = ['pointes3', 'tenue', 'starting'];
+  a.objectif = 'monde'; a.assiduite = { proposees: 12, faites: 12 };
+  const rj = R.reglages(a, R.NIVEAU_OBJECTIF.monde);
+  let pire = 0, ou = '';
+  for (const cle of ['100', '200', '400']) for (let f = 5; f <= 16; f += 0.5) {
+    const g = chrono(cle, f, null) - chrono(cle, f, rj);
+    if (g > pire) { pire = g; ou = `${cle} m a ${f}/s`; }
+  }
+  ok('le meilleur athlete gagne au plus 0,10 s', pire <= 0.1, `${pire.toFixed(3)} s (${ou})`);
+  console.log(`      (pire cas : ${pire.toFixed(3)} s, ${ou})`);
+  for (const k of R.STATS) a.stats[k] = 25;
+  a.materiel = []; a.objectif = null;
+  ok('le debutant perd franchement', chrono('100', 8, null) - chrono('100', 8, R.reglages(a, 0)) < -0.3);
 }
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
