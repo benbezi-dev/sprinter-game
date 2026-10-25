@@ -347,7 +347,11 @@ titre('le calage sur le direct, a partir de la France');
   a.semaine = 20; a.prochaine = 10;
   const rdv = { id: 'ED1', debut: 1_000_000 };
   a.niveau = 2;
-  ok('aux regionaux, les semaines de jeu', R.jourCale(a, rdv, 0).jour && R.jourCale(a, rdv, 0).date === null);
+  // l'auteur, 25/10 : departementaux et regionaux suivent aussi le calendrier des France
+  ok('aux regionaux, la date reelle aussi', !R.jourCale(a, rdv, 0).jour && R.jourCale(a, rdv, 0).date === rdv.debut);
+  a.niveau = 0;
+  ok('au scolaire, les semaines de jeu', R.jourCale(a, rdv, 0).jour && R.jourCale(a, rdv, 0).date === null);
+  a.niveau = 2;
   a.niveau = 3;
   ok('France annoncee : pas avant sa date reelle', !R.jourCale(a, rdv, 999_999).jour && R.jourCale(a, rdv, 0).date === 1_000_000);
   ok('France le jour venu : on court', R.jourCale(a, rdv, 1_000_000).jour);
@@ -400,6 +404,25 @@ titre('les tours : series, demies, finale (format du direct)');
   ok('4e de demie : finale au temps', t('demie', 4).suivant === 'finale' && t('demie', 4).auTemps);
   ok('8e de demie : 16e', t('demie', 8).suivant === null && t('demie', 8).placeFinale === 16);
   ok('la finale ne qualifie pour rien', t('finale', 1).suivant === null && t('finale', 1).placeFinale === 1);
+}
+
+titre('le cycle des championnats et les meetings');
+{
+  const france = { id: 'FR1', debut: Date.UTC(2026, 11, 5) }; // un samedi
+  const d = R.rendezVousAvantFrance(1, france), r = R.rendezVousAvantFrance(2, france);
+  ok('departementaux 8 semaines avant les France, un samedi', d.debut === france.debut - 56 * 864e5 && new Date(d.debut).getUTCDay() === 6);
+  ok('regionaux 4 semaines avant', r.debut === france.debut - 28 * 864e5 && r.id !== d.id);
+  ok('pas de France annoncee : pas de date', R.rendezVousAvantFrance(1, null) === null && R.rendezVousAvantFrance(3, france) === null);
+  const a = R.nouvelAthlete('M', 'modeste', 'polyvalent', null); a.evenement = null;
+  a.niveau = 1; a.jour = R.DIMANCHE; a.argent = 100;
+  ok('un meeting le dimanche', R.meetingPossible(a, false) === null);
+  ok('pas le jour du championnat', R.meetingPossible(a, true) !== null);
+  const n0 = a.niveau, p0 = a.prochaine, m0 = a.argent;
+  const res = R.conclureLeMeeting(a, '100', 1, 12.4, 0.5);
+  ok('il ne qualifie pour rien et ne decale pas le championnat', a.niveau === n0 && a.prochaine === p0 && !res.qualifie);
+  ok('prime et record', a.argent === m0 + 30 && a.records['100'] === 12.4 && a.palmares[0].meeting);
+  a.meeting = a.semaine;
+  ok('un seul meeting par dimanche', R.meetingPossible(a, false) !== null);
 }
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');

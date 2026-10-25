@@ -18,12 +18,13 @@ import {
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
   etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
+  meetingPossible, meetingDe, DEPLACEMENT_MEETING,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
   charger, sauver, semaineSuivante, partirALaCompetition, conclureLaCourse,
   chargerCalendrier, jourDeLAthlete, forfait, agir,
-  rangerLaCourse, aRouvrir, demanderReouverture,
+  rangerLaCourse, aRouvrir, demanderReouverture, partirAuMeeting,
 } from '@/game/athlete/carriere';
 import { mot, dans, seanceDuJour, lang, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe, lookDePersonne } from '@/game/athlete/apparence';
@@ -875,7 +876,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
           <Carte titre={mot('palmares')} icone={Trophy}>
             {a.palmares.slice(0, 6).map((p, i) => (
               <p key={i} className="text-xs text-white/75 flex justify-between gap-2">
-                <span className="truncate">{mot(COMPETITIONS[p.niveau].cle)} · {p.epreuve} m</span>
+                <span className="truncate">{p.meeting ?? mot(COMPETITIONS[p.niveau].cle)} · {p.epreuve} m</span>
                 <span className="tabular-nums shrink-0">{p.chrono === null ? mot('faux') : `${mot('place', { o: ordPlace(p.place) })} · ${p.chrono.toFixed(2)}`}</span>
               </p>
             ))}
@@ -907,9 +908,23 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
           {leJour && certificatRequis(a) && <p className="text-[11px] text-amber-300/90">{dans(['Pas de certificat médical pour cette saison : passe d’abord par le médecin du sport (Espace santé).', 'No medical certificate this season: see the sports doctor first (Health centre).'])}</p>}
           {leJour && <Actions a={a} lieu="gare" ev={ev} changer={changer} />}
           {leJour && <p className="text-[11px] text-white/50">{a.echauffe ? dans(['Échauffé·e : les ischios sont prêts.', 'Warmed up: your hamstrings are ready.']) : dans(['Sans échauffement, le risque de claquage monte.', 'Without a warm-up, the risk of a strain goes up.'])}</p>}
-          {!leJour ? <p className="text-xs text-white/60">{jourDe(a) !== DIMANCHE && jourDeLAthlete(a).cetteSemaine
-            ? dans(['C’est ce dimanche. Reviens le jour J, le train part le matin.', 'It’s this Sunday. Come back on the day, the train leaves in the morning.'])
-            : dans(['Le train attendra : ta prochaine compétition n’est pas pour ce dimanche.', 'The train can wait: your next meet isn’t this Sunday.'])}</p> : <>
+          {!leJour ? <>
+            <p className="text-xs text-white/60">{jourDe(a) !== DIMANCHE && jourDeLAthlete(a).cetteSemaine
+              ? dans(['C’est ce dimanche. Reviens le jour J, le train part le matin.', 'It’s this Sunday. Come back on the day, the train leaves in the morning.'])
+              : dans(['Le train attendra : ta prochaine compétition n’est pas pour ce dimanche.', 'The train can wait: your next meet isn’t this Sunday.'])}</p>
+            {a.niveau >= 1 && (() => {
+              const refus = meetingPossible(a, false), nom = meetingDe(a), ep = a.specialite || epreuve;
+              return (
+                <div className="rounded-xl bg-white/[0.05] p-2.5 flex flex-col gap-1.5">
+                  <span className="text-xs font-black">{dans(nom)} · {dans(['meeting de club', 'club meet'])}</span>
+                  <span className="text-[10px] text-white/55">{dans(['Le dimanche, au plateau de ton niveau : ne qualifie pour rien, compte pour ton record.', 'On Sundays, at your level: no qualification, counts for your PB.'])} · {DEPLACEMENT_MEETING} €</span>
+                  {refus && <span className="text-[10px] text-amber-300/80">{dans(refus)}</span>}
+                  {!refus && !a.specialite && <div className="flex gap-2">{EPREUVES.map(e => <Bouton key={e} plein={epreuve === e} onClick={() => setEpreuve(e)} className="flex-1">{e} m</Bouton>)}</div>}
+                  <Bouton plein disabled={!!refus || ev} onClick={() => { if (partirAuMeeting(a, ep)) demanderReouverture(); }}>{dans(['COURIR LE MEETING', 'RUN THE MEET'])} · {ep} m</Bouton>
+                </div>
+              );
+            })()}
+          </> : <>
             <p className="text-[11px] text-white/60">
               {cout === 0 ? mot('paye') : mot('deplacement', { n: cout })}
               {!payable && <span className="text-red-400"> · {mot('pas_moyens')}</span>}
@@ -1144,7 +1159,7 @@ export function FinDeCourseAthlete() {
         {r && (
           <>
             <span className="text-[10px] font-bold tracking-[0.28em]" style={{ color: VERT }}>
-              {mot(COMPETITIONS[r.niveau].cle).toUpperCase()} · {r.epreuve} M
+              {(r.meeting ? dans(r.meeting) : mot(COMPETITIONS[r.niveau].cle)).toUpperCase()} · {r.epreuve} M
             </span>
             {r.tour && <span className="text-[10px] font-black tracking-[0.3em] text-white/60">{dans(NOM_DU_TOUR[r.tour])}</span>}
             <span className={`font-black font-display text-3xl sm:text-4xl uppercase tracking-tight leading-[0.95]
@@ -1162,7 +1177,7 @@ export function FinDeCourseAthlete() {
             )}
             {r.record && <span className="text-sm font-black" style={{ color: VERT }}>{dans(['RECORD PERSONNEL !', 'PERSONAL BEST!'])}</span>}
             {r.blessure && <span className="text-sm font-bold text-red-400">{dans(BLESSURES[r.blessure].nom)} · {dans(['va voir le médecin du sport', 'see the sports doctor'])}</span>}
-            {!r.suivant && (
+            {!r.suivant && !r.meeting && (
               <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
                 {suivant ? mot('qualifie', { c: mot(suivant.cle) }) : !r.sommet ? mot('pas_qualifie', { n: ecart(r.niveau) }) : null}
               </span>

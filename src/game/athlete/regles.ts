@@ -103,6 +103,8 @@ export type Athlete = {
   certificat?: number;
   /** Une blessure jamais diagnostiquee prend une semaine de plus (une fois). */
   retard?: boolean;
+  /** La semaine du dernier meeting couru : un par dimanche. */
+  meeting?: number;
   /** Le departement declare (departements.ts) : ou l'on court ses departementaux et regionaux en direct. */
   departement?: string;
   /** Deja alle en cours aujourd'hui ? */
@@ -120,7 +122,7 @@ export type Athlete = {
   evenement: string | null;
   vus: string[];
   journal: Ligne[];
-  palmares: { s: number; niveau: number; epreuve: Epreuve; place: number; chrono: number | null }[];
+  palmares: { s: number; niveau: number; epreuve: Epreuve; place: number; chrono: number | null; meeting?: string }[];
   /** L'assiduite du cycle : seances proposees, seances faites. */
   assiduite: { proposees: number; faites: number };
 };
@@ -596,6 +598,8 @@ export type Resultat = {
   tour?: Tour;
   suivant?: Tour;
   auTemps?: boolean;
+  /** Un meeting de club (ne qualifie pour rien) : son nom. */
+  meeting?: [string, string];
   /** Blesse pendant la course ? */
   blessure?: TypeBlessure;
 };
@@ -646,6 +650,44 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   return { niveau, epreuve, place, chrono, qualifie: podium && niveau < COMPETITIONS.length - 1, prime, reputation: rep, sommet, record, vent, homologue };
 }
 
+/**
+ * LES MEETINGS DE CLUB (l'auteur, 25/10 : « des competitions de club et/ou meetings
+ * pour garnir ») : entre deux championnats, un dimanche sans competition officielle,
+ * on peut courir un meeting au plateau de son niveau. Il ne qualifie pour rien et
+ * ne decale pas le championnat ; il rapporte un peu de reputation, une petite prime
+ * sur le podium, et un chrono qui compte pour le record. Noms inventes.
+ */
+export const MEETINGS: [string, string][] = [
+  ['Meeting de la Seine', 'Seine meet'], ['Meeting des Coteaux', 'Hillside meet'],
+  ['Meeting des Falaises', 'Cliffs meet'], ['Meeting d’automne du club', 'Club autumn meet'],
+];
+export const DEPLACEMENT_MEETING = 10;
+export const meetingDe = (a: Athlete) => MEETINGS[a.semaine % MEETINGS.length];
+/** Un meeting est-il possible ce jour-ci ? Rend la raison sinon. */
+export function meetingPossible(a: Athlete, championnatAujourdhui: boolean): [string, string] | null {
+  if (a.niveau < 1) return ['Les meetings s’ouvrent après la compétition scolaire', 'Meets open after the school meet'];
+  if (a.jour !== DIMANCHE) return ['Les meetings ont lieu le dimanche', 'Meets are on Sundays'];
+  if (championnatAujourdhui) return ['Aujourd’hui, c’est le championnat', 'Today is the championship'];
+  if (a.meeting === a.semaine) return ['Déjà couru ce dimanche', 'Already raced this Sunday'];
+  if (a.blessure > 0) return ['Blessé·e', 'Injured'];
+  if (a.argent < DEPLACEMENT_MEETING) return ['Pas assez d’argent', 'Not enough money'];
+  return null;
+}
+export function conclureLeMeeting(a: Athlete, epreuve: Epreuve, place: number, chrono: number | null, vent: number | null): Resultat {
+  const niveau = a.niveau, c = COMPETITIONS[niveau], nom = meetingDe(a);
+  const podium = chrono !== null && place <= QUALIFIES;
+  const prime = podium ? [0, 30, 20, 10][place] * Math.max(1, niveau) : 0;
+  const rep = Math.round(c.reputation * (podium ? 0.4 : 0.1));
+  payer(a, prime, nom[0], nom[1]);
+  a.reputation += rep;
+  a.moral = borne(a.moral + (place === 1 ? 8 : podium ? 4 : -3), 0, 100);
+  a.palmares.unshift({ s: a.semaine, niveau, epreuve, place, chrono, meeting: nom[0] });
+  const rec = a.records ||= {}, homologue = vent === null || vent <= 2.0;
+  const record = chrono !== null && homologue && (rec[epreuve] === undefined || chrono < rec[epreuve]!);
+  if (record) rec[epreuve] = Math.round(chrono! * 100) / 100;
+  return { niveau, epreuve, place, chrono, qualifie: false, prime, reputation: rep, sommet: false, record, vent, homologue, meeting: nom };
+}
+
 /** Ne pas aller a la competition (pas les moyens, blesse, ou choix). */
 export function declarerForfait(a: Athlete) {
   a.prochaine = a.semaine + ecart(a.niveau);
@@ -670,8 +712,20 @@ export type RendezVousReel = { id: string; debut: number };
  * bloquer le joueur. `date` : l'heure reelle d'ouverture, ou null.
  */
 export function jourCale(a: Athlete, rdv: RendezVousReel | null, maintenant: number): { jour: boolean; date: number | null } {
-  if (a.niveau >= NATIONAL && rdv && rdv.id !== a.rendezVous) return { jour: maintenant >= rdv.debut, date: rdv.debut };
+  if (a.niveau >= 1 && rdv && rdv.id !== a.rendezVous) return { jour: maintenant >= rdv.debut, date: rdv.debut };
   return { jour: jourDeCompetition(a), date: null };
+}
+
+/**
+ * LE CYCLE DES CHAMPIONNATS (l'auteur, 25/10) : les France tous les trois mois ;
+ * les regionaux un mois avant, les departementaux deux mois avant. Compte en
+ * semaines pour tomber un samedi, comme l'edition des France : 4 et 8 semaines.
+ */
+export const SEMAINES_AVANT_FRANCE: Record<number, number> = { 1: 8, 2: 4 };
+export function rendezVousAvantFrance(niveau: number, france: RendezVousReel | null): RendezVousReel | null {
+  const avant = SEMAINES_AVANT_FRANCE[niveau];
+  if (!france || !avant) return null;
+  return { id: `${france.id}-${niveau === 1 ? 'D' : 'R'}`, debut: france.debut - avant * 7 * 24 * 3600 * 1000 };
 }
 
 /* ------------------------------------------------------------ la semaine */

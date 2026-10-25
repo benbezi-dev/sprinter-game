@@ -16,7 +16,8 @@ import {
   type Athlete, type Epreuve, COMPETITIONS, NATIONAL, reglages, coutDuDeplacement,
   conclureLaCompetition, finirLaSemaine, noter, declarerForfait, jourCale, type Resultat,
   faireUneAction, avancer, heureDe, DIMANCHE, payer, tirerLeCorps, BLESSURES,
-  type RendezVousReel, type Tour, apresLeTour, HEURE_DU_TOUR,
+  type RendezVousReel, type Tour, apresLeTour, HEURE_DU_TOUR, SEMAINES_AVANT_FRANCE, rendezVousAvantFrance,
+  conclureLeMeeting, meetingDe, DEPLACEMENT_MEETING,
 } from './regles';
 import { tirerLaSemaine } from './recit';
 import { MOTS } from './mots';
@@ -91,6 +92,8 @@ export async function chargerCalendrier(): Promise<void> {
 
 /** Le prochain vrai championnat du niveau `niveau`, ou null. */
 export function rendezVousDe(niveau: number): RendezVousReel | null {
+  // departementaux et regionaux : deux mois et un mois avant les France (regles.ts)
+  if (SEMAINES_AVANT_FRANCE[niveau]) return rendezVousAvantFrance(niveau, rendezVousDe(NATIONAL));
   const z = DIRECT[niveau];
   if (!z || !calendrier) return null;
   const l = calendrier.filter(x => x.echelon === z[0] && x.zone === z[1]).sort((x, y) => x.debut - y.debut)[0];
@@ -123,7 +126,7 @@ export function forfait(a: Athlete) {
 
 /** Ce qu'on garde pendant que la course tourne : `a` est l'objet des ecrans. */
 /** `tour` : une course unique, ou serie, demie, finale a partir des France ; `vent` en m/s (null au 400 m). */
-let enCourse: { a: Athlete; epreuve: Epreuve; niveau: number; vent: number | null; tour: 'unique' | Tour } | null = null;
+let enCourse: { a: Athlete; epreuve: Epreuve; niveau: number; vent: number | null; tour: 'unique' | Tour; meeting?: boolean } | null = null;
 /** Rouvrir le tableau de bord de la carriere en revenant a l'accueil. */
 let rouvrir = false;
 
@@ -157,6 +160,21 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve, tour?: 'demie
   return true;
 }
 
+/** Partir au meeting du dimanche (meetingPossible, regles.ts) : une course unique au plateau du niveau. */
+export function partirAuMeeting(a: Athlete, epreuve: Epreuve): boolean {
+  if (!CARRIERE_ATHLETE_OUVERTE) return false;
+  a.meeting = a.semaine;
+  payer(a, -DEPLACEMENT_MEETING, meetingDe(a)[0], meetingDe(a)[1]);
+  sauver(a);
+  const G = SprinterApp.G;
+  const vent = epreuve === '400' ? null : Math.round((-1.5 + Math.random() * 4.5) * 10) / 10;
+  enCourse = { a, epreuve, niveau: a.niveau, vent, tour: 'unique', meeting: true };
+  G.reglagesJoueur = { ...reglages(a, a.niveau), plateau: COMPETITIONS[a.niveau].chronos || null, look: lookDe(apparenceDe(a), false) };
+  if (!G.surRetourAccueil) G.surRetourAccueil = rangerLaCourse;
+  (SprinterApp as any).startOneShot([epreuve], { levelIdx: COMPETITIONS[a.niveau].plateau, etiquette: 'athlete' });
+  return true;
+}
+
 /**
  * Retirer le corps de l'athlete : rien ne doit suivre le joueur ailleurs.
  * Une course quittee avant l'ecran de fin est un forfait : le deplacement est
@@ -164,7 +182,7 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve, tour?: 'demie
  */
 export function rangerLaCourse() {
   const G = SprinterApp.G;
-  if (enCourse) { declarerForfait(enCourse.a); if (enCourse.a.jour === undefined) semaineSuivante(enCourse.a); else sauver(enCourse.a); }
+  if (enCourse && !enCourse.meeting) { declarerForfait(enCourse.a); if (enCourse.a.jour === undefined) semaineSuivante(enCourse.a); else sauver(enCourse.a); }
   enCourse = null;
   if (!G) return;
   G.reglagesJoueur = null;
@@ -206,6 +224,17 @@ export function conclureLaCourse(a: Athlete): Resultat | null {
              `${nen}: P${place} in ${moi!.toFixed(2)} s — through to ${ven}${suite.auTemps ? ' on time' : ''}.`);
     // le tour suivant a son heure, celle du dimanche du direct
     avancer(a, Math.max(30, HEURE_DU_TOUR[suite.suivant] - heureDe(a)), { energie: -10 });
+    sauver(a);
+    enCourse = null; concluPour = G.runners; dernier = r;
+    return r;
+  }
+  if (enCourse.meeting) {
+    const r = conclureLeMeeting(a, enCourse.epreuve, place, moi, enCourse.vent);
+    const corps = tirerLeCorps(a, 'course');
+    if (corps.blessure) r.blessure = corps.blessure;
+    noter(a, `${r.meeting![0]} — ${r.epreuve} m : ${moi === null ? 'faux départ' : `${place === 1 ? '1er' : `${place}e`} en ${moi.toFixed(2)} s`}`,
+             `${r.meeting![1]} — ${r.epreuve} m: ${moi === null ? 'false start' : `P${place} in ${moi.toFixed(2)} s`}`);
+    avancer(a, Math.max(0, 18 * 60 - heureDe(a)), { energie: -20, hygiene: -30 });
     sauver(a);
     enCourse = null; concluPour = G.runners; dernier = r;
     return r;
