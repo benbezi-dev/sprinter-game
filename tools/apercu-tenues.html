@@ -1,0 +1,31 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — apercu des tenues</title>
+<style>
+  body { margin: 0; background: #14161f; color: #cfd3e0;
+         font: 13px ui-monospace, Menlo, monospace; }
+  h2 { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+       color: #8d93a8; font-weight: 600; margin: 18px 0 6px 16px; }
+  canvas { display: block; margin: 0 16px; background: #1b1e29; border-radius: 6px; }
+</style>
+<!-- Les tenues du vestiaire (game/vestiaire.ts), chacune vue sous six caps :
+     c'est ce que la vignette de MES COURSES > TENUES fait tourner. -->
+<div id="planches"></div>
+<script type="module">
+  import { SprinterApp } from '/src/game/engine.ts';
+  import { TENUES, lookDeTenue } from '/src/game/vestiaire.ts';
+
+  for (const cle of Object.keys(TENUES)) {
+    const h2 = document.createElement('h2'); h2.textContent = cle;
+    const cv = document.createElement('canvas'); cv.width = 1180; cv.height = 360;
+    document.getElementById('planches').append(h2, cv);
+    const ctx = cv.getContext('2d');
+    const man = { look: lookDeTenue(cle), stride: 1.2, v: 3.2, maxSpeed: 12,
+                  fallAnim: 0, celebrate: 0, drivePitch: 0 };
+    for (let i = 0; i < 6; i++) {
+      const cap = i * Math.PI / 3;
+      const caps = SprinterApp.personCapsules(man, cap, 0, false, false, SprinterApp.niveauDetail(140));
+      SprinterApp.drawFacetFigure(ctx, caps, 100 + i * 196, 340, 140, true);
+    }
+  }
+</script>

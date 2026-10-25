@@ -7,6 +7,7 @@ import {
 } from '@/game/leaderboard';
 import { fetchHistory, localHistory, type Course } from '@/game/history';
 import { IdentityPanel } from './IdentityPanel';
+import { TenuesMesCourses } from './Tenues';
 import { HistoriqueDefis } from './HistoriqueDefis';
 import { VEDETTES_LANCEES } from '@/game/canal';
 // LE VESTIAIRE (le panneau SKINS de MES COURSES) : du meme morceau que les
@@ -190,6 +191,8 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
           {/* Qui nous a defies cette semaine, et de quoi repartir dans
               l'autre sens. Replie : on vient d'abord ici pour ses chronos. */}
           <HistoriqueDefis race={race} onDefier={onClose} />
+          {/* SES TENUES : son coureur en grand, et les couleurs qu'il porte. */}
+          <TenuesMesCourses />
           {/* SES SKINS : ce que son coureur porte, et ce qui reste a gagner. */}
           {VEDETTES_LANCEES && <React.Suspense fallback={null}><SkinsMesCourses onPartir={onClose} /></React.Suspense>}
           <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 md:p-4 shadow-2xl">

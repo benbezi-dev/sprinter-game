@@ -137,8 +137,9 @@ G.apresConstruction = () => {
   // LE SKIN GAGNE SE PORTE SUR SES COURSES — les haies pour Aurel Manga, le
   // plat pour Meba-Mickael Zeze (game/vestiaire.ts). Ici, parce que c'est le
   // seul passage de toutes les courses : carriere, one shot, defi, duel, direct.
-  // A vie, et pas seulement pendant la semaine du defi (canal.ts).
-  if (VEDETTES_LANCEES) habillerLeJoueur(cle);
+  // A vie, et pas seulement pendant la semaine du defi (canal.ts). Et la
+  // tenue choisie partout ailleurs, evenement ouvert ou non.
+  habillerLeJoueur(cle);
   if (cle && cle in SprinterCore.RACES && EPREUVES_CONNUES.has(cle)) {
     const jeu = jeuDe(cle);
     if (jeu !== courant) {
