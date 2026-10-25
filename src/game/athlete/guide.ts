@@ -21,7 +21,7 @@ export function seanceDuJourDe(a: Athlete): { j: Jour; lieu: string; faite: bool
   if (!j) return null;
   return { j, lieu: lieuDeLExercice(a, exerciceDuJour(a, j)), faite: a.faites.includes(j) };
 }
-const heureSeance = (j: Jour): [number, number] => (j === 'samedi' ? [9 * 60, 19 * 60] : [16 * 60 + 30, 21 * 60]);
+export const heureSeance = (j: Jour): [number, number] => (j === 'samedi' ? [9 * 60, 19 * 60] : [16 * 60 + 30, 21 * 60]);
 const ecoleDe = (a: Athlete): { lieu: string; nom: Texte } | null => {
   const e = etape(a);
   return e === 'college' ? { lieu: 'college', nom: ['Aller en cours', 'Go to school'] }

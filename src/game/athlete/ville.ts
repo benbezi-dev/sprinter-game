@@ -33,6 +33,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { poser, type Modele } from '../vedette-3d';
+import { couleursDe, tenueDeVilleDe } from './garde-robe';
 
 export type Lieu =
   | 'maison' | 'college' | 'stade' | 'club_quartier' | 'club_horizon' | 'kine'
@@ -322,17 +323,24 @@ const ENDUITS = ['#F1E2C6', '#F2D3AE', '#E7C29C', '#F6EDDB', '#DCE5E9', '#EEC4AC
 // zones, pose a chaque image par `poser` (vedette-3d.ts) sur le squelette que le
 // moteur releve (r.squelette3D) : la marche et la course sont celles des tubes,
 // donc celles du jeu. Tant qu'il n'est pas charge, l'affiche peinte reste.
-// shortcut: un corps d'homme pour tous ; un corps de femme passera par le meme script.
-let gabarit: THREE.Object3D | null = null, gabaritDemande = false;
+// DEUX CORPS (« surtout pas un seul corps d'homme, fais femme et homme », l'auteur) :
+// tools/blender/corps_ville.py, Quaternius femme 1,68 m et homme 1,78 m, avec les zones
+// des vetements de ville (garde-robe.ts) ; le look choisit le sien par `build`.
+const gabarits: Record<'f' | 'm', THREE.Object3D | null> = { f: null, m: null };
+let gabaritDemande = false;
 function chargerLeCorps() {
   if (gabaritDemande) return;
   gabaritDemande = true;
   const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
   const base = (import.meta as any).env?.BASE_URL || '/';
-  l.loadAsync(base + 'modeles/coureur-homme.glb').then(g => { gabarit = g.scene; }).catch(() => { /* l'affiche reste */ });
+  for (const k of ['f', 'm'] as const) {
+    l.loadAsync(base + `modeles/corps-${k === 'f' ? 'femme' : 'homme'}.glb`).then(g => { gabarits[k] = g.scene; }).catch(() => { /* l'affiche reste */ });
+  }
 }
+const gabaritDe = (look: any) => gabarits[look && look.build === 'f' ? 'f' : 'm'];
 const SANS_CHEVEUX = new Set(['ras', 'shaved']);
 function corps3D(look: any): { m: Modele; mats: Record<string, THREE.MeshStandardMaterial> } | null {
+  const gabarit = gabaritDe(look);
   if (!gabarit) return null;
   const copie = clonerSquelette(gabarit);
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
@@ -369,9 +377,16 @@ function teindre(mats: Record<string, THREE.MeshStandardMaterial>, L: any) {
   if (!L) return;
   const rgb = (v: number[] | undefined, d: number[], k = 1) => { const a = v || d; return new THREE.Color().setRGB(a[0] / 255 * k, a[1] / 255 * k, a[2] / 255 * k, THREE.SRGBColorSpace); };
   mats.peau?.color.copy(rgb(L.skin, [180, 130, 100]));
-  mats.maillot?.color.copy(rgb(L.jersey, [200, 40, 50]));
-  mats.short?.color.copy(rgb(L.shorts, [30, 30, 40]));
-  mats.pointes?.color.copy(rgb(L.shoe, [240, 240, 240]));
+  // la tenue du moment : chaque zone a la couleur du haut, du bas, ou de la peau (garde-robe.ts)
+  if (L.tenue) {
+    const z = couleursDe(L.tenue, L.skin || [180, 130, 100], L.jersey);
+    for (const [k, v] of Object.entries(z)) mats[k]?.color.copy(rgb(v as number[], [128, 128, 128]));
+  } else {
+    for (const k of ['manches', 'avantbras', 'ventre', 'cuisses', 'mollets']) mats[k]?.color.copy(rgb(L.skin, [180, 130, 100]));
+    mats.maillot?.color.copy(rgb(L.jersey, [200, 40, 50]));
+    mats.short?.color.copy(rgb(L.shorts, [30, 30, 40]));
+    mats.pointes?.color.copy(rgb(L.shoe, [240, 240, 240]));
+  }
   mats.cheveux?.color.copy(SANS_CHEVEUX.has(L.hair) ? rgb(L.skin, [180, 130, 100], 0.8) : rgb(L.hairCol, [20, 16, 14]));
 }
 /** La glTF a y en haut comme la ville ; le moteur pose son coureur face a +x. */
@@ -417,7 +432,14 @@ class Personne {
     this.placer();
   }
 
-  habiller(look: any) { this.corps.look = look; this.dejaPeint = ''; if (this.m3) teindre(this.m3.mats, look); }
+  habiller(look: any) {
+    const avant = this.corps.look && this.corps.look.build;
+    this.corps.look = look; this.dejaPeint = '';
+    if (!this.m3) return;
+    // un autre corps (le miroir) : on refait le maillage a la prochaine image
+    if ((look && look.build) !== avant) { this.scene.remove(this.m3.m.racine); this.m3 = null; this.sprite.visible = true; return; }
+    teindre(this.m3.mats, look);
+  }
   placer() {
     this.sprite.position.set(this.pos.x, SOL, this.pos.z); this.ombre.position.set(this.pos.x, SOL + 0.02, this.pos.z);
     if (!this.m3) return;
@@ -451,7 +473,7 @@ class Personne {
 
   /** Repeindre l'affiche si la pose ou l'angle de vue ont change. */
   peindre(camera: THREE.Camera) {
-    if (!this.m3 && gabarit) {
+    if (!this.m3 && gabaritDe(this.corps.look)) {
       this.m3 = corps3D(this.corps.look);
       if (this.m3) {
         this.scene.add(this.m3.m.racine); this.sprite.visible = false; this.corps.squelette3D = true;
@@ -944,6 +966,7 @@ export class Ville {
     for (let i = 0; i < 14; i++) {
       const base = C.lookFor('passant-' + i, 'divers');
       const look = C.look({ ...base, civil: true, manches: base.jersey, pantalon: [50, 52, 70] });
+      look.tenue = tenueDeVilleDe('passant-' + i, look.build === 'f' ? 'f' : 'm');
       const k = this.pietons.auHasard([dx, dz], 120);
       if (k >= 0) this.passants.push(new Personne(look, this.pietons.xs[k], this.pietons.zs[k], this.scene, 160));
     }

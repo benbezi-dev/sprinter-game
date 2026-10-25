@@ -105,6 +105,8 @@ export type Athlete = {
   retard?: boolean;
   /** Les actions faites aujourd'hui (guide.ts) : remis a zero au reveil. */
   faitAujourdhui?: string[];
+  /** La garde-robe (garde-robe.ts) : les tenues possedees, et celle de chaque moment. */
+  garde?: import('./garde-robe').GardeRobe;
   /** La semaine du dernier meeting couru : un par dimanche. */
   meeting?: number;
   /** Le departement declare (departements.ts) : ou l'on court ses departementaux et regionaux en direct. */

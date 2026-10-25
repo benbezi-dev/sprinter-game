@@ -7,7 +7,8 @@ import {
   Zap, Utensils, ShowerHead, MessageCircle, Smile, Pause, Play, FastForward, Check, Navigation, Video, Map as Plan,
 } from 'lucide-react';
 import { PANNEAU, RESSORT, DUREE, COURBE, TRANSITION } from '@/lib/mouvement';
-import { conseil, journee } from '@/game/athlete/guide';
+import { conseil, journee, seanceDuJourDe, heureSeance } from '@/game/athlete/guide';
+import { type Moment, type Tenue, TENUES, tenue, tenuesDu, GARDE_ROBE_DE_DEPART, momentDe } from '@/game/athlete/garde-robe';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
@@ -454,6 +455,50 @@ function Actions({ a, lieu, ev, changer }: { a: Athlete; lieu: string; ev: boole
     </Carte>
   );
 }
+/** La garde-robe de l'athlete (garde-robe.ts), creee au premier besoin. */
+const gardeDe = (a: Athlete) => (a.garde ||= { possede: [...GARDE_ROBE_DE_DEPART.possede], porte: { ...GARDE_ROBE_DE_DEPART.porte } });
+/** Le moment de la journee pour la tenue, et la tenue portee a ce moment. */
+function tenueDuMoment(a: Athlete, competition: boolean): { moment: Moment; t: Tenue | null } {
+  const s = seanceDuJourDe(a);
+  const sea = s ? { debut: heureSeance(s.j)[0], fin: heureSeance(s.j)[1], faite: s.faite } : null;
+  const moment = momentDe(heureDe(a), competition, sea);
+  return { moment, t: tenue(gardeDe(a).porte[moment]) };
+}
+const MOMENTS: [Moment, [string, string]][] = [['ville', ['En ville', 'In town']], ['entrainement', ['Entraînement', 'Training']], ['competition', ['Compétition', 'Racing']], ['nuit', ['La nuit', 'At night']]];
+const rgbCss = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
+/** Deux pastilles : le haut et le bas d'une tenue. */
+const Pastilles = ({ t }: { t: Tenue }) => (
+  <span className="flex -space-x-1 shrink-0">
+    <span className="w-3.5 h-3.5 rounded-full border border-black/30" style={{ background: rgbCss(t.haut) }} />
+    <span className="w-3.5 h-3.5 rounded-full border border-black/30" style={{ background: rgbCss(t.bas) }} />
+  </span>
+);
+
+/** LA GARDE-ROBE, au miroir : la tenue de chaque moment, parmi celles qu'on possede. */
+function GardeRobe({ a, changer }: { a: Athlete; changer: (f: () => void) => void }) {
+  const g = gardeDe(a), corps = apparenceDe(a).corps;
+  return (
+    <Carte titre={dans(['TA GARDE-ROBE', 'YOUR WARDROBE'])}>
+      <p className="text-[10px] text-white/55">{dans(['Ton athlète change de tenue tout seul selon le moment.', 'Your athlete changes outfit by themselves depending on the moment.'])}</p>
+      {MOMENTS.map(([m, nom]) => (
+        <div key={m} className="flex flex-col gap-1">
+          <span className="text-[10px] font-black tracking-widest text-white/60">{dans(nom).toUpperCase()}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {tenuesDu(m, corps).filter(t => g.possede.includes(t.id)).map(t => (
+              <motion.button key={t.id} whileTap={{ scale: 0.94 }} layout
+                             onClick={() => changer(() => { g.porte[m] = t.id; })}
+                             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold ${g.porte[m] === t.id ? 'text-black' : 'bg-white/10 text-white/80'}`}
+                             style={g.porte[m] === t.id ? { background: VERT } : undefined}>
+                <Pastilles t={t} />{dans(t.nom)}
+              </motion.button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </Carte>
+  );
+}
+
 /**
  * LE JOYSTICK (25/10, d'apres Lagos Life). Un disque sous le pouce : la direction fait marcher
  * le long des trottoirs (ville.ts, comme les fleches), pousser au bord fait courir. Le bouton
@@ -618,6 +663,9 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
 
   const comp = COMPETITIONS[a.niveau];
   const { jour: leJour, date: direct, cetteSemaine } = jourDeLAthlete(a);
+  // LA TENUE DU MOMENT : en ville, a l'entrainement, le jour J, la nuit (garde-robe.ts)
+  const { moment, t: tenueVue } = tenueDuMoment(a, leJour);
+  useEffect(() => { ville.current?.habiller(lookDe(apparenceDe(a), true, tenueVue)); }, [moment, tenueVue?.id, pret]);
   // partir vers un lieu : a pied on y marche dans la ville ; a velo ou en bus on y est,
   // le temps du trajet passe et le ticket se paie (telephone.ts, trajet)
   const aller = (l: Lieu, mode: Mode = 'pied') => {
@@ -741,7 +789,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
           <Ici a={a} lieu={lieu} parler={p => { setLieu(null); setPersonne(p); }} />
           <DansLeLieu lieu={lieu} a={a} ev={!!ev} leJour={leJour} changer={changer} aller={aller}
                       surSeance={j => setSeance(j)} onEffacer={onEffacer}
-                      surApparence={ap => changer(() => { a.apparence = ap; ville.current?.habiller(lookDe(ap, true)); })} />
+                      surApparence={ap => changer(() => { a.apparence = ap; ville.current?.habiller(lookDe(ap, true, tenueDuMoment(a, leJour).t)); })} />
         </Feuille>
       )}
 
@@ -1001,6 +1049,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
         <Carte><Barres a={a} /></Carte>
         <Bouton onClick={() => setMiroir(m => !m)}>{dans(['LE MIROIR · CHANGER DE STYLE', 'THE MIRROR · CHANGE STYLE'])}</Bouton>
         {miroir && <ChoixApparence ap={apparenceDe(a)} onChange={surApparence} />}
+        {miroir && <GardeRobe a={a} changer={changer} />}
         {a.palmares.length > 0 && (
           <Carte titre={mot('palmares')} icone={Trophy}>
             {a.palmares.slice(0, 6).map((p, i) => (
@@ -1088,6 +1137,17 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
 
     case 'boutique': return (
       <Carte titre={mot('boutique')} icone={ShoppingBag}>
+        {/* LES VETEMENTS : ce qu'on n'a pas encore, pour son corps (garde-robe.ts) */}
+        {TENUES.filter(t => t.prix > 0 && (!t.pour || t.pour === apparenceDe(a).corps) && !gardeDe(a).possede.includes(t.id)).map(t => (
+          <div key={t.id} className="flex items-center gap-2">
+            <Pastilles t={t} />
+            <span className="flex-1 min-w-0 flex flex-col">
+              <span className="text-xs font-black">{dans(t.nom)}</span>
+              <span className="text-[10px] text-white/55">{dans(MOMENTS.find(x => x[0] === t.moment)![1])}</span>
+            </span>
+            <Bouton disabled={a.argent < t.prix} onClick={() => changer(() => { payer(a, -t.prix, t.nom[0], t.nom[1]); gardeDe(a).possede.push(t.id); })}>{t.prix} €</Bouton>
+          </div>
+        ))}
         {/* le velo : traverser Val-de-Reuil en quelques minutes, sans ticket (telephone.ts, trajet) */}
         <div className="flex items-center gap-2">
           <span className="flex-1 min-w-0 flex flex-col">

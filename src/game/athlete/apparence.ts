@@ -6,6 +6,7 @@
 
 import { SprinterCore } from '../engine';
 import { type Athlete, type Apparence, APPARENCE, COULEURS } from './regles';
+import { type Tenue, tenue, tenueDeVilleDe } from './garde-robe';
 
 const CHEVEUX: Record<string, [number, number, number]> = {
   noir: [28, 22, 22], brun: [56, 36, 24], chatain: [92, 62, 36],
@@ -14,12 +15,15 @@ const CHEVEUX: Record<string, [number, number, number]> = {
 
 export const apparenceDe = (a: Athlete): Apparence => a.apparence || APPARENCE;
 
-export function lookDe(ap: Apparence, enVille: boolean) {
+export function lookDe(ap: Apparence, enVille: boolean, porte: Tenue | null = null) {
   const c = COULEURS[ap.couleur] || COULEURS[0];
   const base = { build: ap.corps, skin: ap.peau, hair: ap.coiffure, hairCol: CHEVEUX[ap.cheveux], h: ap.taille, jersey: c };
-  return (SprinterCore as any).look(enVille
+  const look = (SprinterCore as any).look(enVille
     ? { ...base, civil: true, manches: c, pantalon: [44, 46, 64], shoe: [240, 240, 244] }
     : { ...base, shorts: [30, 32, 48] });
+  // la tenue du moment (garde-robe.ts), que le corps 3D de la ville peint par zones
+  if (porte) look.tenue = porte;
+  return look;
 }
 
 /**
@@ -45,6 +49,8 @@ export function lookDePersonne(a: Athlete, p: string): any {
     ...(sport ? { jersey: p === 'rival' ? [200, 40, 40] : base.jersey } : { civil: true, manches: base.jersey, pantalon: p === 'prof' ? [70, 60, 50] : [50, 52, 70] }),
     lunettes: p === 'prof' ? [30, 30, 34] : base.lunettes,
   });
+  // en ville, une tenue tiree sur son nom ; ceux du club en tenue d'entrainement, a leurs couleurs
+  look.tenue = sport ? { ...tenue('debardeur-short')!, haut: look.jersey || [200, 40, 40] } : tenueDeVilleDe(p, corps);
   cacheGens.set(cle, look);
   return look;
 }

@@ -27,7 +27,8 @@ export * from '${join(process.cwd(), 'src/game/athlete/recit.ts')}';
 export * from '${join(process.cwd(), 'src/game/athlete/gens.ts')}';
 export * from '${join(process.cwd(), 'src/game/athlete/telephone.ts')}';
 export * from '${join(process.cwd(), 'src/game/athlete/sante.ts')}';
-export * from '${join(process.cwd(), 'src/game/athlete/guide.ts')}';`);
+export * from '${join(process.cwd(), 'src/game/athlete/guide.ts')}';
+export * from '${join(process.cwd(), 'src/game/athlete/garde-robe.ts')}';`);
 const sortie = join(dir, 'athlete.mjs');
 await build({ entryPoints: [entree], bundle: true, format: 'esm', platform: 'node', outfile: sortie, logLevel: 'silent' });
 const R = await import(sortie);
@@ -449,6 +450,25 @@ titre('le guide du moment');
   ok('…le lendemain, plus rien de coche hors seances', !R.journee(a, false).find(x => x.texte[0] === 'Douche').fait);
   a.jour = R.DIMANCHE; a.heure = 9 * 60;
   ok('jour de competition : la gare', R.conseil(a, true).lieu === 'gare');
+}
+
+titre('la garde-robe');
+{
+  const peau = [150, 100, 70];
+  const jean = R.couleursDe(R.tenue('tshirt-jean'), peau);
+  ok('t-shirt et jean : manches couvertes, jambes en jean, avant-bras nus', jean.manches[0] === 240 && jean.mollets[2] === 140 && jean.avantbras === peau);
+  const deb = R.couleursDe(R.tenue('debardeur-short'), peau);
+  ok('debardeur : bras et cuisses nus', deb.manches === peau && deb.cuisses === peau && deb.short[0] === 30);
+  const robe = R.couleursDe(R.tenue('robe-ete'), peau);
+  ok('robe : jusqu’au genou, mollets nus', robe.cuisses[0] === 248 && robe.mollets === peau);
+  ok('le maillot de competition prend la couleur de l’athlete', R.couleursDe(R.tenue('competition'), peau, [1, 2, 3]).maillot[2] === 3);
+  ok('pas de robe ni de brassiere pour un corps d’homme', R.tenuesDu('ville', 'm').every(t => t.pour !== 'f') && R.tenuesDu('entrainement', 'm').every(t => t.pour !== 'f'));
+  ok('une tenue de ville stable sur un nom', R.tenueDeVilleDe('passant-3', 'f').id === R.tenueDeVilleDe('passant-3', 'f').id);
+  const sea = { debut: 16.5 * 60, fin: 21 * 60, faite: false };
+  ok('le moment : nuit, competition, entrainement, ville', R.momentDe(23 * 60, false, sea) === 'nuit' && R.momentDe(9 * 60, true, null) === 'competition'
+    && R.momentDe(16 * 60, false, sea) === 'entrainement' && R.momentDe(11 * 60, false, sea) === 'ville');
+  ok('seance faite : retour en tenue de ville', R.momentDe(18 * 60, false, { ...sea, faite: true }) === 'ville');
+  ok('on part avec une tenue pour chaque moment', ['ville', 'entrainement', 'competition', 'nuit'].every(m => R.GARDE_ROBE_DE_DEPART.possede.includes(R.GARDE_ROBE_DE_DEPART.porte[m])));
 }
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
