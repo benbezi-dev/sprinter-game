@@ -196,6 +196,58 @@ L'auteur, 25/10 : « lorsque toutes les épreuves seront prêtes, on mettra en
 place les interclubs avec chaque club inscrit dans le jeu ». À faire une fois
 toutes les épreuves jouables ; les clubs réels seulement avec accord écrit.
 
+## Ce qu'on reprend de Lagos Life (relevé du 25/10 dans le jeu)
+
+L'auteur, 25/10 : « récupère tout de ce jeu qui peut nous être utile dans le
+nôtre ». On reprend des IDÉES et des MÉCANIQUES, adaptées à la vie d'un
+athlète — jamais leur code, leurs images ni leurs modèles. Relevé complet :
+mémoire `reference_lagos_life_releve`.
+
+Fait :
+- ✓ Une consigne à la fois (« À FAIRE ») et la journée cochée (guide.ts).
+- ✓ Vrais corps 3D animés dans la ville, marche et COURSE (Maj, double
+  appui, bouton « Courir » ; 100 m courus = 1 d'énergie et 1 d'hygiène).
+- ✓ « Y ALLER » qui prend le trajet le plus court en temps de jeu.
+
+À faire, par ordre :
+1. **Série et niveau** : série quotidienne (avec un « gel »), XP, paliers
+   (Benjamin → Élite), récompenses J3/J7/J30/J100/J365 (tenue, pointes,
+   entrée de stade), un déblocage par niveau, semaine qui se remet à zéro.
+2. **Lieux vivants** : la feuille du lieu avec une phrase du jour (« piste
+   mouillée ce matin »), des coins où aller d'un toucher (couloirs, sautoir,
+   tribune, salle de muscu), les athlètes présents.
+3. **Joystick + caméra derrière le joueur** (« Eyes ») en plus de la vue de
+   dessus ; bouton « COURIR » quand on pousse à fond. GPS « Où aller ? »
+   (temps à pied, en bus, à vélo), marche automatique, mini-carte et flèche ;
+   bouton « Parler » près d'une personne.
+4. **Intérieurs en coupe** (« Inside ») : maison, salle de muscu, cabinet du
+   kiné ; on touche l'objet (douche, lit, frigo, banc) pour agir.
+5. **Filières à échelons** : au club (licencié → capitaine) ; pour un adulte,
+   un métier qui progresse avec une compétence.
+6. **Classements** : podium par épreuve et par département, « ton rang »
+   toujours visible (rejoint les départementaux en direct).
+7. **Téléphone** : « Actus » (résultats, records, rumeurs de sélection),
+   « Événements » (meetings, stages), aide « 3 choses à faire d'abord ».
+   Pas 50 applis.
+8. **Rue vivante** : passants variés, bus qui roulent, devantures à enseigne,
+   ciel de crépuscule, transition « je sors ».
+9. **Vie collective** (quand il y aura du monde en ligne) : capitaine du club
+   ou délégué du département élu chaque semaine ; tchat et salon du lieu.
+
+Refusé : les paris (des mineurs jouent), les promesses d'argent en campagne,
+les panneaux publicitaires vendus aux joueurs tant qu'il n'y a pas de
+modération.
+
+## D'autres villes (après Val-de-Reuil)
+
+L'auteur, 25/10 : « nous allons créer ensuite d'autres villes joignables en
+bus, voiture, train ou avion ». Chaque ville construite comme Val-de-Reuil
+(OpenStreetMap, redressée), avec sa gare, son arrêt de car, son aéroport s'il
+y en a un ; le trajet coûte du temps de jeu et de l'argent selon le moyen
+(bus et car lents et bon marché, train rapide, avion pour les grandes
+distances, voiture une fois achetée). Les compétitions loin de chez soi
+(régionaux, France) deviennent de vrais voyages.
+
 ## Ce qui ne change pas
 
 - Le plafond : un athlète au sommet ne gagne jamais plus de 0,10 s sur un

@@ -519,6 +519,8 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   const [pret, setPret] = useState(false);
   // la vitesse du temps : minutes de jeu par seconde (0 : pause), comme les Sims
   const [vitesse, setVitesse] = useState(1);
+  // courir partout (« le personnage peut aussi courir pour aller plus vite », l'auteur, 25/10)
+  const [course, setCourse] = useState(false);
   const hote = useRef<HTMLDivElement>(null);
   const ville = useRef<Ville | null>(null);
   const changer = (f: () => void) => { f(); sauver(a); maj(); };
@@ -560,8 +562,10 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
     if (fige || !vitesse || !pret) return;
     let n = 0;
     const id = setInterval(() => {
-      // un trajet a pied ne mange pas la journee : l'horloge passe au quart pendant la marche
-      const quoi = avancer(a, ville.current?.enMarche() ? vitesse / 4 : vitesse);
+      // un trajet a pied ne mange pas la journee : l'horloge passe au quart pendant la marche ;
+      // courir coute : 100 m courus, un point d'energie et un d'hygiene
+      const couru = ville.current?.metresCourus() || 0;
+      const quoi = avancer(a, ville.current?.enMarche() ? vitesse / 4 : vitesse, couru ? { energie: -couru / 100, hygiene: -couru / 100 } : {});
       ville.current?.heure(heureDe(a));
       // plus d'energie : on rentre se coucher, comme un Sim qui s'effondre
       if (quoi.includes('epuise')) {
@@ -651,6 +655,12 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
               {nonLus(a) > 0 && <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center">{nonLus(a)}</span>}
             </button>
             <button onClick={() => { setLieu(null); setTel('carte'); }} aria-label={dans(['Carte', 'Map'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><MapPin size={18} /></button>
+            <motion.button whileTap={{ scale: 0.9 }} onClick={() => { const v = !course; setCourse(v); ville.current?.courir(v); }}
+                           aria-label={dans(['Courir', 'Run'])} aria-pressed={course}
+                           className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center ${course ? 'text-black' : 'bg-[rgba(8,18,14,0.86)] text-white/80'}`}
+                           style={course ? { background: VERT } : undefined}>
+              <Footprints size={16} /><span className="text-[7px] font-black leading-none mt-0.5">{dans(['COURIR', 'RUN'])}</span>
+            </motion.button>
             <button onClick={() => ville.current?.tourner(-1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCcw size={16} /></button>
             <button onClick={() => ville.current?.tourner(1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCw size={16} /></button>
           </div>

@@ -29,6 +29,10 @@
 
 import * as THREE from 'three';
 import { SprinterApp, SprinterCore } from '../engine';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { poser, type Modele } from '../vedette-3d';
 
 export type Lieu =
   | 'maison' | 'college' | 'stade' | 'club_quartier' | 'club_horizon' | 'kine'
@@ -309,6 +313,72 @@ const ENDUITS = ['#F1E2C6', '#F2D3AE', '#E7C29C', '#F6EDDB', '#DCE5E9', '#EEC4AC
  * Un personnage : son corps a facettes peint dans une affiche. L'affiche fait
  * face a la camera ; le corps est tourne vers la ou il marche.
  */
+// --- LES CORPS EN VRAI MAILLAGE (25/10) --------------------------------------
+//
+// « Remplace les personnages plats de la ville par les vrais modeles 3D animes »
+// (l'auteur, apres Lagos Life). Le corps generique de la course en 3D
+// (public/modeles/coureur-homme.glb, Quaternius CC0 passe par
+// tools/blender/coureur_generique.py), clone par habitant, teint a son look par
+// zones, pose a chaque image par `poser` (vedette-3d.ts) sur le squelette que le
+// moteur releve (r.squelette3D) : la marche et la course sont celles des tubes,
+// donc celles du jeu. Tant qu'il n'est pas charge, l'affiche peinte reste.
+// shortcut: un corps d'homme pour tous ; un corps de femme passera par le meme script.
+let gabarit: THREE.Object3D | null = null, gabaritDemande = false;
+function chargerLeCorps() {
+  if (gabaritDemande) return;
+  gabaritDemande = true;
+  const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+  const base = (import.meta as any).env?.BASE_URL || '/';
+  l.loadAsync(base + 'modeles/coureur-homme.glb').then(g => { gabarit = g.scene; }).catch(() => { /* l'affiche reste */ });
+}
+const SANS_CHEVEUX = new Set(['ras', 'shaved']);
+function corps3D(look: any): { m: Modele; mats: Record<string, THREE.MeshStandardMaterial> } | null {
+  if (!gabarit) return null;
+  const copie = clonerSquelette(gabarit);
+  const mats: Record<string, THREE.MeshStandardMaterial> = {};
+  copie.traverse((o: any) => {
+    if (!o.isMesh) return;
+    o.frustumCulled = false; o.castShadow = true;
+    const liste = Array.isArray(o.material) ? o.material : [o.material];
+    const neufs = liste.map((m: any) => {
+      const zone = String(m.name || '').replace('Coureur_', '');
+      return (mats[zone] = new THREE.MeshStandardMaterial({ roughness: zone === 'peau' ? 0.55 : 0.7, metalness: 0 }));
+    });
+    o.material = Array.isArray(o.material) ? neufs : neufs[0];
+  });
+  teindre(mats, look);
+  const racine = new THREE.Group();
+  racine.matrixAutoUpdate = false;
+  racine.add(copie);
+  copie.updateMatrixWorld(true);
+  const os = new Map<string, THREE.Bone>();
+  copie.traverse((o: any) => { if (o.isBone) os.set(o.name, o); });
+  const prof = (b: THREE.Object3D) => { let n = 0; while (b.parent) { b = b.parent; n++; } return n; };
+  const ordre = [...os.values()].sort((a, b) => prof(a) - prof(b));
+  const repos = new Map<THREE.Bone, THREE.Quaternion>(), reposLocal = new Map<THREE.Bone, THREE.Quaternion>();
+  const inv = new THREE.Matrix4().copy(copie.matrixWorld).invert();
+  for (const b of ordre) {
+    repos.set(b, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().multiplyMatrices(inv, b.matrixWorld)));
+    reposLocal.set(b, b.quaternion.clone());
+  }
+  const bassin = os.get('pelvis')!;
+  const bassinParent = new THREE.Matrix4().multiplyMatrices(inv, bassin.parent!.matrixWorld);
+  return { m: { racine, os, ordre, repos, reposLocal, bassinParent } as unknown as Modele, mats };
+}
+function teindre(mats: Record<string, THREE.MeshStandardMaterial>, L: any) {
+  if (!L) return;
+  const rgb = (v: number[] | undefined, d: number[], k = 1) => { const a = v || d; return new THREE.Color().setRGB(a[0] / 255 * k, a[1] / 255 * k, a[2] / 255 * k, THREE.SRGBColorSpace); };
+  mats.peau?.color.copy(rgb(L.skin, [180, 130, 100]));
+  mats.maillot?.color.copy(rgb(L.jersey, [200, 40, 50]));
+  mats.short?.color.copy(rgb(L.shorts, [30, 30, 40]));
+  mats.pointes?.color.copy(rgb(L.shoe, [240, 240, 240]));
+  mats.cheveux?.color.copy(SANS_CHEVEUX.has(L.hair) ? rgb(L.skin, [180, 130, 100], 0.8) : rgb(L.hairCol, [20, 16, 14]));
+}
+/** La glTF a y en haut comme la ville ; le moteur pose son coureur face a +x. */
+const _T = new THREE.Matrix4(), _R = new THREE.Matrix4(), _S = new THREE.Matrix4();
+/** La foulee de course en ville, en metres (le moteur avance sa phase d'un demi-tour par appui). */
+const FOULEE = 2.1;
+
 class Personne {
   sprite: THREE.Sprite;
   ombre: THREE.Mesh;
@@ -321,7 +391,11 @@ class Personne {
   dir = new THREE.Vector3(0, 0, 1);
   private marcheT = Math.random() * 6;
   marche = false;
+  /** Il court (plus vite que la marche) : la phase de foulee avance avec la distance. */
+  court = false;
   private dejaPeint = '';
+  private m3: ReturnType<typeof corps3D> = null;
+  private scene: THREE.Object3D;
 
   constructor(look: any, x: number, z: number, scene: THREE.Object3D, private px = 256) {
     this.cv.width = px; this.cv.height = px;
@@ -338,11 +412,23 @@ class Personne {
       new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.28, depthWrite: false }));
     this.ombre.rotation.x = -Math.PI / 2;
     scene.add(this.sprite, this.ombre);
+    this.scene = scene;
+    chargerLeCorps();
     this.placer();
   }
 
-  habiller(look: any) { this.corps.look = look; this.dejaPeint = ''; }
-  placer() { this.sprite.position.set(this.pos.x, SOL, this.pos.z); this.ombre.position.set(this.pos.x, SOL + 0.02, this.pos.z); }
+  habiller(look: any) { this.corps.look = look; this.dejaPeint = ''; if (this.m3) teindre(this.m3.mats, look); }
+  placer() {
+    this.sprite.position.set(this.pos.x, SOL, this.pos.z); this.ombre.position.set(this.pos.x, SOL + 0.02, this.pos.z);
+    if (!this.m3) return;
+    // tourne vers ou il va : +x du corps sur la direction de marche
+    const k = GRANDI * 1.08;
+    this.m3.m.racine.matrix.multiplyMatrices(_T.makeTranslation(this.pos.x, SOL, this.pos.z), _R.makeRotationY(Math.atan2(-this.dir.z, this.dir.x)))
+      .multiply(_S.makeScale(k, k, k));
+    this.m3.m.racine.matrixWorldNeedsUpdate = true;
+  }
+  /** Le retirer de la ville (affiche, ombre, corps). */
+  retirer() { this.scene.remove(this.sprite, this.ombre); if (this.m3) this.scene.remove(this.m3.m.racine); }
 
   /** Avancer le long de la route. Rend vrai a l'arrivee du dernier point. */
   avancer(dt: number, vitesse: number): boolean {
@@ -350,6 +436,8 @@ class Personne {
     let pas = vitesse * dt;
     this.marche = true;
     this.marcheT += dt * 7.5 * Math.min(1.6, vitesse / 4.2);
+    // en courant, la foulee du moteur : un demi-tour de phase par appui
+    if (this.court) { this.corps.stride = (this.corps.stride || 0) + pas * Math.PI / FOULEE; this.corps.v = vitesse; }
     while (pas > 0 && this.route.length) {
       const [bx, bz] = this.route[0];
       const dx = bx - this.pos.x, dz = bz - this.pos.z, d = Math.hypot(dx, dz);
@@ -363,6 +451,20 @@ class Personne {
 
   /** Repeindre l'affiche si la pose ou l'angle de vue ont change. */
   peindre(camera: THREE.Camera) {
+    if (!this.m3 && gabarit) {
+      this.m3 = corps3D(this.corps.look);
+      if (this.m3) { this.scene.add(this.m3.m.racine); this.sprite.visible = false; this.corps.squelette3D = true; this.placer(); }
+    }
+    if (this.m3) {
+      // la marche, ou la course (le moteur sprinte quand marche = 0 et v > 0), ou l'arret
+      const A = SprinterApp as any, c = this.corps;
+      c.marche = this.marche && !this.court ? 1 : 0;
+      c.marcheT = this.marcheT;
+      if (!this.marche || !this.court) c.v = 0;
+      A.personCapsules(c, 0, 0, false, false, 0);
+      if (c.squelette) poser(this.m3.m, c.squelette);
+      return;
+    }
     const a = this.pos.clone().project(camera), b = this.pos.clone().add(this.dir).project(camera);
     // LE CAP DU MOTEUR N'EST PAS UN ANGLE D'ECRAN (« le joueur marche a l'envers », l'auteur) :
     // personCapsules tourne le corps au sol puis le projette en isometrie, x du sol vers le haut
@@ -411,8 +513,9 @@ function dansPoly(poly: P2[], x: number, z: number) {
 const GRANDI = 1.55;
 /** Le niveau des trottoirs et dalles, sur lequel on marche. */
 const SOL = 0.12;
-// « les deplacements sont trop lents, c'est plus rapide dans les Sims » (l'auteur, 25/10) : on presse le pas
-const VITESSE = 10;
+// « les deplacements sont trop lents, c'est plus rapide dans les Sims » (l'auteur, 25/10) : on presse le pas ;
+// et « le personnage peut aussi courir pour aller plus vite » : la course double la vitesse
+const VITESSE = 6, VITESSE_COURSE = 13;
 const COULEURS_AUTO = ['#C0392B', '#2E86C1', '#F4F6F7', '#1C2833', '#F1C40F', '#7D8C8E', '#27AE60', '#8E44AD', '#D35400'];
 const VOITURES = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'primary_link', 'secondary_link', 'tertiary_link']);
 
@@ -463,6 +566,9 @@ export class Ville {
   private id = 0;
   private dernier = 0;
   private touches = new Set<string>();
+  /** Courir par defaut (le bouton du tableau de bord), et les metres courus depuis la derniere lecture. */
+  private enCourse = false; private metres = 0;
+  private dernierAppui = 0;
   private arrete = false;
   private enPause = false;
   private lent = 0;
@@ -577,7 +683,7 @@ export class Ville {
     const vus = new Set(liste.map(h => h.id));
     for (const [id, h] of this.habitants) {
       if (vus.has(id)) continue;
-      this.scene.remove(h.p.sprite, h.p.ombre); h.el.remove(); this.habitants.delete(id);
+      h.p.retirer(); h.el.remove(); this.habitants.delete(id);
     }
     liste.forEach((h, i) => {
       // shortcut: une ville batie pour un mineur n'a pas de porte « parents » ; si l'athlete
@@ -627,6 +733,10 @@ export class Ville {
   /** La porte d'un lieu (metres), ou null s'il n'existe pas ici. */
   /** Le joueur est-il en chemin ? (l'horloge ralentit pendant les trajets) */
   enMarche() { return !!this.moi && this.moi.route.length > 0; }
+  /** Le bouton « Courir » : tous les trajets a pied se font en courant. */
+  courir(oui: boolean) { this.enCourse = oui; if (this.moi) this.moi.court = oui; }
+  /** Les metres courus depuis la derniere lecture (ils coutent de l'energie, CarriereAthlete). */
+  metresCourus() { const m = this.metres; this.metres = 0; return m; }
   porte(l: Lieu): P2 | null { return this.portes[l] || null; }
 
   /** La distance a pied jusqu'a un lieu, a vol d'oiseau, en metres. */
@@ -885,6 +995,10 @@ export class Ville {
     this.pointeurs.delete(e.pointerId); this.pince = 0;
     if (!seul || this.bouge || this.enPause || !this.moi) return;
     const p = this.solSous(e); if (!p) return;
+    // DEUX APPUIS RAPPROCHES : on y va en courant (comme le double clic des Sims)
+    const t = performance.now();
+    this.moi.court = this.enCourse || t - this.dernierAppui < 350;
+    this.dernierAppui = t;
     // une personne touchee : on lui parle
     for (const [id, h] of this.habitants) {
       if (Math.hypot(h.p.pos.x - p.x, h.p.pos.z - p.z) < 2.2) { this.o.surPersonne?.(id); return; }
@@ -908,12 +1022,14 @@ export class Ville {
     if (this.enPause) return;
     if (e.key === 'q' || e.key === 'Q') { this.tourner(-1); return; }
     if (e.key === 'e' || e.key === 'E') { this.tourner(1); return; }
+    if (e.key === 'Shift') { if (this.moi) this.moi.court = true; return; }
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
     e.preventDefault();
+    if (this.moi) this.moi.court = e.shiftKey || this.enCourse;
     this.touches.add(e.key); this.lieuVise = null; this.marque.visible = false;
     if (this.moi) this.moi.route = [];
   };
-  private relache = (e: KeyboardEvent) => { this.touches.delete(e.key); };
+  private relache = (e: KeyboardEvent) => { this.touches.delete(e.key); if (e.key === 'Shift' && this.moi) this.moi.court = this.enCourse; };
 
   /** Au clavier : marcher dans la direction DE L'ECRAN, en suivant le reseau. */
   private pasClavier() {
@@ -947,7 +1063,10 @@ export class Ville {
 
     if (!this.enPause && !moi.route.length && this.touches.size) this.pasClavier();
     const avait = moi.route.length > 0;
-    if (moi.avancer(dt, VITESSE) && avait) {
+    const x0 = moi.pos.x, z0 = moi.pos.z;
+    const arrive = moi.avancer(dt, moi.court ? VITESSE_COURSE : VITESSE);
+    if (moi.court) this.metres += Math.hypot(moi.pos.x - x0, moi.pos.z - z0);
+    if (arrive && avait) {
       this.marque.visible = false;
       this.o.surPosition?.([moi.pos.x, moi.pos.z]);
       if (this.lieuVise) { const l = this.lieuVise; this.lieuVise = null; this.o.surLieu(l); }

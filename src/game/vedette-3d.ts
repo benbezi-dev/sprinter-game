@@ -538,5 +538,9 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
   }
 }
 
+// La ville de la carriere (game/athlete/ville.ts) pose ses habitants avec la meme fonction.
+export { poser };
+export type { Modele, Squelette };
+
 // Le moteur (sprinter-app.js, du JavaScript sans import) le trouve ici.
 (globalThis as any).SprinterVedette3D = { charger, pret, dessiner };
