@@ -33,6 +33,7 @@ import { Telephone, type App } from './TelephoneAthlete';
 import { type Mode, voyager, nonLus, messagesDuReveil, messagesDeBienvenue } from '@/game/athlete/telephone';
 import { SeanceJeu } from './SeancesAthlete';
 import { nomDuClub, logoDuClub, CLUB_PARTENAIRE } from '@/game/athlete/partenaires';
+import { DEPARTEMENTS, REGIONS, DEPARTEMENT_DEFAUT, regionDe } from '@/game/athlete/departements';
 import { type Soin, etatDeSante, soigner, soinPossible, resteACharge, certificatRequis, EXAMEN } from '@/game/athlete/sante';
 
 /* ---------------------------------------------------------------------------
@@ -298,6 +299,7 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
   const [voie, setVoie] = useState<Voie | null>(null);
   const [spe, setSpe] = useState<Epreuve>('100');
   const [age, setAge] = useState(14);
+  const [dep, setDep] = useState(DEPARTEMENT_DEFAUT);
   const vie = age <= 14 ? dans(['Collège · chez tes parents · compétition scolaire', 'Secondary school · living with parents · school meet'])
     : age <= 17 ? dans(['Lycée · chez tes parents', 'High school · living with parents'])
     : dans(['Vie active · ton appart, un loyer, un travail · départementaux d’entrée', 'Working life · your own flat, rent, a job · straight to county level']);
@@ -326,6 +328,14 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
             <input type="range" min={12} max={35} step={1} value={age} onChange={e => setAge(+e.target.value)} className="w-full accent-[#3DDC84]" aria-label={dans(['Âge', 'Age'])} />
             <p className="text-xs text-white/65">{vie}</p>
           </Carte>
+          <Carte titre={dans(['TON DÉPARTEMENT', 'YOUR COUNTY'])}>
+            <select value={dep} onChange={e => setDep(e.target.value)} aria-label={dans(['Département', 'County'])}
+                    className="w-full rounded-xl bg-white/[0.06] border border-white/15 px-3 py-2.5 text-sm font-bold text-white">
+              {DEPARTEMENTS.map(([c, n]) => <option key={c} value={c} className="text-black">{c} · {n}</option>)}
+            </select>
+            <p className="text-xs text-white/65">{dans([`Départementaux et régionaux en direct contre les athlètes du ${dep} puis de la région ${REGIONS[regionDe(dep)!]}.`,
+              `County and regional meets, live, against athletes from ${dep} then the ${REGIONS[regionDe(dep)!]} region.`])}</p>
+          </Carte>
           <Carte titre={mot('famille')}>
             {(['aisee', 'modeste'] as Origine[]).map(o => (
               <button key={o} onClick={() => setOrigine(o)} className={choix(origine === o)}
@@ -352,7 +362,7 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
           <div className="flex gap-2">
             <Bouton onClick={() => setEtape('corps')}>‹</Bouton>
             <Bouton plein disabled={!origine || !voie} className="flex-1 py-4 text-base"
-                    onClick={() => origine && voie && onFini(nouvelAthlete(getSavedName() || 'TOI', origine, voie, spe, ap, age))}>
+                    onClick={() => origine && voie && onFini({ ...nouvelAthlete(getSavedName() || 'TOI', origine, voie, spe, ap, age), departement: dep })}>
               {mot('lancer')}
             </Bouton>
           </div>

@@ -103,6 +103,8 @@ export type Athlete = {
   certificat?: number;
   /** Une blessure jamais diagnostiquee prend une semaine de plus (une fois). */
   retard?: boolean;
+  /** Le departement declare (departements.ts) : ou l'on court ses departementaux et regionaux en direct. */
+  departement?: string;
   /** Deja alle en cours aujourd'hui ? */
   cours?: boolean;
   /** Deja passe chez le kine, deja fait son footing cette semaine ? */
