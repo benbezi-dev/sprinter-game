@@ -4,7 +4,7 @@
 // (legende/mots.ts) : tout le mode doit sortir du paquet public d'un seul
 // drapeau, et une table posee sur un global y resterait.
 
-import type { Jour } from './regles';
+import { type Jour, type Athlete, type Exercice, exerciceDuJour } from './regles';
 
 export const MOTS: Record<string, [string, string]> = {
   titre:        ['CARRIÈRE D’ATHLÈTE', 'ATHLETE CAREER'],
@@ -145,43 +145,76 @@ export function mot(k: string, p: Record<string, string | number> = {}): string 
 /** Un texte [fr, en] dans la langue du jeu. */
 export const dans = (t: [string, string]) => t[lang() === 'en' ? 1 : 0];
 
-/* ------------------------------------------------ les seances du programme */
+/* ------------------------------------------------ les exercices */
 
-// DE VRAIES SEANCES DE SPRINT, ecrites pour l'exemple. Le jour ou des coachs
-// partenaires apporteront les leurs, elles prendront cette place.
-const PROGRAMME: Record<Jour, [string, string][]> = {
-  lundi: [
-    ['6 × 30 m départ accroupi, récup 3’', '6 × 30 m crouch starts, 3’ rest'],
-    ['4 × 40 m lancés, récup complète', '4 × 40 m flying, full rest'],
-    ['3 × 60 m à 95 %, récup 5’', '3 × 60 m at 95%, 5’ rest'],
-  ],
-  mercredi: [
-    ['Côtes : 8 × 60 m', 'Hills: 8 × 60 m'],
-    ['Muscu : squat 4 × 5, fentes 3 × 8', 'Gym: squat 4 × 5, lunges 3 × 8'],
-    ['Bondissements 5 × 30 m + gainage', 'Bounding 5 × 30 m + core'],
-  ],
-  vendredi: [
-    ['Gammes : montées de genoux, talons-fesses', 'Drills: high knees, butt kicks'],
-    ['Départs en blocs : 8 × 15 m', 'Block starts: 8 × 15 m'],
-    ['Virage : 4 × 80 m en courbe', 'Bend: 4 × 80 m on the curve'],
-  ],
-  samedi: [
-    ['Tempo : 6 × 150 m à 75 %', 'Tempo: 6 × 150 m at 75%'],
-    ['2 × (3 × 200 m), récup 2’/6’', '2 × (3 × 200 m), 2’/6’ rest'],
-    ['Lactique : 2 × 300 m', 'Lactic: 2 × 300 m'],
-  ],
+// Le nom, la seance telle que l'entraineur l'ecrit, et ce qu'on fait au
+// mini-jeu. Des seances reelles de sprinteur, ecrites pour l'exemple : le jour
+// ou des coachs partenaires apporteront les leurs, elles prendront cette place.
+export const EXOS: Record<Exercice, { nom: [string, string]; serie: [string, string]; seul: [string, string]; jeu: [string, string] }> = {
+  departs: {
+    nom: ['Départs en blocs', 'Block starts'],
+    serie: ['8 × 20 m départ en blocs, récup 3’', '8 × 20 m from the blocks, 3’ rest'],
+    seul: ['Départs accroupis sur l’herbe', 'Crouch starts on the grass'],
+    jeu: ['« À vos marques… Prêts… » Pars au coup de pistolet, pas avant : un faux départ et l’essai compte pour rien.', '“On your marks… Set…” Go on the gun, not before: a false start wastes the attempt.'],
+  },
+  lancee: {
+    nom: ['Vitesse lancée', 'Flying sprints'],
+    serie: ['4 × 30 m lancés après 20 m d’élan', '4 × 30 m flying after a 20 m run-up'],
+    seul: ['Accélérations au parc', 'Strides in the park'],
+    jeu: ['Prends ton élan, puis tape le plus vite possible dans la zone lancée.', 'Build up, then tap as fast as you can through the flying zone.'],
+  },
+  gammes: {
+    nom: ['Gammes', 'Drills'],
+    serie: ['Montées de genoux, talons-fesses, pas chassés', 'High knees, butt kicks, side shuffles'],
+    seul: ['Éducatifs vus sur YouTube', 'Drills from YouTube'],
+    jeu: ['Suis l’éducatif : tape du bon côté, au bon moment.', 'Follow the drill: tap the right side, on time.'],
+  },
+  virage: {
+    nom: ['Virage', 'Bend running'],
+    serie: ['4 × 80 m en courbe, à la corde', '4 × 80 m on the bend, hugging the line'],
+    seul: ['Courbes autour du rond-point', 'Curves round the roundabout'],
+    jeu: ['Garde la cadence et reste dans ton couloir : la courbe te pousse dehors.', 'Keep the cadence and stay in your lane: the bend pushes you out.'],
+  },
+  cotes: {
+    nom: ['Côtes', 'Hill sprints'],
+    serie: ['8 × 60 m en côte, retour en marchant', '8 × 60 m uphill, walk back down'],
+    seul: ['Côtes à la colline des pins', 'Hills on the pine hill'],
+    jeu: ['Monte la côte avant la fin du temps : plus ça grimpe, plus chaque appui coûte.', 'Reach the top in time: the steeper it gets, the more each step costs.'],
+  },
+  muscu: {
+    nom: ['Musculation', 'Weights'],
+    serie: ['Squat 5 × 5, épaulé 4 × 3', 'Squat 5 × 5, clean 4 × 3'],
+    seul: ['Pompes et escaliers de l’immeuble', 'Push-ups and the stairwell'],
+    jeu: ['Appuie pour descendre, relâche dans la zone verte : la barre remonte.', 'Hold to go down, release in the green zone: the bar drives up.'],
+  },
+  bonds: {
+    nom: ['Bondissements', 'Bounding'],
+    serie: ['5 × 30 m foulées bondissantes', '5 × 30 m bounding'],
+    seul: ['Sauts sur les marches', 'Jumps on the steps'],
+    jeu: ['Tape au moment où le pied touche le sol : chaque bond bien rendu va plus loin.', 'Tap as the foot hits the ground: every good bounce goes further.'],
+  },
+  gainage: {
+    nom: ['Gainage', 'Core'],
+    serie: ['Planche 4 × 45 s, gainage latéral', 'Plank 4 × 45 s, side plank'],
+    seul: ['Planche dans ta chambre', 'Plank in your bedroom'],
+    jeu: ['Garde le corps aligné : corrige à gauche, à droite, sans trembler.', 'Keep your body straight: correct left and right, without shaking.'],
+  },
+  fractionne: {
+    nom: ['Fractionné', 'Intervals'],
+    serie: ['3 × 150 m à 90 %, récup 5’', '3 × 150 m at 90%, 5’ rest'],
+    seul: ['Allers-retours entre deux lampadaires', 'Shuttles between two lampposts'],
+    jeu: ['Tiens l’allure dans la zone, répétition après répétition : la fatigue la déplace.', 'Hold the pace in the zone, rep after rep: fatigue moves it.'],
+  },
+  tempo: {
+    nom: ['Tempo', 'Tempo'],
+    serie: ['6 × 150 m à 75 %, récup 1’', '6 × 150 m at 75%, 1’ rest'],
+    seul: ['Footing de 30 minutes', '30-minute jog'],
+    jeu: ['Reste dans la zone d’allure, ni trop vite ni trop lent, jusqu’au bout.', 'Stay in the pace zone, not too fast nor too slow, to the end.'],
+  },
 };
 
-const SEUL: Record<Jour, [string, string]> = {
-  lundi: ['Accélérations au parc', 'Strides in the park'],
-  mercredi: ['Pompes et escaliers de l’immeuble', 'Push-ups and the stairwell'],
-  vendredi: ['Éducatifs vus sur YouTube', 'Drills from YouTube'],
-  samedi: ['Footing de 30 minutes', '30-minute jog'],
-};
-
-/** La seance du jour, selon la semaine et la presence d'un coach. */
-export function seanceDuJour(j: Jour, semaine: number, coach: boolean): string {
-  if (!coach) return dans(SEUL[j]);
-  const l = PROGRAMME[j];
-  return dans(l[semaine % l.length]);
+/** La seance du jour, telle qu'on la lit sur le tableau. */
+export function seanceDuJour(a: Athlete, j: Jour): string {
+  const e = EXOS[exerciceDuJour(a, j)];
+  return dans(a.coach ? e.serie : e.seul);
 }

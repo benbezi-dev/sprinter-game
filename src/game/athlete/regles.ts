@@ -68,6 +68,13 @@ export type Athlete = {
   relations: { coach: number; club: number; rival: number };
   sponsors: string[];
   chapitre: Chapitre;
+  /** Deja passe chez le kine, deja fait son footing cette semaine ? */
+  kine?: boolean;
+  footing?: boolean;
+  /** Le corps et la tenue choisis a la creation (absent des sauvegardes d'avant : APPARENCE). */
+  apparence?: Apparence;
+  /** Ou l'athlete se tient dans la ville (ville.ts), entre deux visites. */
+  position?: [number, number];
   /** Le dernier vrai championnat (id d'edition) couru ou declare forfait : on ne le court qu'une fois. */
   rendezVous?: string | null;
   /** L'evenement qui attend une reponse, ou null. */
@@ -81,14 +88,78 @@ export type Athlete = {
 
 /* ------------------------------------------------------------ les seances */
 
-export type Jeu = 'frequence' | 'charge' | 'rythme' | 'tempo';
-
-export const SEANCES: Record<Jour, { stat: Stat; secondaire: Stat; fatigue: number; jeu: Jeu }> = {
-  lundi:    { stat: 'vitesse',   secondaire: 'technique', fatigue: 18, jeu: 'frequence' },
-  mercredi: { stat: 'force',     secondaire: 'vitesse',   fatigue: 22, jeu: 'charge' },
-  vendredi: { stat: 'technique', secondaire: 'force',     fatigue: 14, jeu: 'rythme' },
-  samedi:   { stat: 'endurance', secondaire: 'force',     fatigue: 20, jeu: 'tempo' },
+export const SEANCES: Record<Jour, { stat: Stat; secondaire: Stat; fatigue: number }> = {
+  lundi:    { stat: 'vitesse',   secondaire: 'technique', fatigue: 18 },
+  mercredi: { stat: 'force',     secondaire: 'vitesse',   fatigue: 22 },
+  vendredi: { stat: 'technique', secondaire: 'force',     fatigue: 14 },
+  samedi:   { stat: 'endurance', secondaire: 'force',     fatigue: 20 },
 };
+
+/* ------------------------------------------------------------ les exercices */
+
+// DE VRAIS EXERCICES DE SPRINTEUR (l'auteur, 25/10 : « il faut qu'ils
+// correspondent aux exercices d'athletisme », « seance de cotes, le kine,
+// n'oublie rien »). Chacun a son mini-jeu (SeancesAthlete.tsx) et son lieu
+// dans la ville : on va a la cote pour les cotes, a la salle du club pour la
+// musculation, au parc quand on s'entraine seul.
+export type Exercice =
+  | 'departs' | 'lancee' | 'gammes' | 'virage' | 'cotes' | 'muscu'
+  | 'bonds' | 'gainage' | 'fractionne' | 'tempo';
+
+/** Le programme d'un entraineur : chaque jour tourne sur ses exercices, semaine apres semaine. */
+export const PROGRAMME: Record<Jour, Exercice[]> = {
+  lundi: ['departs', 'lancee', 'departs'],
+  mercredi: ['cotes', 'muscu', 'bonds'],
+  vendredi: ['gammes', 'virage', 'gainage'],
+  samedi: ['fractionne', 'tempo', 'fractionne'],
+};
+/** Seul, sans entraineur : ce qu'on trouve a faire au parc et a la cote. */
+export const SEUL: Record<Jour, Exercice> = { lundi: 'lancee', mercredi: 'cotes', vendredi: 'gammes', samedi: 'tempo' };
+
+export function exerciceDuJour(a: Athlete, j: Jour): Exercice {
+  if (!a.coach) return SEUL[j];
+  const l = PROGRAMME[j];
+  return l[a.semaine % l.length];
+}
+
+/** Ou se fait l'exercice : un lieu de la ville (ville.ts). */
+export function lieuDeLExercice(a: Athlete, ex: Exercice): 'stade' | 'cote' | 'parc' | 'club_quartier' | 'club_horizon' {
+  if (ex === 'cotes') return 'cote';
+  if (!a.club) return 'parc';
+  if (ex === 'muscu') return a.club === 'horizon' ? 'club_horizon' : 'club_quartier';
+  return 'stade';
+}
+
+/* ------------------------------------------------------------ le soin */
+
+/** Le kine : une seance par semaine, moitie prise par le club. */
+export const KINE = 40;
+export const prixDuKine = (a: Athlete) => (a.club ? KINE / 2 : KINE);
+
+/**
+ * Une seance chez le kine : la fatigue tombe, une blessure guerit d'une
+ * semaine plus vite. Rend la raison si ce n'est pas possible.
+ */
+export function chezLeKine(a: Athlete): null | 'fait' | 'argent' {
+  if (a.kine) return 'fait';
+  const p = prixDuKine(a);
+  if (a.argent < p) return 'argent';
+  a.argent -= p;
+  a.kine = true;
+  a.fatigue = borne(a.fatigue - 25, 0, 100);
+  if (a.blessure > 0) a.blessure -= 1;
+  noter(a, 'Chez le kiné : massage, étirements, le corps respire.', 'At the physio: massage, stretching, the body breathes.');
+  return null;
+}
+
+/** Le footing de recuperation au parc : gratuit, une fois par semaine. */
+export function footingAuParc(a: Athlete): boolean {
+  if (a.footing || a.blessure > 0) return false;
+  a.footing = true;
+  a.fatigue = borne(a.fatigue - 12, 0, 100);
+  a.moral = borne(a.moral + 4, 0, 100);
+  return true;
+}
 
 /** Les qualites qui font chaque epreuve : le specialiste y gagne plus vite. */
 export const CLES_EPREUVE: Record<Epreuve, Stat[]> = {
@@ -187,6 +258,31 @@ export const CLUBS: Club[] = [
 ];
 export const club = (id: string | null) => CLUBS.find(c => c.id === id) || null;
 
+/* ------------------------------------------------------------ l'apparence */
+
+// Ce que le moteur sait dessiner (look, sprinter-core.js) : les memes corps,
+// peaux et coiffures que les coureurs du jeu. Le personnage de la ville est
+// celui qui court les competitions.
+export const CORPS = ['f', 'm'] as const;
+export const PEAUX = ['ebene', 'cacao', 'acajou', 'noisette', 'bronze', 'ambre', 'miel', 'olive', 'sable', 'clair', 'porcelaine'] as const;
+export const COIFFURES = ['crop', 'fade', 'ras', 'flattop', 'twists', 'braids', 'ponytail', 'bun', 'shaved'] as const;
+export const CHEVEUX = ['noir', 'brun', 'chatain', 'blond', 'roux', 'gris'] as const;
+export const COULEURS: [number, number, number][] = [
+  [61, 220, 132], [80, 140, 230], [236, 72, 96], [248, 205, 74],
+  [167, 139, 250], [251, 146, 60], [45, 212, 191], [240, 240, 246],
+];
+export type Apparence = {
+  corps: typeof CORPS[number];
+  peau: typeof PEAUX[number];
+  coiffure: typeof COIFFURES[number];
+  cheveux: typeof CHEVEUX[number];
+  /** La taille en metres, de 1,55 a 2,00. */
+  taille: number;
+  /** L'index dans COULEURS : le maillot en course, le haut en ville. */
+  couleur: number;
+};
+export const APPARENCE: Apparence = { corps: 'f', peau: 'miel', coiffure: 'ponytail', cheveux: 'chatain', taille: 1.72, couleur: 0 };
+
 /* ------------------------------------------------------------ outils */
 
 const borne = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
@@ -199,7 +295,8 @@ export function noter(a: Athlete, fr: string, en: string) {
 
 /* ------------------------------------------------------------ la naissance */
 
-export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, specialite: Epreuve | null): Athlete {
+export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, specialite: Epreuve | null,
+                             apparence: Apparence = APPARENCE): Athlete {
   const aisee = origine === 'aisee';
   return {
     v: 2,
@@ -207,6 +304,7 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
     origine,
     voie,
     specialite: voie === 'specialiste' ? (specialite || '100') : null,
+    apparence: { ...apparence },
     stats: { vitesse: 28, force: 24, technique: 22, endurance: 26 },
     argent: aisee ? 600 : 20,
     fatigue: 0,
@@ -480,4 +578,6 @@ export function finirLaSemaine(a: Athlete) {
   a.semaine += 1;
   a.faites = [];
   a.boulot = null;
+  a.kine = false;
+  a.footing = false;
 }

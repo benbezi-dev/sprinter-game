@@ -140,6 +140,26 @@ titre('l\'histoire');
   ok('chaque evenement a au moins un choix', R.EVENEMENTS.every(x => x.choix.length > 0));
 }
 
+titre('les exercices, le kine, le parc');
+{
+  const a = R.nouvelAthlete('T', 'modeste', 'polyvalent', null);
+  ok('seul : les cotes se font a la cote', R.exerciceDuJour(a, 'mercredi') === 'cotes' && R.lieuDeLExercice(a, 'cotes') === 'cote');
+  ok('seul : le reste au parc', R.lieuDeLExercice(a, R.exerciceDuJour(a, 'lundi')) === 'parc');
+  a.club = 'quartier'; a.coach = 'dede';
+  const vus = new Set(); for (let s = 0; s < 6; s++) { a.semaine = s; for (const j of R.JOURS) vus.add(R.exerciceDuJour(a, j)); }
+  ok('avec un coach, au moins huit exercices differents', vus.size >= 8, [...vus].join(','));
+  ok('la muscu a la salle du club', R.lieuDeLExercice(a, 'muscu') === 'club_quartier');
+  ok('les departs au stade', R.lieuDeLExercice(a, 'departs') === 'stade');
+  a.argent = 100; a.fatigue = 60; a.blessure = 2;
+  ok('le kine : la moitie payee par le club', R.chezLeKine(a) === null && a.argent === 80);
+  ok('il soulage et fait guerir plus vite', a.fatigue === 35 && a.blessure === 1);
+  ok('une fois par semaine', R.chezLeKine(a) === 'fait');
+  a.blessure = 0;
+  ok('le footing au parc repose', R.footingAuParc(a) && a.fatigue === 23 && !R.footingAuParc(a));
+  R.finirLaSemaine(a);
+  ok('la semaine suivante, on peut y retourner', !a.kine && !a.footing);
+}
+
 titre('le calage sur le direct, a partir de la France');
 {
   const a = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);

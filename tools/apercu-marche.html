@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — la demarche, tous les caps</title>
+<style>body{margin:0;background:#cfe3c4}canvas{display:block}</style>
+<canvas id="c" width="1100" height="320"></canvas>
+<script type="module">
+  import { SprinterApp, SprinterCore } from '/src/game/engine.ts';
+  const ctx = document.getElementById('c').getContext('2d');
+  const look = SprinterCore.look({ build: 'f', skin: 'miel', jersey: [80, 140, 230], hair: 'ponytail',
+    hairCol: [92, 62, 36], manches: [80, 140, 230], pantalon: [40, 40, 60], h: 1.70 });
+  const p = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 1, marcheT: 0.8 };
+  [0, 45, 90, 135, 180, 225, 270, 315].forEach((d, i) => {
+    const cp = SprinterApp.personCapsules(p, d * Math.PI / 180, 0, false, false, SprinterApp.niveauDetail(120));
+    SprinterApp.drawFacetFigure(ctx, cp, 70 + i * 135, 270, 120);
+    ctx.fillStyle = '#000'; ctx.fillText(d + '°', 60 + i * 135, 305);
+  });
+</script>

@@ -2283,6 +2283,8 @@
       pl.coefBoost = rj.boost || 1;
       pl.coefDrag = rj.drag || 1;
       pl.coefChute = rj.chute || 1;
+      // et son apparence, choisie a la creation (game/athlete/apparence.ts)
+      if (rj.look) pl.look = rj.look;
     }
     G.player = pl; G.runners.push(pl);
     let best = 1e9;

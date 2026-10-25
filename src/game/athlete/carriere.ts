@@ -20,6 +20,7 @@ import {
 import { tirerLaSemaine } from './recit';
 import { MOTS } from './mots';
 import { recapMondial } from '../championnats';
+import { lookDe, apparenceDe } from './apparence';
 
 const CLE = 'sprinter_athlete_v1';
 
@@ -113,7 +114,8 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve): boolean {
   sauver(a);
   const G = SprinterApp.G;
   enCourse = { a, epreuve, niveau: a.niveau };
-  G.reglagesJoueur = { ...reglages(a, a.niveau), plateau: COMPETITIONS[a.niveau].chronos || null };
+  G.reglagesJoueur = { ...reglages(a, a.niveau), plateau: COMPETITIONS[a.niveau].chronos || null,
+                       look: lookDe(apparenceDe(a), false) };
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLaCourse;
   (SprinterApp as any).startOneShot([epreuve], { levelIdx: COMPETITIONS[a.niveau].plateau, etiquette: 'athlete' });
   return true;

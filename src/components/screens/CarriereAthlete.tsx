@@ -22,6 +22,7 @@ import {
   rangerLaCourse, aRouvrir, demanderReouverture,
 } from '@/game/athlete/carriere';
 import { mot, dans, seanceDuJour, lang } from '@/game/athlete/mots';
+import { SeanceJeu } from './SeancesAthlete';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE D'ATHLETE — les ecrans du mode
@@ -364,7 +365,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
                 <span className="text-[10px] font-black tracking-widest text-white/70">
                   {mot(j)} · {mot(SEANCES[j].stat).toUpperCase()}
                 </span>
-                <span className="text-xs text-white/80 truncate">{seanceDuJour(j, a.semaine, !!a.coach)}</span>
+                <span className="text-xs text-white/80 truncate">{seanceDuJour(a, j)}</span>
               </span>
               {raison
                 ? <span className="text-[10px] font-black tracking-widest text-white/40">
@@ -514,182 +515,6 @@ function Dialogue({ a, onRepondu }: { a: Athlete; onRepondu: () => void }) {
           })}
         </div>
       </motion.div>
-    </div>,
-    document.body,
-  );
-}
-
-/* ===========================================================================
-   LA SEANCE : L'ARCADE DE L'ENTRAINEMENT
-   ===========================================================================
-   Quatre jeux d'appuis alternes, un par jour, qui mesurent ce que la seance
-   travaille. Le geste est celui de la course — gauche, droite, ou les deux
-   zones —, et deux appuis du meme cote sont une faute.
-
-     frequence  6 s   le plus d'appuis alternes possible
-     charge    10 s   tenir une cadence haute (la fin compte autant que le debut)
-     rythme     8 s   un appui par battement, gauche puis droite
-     tempo     16 s   rester dans la zone de 5 a 8 appuis par seconde
-
-   Le score va de 0 a 1 ; regles.ts en fait des points de stats. */
-
-const DUREE = { frequence: 6, charge: 10, rythme: 8, tempo: 16 } as const;
-const BATTEMENT = 0.4;
-const ZONE: [number, number] = [5, 8];
-
-type Appui = { t: number; cote: 'g' | 'd'; bon: boolean };
-
-function noterLaSeance(jeu: keyof typeof DUREE, appuis: Appui[]): number {
-  const d = DUREE[jeu];
-  const bons = appuis.filter(x => x.bon);
-  const fautes = appuis.length - bons.length;
-  const borne = (v: number) => Math.max(0, Math.min(1, v));
-  if (jeu === 'frequence') return borne((bons.length / d - 4) / 7 - fautes * 0.02);
-  if (jeu === 'charge') {
-    // la seconde moitie pese autant que la premiere : on juge la plus faible
-    const a = bons.filter(x => x.t < d / 2).length, b = bons.length - a;
-    return borne((Math.min(a, b) / (d / 2) - 3) / 6 - fautes * 0.02);
-  }
-  if (jeu === 'rythme') {
-    let touches = 0, n = 0;
-    for (let k = 1; k * BATTEMENT <= d - 0.2; k++, n++) {
-      const t = k * BATTEMENT, cote = k % 2 ? 'g' : 'd';
-      if (appuis.some(x => x.cote === cote && Math.abs(x.t - t) <= 0.1)) touches++;
-    }
-    return borne(n ? touches / n - fautes * 0.01 : 0);
-  }
-  // tempo : la cadence glissante sur une seconde, relevee tous les dixiemes
-  let dedans = 0, total = 0;
-  for (let t = 1; t <= d; t += 0.1, total++) {
-    const r = bons.filter(x => x.t > t - 1 && x.t <= t).length;
-    if (r >= ZONE[0] && r <= ZONE[1]) dedans++;
-  }
-  return borne(total ? dedans / total : 0);
-}
-
-function SeanceJeu({ jour, a, onFin }: { jour: Jour; a: Athlete; onFin: () => void }) {
-  const jeu = SEANCES[jour].jeu;
-  const duree = DUREE[jeu];
-  const [phase, setPhase] = useState<'pret' | 'jeu' | 'fini'>('pret');
-  const [t, setT] = useState(0);
-  const [res, setRes] = useState<{ score: number; r: ResultatSeance | null } | null>(null);
-  const appuis = useRef<Appui[]>([]);
-  const debut = useRef(0);
-  const dernier = useRef<'g' | 'd' | null>(null);
-  const [, maj] = useReducer((x: number) => x + 1, 0);
-
-  const appui = (cote: 'g' | 'd') => {
-    if (phase !== 'jeu') return;
-    const tt = (performance.now() - debut.current) / 1000;
-    appuis.current.push({ t: tt, cote, bon: dernier.current !== cote });
-    dernier.current = cote;
-    maj();
-  };
-
-  // le clavier, comme en course
-  useEffect(() => {
-    if (phase !== 'jeu') return;
-    const k = (e: KeyboardEvent) => {
-      if (e.repeat) return;
-      if (e.key === 'ArrowLeft') { e.preventDefault(); appui('g'); }
-      else if (e.key === 'ArrowRight') { e.preventDefault(); appui('d'); }
-    };
-    window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
-  });
-
-  // l'horloge de la seance
-  useEffect(() => {
-    if (phase !== 'jeu') return;
-    let id = 0;
-    const tic = () => {
-      const tt = (performance.now() - debut.current) / 1000;
-      if (tt >= duree) {
-        const score = noterLaSeance(jeu, appuis.current);
-        const r = faireLaSeance(a, jour, score, Math.random);
-        setRes({ score, r });
-        setPhase('fini');
-        return;
-      }
-      setT(tt);
-      id = requestAnimationFrame(tic);
-    };
-    id = requestAnimationFrame(tic);
-    return () => cancelAnimationFrame(id);
-  }, [phase]);
-
-  const partir = () => { appuis.current = []; dernier.current = null; debut.current = performance.now(); setT(0); setPhase('jeu'); };
-
-  const bons = appuis.current.filter(x => x.bon);
-  const cadence = bons.filter(x => x.t > t - 1).length;
-  const prochain = Math.ceil(t / BATTEMENT) * BATTEMENT;
-  const pulse = jeu === 'rythme' && phase === 'jeu' && prochain - t < 0.08;
-  const attendu = Math.round(prochain / BATTEMENT) % 2 ? 'g' : 'd';
-
-  return createPortal(
-    <div className="fixed inset-0 z-[85] flex flex-col bg-[rgba(4,8,7,0.98)] text-foreground select-none touch-none">
-      <div className="px-4 pt-[max(env(safe-area-inset-top),1rem)] flex flex-col gap-2 max-w-lg w-full mx-auto">
-        <span className="text-[10px] font-black tracking-[0.22em]" style={{ color: COULEUR[SEANCES[jour].stat] }}>
-          {mot(jour)} · {mot(SEANCES[jour].stat).toUpperCase()}
-        </span>
-        <h2 className="font-black font-display text-xl leading-tight">{seanceDuJour(jour, a.semaine, !!a.coach)}</h2>
-        <p className="text-xs text-white/65">{mot(`${jeu}_d`)}</p>
-        <Jauge v={t} max={duree} couleur={COULEUR[SEANCES[jour].stat]} />
-      </div>
-
-      <div className="flex-1 flex flex-col items-center justify-center gap-3 px-4">
-        {phase === 'pret' && (
-          <>
-            <p className="text-sm text-white/70 text-center max-w-xs">{mot('pret')}</p>
-            <Bouton plein className="px-10 py-4 text-xl" onClick={partir}>{mot('go')}</Bouton>
-          </>
-        )}
-        {phase === 'jeu' && (
-          <>
-            <span className="font-black font-display text-6xl tabular-nums">{bons.length}</span>
-            <span className="text-sm font-bold tabular-nums"
-                  style={{ color: jeu === 'tempo' ? (cadence >= ZONE[0] && cadence <= ZONE[1] ? VERT : '#FF5A5F') : undefined }}>
-              {mot('appuis', { n: cadence })}
-            </span>
-            {jeu === 'rythme' && (
-              <span className="w-16 h-16 rounded-full border-4 transition-transform"
-                    style={{ borderColor: VERT, transform: `scale(${pulse ? 1.25 : 0.85})`,
-                             background: pulse ? `${VERT}55` : 'transparent' }}>
-                <span className="flex h-full items-center justify-center text-[10px] font-black">
-                  {attendu === 'g' ? mot('gauche') : mot('droite')}
-                </span>
-              </span>
-            )}
-          </>
-        )}
-        {phase === 'fini' && res && (
-          <div className="flex flex-col items-center gap-2 text-center">
-            <span className="font-black font-display text-3xl">{mot('score', { n: Math.round(res.score * 100) })}</span>
-            {res.r?.blessure
-              ? <span className="text-red-400 font-bold">{mot('blessure_s')}</span>
-              : res.r && (
-                <div className="flex gap-3">
-                  {Object.entries(res.r.gains).map(([k, v]) => (
-                    <span key={k} className="font-black" style={{ color: COULEUR[k as Stat] }}>{mot(k)} +{v}</span>
-                  ))}
-                </div>
-              )}
-            <Bouton plein className="px-8 py-3 mt-2" onClick={onFin}>{mot('continuer')}</Bouton>
-          </div>
-        )}
-      </div>
-
-      {/* les deux zones, comme en course */}
-      {phase === 'jeu' && (
-        <div className="grid grid-cols-2 gap-2 p-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] h-[38vh]">
-          {(['g', 'd'] as const).map(c => (
-            <button key={c} onPointerDown={e => { e.preventDefault(); appui(c); }}
-                    className="rounded-2xl border-2 border-white/15 bg-white/[0.06] active:bg-white/20 font-black tracking-widest text-white/50">
-              {c === 'g' ? '←' : '→'}
-            </button>
-          ))}
-        </div>
-      )}
     </div>,
     document.body,
   );
