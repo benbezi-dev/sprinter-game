@@ -68,6 +68,8 @@ export type Athlete = {
   relations: { coach: number; club: number; rival: number };
   sponsors: string[];
   chapitre: Chapitre;
+  /** Le dernier vrai championnat (id d'edition) couru ou declare forfait : on ne le court qu'une fois. */
+  rendezVous?: string | null;
   /** L'evenement qui attend une reponse, ou null. */
   evenement: string | null;
   vus: string[];
@@ -438,6 +440,22 @@ export function declarerForfait(a: Athlete) {
 /** Est-ce le dimanche d'une competition ? */
 export function jourDeCompetition(a: Athlete): boolean {
   return a.semaine >= a.prochaine;
+}
+
+/** Un vrai championnat en direct, annonce ou en cours (worker, /champ/monde). */
+export type RendezVousReel = { id: string; debut: number };
+
+/**
+ * LE JOUR DE COMPETITION, CALE SUR LE DIRECT A PARTIR DE LA FRANCE (l'auteur,
+ * 25/10). Quand un vrai championnat du meme echelon est annonce ou en cours,
+ * la competition de la carriere s'ouvre a sa date reelle, et pas avant : les
+ * semaines continuent d'ici la (le plafond du niveau empeche d'en profiter).
+ * Sans championnat annonce, on garde les semaines de jeu : rien ne doit
+ * bloquer le joueur. `date` : l'heure reelle d'ouverture, ou null.
+ */
+export function jourCale(a: Athlete, rdv: RendezVousReel | null, maintenant: number): { jour: boolean; date: number | null } {
+  if (a.niveau >= NATIONAL && rdv && rdv.id !== a.rendezVous) return { jour: maintenant >= rdv.debut, date: rdv.debut };
+  return { jour: jourDeCompetition(a), date: null };
 }
 
 /* ------------------------------------------------------------ la semaine */

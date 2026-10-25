@@ -12,15 +12,16 @@ import {
   type Athlete, type Jour, type Stat, type Epreuve, type Origine, type Voie,
   STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
-  bonusMateriel, coutDuDeplacement, jourDeCompetition, declarerForfait, picDeForme,
+  bonusMateriel, coutDuDeplacement, picDeForme,
   type Seance as ResultatSeance, type Resultat,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
   charger, sauver, semaineSuivante, partirALaCompetition, conclureLaCourse,
+  chargerCalendrier, jourDeLAthlete, forfait,
   rangerLaCourse, aRouvrir, demanderReouverture,
 } from '@/game/athlete/carriere';
-import { mot, dans, seanceDuJour } from '@/game/athlete/mots';
+import { mot, dans, seanceDuJour, lang } from '@/game/athlete/mots';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE D'ATHLETE — les ecrans du mode
@@ -36,6 +37,10 @@ import { mot, dans, seanceDuJour } from '@/game/athlete/mots';
 --------------------------------------------------------------------------- */
 
 const VERT = '#3DDC84';
+
+/** Une date reelle, courte : « sam. 14 nov., 18:00 ». */
+const quand = (t: number) => new Date(t).toLocaleString(lang() === 'en' ? 'en-GB' : 'fr-FR',
+  { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
 const ord = (n: number) => {
   const N = (globalThis as any).SprinterI18N;
@@ -262,9 +267,11 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   const [efface, setEfface] = useState(false);
   const [epreuve, setEpreuve] = useState<Epreuve>(a.specialite || '100');
   const changer = (f: () => void) => { f(); sauver(a); maj(); };
+  // les vrais championnats : a partir de la France, la competition se cale sur eux
+  useEffect(() => { chargerCalendrier().then(maj); }, []);
 
   const comp = COMPETITIONS[a.niveau];
-  const leJour = jourDeCompetition(a);
+  const { jour: leJour, date: direct } = jourDeLAthlete(a);
   const cout = coutDuDeplacement(a, a.niveau);
   const payable = a.argent >= cout;
   const ev = evenement(a.evenement);
@@ -314,9 +321,10 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
         <div className="flex items-baseline justify-between gap-2">
           <span className="font-black text-sm">{mot(comp.cle)}</span>
           <span className="text-[10px] font-bold tracking-widest" style={{ color: leJour ? VERT : undefined }}>
-            {leJour ? mot('ce_dimanche') : mot('dans', { n: a.prochaine - a.semaine })}
+            {leJour ? mot('ce_dimanche') : direct ? quand(direct) : mot('dans', { n: a.prochaine - a.semaine })}
           </span>
         </div>
+        {direct && <p className="text-[11px] font-bold" style={{ color: VERT }}>{mot('direct')}</p>}
         {a.objectif && (
           <p className="text-[11px] text-white/60">
             {mot('objectif', { o: mot(COMPETITIONS[NIVEAU_OBJECTIF[a.objectif]].cle) })} · {mot('assiduite', { f: a.assiduite.faites, p: a.assiduite.proposees })}
@@ -338,7 +346,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
               <Bouton plein className="flex-1 py-3 text-sm" disabled={!payable || a.blessure > 0 || !!ev} onClick={courir}>
                 {mot('courir')} · {a.specialite || epreuve} m
               </Bouton>
-              <Bouton disabled={!!ev} onClick={() => changer(() => { declarerForfait(a); semaineSuivante(a); })}>{mot('forfait')}</Bouton>
+              <Bouton disabled={!!ev} onClick={() => changer(() => forfait(a))}>{mot('forfait')}</Bouton>
             </div>
           </>
         )}

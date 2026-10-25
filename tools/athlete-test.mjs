@@ -140,6 +140,21 @@ titre('l\'histoire');
   ok('chaque evenement a au moins un choix', R.EVENEMENTS.every(x => x.choix.length > 0));
 }
 
+titre('le calage sur le direct, a partir de la France');
+{
+  const a = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);
+  a.semaine = 20; a.prochaine = 10;
+  const rdv = { id: 'ED1', debut: 1_000_000 };
+  a.niveau = 2;
+  ok('aux regionaux, les semaines de jeu', R.jourCale(a, rdv, 0).jour && R.jourCale(a, rdv, 0).date === null);
+  a.niveau = 3;
+  ok('France annoncee : pas avant sa date reelle', !R.jourCale(a, rdv, 999_999).jour && R.jourCale(a, rdv, 0).date === 1_000_000);
+  ok('France le jour venu : on court', R.jourCale(a, rdv, 1_000_000).jour);
+  ok('sans championnat annonce : les semaines de jeu', R.jourCale(a, null, 0).jour);
+  a.rendezVous = 'ED1';
+  ok('un vrai championnat ne se court qu\'une fois', R.jourCale(a, rdv, 2_000_000).date === null);
+}
+
 titre('le plafond : un dixieme au plus');
 {
   // L'auteur, 25/10 : jamais plus d'un dixieme sur qui ne joue pas a ce mode.

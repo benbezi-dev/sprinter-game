@@ -14,10 +14,12 @@ import { SprinterApp } from '../engine';
 import { CARRIERE_ATHLETE_OUVERTE } from '../canal';
 import {
   type Athlete, type Epreuve, COMPETITIONS, reglages, coutDuDeplacement,
-  conclureLaCompetition, finirLaSemaine, noter, declarerForfait, type Resultat,
+  conclureLaCompetition, finirLaSemaine, noter, declarerForfait, jourCale, type Resultat,
+  type RendezVousReel,
 } from './regles';
 import { tirerLaSemaine } from './recit';
 import { MOTS } from './mots';
+import { recapMondial } from '../championnats';
 
 const CLE = 'sprinter_athlete_v1';
 
@@ -50,6 +52,43 @@ export function semaineSuivante(a: Athlete, alea: () => number = Math.random) {
   sauver(a);
 }
 
+/* ------------------------------------------- le calendrier du direct */
+
+// L'echelon et la zone des vrais championnats qui comptent pour la carriere :
+// la France, l'Europe, le monde (worker/src/championnats.js).
+const DIRECT: Record<number, [string, string]> = { 3: ['national', 'FR'], 4: ['continental', 'EU'], 5: ['mondial', 'MONDE'] };
+let calendrier: { id: string; echelon: string; zone: string; debut: number }[] | null = null;
+
+/** Relire les championnats annonces et en cours. Hors ligne : on reste aux semaines de jeu. */
+export async function chargerCalendrier(): Promise<void> {
+  const m = await recapMondial();
+  if (m) calendrier = [...m.annoncees, ...m.encours].map(l => ({ id: l.edition, echelon: l.echelon, zone: l.zone, debut: l.debut }));
+}
+
+/** Le prochain vrai championnat du niveau `niveau`, ou null. */
+export function rendezVousDe(niveau: number): RendezVousReel | null {
+  const z = DIRECT[niveau];
+  if (!z || !calendrier) return null;
+  const l = calendrier.filter(x => x.echelon === z[0] && x.zone === z[1]).sort((x, y) => x.debut - y.debut)[0];
+  return l ? { id: l.id, debut: l.debut } : null;
+}
+
+/** Le jour de competition de cet athlete, cale sur le direct quand il y a lieu. */
+export const jourDeLAthlete = (a: Athlete, maintenant = Date.now()) => jourCale(a, rendezVousDe(a.niveau), maintenant);
+
+/** Un vrai championnat ne se court qu'une fois : on le marque des qu'on part, ou qu'on renonce. */
+function marquerLeRendezVous(a: Athlete) {
+  const rdv = rendezVousDe(a.niveau);
+  if (rdv && jourCale(a, rdv, Date.now()).date !== null) a.rendezVous = rdv.id;
+}
+
+/** Declarer forfait au jour de competition, et tourner la semaine. */
+export function forfait(a: Athlete) {
+  marquerLeRendezVous(a);
+  declarerForfait(a);
+  semaineSuivante(a);
+}
+
 /* --------------------------------------------------- la competition */
 
 /** Ce qu'on garde pendant que la course tourne : `a` est l'objet des ecrans. */
@@ -68,7 +107,8 @@ export function demanderReouverture() { rouvrir = true; }
 export function partirALaCompetition(a: Athlete, epreuve: Epreuve): boolean {
   if (!CARRIERE_ATHLETE_OUVERTE) return false;
   const cout = coutDuDeplacement(a, a.niveau);
-  if (a.argent < cout || a.blessure > 0) return false;
+  if (a.argent < cout || a.blessure > 0 || !jourDeLAthlete(a).jour) return false;
+  marquerLeRendezVous(a);
   a.argent -= cout;
   sauver(a);
   const G = SprinterApp.G;

@@ -120,6 +120,7 @@ export const MOTS: Record<string, [string, string]> = {
   droite:       ['DROITE', 'RIGHT'],
   // la fin de course
   qualifie:     ['QUALIFIÉ·E POUR : {c}', 'QUALIFIED FOR: {c}'],
+  direct:       ['En même temps que le vrai championnat en direct.', 'At the same time as the real live championship.'],
   pas_qualifie: ['Pas de podium. Prochaine chance dans {n} semaines.', 'No podium. Next chance in {n} weeks.'],
   prime:        ['Prime : {n} €', 'Prize: €{n}'],
   rep_plus:     ['Réputation +{n}', 'Reputation +{n}'],
