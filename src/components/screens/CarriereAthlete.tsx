@@ -1,12 +1,13 @@
 import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Footprints, ChevronRight, ChevronLeft, X, Trophy, Wallet, HeartPulse, BatteryMedium,
   Briefcase, ShoppingBag, Users, BookOpen, Flag, Star, Smartphone, MapPin, RotateCcw, RotateCw,
-  Zap, Utensils, ShowerHead, MessageCircle, Smile, Pause, Play, FastForward,
+  Zap, Utensils, ShowerHead, MessageCircle, Smile, Pause, Play, FastForward, Check, Navigation,
 } from 'lucide-react';
-import { PANNEAU } from '@/lib/mouvement';
+import { PANNEAU, RESSORT, DUREE, COURBE, TRANSITION } from '@/lib/mouvement';
+import { conseil, journee } from '@/game/athlete/guide';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
@@ -31,7 +32,7 @@ import { lookDe, apparenceDe, lookDePersonne } from '@/game/athlete/apparence';
 import { type Personne, GENS, PERSONNES, ouEst, lienDe, etiquette, interactionsAvec, interagir, roleDe } from '@/game/athlete/gens';
 import { Ville, LIEUX, type Lieu } from '@/game/athlete/ville';
 import { Telephone, type App } from './TelephoneAthlete';
-import { type Mode, voyager, nonLus, messagesDuReveil, messagesDeBienvenue } from '@/game/athlete/telephone';
+import { type Mode, voyager, trajet, nonLus, messagesDuReveil, messagesDeBienvenue } from '@/game/athlete/telephone';
 import { SeanceJeu } from './SeancesAthlete';
 import { nomDuClub, logoDuClub, CLUB_PARTENAIRE } from '@/game/athlete/partenaires';
 import { DEPARTEMENTS, REGIONS, DEPARTEMENT_DEFAUT, regionDe } from '@/game/athlete/departements';
@@ -429,21 +430,80 @@ function Actions({ a, lieu, ev, changer }: { a: Athlete; lieu: string; ev: boole
     <Carte titre={dans(['FAIRE', 'DO'])}>
       {liste.map(x => {
         const r = actionPossible(a, x.id);
+        // fait aujourd'hui : la ligne se grise et se coche, on peut encore la refaire si elle se repete
+        const deja = r === 'fait' || (!r && (a.faitAujourdhui || []).includes(x.id));
         const duree = x.duree === 'nuit' ? dans(['la nuit', 'overnight']) : x.duree === 'cours' ? (x.id === 'travail' ? dans([`jusqu’à 17 h · +${SALAIRE} €`, `till 5 pm · +€${SALAIRE}`]) : dans(['jusqu’à 16 h 30', 'till 4:30 pm'])) : `${x.duree} min`;
         return (
-          <div key={x.id} className="flex items-center gap-2">
+          <motion.div layout key={x.id} className={`flex items-center gap-2 ${deja ? 'opacity-55' : ''}`} transition={RESSORT.rang}>
             <span className="flex-1 min-w-0 flex flex-col">
-              <span className="text-xs font-black">{dans(NOMS_ACTIONS[x.id] || [x.id, x.id])}</span>
+              <span className="text-xs font-black flex items-center gap-1">
+                <AnimatePresence initial={false}>{deja && (
+                  <motion.span key="ok" initial={{ scale: 0 }} animate={{ scale: 1 }} exit={{ scale: 0 }} transition={RESSORT.trophee}
+                               className="w-4 h-4 rounded-full flex items-center justify-center text-black shrink-0" style={{ background: VERT }}><Check size={11} strokeWidth={3} /></motion.span>
+                )}</AnimatePresence>
+                {dans(NOMS_ACTIONS[x.id] || [x.id, x.id])}
+              </span>
               <span className="text-[10px] text-white/55">{duree}{x.cout ? ` · ${x.cout} €` : ''}{effetsTexte(x.effets) ? ` · ${effetsTexte(x.effets)}` : ''}</span>
-              {r && <span className="text-[10px] text-amber-300/80">{dans(RAISONS[r])}</span>}
+              {r && r !== 'fait' && <span className="text-[10px] text-amber-300/80">{dans(RAISONS[r])}</span>}
+              {deja && <span className="text-[10px] font-bold" style={{ color: VERT }}>{dans(['Fait aujourd’hui', 'Done today'])}</span>}
             </span>
-            <Bouton plein disabled={!!r || ev} onClick={() => changer(() => { agir(a, x.id); })}>{dans(['OK', 'GO'])}</Bouton>
-          </div>
+            {r === 'fait' ? null : <Bouton plein={!deja} disabled={!!r || ev} onClick={() => changer(() => { agir(a, x.id); })}>{deja ? dans(['ENCORE', 'AGAIN']) : dans(['OK', 'GO'])}</Bouton>}
+          </motion.div>
         );
       })}
     </Carte>
   );
 }
+/**
+ * LE GUIDE DU MOMENT (guide.ts) : ce qu'il faut faire maintenant, et pourquoi, avec le lieu ou
+ * aller ; dessous, la journee cochee. L'auteur, 25/10 : « on ne sait pas ce qu'il doit etre fait,
+ * on est facilement perdu ». Le conseil change en glissant, l'urgent respire, la coche surgit.
+ */
+function Guide({ a, competition, aller }: { a: Athlete; competition: boolean; aller: (l: Lieu) => void }) {
+  const c = conseil(a, competition), jour = journee(a, competition);
+  const faits = jour.filter(x => x.fait).length;
+  return (
+    <motion.div layout transition={RESSORT.panneau} className="mt-2 rounded-xl bg-white/[0.06] border border-white/10 p-2 flex flex-col gap-1.5">
+      <div className="flex items-center gap-2">
+        <span className="relative shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-black" style={{ background: c.urgent ? '#FF5A5F' : VERT }}>
+          {c.urgent && <motion.span className="absolute inset-0 rounded-full" style={{ background: '#FF5A5F' }}
+                                    animate={{ scale: [1, 1.6], opacity: [0.5, 0] }} transition={{ ...TRANSITION.battement, ease: COURBE.sortie }} />}
+          <Navigation size={13} className="relative" />
+        </span>
+        <div className="flex-1 min-w-0 overflow-hidden">
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.div key={c.titre[0]} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+                        transition={{ duration: DUREE.rapide, ease: COURBE.sortie }}>
+              <p className="text-[9px] font-black tracking-[0.2em]" style={{ color: c.urgent ? '#FF8A8D' : VERT }}>{c.urgent ? dans(['URGENT', 'URGENT']) : dans(['À FAIRE', 'TO DO'])}</p>
+              <p className="text-[12px] font-black text-white leading-tight truncate">{dans(c.titre)}</p>
+              <p className="text-[10px] text-white/60 leading-snug truncate">{dans(c.pourquoi)}</p>
+            </motion.div>
+          </AnimatePresence>
+        </div>
+        {c.lieu && (
+          <motion.button whileTap={{ scale: 0.92 }} whileHover={{ scale: 1.04 }} onClick={() => aller(c.lieu as Lieu)}
+                         className="shrink-0 rounded-lg px-2.5 py-1.5 text-[10px] font-black text-black" style={{ background: VERT }}>
+            {dans(['Y ALLER', 'GO'])}
+          </motion.button>
+        )}
+      </div>
+      <div className="flex items-center gap-1 flex-wrap">
+        <span className="text-[9px] font-bold tracking-widest text-white/45 mr-0.5">{dans(['TA JOURNÉE', 'YOUR DAY'])} {faits}/{jour.length}</span>
+        {jour.map(x => (
+          <motion.span layout key={x.texte[0]} transition={RESSORT.rang}
+                       className={`flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${x.fait ? 'text-black' : 'text-white/70 bg-white/10'}`}
+                       style={x.fait ? { background: VERT } : undefined}>
+            <AnimatePresence initial={false}>{x.fait && (
+              <motion.span key="c" initial={{ scale: 0, rotate: -45 }} animate={{ scale: 1, rotate: 0 }} transition={RESSORT.trophee}><Check size={9} strokeWidth={3} /></motion.span>
+            )}</AnimatePresence>
+            {dans(x.texte)}
+          </motion.span>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
+
 const BOULOT_DU_LIEU: Partial<Record<Lieu, string>> = { marche: 'marche', livraison: 'livraison', babysitting: 'babysitting' };
 /** Le temps que prend chaque petit boulot, en minutes. */
 const DUREE_BOULOT: Record<string, number> = { babysitting: 180, livraison: 120, marche: 240 };
@@ -500,7 +560,8 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
     if (fige || !vitesse || !pret) return;
     let n = 0;
     const id = setInterval(() => {
-      const quoi = avancer(a, vitesse);
+      // un trajet a pied ne mange pas la journee : l'horloge passe au quart pendant la marche
+      const quoi = avancer(a, ville.current?.enMarche() ? vitesse / 4 : vitesse);
       ville.current?.heure(heureDe(a));
       // plus d'energie : on rentre se coucher, comme un Sim qui s'effondre
       if (quoi.includes('epuise')) {
@@ -524,6 +585,17 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
     if (voyager(a, mode, Math.round((ville.current?.distance(l) || 0) * 1.3))) return;
     sauver(a);
     ville.current?.filerA(l);
+  };
+  // « Y ALLER » du guide : tout pres, on marche ; plus loin, le trajet le plus court en temps de jeu
+  // (velo, bus, ou a pied sans attendre), comme un Sim qu'on envoie de l'autre cote de la ville
+  const allerVite = (l: Lieu) => {
+    const m = Math.round((ville.current?.distance(l) || 0) * 1.3);
+    if (m < 120) { aller(l, 'pied'); return; }
+    const modes = (['velo', 'bus', 'pied'] as Mode[]).map(md => ({ md, t: trajet(a, md, m) })).filter(x => !x.t.refus);
+    const meilleur = modes.sort((x, y) => x.t.minutes - y.t.minutes)[0];
+    if (!meilleur) { aller(l, 'pied'); return; }
+    setLieu(null); setTel(null);
+    voyager(a, meilleur.md, m); sauver(a); ville.current?.filerA(l); maj();
   };
 
   return createPortal(
@@ -570,6 +642,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
                 {leJour ? dans(['AUJOURD’HUI', 'TODAY']) : cetteSemaine && !direct ? mot('ce_dimanche') : direct ? quand(direct) : mot('dans', { n: a.prochaine - a.semaine })}
               </span>
             </button>
+            {!lieu && !tel && <Guide a={a} competition={leJour} aller={allerVite} />}
           </div>
           <div className="flex flex-col gap-1.5">
             <button onClick={onFermer} aria-label={mot('fermer')} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><X size={18} /></button>

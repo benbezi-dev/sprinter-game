@@ -103,6 +103,8 @@ export type Athlete = {
   certificat?: number;
   /** Une blessure jamais diagnostiquee prend une semaine de plus (une fois). */
   retard?: boolean;
+  /** Les actions faites aujourd'hui (guide.ts) : remis a zero au reveil. */
+  faitAujourdhui?: string[];
   /** La semaine du dernier meeting couru : un par dimanche. */
   meeting?: number;
   /** Le departement declare (departements.ts) : ou l'on court ses departementaux et regionaux en direct. */
@@ -881,6 +883,7 @@ export function actionPossible(a: Athlete, id: string): null | 'heure' | 'argent
 export function faireUneAction(a: Athlete, id: string): null | string {
   const r = actionPossible(a, id); if (r) return r;
   const x = action(id)!;
+  (a.faitAujourdhui ||= []).push(id);
   if (x.cout) payer(a, -x.cout, x.id === 'pizza' ? 'Pizzeria' : 'Marché', x.id === 'pizza' ? 'Pizzeria' : 'Market');
   if (x.duree === 'nuit') { dormir(a); return null; }
   if (x.duree === 'cours') {
@@ -912,6 +915,7 @@ export function dormir(a: Athlete) {
   soulager(a, 4 * (duree >= 8 * 60 ? 1.5 : duree < 6 * 60 ? 0.5 : 1));
   if (duree < 7 * 60) a.moral = borne(a.moral - 4, 0, 100);
   if (h > REVEIL) { a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
+  a.faitAujourdhui = [];
   a.heure = REVEIL;
   // le dimanche soir, la semaine tourne ; une competition manquee est un forfait
   if (dimanche) {

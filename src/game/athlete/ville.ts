@@ -364,7 +364,12 @@ class Personne {
   /** Repeindre l'affiche si la pose ou l'angle de vue ont change. */
   peindre(camera: THREE.Camera) {
     const a = this.pos.clone().project(camera), b = this.pos.clone().add(this.dir).project(camera);
-    const cap = Math.atan2(b.y - a.y, b.x - a.x);
+    // LE CAP DU MOTEUR N'EST PAS UN ANGLE D'ECRAN (« le joueur marche a l'envers », l'auteur) :
+    // personCapsules tourne le corps au sol puis le projette en isometrie, x du sol vers le haut
+    // a gauche (-ISO_COS, -ISO_SIN), y vers le haut a droite (ISO_COS, -ISO_SIN). On inverse
+    // cette projection pour que le corps regarde la ou il va a l'ecran.
+    const C = (SprinterApp as any).C, p = (b.x - a.x) / C.ISO_COS, q = (b.y - a.y) / C.ISO_SIN;
+    const cap = Math.atan2(p + q, q - p);
     this.corps.marche = this.marche ? 1 : 0;
     this.corps.marcheT = this.marcheT;
     const cle = `${cap.toFixed(2)}|${this.marche ? this.marcheT.toFixed(2) : 'arret'}|${this.corps.look && this.corps.look.skin}`;
@@ -406,7 +411,8 @@ function dansPoly(poly: P2[], x: number, z: number) {
 const GRANDI = 1.55;
 /** Le niveau des trottoirs et dalles, sur lequel on marche. */
 const SOL = 0.12;
-const VITESSE = 4.2;
+// « les deplacements sont trop lents, c'est plus rapide dans les Sims » (l'auteur, 25/10) : on presse le pas
+const VITESSE = 10;
 const COULEURS_AUTO = ['#C0392B', '#2E86C1', '#F4F6F7', '#1C2833', '#F1C40F', '#7D8C8E', '#27AE60', '#8E44AD', '#D35400'];
 const VOITURES = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'primary_link', 'secondary_link', 'tertiary_link']);
 
@@ -619,6 +625,8 @@ export class Ville {
   position(): P2 | null { return this.moi ? [this.moi.pos.x, this.moi.pos.z] : null; }
 
   /** La porte d'un lieu (metres), ou null s'il n'existe pas ici. */
+  /** Le joueur est-il en chemin ? (l'horloge ralentit pendant les trajets) */
+  enMarche() { return !!this.moi && this.moi.route.length > 0; }
   porte(l: Lieu): P2 | null { return this.portes[l] || null; }
 
   /** La distance a pied jusqu'a un lieu, a vol d'oiseau, en metres. */

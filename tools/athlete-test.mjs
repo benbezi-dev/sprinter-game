@@ -26,7 +26,8 @@ writeFileSync(entree, `export * from '${join(process.cwd(), 'src/game/athlete/re
 export * from '${join(process.cwd(), 'src/game/athlete/recit.ts')}';
 export * from '${join(process.cwd(), 'src/game/athlete/gens.ts')}';
 export * from '${join(process.cwd(), 'src/game/athlete/telephone.ts')}';
-export * from '${join(process.cwd(), 'src/game/athlete/sante.ts')}';`);
+export * from '${join(process.cwd(), 'src/game/athlete/sante.ts')}';
+export * from '${join(process.cwd(), 'src/game/athlete/guide.ts')}';`);
 const sortie = join(dir, 'athlete.mjs');
 await build({ entryPoints: [entree], bundle: true, format: 'esm', platform: 'node', outfile: sortie, logLevel: 'silent' });
 const R = await import(sortie);
@@ -423,6 +424,31 @@ titre('le cycle des championnats et les meetings');
   ok('prime et record', a.argent === m0 + 30 && a.records['100'] === 12.4 && a.palmares[0].meeting);
   a.meeting = a.semaine;
   ok('un seul meeting par dimanche', R.meetingPossible(a, false) !== null);
+}
+
+titre('le guide du moment');
+{
+  const a = R.nouvelAthlete('G', 'modeste', 'polyvalent', null); a.evenement = null;
+  a.jour = 0; a.heure = 7 * 60 + 30; a.cours = false;
+  ok('lundi 7 h 30 : aller en cours', R.conseil(a, false).lieu === 'college');
+  a.besoinsJ = undefined; R.besoinsDe(a).energie = 10;
+  ok('plus d’energie : rentrer dormir, en urgence', R.conseil(a, false).lieu === 'maison' && R.conseil(a, false).urgent);
+  R.besoinsDe(a).energie = 90;
+  a.blessure = 2; a.blessureType = 'ischio'; a.diagnostic = null;
+  ok('blesse sans diagnostic : le medecin d’abord', R.conseil(a, false).lieu === 'kine');
+  a.blessure = 0;
+  a.cours = true; a.heure = 17 * 60;
+  const s = R.seanceDuJourDe(a);
+  ok('lundi 17 h : la seance, au bon lieu', s && R.conseil(a, false).lieu === s.lieu);
+  a.faites.push('lundi');
+  const j = R.journee(a, false);
+  ok('la journee se coche : cours et seance faits', j.find(x => x.texte[0].startsWith('Aller')).fait && j.find(x => x.texte[0].startsWith('Séance')).fait);
+  R.faireUneAction(a, 'douche');
+  ok('la douche faite se coche, et se remet a zero au reveil', R.journee(a, false).find(x => x.texte[0] === 'Douche').fait);
+  a.heure = 22 * 60; R.dormir(a);
+  ok('…le lendemain, plus rien de coche hors seances', !R.journee(a, false).find(x => x.texte[0] === 'Douche').fait);
+  a.jour = R.DIMANCHE; a.heure = 9 * 60;
+  ok('jour de competition : la gare', R.conseil(a, true).lieu === 'gare');
 }
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
