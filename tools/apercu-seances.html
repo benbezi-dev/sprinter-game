@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sprinter — les seances, une par une</title>
+<link rel="stylesheet" href="/src/index.css">
+<style>html,body{margin:0;height:100%;background:#000}</style>
+<div id="r"></div>
+<script type="module">
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { SeanceJeu } from '/src/components/screens/SeancesAthlete.tsx';
+  import { nouvelAthlete } from '/src/game/athlete/regles.ts';
+  const q = new URLSearchParams(location.search);
+  const a = nouvelAthlete('NOVA', 'modeste', 'polyvalent', null, { corps: q.get('corps') || 'f', peau: 'cacao', coiffure: 'braids', cheveux: 'noir', taille: 1.72, couleur: 1 });
+  if (q.get('club')) { a.club = 'quartier'; a.coach = 'dede'; }
+  window.athlete = a;
+  createRoot(document.getElementById('r')).render(React.createElement(SeanceJeu, { jour: 'lundi', a, exercice: q.get('ex') || 'departs', onFin: () => { document.title = 'fini'; } }));
+</script>
