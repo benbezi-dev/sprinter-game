@@ -375,7 +375,7 @@ function teindre(mats: Record<string, THREE.MeshStandardMaterial>, L: any) {
   mats.cheveux?.color.copy(SANS_CHEVEUX.has(L.hair) ? rgb(L.skin, [180, 130, 100], 0.8) : rgb(L.hairCol, [20, 16, 14]));
 }
 /** La glTF a y en haut comme la ville ; le moteur pose son coureur face a +x. */
-const _T = new THREE.Matrix4(), _R = new THREE.Matrix4(), _S = new THREE.Matrix4();
+const _T = new THREE.Matrix4(), _R = new THREE.Matrix4(), _S = new THREE.Matrix4(), _vDos = new THREE.Vector3();
 /** La foulee de course en ville, en metres (le moteur avance sa phase d'un demi-tour par appui). */
 const FOULEE = 2.1;
 
@@ -453,7 +453,12 @@ class Personne {
   peindre(camera: THREE.Camera) {
     if (!this.m3 && gabarit) {
       this.m3 = corps3D(this.corps.look);
-      if (this.m3) { this.scene.add(this.m3.m.racine); this.sprite.visible = false; this.corps.squelette3D = true; this.placer(); }
+      if (this.m3) {
+        this.scene.add(this.m3.m.racine); this.sprite.visible = false; this.corps.squelette3D = true;
+        // le corps porte sa vraie ombre : la tache de l'affiche ne garde qu'un contact discret au sol
+        (this.ombre.material as THREE.MeshBasicMaterial).opacity = 0.14; this.ombre.scale.setScalar(0.6);
+        this.placer();
+      }
     }
     if (this.m3) {
       // la marche, ou la course (le moteur sprinte quand marche = 0 et v > 0), ou l'arret
@@ -541,6 +546,13 @@ export class Ville {
   private rendu: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
   private camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 800);
+  // LA CAMERA DERRIERE LE JOUEUR (« Eyes » de Lagos Life, l'auteur, 25/10) : en perspective,
+  // a hauteur d'epaule, elle suit la direction de marche en douceur. `vue` choisit la camera.
+  private dos = new THREE.PerspectiveCamera(58, 1, 0.1, 700);
+  private vue: 'dessus' | 'derriere' = 'dessus';
+  private capDos = 0;
+  /** Le joystick de l'ecran : direction (x a droite, y vers le haut de l'ecran), force 0..1. */
+  private joy: { x: number; y: number } | null = null;
   private soleil = new THREE.DirectionalLight('#FFF1D6', 2.4);
   private ciel = new THREE.HemisphereLight('#E4F0FF', '#6E8A5A', 1.25);
   private lampe = mat('#FFF4D2', { emissive: '#FFE6A0', emissiveIntensity: 0.7 });
@@ -645,6 +657,21 @@ export class Ville {
   habiller(look: any) { this.moi?.habiller(look); }
   pause(oui: boolean) { this.enPause = oui; if (oui && this.moi) { this.moi.route = []; this.touches.clear(); } }
   tourner(sens: 1 | -1) { this.azimutVise += sens * Math.PI / 2; }
+  /** La camera active : la vue de dessus, ou derriere le joueur. */
+  private get cam(): THREE.Camera { return this.vue === 'derriere' ? this.dos : this.camera; }
+  /** Basculer entre la vue de dessus et la vue derriere le joueur. */
+  changerDeVue(v: 'dessus' | 'derriere') {
+    this.vue = v;
+    if (v === 'derriere' && this.moi) this.capDos = Math.atan2(this.moi.dir.z, this.moi.dir.x);
+  }
+  /** Le joystick : x a droite, y vers le haut de l'ecran, dans [-1, 1] ; pousse a fond, on court. */
+  joystick(x: number, y: number) {
+    const f = Math.hypot(x, y);
+    if (f < 0.15) { this.joy = null; if (this.moi && !this.touches.size) { this.moi.route = []; this.moi.court = this.enCourse; } return; }
+    this.joy = { x, y };
+    this.lieuVise = null; this.marque.visible = false;
+    if (this.moi) this.moi.court = this.enCourse || f > 0.85;
+  }
   zoomer(f: number) { this.zoom = Math.min(2.4, Math.max(0.35, this.zoom * f)); this.redimensionner(); }
 
   /**
@@ -964,12 +991,13 @@ export class Ville {
     this.camera.left = -vue / 2; this.camera.right = vue / 2;
     this.camera.top = vue / asp / 2; this.camera.bottom = -vue / asp / 2;
     this.camera.updateProjectionMatrix();
+    this.dos.aspect = asp; this.dos.updateProjectionMatrix();
   };
 
   private solSous(e: { clientX: number; clientY: number }): THREE.Vector3 | null {
     const r = this.rendu.domElement.getBoundingClientRect();
     const v = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-    const ray = new THREE.Raycaster(); ray.setFromCamera(v, this.camera);
+    const ray = new THREE.Raycaster(); ray.setFromCamera(v, this.cam);
     const p = new THREE.Vector3();
     return ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -SOL), p) ? p : null;
   }
@@ -1039,9 +1067,10 @@ export class Ville {
     if (this.touches.has('ArrowDown')) sy -= 1;
     if (this.touches.has('ArrowLeft')) sx -= 1;
     if (this.touches.has('ArrowRight')) sx += 1;
+    if (this.joy) { sx += this.joy.x; sy += this.joy.y; }
     if (!sx && !sy) return;
-    const droite = new THREE.Vector3(1, 0, 0).applyQuaternion(this.camera.quaternion); droite.y = 0; droite.normalize();
-    const haut = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion); haut.y = 0; haut.normalize();
+    const droite = new THREE.Vector3(1, 0, 0).applyQuaternion(this.cam.quaternion); droite.y = 0; droite.normalize();
+    const haut = new THREE.Vector3(0, 1, 0).applyQuaternion(this.cam.quaternion); haut.y = 0; haut.normalize();
     const v = droite.multiplyScalar(sx).add(haut.multiplyScalar(sy)).normalize();
     const k = this.pietons.proche(moi.pos.x, moi.pos.z, 30); if (k < 0) return;
     // pas encore sur le reseau : on le rejoint ; sinon, le voisin le mieux aligne
@@ -1061,7 +1090,7 @@ export class Ville {
     this.dernier = t;
     const moi = this.moi!;
 
-    if (!this.enPause && !moi.route.length && this.touches.size) this.pasClavier();
+    if (!this.enPause && !moi.route.length && (this.touches.size || this.joy)) this.pasClavier();
     const avait = moi.route.length > 0;
     const x0 = moi.pos.x, z0 = moi.pos.z;
     const arrive = moi.avancer(dt, moi.court ? VITESSE_COURSE : VITESSE);
@@ -1112,18 +1141,31 @@ export class Ville {
     this.camera.position.set(this.cible.x + Math.cos(this.azimut) * Math.cos(elev) * dist, Math.sin(elev) * dist,
       this.cible.z + Math.sin(this.azimut) * Math.cos(elev) * dist);
     this.camera.lookAt(this.cible);
+    if (this.vue === 'derriere') {
+      // derriere le joueur : la camera rattrape sa direction (le plus court chemin d'angle)
+      if (moi.marche) {
+        const vise = Math.atan2(moi.dir.z, moi.dir.x);
+        let d = vise - this.capDos; d = Math.atan2(Math.sin(d), Math.cos(d));
+        this.capDos += d * (1 - Math.exp(-3 * dt));
+      }
+      const recul = 7.5, haut = 3.6, cx = Math.cos(this.capDos), cz = Math.sin(this.capDos);
+      const vx = moi.pos.x - cx * recul, vz = moi.pos.z - cz * recul;
+      this.dos.position.lerp(_vDos.set(vx, SOL + haut, vz), 1 - Math.exp(-10 * dt));
+      this.dos.lookAt(moi.pos.x + cx * 4, SOL + 1.5, moi.pos.z + cz * 4);
+      this.cible.copy(moi.pos);
+    }
     this.soleil.position.set(this.cible.x - 60, 110, this.cible.z + 40);
     this.soleil.target.position.copy(this.cible);
     // les seuils des lieux respirent doucement
     for (const e of this.enseignes) e.scale.setScalar(1 + 0.08 * Math.sin(t / 380));
 
-    moi.peindre(this.camera);
+    moi.peindre(this.cam);
     if (Math.floor(t / 66) !== Math.floor((t - dt * 1000) / 66)) {
-      for (const p of this.passants) p.peindre(this.camera);
-      for (const [, h] of this.habitants) h.p.peindre(this.camera);
+      for (const p of this.passants) p.peindre(this.cam);
+      for (const [, h] of this.habitants) h.p.peindre(this.cam);
     }
 
-    this.rendu.render(this.scene, this.camera);
+    this.rendu.render(this.scene, this.cam);
     this.lesEtiquettes();
 
     if (dt > 0.045) this.lent++; else this.lent = Math.max(0, this.lent - 1);
@@ -1137,16 +1179,16 @@ export class Ville {
   private lesEtiquettes() {
     const l = this.hote.clientWidth, h = this.hote.clientHeight;
     for (const [, g] of this.habitants) {
-      const q = g.p.pos.clone(); q.y = 4.4; q.project(this.camera);
+      const q = g.p.pos.clone(); q.y = 4.4; q.project(this.cam);
       const x = (q.x + 1) / 2 * l, y = (1 - q.y) / 2 * h;
-      const dehors = x < -60 || x > l + 60 || y < -20 || y > h + 40;
+      const dehors = q.z > 1 || x < -60 || x > l + 60 || y < -20 || y > h + 40;
       g.el.style.display = dehors ? 'none' : '';
       if (!dehors) g.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%,-100%)`;
     }
     for (const { el, p } of this.etiquettes) {
-      const q = p.clone().project(this.camera);
+      const q = p.clone().project(this.cam);
       const x = (q.x + 1) / 2 * l, y = (1 - q.y) / 2 * h;
-      const dehors = x < -80 || x > l + 80 || y < -20 || y > h + 40;
+      const dehors = q.z > 1 || x < -80 || x > l + 80 || y < -20 || y > h + 40;
       el.style.display = dehors ? 'none' : '';
       if (!dehors) el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%,-100%)`;
     }

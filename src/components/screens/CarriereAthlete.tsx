@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   Footprints, ChevronRight, ChevronLeft, X, Trophy, Wallet, HeartPulse, BatteryMedium,
   Briefcase, ShoppingBag, Users, BookOpen, Flag, Star, Smartphone, MapPin, RotateCcw, RotateCw,
-  Zap, Utensils, ShowerHead, MessageCircle, Smile, Pause, Play, FastForward, Check, Navigation,
+  Zap, Utensils, ShowerHead, MessageCircle, Smile, Pause, Play, FastForward, Check, Navigation, Video, Map as Plan,
 } from 'lucide-react';
 import { PANNEAU, RESSORT, DUREE, COURBE, TRANSITION } from '@/lib/mouvement';
 import { conseil, journee } from '@/game/athlete/guide';
@@ -455,6 +455,41 @@ function Actions({ a, lieu, ev, changer }: { a: Athlete; lieu: string; ev: boole
   );
 }
 /**
+ * LE JOYSTICK (25/10, d'apres Lagos Life). Un disque sous le pouce : la direction fait marcher
+ * le long des trottoirs (ville.ts, comme les fleches), pousser au bord fait courir. Le bouton
+ * revient au centre en ressort quand on lache.
+ */
+function Joystick({ surDirection }: { surDirection: (x: number, y: number) => void }) {
+  const R = 46;
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const centre = useRef<{ x: number; y: number } | null>(null);
+  const bouger = (e: React.PointerEvent) => {
+    if (!centre.current) return;
+    let dx = e.clientX - centre.current.x, dy = e.clientY - centre.current.y;
+    const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; }
+    setPos({ x: dx, y: dy });
+    surDirection(dx / R, -dy / R);
+  };
+  const lacher = () => { centre.current = null; setPos({ x: 0, y: 0 }); surDirection(0, 0); };
+  const fort = Math.hypot(pos.x, pos.y) / R > 0.85;
+  return (
+    <div className="absolute right-[max(env(safe-area-inset-right),0.75rem)] bottom-[max(env(safe-area-inset-bottom),0.75rem)] w-32 h-32 rounded-full bg-[rgba(8,18,14,0.45)] border border-white/20 backdrop-blur-sm touch-none select-none"
+         onPointerDown={e => { const r = e.currentTarget.getBoundingClientRect(); centre.current = { x: r.left + r.width / 2, y: r.top + r.height / 2 }; e.currentTarget.setPointerCapture(e.pointerId); bouger(e); }}
+         onPointerMove={bouger} onPointerUp={lacher} onPointerCancel={lacher}
+         role="application" aria-label={dans(['Joystick : glisser pour marcher, au bord pour courir', 'Joystick: drag to walk, push to the edge to run'])}>
+      <motion.div className="absolute left-1/2 top-1/2 -ml-7 -mt-7 w-14 h-14 rounded-full shadow-xl flex items-center justify-center"
+                  animate={{ x: pos.x, y: pos.y, scale: fort ? 1.08 : 1 }} transition={centre.current ? { duration: 0 } : RESSORT.trophee}
+                  style={{ background: fort ? '#F5C542' : 'rgba(255,255,255,0.92)' }}>
+        <AnimatePresence>{fort && (
+          <motion.span initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.6 }}
+                       className="text-[9px] font-black text-black">{dans(['COURS', 'RUN'])}</motion.span>
+        )}</AnimatePresence>
+      </motion.div>
+    </div>
+  );
+}
+
+/**
  * LE GUIDE DU MOMENT (guide.ts) : ce qu'il faut faire maintenant, et pourquoi, avec le lieu ou
  * aller ; dessous, la journee cochee. L'auteur, 25/10 : « on ne sait pas ce qu'il doit etre fait,
  * on est facilement perdu ». Le conseil change en glissant, l'urgent respire, la coche surgit.
@@ -521,6 +556,8 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   const [vitesse, setVitesse] = useState(1);
   // courir partout (« le personnage peut aussi courir pour aller plus vite », l'auteur, 25/10)
   const [course, setCourse] = useState(false);
+  // la camera : de dessus (la ville entiere) ou derriere le joueur (« Eyes » de Lagos Life)
+  const [vue, setVue] = useState<'dessus' | 'derriere'>('dessus');
   const hote = useRef<HTMLDivElement>(null);
   const ville = useRef<Ville | null>(null);
   const changer = (f: () => void) => { f(); sauver(a); maj(); };
@@ -661,11 +698,20 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
                            style={course ? { background: VERT } : undefined}>
               <Footprints size={16} /><span className="text-[7px] font-black leading-none mt-0.5">{dans(['COURIR', 'RUN'])}</span>
             </motion.button>
+            <motion.button whileTap={{ scale: 0.9 }} onClick={() => { const v = vue === 'dessus' ? 'derriere' : 'dessus'; setVue(v); ville.current?.changerDeVue(v); }}
+                           aria-label={dans(['Changer de vue', 'Switch view'])}
+                           className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex flex-col items-center justify-center">
+              {vue === 'dessus' ? <Video size={16} /> : <Plan size={16} />}
+              <span className="text-[7px] font-black leading-none mt-0.5">{vue === 'dessus' ? dans(['DERRIÈRE', 'BEHIND']) : dans(['DESSUS', 'ABOVE'])}</span>
+            </motion.button>
             <button onClick={() => ville.current?.tourner(-1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCcw size={16} /></button>
             <button onClick={() => ville.current?.tourner(1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCw size={16} /></button>
           </div>
         </div>
       </div>
+
+      {/* le joystick : glisser pour marcher, pousser a fond pour courir */}
+      {!lieu && !tel && !personne && !seance && pret && <Joystick surDirection={(x, y) => ville.current?.joystick(x, y)} />}
 
       {/* les besoins, comme les jauges d'un Sim */}
       {!lieu && !tel && (
