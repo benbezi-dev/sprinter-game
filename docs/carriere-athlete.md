@@ -162,17 +162,30 @@ Sources citées dans le relevé ; ce qui n'est pas vérifié en ligne est marqu�
 - Antidopage* : localisation quotidienne (un créneau d'une heure), contrôle
   inopiné.
 
-## Courir (tranche 5)
+## Courir (tranche 5) — en partie ✓
 
-Chambre d'appel (nervosité, choix), échauffement, séries / demi-finales /
-finale à haut niveau, vent affiché (+2,0 m/s pour un record), temps de
-réaction, photo-finish, interview d'après-course, réseaux.
+✓ Échauffement à la gare, vent affiché (record homologué à +2,0 m/s au plus,
+pas de vent au 400 m), séries puis finale à partir du niveau France (les 3
+premiers de la série passent), certificat médical de la saison exigé des
+adultes. Reste : chambre d'appel, photo-finish, interview, réseaux.
 
-## Le corps (tranche 5)
+## Le corps (tranche 5) ✓ — des conséquences, pas du hasard
 
-Blessures réelles du sprinteur* : ischio-jambiers (2 à 8 semaines),
-périostite, tendon d'Achille, pubalgie ; croissance à l'adolescence. Prévenir :
-sommeil, kiné, échauffement, charge raisonnable.
+Consigne de l'auteur, 25/10 : « les blessures ne doivent pas être un facteur de
+hasard mais de conséquences ». Chaque exercice use des zones précises
+(ischio-jambiers, tibias, tendons d'Achille, chevilles), plus fort si l'on est
+fatigué, à jeun d'énergie, ou après 5 séances en 7 jours ; une course sans
+échauffement charge les ischios. À 60 d'usure : une gêne, signalée. À 85 : la
+blessure, son grade (1 à 3) suit l'usure atteinte. La nuit, le footing, le kiné
+(zone la plus usée) et l'ostéopathe font redescendre l'usure. Le surmenage vient
+d'une fatigue ≥ 95.
+
+L'Espace santé (sante.ts) : médecin du sport (diagnostic, certificat), IRM pour
+ischios et Achille, radio pour chevilles et tibias (fracture de fatigue si le
+tibia atteint le grade 3), l'examen adapté retire une semaine d'arrêt ; sans
+diagnostic, l'arrêt s'allonge d'une semaine. Reste à charge : rien pour un
+mineur de famille aisée, 15 % pour un mineur, 35 % pour un adulte,
+l'ostéopathe jamais remboursé. Montants de jeu, pas des tarifs réels.
 
 ## Ce qui ne change pas
 
