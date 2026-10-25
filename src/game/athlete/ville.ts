@@ -276,7 +276,7 @@ function hauteurDe(b: Donnees['batiments'][number], i: number): number {
 }
 
 // Les facades de la ville nouvelle : enduits clairs et couleurs franches.
-const ENDUITS = ['#EAD9BE', '#E9C9A4', '#D9B48F', '#F2E6CF', '#CFD8DC', '#E3B7A0', '#BFD3C1', '#E8D18A', '#D7C3D9', '#F0F0EA', '#C9B7A0', '#E6A98C'];
+const ENDUITS = ['#F1E2C6', '#F2D3AE', '#E7C29C', '#F6EDDB', '#DCE5E9', '#EEC4AC', '#CFE0CF', '#F0DC9A', '#F5F3EE', '#E2CDB2', '#F0B79B', '#CADCEB'];
 
 /* ------------------------------------------------------------- les gens */
 
@@ -440,7 +440,7 @@ export class Ville {
 
     this.scene.background = new THREE.Color('#A9D3F0');
     this.scene.fog = new THREE.Fog('#BFDDF3', 260, 480);
-    this.scene.add(new THREE.HemisphereLight('#DCEBFF', '#5E7A4A', 0.95));
+    this.scene.add(new THREE.HemisphereLight('#E4F0FF', '#6E8A5A', 1.25));
     this.soleil.castShadow = true;
     this.soleil.shadow.mapSize.set(2048, 2048);
     const sc = this.soleil.shadow.camera;
@@ -589,7 +589,7 @@ export class Ville {
     }
 
     // les batiments : murs a fenetres teintes, toits plats ou de tuiles
-    const murs = new Tampon(), mursPetits = new Tampon(), toits = new Tampon(), tuiles = new Tampon();
+    const murs = new Tampon(), mursPetits = new Tampon(), toits = new Tampon(), tuiles = new Tampon(), acroteres = new Tampon();
     const couleur = new THREE.Color(), gris = new THREE.Color();
     d.batiments.forEach((b, i) => {
       const p = b.p; if (p.length < 3) return;
@@ -611,11 +611,14 @@ export class Ville {
       }
       gris.set(maison ? '#B6553A' : ['#8D9096', '#7E8188', '#9A9CA2'][i % 3]);
       aplat(maison ? tuiles : toits, p, h, 0, gris);
+      // l'acrotere : un liseré net qui dessine le haut des murs
+      if (!maison && h >= 4) ruban(acroteres, [...p, p[0]], 0.45, h + 0.03);
     });
     this.poser(murs, mat('#ffffff', { map: travee(false), vertexColors: true }), true, true);
     this.poser(mursPetits, mat('#ffffff', { map: travee(true), vertexColors: true }), true, true);
     this.poser(toits, mat('#ffffff', { vertexColors: true, roughness: 0.95 }), true, true);
     this.poser(tuiles, mat('#ffffff', { vertexColors: true, roughness: 0.8 }), true, true);
+    this.poser(acroteres, mat('#5F636B', { roughness: 0.9 }), false, false);
 
     // les arbres : ceux de la carte, et les bois semes
     const arbres: P2[] = [...d.arbres];

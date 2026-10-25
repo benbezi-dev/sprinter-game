@@ -11,6 +11,7 @@
 // affichee dans la ville (ville.ts).
 
 import { writeFileSync } from 'fs';
+import { redresser } from './redresser.mjs';
 
 // sud, ouest, nord, est : du stade Bernard Amsalem a la gare
 const BBOX = [49.2640, 1.1925, 49.2795, 1.2295];
@@ -83,6 +84,7 @@ for (const e of d.elements) {
     }
   }
 }
+console.log('redressage', redresser(out));
 const f = 'public/athlete/val-de-reuil.json';
 writeFileSync(f, JSON.stringify(out));
 console.log(f, Object.fromEntries(Object.entries(out).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [k, v.length])));
