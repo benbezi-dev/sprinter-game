@@ -1,3 +1,4 @@
+import { ecrireLaDuree } from './mp4-duree';
 // La video de la course, enregistree chez le joueur et perissable.
 //
 // Rien de tout ceci ne passe par un serveur, et ce n'est pas un raccourci :
@@ -309,6 +310,23 @@ async function partagerEnNatif(blob: Blob, nom: string): Promise<Sortie | null> 
  * mais grandit lui aussi jusqu'au 2K (voir cadreDuFilm).
  */
 const RATIO_PORTRAIT = 1.6;
+
+/**
+ * LE DEBIT, CALE SUR LA DUREE DU FILM (l'auteur, 25/10 : « degradee… ou ecourtee
+ * sur WhatsApp »). A 5 Mbit/s, un 100 m pese deja 12 Mo pour 20 s, et un 400 m
+ * en passait 30 : selon les versions, WhatsApp refuse au-dela d'environ 16 Mo et
+ * propose de couper la video. On vise 15 Mo au plus, son compris, d'apres la
+ * duree attendue des epreuves du film ; le 100 m garde ses 5 Mbit/s.
+ */
+const POIDS_MAX = 15_000_000;
+const SECONDES: Record<string, number> = { '100': 20, '200': 30, '400': 58, '4x100': 52, '100h': 24, '110h': 24, '400h': 62 };
+function debitDuFilm(): number {
+  const G = (globalThis as any).SprinterApp?.G;
+  const cles: string[] = (G?.mode === 'oneshot' && Array.isArray(G?.shotRaces) && G.shotRaces.length)
+    ? G.shotRaces.map((r: any) => r?.key ?? r) : [G?.race?.key];
+  const duree = cles.reduce((s, k) => s + (SECONDES[String(k)] ?? 32), 0) + CARTON_MS / 1000;
+  return Math.round(Math.max(1_500_000, Math.min(5_000_000, POIDS_MAX * 8 / duree - 128_000)));
+}
 /** La largeur visee, en pixels : le 2K d'un portrait tenu debout (1440 x 2560). */
 const LARGEUR_2K = 1440;
 interface Cadre { l: number; h: number; sx: number; sy: number; sl: number; sh: number; ecran?: string }
@@ -450,11 +468,10 @@ export class Review {
       this.morceaux = [];
       this.rec = new MediaRecorder(flux, {
         mimeType: format,
-        // 5 Mbps pour le 2K (1440 x 2560) : 2,5 suffisaient en 1080, ils
-        // laisseraient des blocs sur deux fois plus de pixels. Le fichier
-        // grossit (~1 Mo la dizaine de secondes de course) — le poids reste
-        // affiche a cote du bouton de partage, voir OneShotEndScreen.
-        videoBitsPerSecond: 5_000_000,
+        // Jusqu'a 5 Mbps pour le 2K (1440 x 2560), moins pour les longues epreuves :
+        // le film reste sous ~15 Mo, voir debitDuFilm. 5 Mbps, c'est 6 Mo les dix
+        // secondes — le poids reste affiche a cote du bouton de partage.
+        videoBitsPerSecond: debitDuFilm(),
         // De quoi rendre une foule et un coup de pistolet sans peser : le son
         // du jeu est synthetise, il n'a pas la matiere d'un enregistrement.
         audioBitsPerSecond: 128_000,
@@ -740,12 +757,18 @@ export class Review {
     return new Promise(resolve => {
       const r = this.rec;
       if (!r || r.state === 'inactive') { resolve(); return; }
-      r.onstop = () => {
+      r.onstop = async () => {
         this.rec = null;
         this.rendreLeCanvas();
         if (!this.morceaux.length) { this.prevenir({ phase: 'impossible' }); resolve(); return; }
-        const blob = new Blob(this.morceaux, { type: this.format });
+        let blob = new Blob(this.morceaux, { type: this.format });
         this.morceaux = [];
+        // LA DUREE DANS L'EN-TETE : le MP4 de MediaRecorder annonce 0 s (et 3,6 s par
+        // piste pour un film de 20 s, mesure le 25/10) ; un reencodeur qui s'y fie coupe
+        // la video. Voir mp4-duree.ts — sans rien reencoder.
+        if (this.format.startsWith('video/mp4')) {
+          try { blob = new Blob([ecrireLaDuree(await blob.arrayBuffer())], { type: this.format }); } catch { /* le film tel quel */ }
+        }
         this.donnees = blob;
         this.url = URL.createObjectURL(blob);
         this.expireA = Date.now() + TTL_MS;
