@@ -202,21 +202,6 @@ function travee(petite: boolean) {
   });
 }
 
-/** Une enseigne : du texte sur un panneau, nette a distance. */
-function panneau(texte: string, fond: string, encre: string, l = 4, h = 0.8) {
-  const px = 512, py = Math.round(512 * h / l);
-  const t = toile(px, py, c => {
-    c.fillStyle = fond; c.beginPath(); c.roundRect(0, 0, px, py, py * 0.18); c.fill();
-    c.fillStyle = encre; c.textAlign = 'center'; c.textBaseline = 'middle';
-    let taille = py * 0.56;
-    c.font = `900 ${taille}px system-ui, sans-serif`;
-    while (c.measureText(texte).width > px * 0.9 && taille > 10) { taille -= 2; c.font = `900 ${taille}px system-ui, sans-serif`; }
-    c.fillText(texte, px / 2, py / 2 + 2);
-  });
-  t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-  return new THREE.Mesh(new THREE.PlaneGeometry(l, h), new THREE.MeshStandardMaterial({ map: t, roughness: 0.6, side: THREE.DoubleSide }));
-}
-
 /* ------------------------------------------------------------- les constructions */
 
 /** Un tampon de triangles qu'on remplit puis qu'on fige en une geometrie. */
@@ -687,12 +672,12 @@ export class Ville {
       el.addEventListener('click', e => { e.stopPropagation(); if (!this.enPause) this.allerA(l); });
       this.hote.appendChild(el);
       this.etiquettes.push({ l, el, p: new THREE.Vector3(this.portes[l][0], 6, this.portes[l][1]) });
-      const pn = panneau(this.o.nom(l).toUpperCase(), '#0F2A1E', '#3DDC84', 3.4, 0.6);
-      pn.position.set(this.portes[l][0], 2.6, this.portes[l][1]);
-      const poteau = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2.3, 6), mat('#2B3A33'));
-      poteau.position.set(this.portes[l][0], 1.15, this.portes[l][1]);
-      g.add(pn, poteau);
-      this.enseignes.push(pn);
+      // devant la porte, un cercle vert au sol : on sait ou entrer
+      const seuil = new THREE.Mesh(new THREE.RingGeometry(1.1, 1.5, 40),
+        new THREE.MeshBasicMaterial({ color: '#3DDC84', transparent: true, opacity: 0.85, depthWrite: false }));
+      seuil.rotation.x = -Math.PI / 2; seuil.position.set(this.portes[l][0], SOL + 0.04, this.portes[l][1]);
+      g.add(seuil);
+      this.enseignes.push(seuil);
     }
 
     // le joueur, les passants, les voitures qui roulent
@@ -875,8 +860,8 @@ export class Ville {
     this.camera.lookAt(this.cible);
     this.soleil.position.set(this.cible.x - 60, 110, this.cible.z + 40);
     this.soleil.target.position.copy(this.cible);
-    // les enseignes des lieux font face a la camera
-    for (const e of this.enseignes) e.rotation.y = -this.azimut + Math.PI / 2;
+    // les seuils des lieux respirent doucement
+    for (const e of this.enseignes) e.scale.setScalar(1 + 0.08 * Math.sin(t / 380));
 
     moi.peindre(this.camera);
     if (Math.floor(t / 66) !== Math.floor((t - dt * 1000) / 66)) for (const p of this.passants) p.peindre(this.camera);

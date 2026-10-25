@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import {
   Footprints, ChevronRight, ChevronLeft, X, Trophy, Wallet, HeartPulse, BatteryMedium,
-  Briefcase, ShoppingBag, Users, BookOpen, Flag, Star, Smartphone,
+  Briefcase, ShoppingBag, Users, BookOpen, Flag, Star, Smartphone, MapPin, RotateCcw, RotateCw,
 } from 'lucide-react';
 import { PANNEAU } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
@@ -13,7 +13,8 @@ import {
   STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
   bonusMateriel, coutDuDeplacement, picDeForme,
-  type Seance as ResultatSeance, type Resultat,
+  type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
+  exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
@@ -21,7 +22,9 @@ import {
   chargerCalendrier, jourDeLAthlete, forfait,
   rangerLaCourse, aRouvrir, demanderReouverture,
 } from '@/game/athlete/carriere';
-import { mot, dans, seanceDuJour, lang } from '@/game/athlete/mots';
+import { mot, dans, seanceDuJour, lang, EXOS } from '@/game/athlete/mots';
+import { lookDe, apparenceDe } from '@/game/athlete/apparence';
+import { Ville, LIEUX, type Lieu } from '@/game/athlete/ville';
 import { SeanceJeu } from './SeancesAthlete';
 
 /* ---------------------------------------------------------------------------
@@ -205,10 +208,81 @@ function Bouton({ onClick, disabled, children, plein = false, className = '' }:
 }
 
 /* ===========================================================================
+   L'APPARENCE : LE CORPS QU'ON SE CHOISIT
+   =========================================================================== */
+
+const NOMS_COIFFURES: Record<string, [string, string]> = {
+  crop: ['Court', 'Crop'], fade: ['Dégradé', 'Fade'], ras: ['Ras', 'Buzz'], flattop: ['Flat-top', 'Flat-top'],
+  twists: ['Twists', 'Twists'], braids: ['Tresses', 'Braids'], ponytail: ['Queue de cheval', 'Ponytail'],
+  bun: ['Chignon', 'Bun'], shaved: ['Crâne rasé', 'Shaved'],
+};
+const TEINTES_CHEVEUX: Record<string, string> = { noir: '#1C1616', brun: '#382418', chatain: '#5C3E24', blond: '#BC9A58', roux: '#944A26', gris: '#B0B0B6' };
+const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
+const PEAUX_RGB: Record<string, number[]> = {
+  ebene: [74, 46, 32], cacao: [96, 60, 40], acajou: [108, 66, 42], noisette: [120, 76, 50], bronze: [142, 92, 58],
+  ambre: [176, 122, 78], miel: [198, 150, 104], olive: [206, 166, 118], sable: [224, 186, 142], clair: [238, 204, 166], porcelaine: [246, 220, 190],
+};
+
+/** Le personnage qui tourne lentement sur lui-meme, en tenue de ville. */
+function Apercu({ ap, haut = 260 }: { ap: Apparence; haut?: number }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = ref.current; if (!cv) return;
+    const dpr = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+    cv.width = Math.round(haut * 0.8 * dpr); cv.height = Math.round(haut * dpr);
+    const c = cv.getContext('2d')!, A = SprinterApp as any;
+    const corps = { look: lookDe(ap, true), stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0 };
+    let id = 0;
+    const tic = (t: number) => {
+      c.clearRect(0, 0, cv.width, cv.height);
+      const k = cv.height * 0.47;
+      A.drawFacetFigure(c, A.personCapsules(corps, -Math.PI / 2 + Math.sin(t / 1400) * 1.2, 0, false, false, A.niveauDetail(k)), cv.width / 2, cv.height * 0.96, k);
+      id = requestAnimationFrame(tic);
+    };
+    id = requestAnimationFrame(tic);
+    return () => cancelAnimationFrame(id);
+  }, [ap, haut]);
+  return <canvas ref={ref} style={{ height: haut, width: haut * 0.8 }} className="mx-auto block" />;
+}
+
+function ChoixApparence({ ap, onChange }: { ap: Apparence; onChange: (a: Apparence) => void }) {
+  const pastille = (actif: boolean) => `w-8 h-8 rounded-full border-2 ${actif ? 'border-white scale-110' : 'border-white/20'} transition-transform`;
+  const ligne = 'flex flex-wrap gap-2 items-center';
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="rounded-2xl bg-gradient-to-b from-[#BFE0F5] to-[#8DBF77]"><Apercu ap={ap} /></div>
+      <div className={ligne}>
+        {CORPS.map(c => <Bouton key={c} plein={ap.corps === c} onClick={() => onChange({ ...ap, corps: c })} className="flex-1">
+          {c === 'f' ? dans(['Fille', 'Girl']) : dans(['Garçon', 'Boy'])}</Bouton>)}
+      </div>
+      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['PEAU', 'SKIN'])}</span>
+      <div className={ligne}>
+        {PEAUX.map(p => <button key={p} aria-label={p} onClick={() => onChange({ ...ap, peau: p })} className={pastille(ap.peau === p)} style={{ background: rgb(PEAUX_RGB[p]) }} />)}
+      </div>
+      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['COIFFURE', 'HAIR'])}</span>
+      <div className={ligne}>
+        {COIFFURES.map(h => <Bouton key={h} plein={ap.coiffure === h} onClick={() => onChange({ ...ap, coiffure: h })}>{dans(NOMS_COIFFURES[h])}</Bouton>)}
+      </div>
+      <div className={ligne}>
+        {CHEVEUX.map(h => <button key={h} aria-label={h} onClick={() => onChange({ ...ap, cheveux: h })} className={pastille(ap.cheveux === h)} style={{ background: TEINTES_CHEVEUX[h] }} />)}
+      </div>
+      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['TAILLE', 'HEIGHT'])} · {ap.taille.toFixed(2)} m</span>
+      <input type="range" min={1.55} max={2} step={0.01} value={ap.taille} onChange={e => onChange({ ...ap, taille: +e.target.value })} className="w-full accent-[#3DDC84]" />
+      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['TES COULEURS', 'YOUR COLOURS'])}</span>
+      <div className={ligne}>
+        {COULEURS.map((c, i) => <button key={i} aria-label={`couleur ${i + 1}`} onClick={() => onChange({ ...ap, couleur: i })} className={pastille(ap.couleur === i)} style={{ background: rgb(c) }} />)}
+      </div>
+    </div>
+  );
+}
+
+/* ===========================================================================
    LA CREATION
    =========================================================================== */
 
 function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer: () => void }) {
+  const [etape, setEtape] = useState<'corps' | 'vie'>('corps');
+  const [ap, setAp] = useState<Apparence>(APPARENCE);
   const [origine, setOrigine] = useState<Origine | null>(null);
   const [voie, setVoie] = useState<Voie | null>(null);
   const [spe, setSpe] = useState<Epreuve>('100');
@@ -222,189 +296,337 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
         <button onClick={onFermer} aria-label={mot('fermer')} className="p-2 text-white/70 hover:text-white"><X size={20} /></button>
       </div>
 
-      <Carte titre={mot('famille')}>
-        {(['aisee', 'modeste'] as Origine[]).map(o => (
-          <button key={o} onClick={() => setOrigine(o)} className={choix(origine === o)}
-                  style={origine === o ? { borderColor: VERT } : undefined}>
-            <span className="block font-black text-sm">{mot(o)}</span>
-            <span className="block text-xs text-white/65 leading-snug">{mot(`${o}_d`)}</span>
-          </button>
-        ))}
-      </Carte>
-
-      <Carte titre={mot('voie')}>
-        {(['polyvalent', 'specialiste'] as Voie[]).map(v => (
-          <button key={v} onClick={() => setVoie(v)} className={choix(voie === v)}
-                  style={voie === v ? { borderColor: VERT } : undefined}>
-            <span className="block font-black text-sm">{mot(v)}</span>
-            <span className="block text-xs text-white/65 leading-snug">{mot(`${v}_d`)}</span>
-          </button>
-        ))}
-        {voie === 'specialiste' && (
-          <div className="flex gap-2">
-            {EPREUVES.map(e => (
-              <Bouton key={e} plein={spe === e} onClick={() => setSpe(e)} className="flex-1">{e} m</Bouton>
+      {etape === 'corps' ? (
+        <>
+          <Carte titre={dans(['TON ATHLÈTE', 'YOUR ATHLETE'])}><ChoixApparence ap={ap} onChange={setAp} /></Carte>
+          <Bouton plein className="py-4 text-base" onClick={() => setEtape('vie')}>{dans(['SUIVANT', 'NEXT'])} ›</Bouton>
+        </>
+      ) : (
+        <>
+          <Carte titre={mot('famille')}>
+            {(['aisee', 'modeste'] as Origine[]).map(o => (
+              <button key={o} onClick={() => setOrigine(o)} className={choix(origine === o)}
+                      style={origine === o ? { borderColor: VERT } : undefined}>
+                <span className="block font-black text-sm">{mot(o)}</span>
+                <span className="block text-xs text-white/65 leading-snug">{mot(`${o}_d`)}</span>
+              </button>
             ))}
+          </Carte>
+          <Carte titre={mot('voie')}>
+            {(['polyvalent', 'specialiste'] as Voie[]).map(v => (
+              <button key={v} onClick={() => setVoie(v)} className={choix(voie === v)}
+                      style={voie === v ? { borderColor: VERT } : undefined}>
+                <span className="block font-black text-sm">{mot(v)}</span>
+                <span className="block text-xs text-white/65 leading-snug">{mot(`${v}_d`)}</span>
+              </button>
+            ))}
+            {voie === 'specialiste' && (
+              <div className="flex gap-2">
+                {EPREUVES.map(e => <Bouton key={e} plein={spe === e} onClick={() => setSpe(e)} className="flex-1">{e} m</Bouton>)}
+              </div>
+            )}
+          </Carte>
+          <div className="flex gap-2">
+            <Bouton onClick={() => setEtape('corps')}>‹</Bouton>
+            <Bouton plein disabled={!origine || !voie} className="flex-1 py-4 text-base"
+                    onClick={() => origine && voie && onFini(nouvelAthlete(getSavedName() || 'TOI', origine, voie, spe, ap))}>
+              {mot('lancer')}
+            </Bouton>
           </div>
-        )}
-      </Carte>
-
-      <Bouton plein disabled={!origine || !voie} className="py-4 text-base"
-              onClick={() => origine && voie && onFini(nouvelAthlete(getSavedName() || 'TOI', origine, voie, spe))}>
-        {mot('lancer')}
-      </Bouton>
+        </>
+      )}
     </Voile>
   );
 }
 
 /* ===========================================================================
-   LE TABLEAU DE BORD : LA SEMAINE
-   =========================================================================== */
+   LA VILLE : LA VIE DE LA SEMAINE, LIEU PAR LIEU
+   ===========================================================================
+   L'athlete se promene dans Val-de-Reuil (game/athlete/ville.ts). Arriver a
+   une porte ouvre le lieu : on y fait ce qu'on y fait dans la vraie vie. Les
+   seances se font la ou l'exercice se fait (lieuDeLExercice) ; la competition
+   part de la gare ; on dort a la maison, ce qui fait tourner la semaine. */
+
+const NOMS_LIEUX: Record<Lieu, [string, string]> = {
+  maison: ['Maison', 'Home'], college: ['Collège', 'School'], lycee: ['Lycée', 'High school'],
+  stade: ['Stade', 'Stadium'], club_quartier: ['Les Foulées du Quartier', 'Les Foulées du Quartier'],
+  club_horizon: ['Horizon Athlétisme', 'Horizon Athletics'], kine: ['Kiné', 'Physio'],
+  boutique: ['Magasin de sport', 'Sports shop'], marche: ['Marché', 'Market'], livraison: ['Pizzeria', 'Pizzeria'],
+  babysitting: ['Les voisins', 'Neighbours'], gare: ['Gare', 'Station'], cote: ['La côte', 'The hill'],
+  parc: ['Parc', 'Park'], piscine: ['Piscine', 'Pool'], mairie: ['Mairie', 'Town hall'],
+};
+const nomLieu = (l: Lieu) => dans(NOMS_LIEUX[l]);
+const BOULOT_DU_LIEU: Partial<Record<Lieu, string>> = { marche: 'marche', livraison: 'livraison', babysitting: 'babysitting' };
+const lieuDuClub = (a: Athlete): Lieu | null => (a.club === 'horizon' ? 'club_horizon' : a.club === 'quartier' ? 'club_quartier' : null);
 
 function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void; onEffacer: () => void }) {
   const [, maj] = useReducer((x: number) => x + 1, 0);
   const [seance, setSeance] = useState<Jour | null>(null);
-  const [boutique, setBoutique] = useState(false);
-  const [efface, setEfface] = useState(false);
-  const [epreuve, setEpreuve] = useState<Epreuve>(a.specialite || '100');
+  const [lieu, setLieu] = useState<Lieu | null>(null);
+  const [menu, setMenu] = useState(false);
+  const [pret, setPret] = useState(false);
+  const hote = useRef<HTMLDivElement>(null);
+  const ville = useRef<Ville | null>(null);
   const changer = (f: () => void) => { f(); sauver(a); maj(); };
-  // les vrais championnats : a partir de la France, la competition se cale sur eux
+
+  // la ville : construite une fois, detruite en sortant
+  useEffect(() => {
+    if (!hote.current) return;
+    const v = new Ville(hote.current, {
+      look: lookDe(apparenceDe(a), true),
+      depart: a.position || null,
+      nom: nomLieu,
+      surLieu: l => setLieu(l),
+      surPosition: p => { a.position = p; },
+      surPret: () => setPret(true),
+    });
+    ville.current = v;
+    return () => { sauver(a); v.detruire(); ville.current = null; };
+  }, []);
   useEffect(() => { chargerCalendrier().then(maj); }, []);
+
+  const ev = evenement(a.evenement);
+  // la ville se fige tant qu'un lieu, une seance, un dialogue ou le menu est ouvert
+  useEffect(() => { ville.current?.pause(!!(lieu || seance || ev || menu)); }, [lieu, seance, ev, menu]);
 
   const comp = COMPETITIONS[a.niveau];
   const { jour: leJour, date: direct } = jourDeLAthlete(a);
-  const cout = coutDuDeplacement(a, a.niveau);
-  const payable = a.argent >= cout;
-  const ev = evenement(a.evenement);
+  const aller = (l: Lieu) => { setLieu(null); setMenu(false); ville.current?.allerA(l); };
+  const filer = (l: Lieu) => { setMenu(false); ville.current?.filerA(l); };
 
-  const courir = () => {
-    if (!partirALaCompetition(a, a.specialite || epreuve)) return;
-    // la course part : l'accueil se demonte, et la fin de course rouvrira ici
-    demanderReouverture();
-  };
+  return createPortal(
+    <div className="fixed inset-0 z-[70] bg-[#A9D3F0] text-foreground select-none">
+      <div ref={hote} className="absolute inset-0 overflow-hidden" />
+      {!pret && <div className="absolute inset-0 flex items-center justify-center bg-[#0A1410] text-white/70 text-sm">
+        {dans(['Val-de-Reuil se dessine…', 'Drawing Val-de-Reuil…'])}</div>}
 
+      {/* le bandeau du haut : qui, quand, combien */}
+      <div className="absolute top-0 inset-x-0 px-[max(env(safe-area-inset-left),0.5rem)] pr-[max(env(safe-area-inset-right),0.5rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pointer-events-none">
+        <div className="flex items-start gap-2 pointer-events-auto">
+          <div className="flex-1 min-w-0 rounded-2xl bg-[rgba(8,18,14,0.86)] backdrop-blur px-3 py-2 shadow-xl">
+            <div className="flex items-baseline justify-between gap-2">
+              <span className="font-black font-display text-base truncate" style={{ color: VERT }}>{a.nom}</span>
+              <span className="text-[10px] font-bold tracking-widest text-white/60 shrink-0">{mot('semaine', { n: a.semaine })}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2 mt-1 text-[10px] text-white/70">
+              <span className="flex items-center gap-1 tabular-nums"><Wallet size={11} /> {mot('argent', { n: a.argent })}</span>
+              <span className="flex flex-col gap-0.5"><span className="flex items-center gap-1"><BatteryMedium size={11} /> {Math.round(a.fatigue)}</span>
+                <Jauge v={a.fatigue} couleur={a.fatigue >= 85 ? '#FF5A5F' : a.fatigue >= 60 ? '#F5A623' : VERT} /></span>
+              <span className="flex flex-col gap-0.5"><span className="flex items-center gap-1"><HeartPulse size={11} /> {Math.round(a.moral)}</span>
+                <Jauge v={a.moral} couleur="#C58BFF" /></span>
+            </div>
+            <button onClick={() => aller('gare')} className="mt-1.5 w-full flex items-center justify-between gap-2 text-[10px] font-bold text-left">
+              <span className="truncate text-white/80"><Trophy size={10} className="inline -mt-0.5" /> {mot(comp.cle)}</span>
+              <span className="shrink-0 tracking-widest" style={{ color: leJour ? VERT : undefined }}>
+                {leJour ? mot('ce_dimanche') : direct ? quand(direct) : mot('dans', { n: a.prochaine - a.semaine })}
+              </span>
+            </button>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <button onClick={onFermer} aria-label={mot('fermer')} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><X size={18} /></button>
+            <button onClick={() => setMenu(true)} aria-label={dans(['Aller à', 'Go to'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><MapPin size={18} /></button>
+            <button onClick={() => ville.current?.tourner(-1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCcw size={16} /></button>
+            <button onClick={() => ville.current?.tourner(1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCw size={16} /></button>
+          </div>
+        </div>
+      </div>
+
+      {/* aller a : la liste des lieux, a pied ou tout de suite */}
+      {menu && (
+        <Feuille titre={dans(['ALLER À', 'GO TO'])} onFermer={() => setMenu(false)}>
+          {(Object.keys(LIEUX) as Lieu[]).map(l => (
+            <div key={l} className="flex items-center gap-2">
+              <span className="flex-1 min-w-0 flex flex-col">
+                <span className="text-sm font-black truncate">{nomLieu(l)}</span>
+                <span className="text-[10px] text-white/50 truncate">{LIEUX[l].vrai || 'Val-de-Reuil'} · {Math.round((ville.current?.distance(l) || 0) / 10) * 10} m</span>
+              </span>
+              <Bouton onClick={() => aller(l)}>{dans(['À PIED', 'WALK'])}</Bouton>
+              <Bouton plein onClick={() => filer(l)}>{dans(['Y ALLER', 'GO'])}</Bouton>
+            </div>
+          ))}
+        </Feuille>
+      )}
+
+      {/* le lieu ou l'on vient d'entrer */}
+      {lieu && (
+        <Feuille titre={nomLieu(lieu).toUpperCase()} sous={LIEUX[lieu].vrai} onFermer={() => { sauver(a); setLieu(null); }}>
+          <DansLeLieu lieu={lieu} a={a} ev={!!ev} leJour={leJour} changer={changer} aller={aller}
+                      surSeance={j => setSeance(j)} onEffacer={onEffacer}
+                      surApparence={ap => changer(() => { a.apparence = ap; ville.current?.habiller(lookDe(ap, true)); })} />
+        </Feuille>
+      )}
+
+      {ev && <Dialogue a={a} onRepondu={() => { sauver(a); maj(); }} />}
+      {seance && <SeanceJeu jour={seance} a={a} onFin={() => { setSeance(null); sauver(a); maj(); }} />}
+    </div>,
+    document.body,
+  );
+}
+
+/** Une feuille qui monte du bas de l'ecran. */
+function Feuille({ titre, sous, onFermer, children }: { titre: string; sous?: string; onFermer: () => void; children: React.ReactNode }) {
   return (
-    <Voile>
-      {/* l'en-tete */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="font-black font-display text-2xl tracking-wide truncate" style={{ color: VERT }}>{a.nom}</h2>
-          <p className="text-[10px] font-bold tracking-widest text-white/60">
-            {mot('semaine', { n: a.semaine })}
-            {a.specialite ? ` · ${a.specialite} m` : ` · ${mot('polyvalent').toUpperCase()}`}
-            {a.club ? ` · ${mot(a.club).toUpperCase()}` : ''}
-          </p>
+    <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center px-[max(env(safe-area-inset-left),0.5rem)] pr-[max(env(safe-area-inset-right),0.5rem)] pb-[max(env(safe-area-inset-bottom),0.5rem)]">
+      <motion.div {...PANNEAU} className="w-full max-w-lg max-h-[68vh] overflow-y-auto rounded-2xl border p-3 flex flex-col gap-2 shadow-2xl"
+                  style={{ borderColor: `${VERT}66`, background: 'linear-gradient(160deg, #10251CF5, #0A1410F7)' }}>
+        <div className="flex items-start justify-between gap-2 sticky top-0">
+          <div className="min-w-0">
+            <h3 className="font-black font-display text-xl tracking-wide" style={{ color: VERT }}>{titre}</h3>
+            {sous && <p className="text-[10px] font-bold tracking-widest text-white/50">{sous}</p>}
+          </div>
+          <button onClick={onFermer} aria-label={mot('fermer')} className="p-1.5 text-white/70 hover:text-white"><X size={18} /></button>
         </div>
-        <button onClick={onFermer} aria-label={mot('fermer')} className="p-2 text-white/70 hover:text-white"><X size={20} /></button>
-      </div>
+        {children}
+      </motion.div>
+    </div>
+  );
+}
 
-      <div className="grid grid-cols-3 gap-2 text-xs">
-        <div className="rounded-xl bg-white/[0.04] border border-white/10 p-2 flex flex-col gap-1">
-          <span className="flex items-center gap-1 text-white/60"><Wallet size={12} /> €</span>
-          <span className="font-black tabular-nums text-base">{mot('argent', { n: a.argent })}</span>
-        </div>
-        <div className="rounded-xl bg-white/[0.04] border border-white/10 p-2 flex flex-col gap-1">
-          <span className="flex items-center gap-1 text-white/60"><BatteryMedium size={12} /> {mot('fatigue')}</span>
-          <span className="font-black tabular-nums">{Math.round(a.fatigue)}</span>
-          <Jauge v={a.fatigue} couleur={a.fatigue >= 85 ? '#FF5A5F' : a.fatigue >= 60 ? '#F5A623' : VERT} />
-        </div>
-        <div className="rounded-xl bg-white/[0.04] border border-white/10 p-2 flex flex-col gap-1">
-          <span className="flex items-center gap-1 text-white/60"><HeartPulse size={12} /> {mot('moral')}</span>
-          <span className="font-black tabular-nums">{Math.round(a.moral)}</span>
-          <Jauge v={a.moral} couleur="#C58BFF" />
-        </div>
-      </div>
+/** Ce qu'on fait dans chaque lieu. */
+function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer, surApparence }: {
+  lieu: Lieu; a: Athlete; ev: boolean; leJour: boolean;
+  changer: (f: () => void) => void; aller: (l: Lieu) => void; surSeance: (j: Jour) => void;
+  onEffacer: () => void; surApparence: (ap: Apparence) => void;
+}) {
+  const [efface, setEfface] = useState(false);
+  const [miroir, setMiroir] = useState(false);
+  const [epreuve, setEpreuve] = useState<Epreuve>(a.specialite || '100');
+  const club = lieuDuClub(a);
+  // les seances de la semaine qui se font ICI
+  const seancesIci = JOURS.filter(j => {
+    const l = lieuDeLExercice(a, exerciceDuJour(a, j));
+    return l === lieu || (lieu === club && (l === 'club_quartier' || l === 'club_horizon'));
+  });
+  const ailleurs = JOURS.filter(j => !seancesIci.includes(j));
 
-      <Carte><Barres a={a} /></Carte>
+  const Seances = () => (
+    <Carte titre={dans(['S’ENTRAÎNER ICI', 'TRAIN HERE'])} icone={Flag}>
+      {seancesIci.map(j => {
+        const raison = seancePossible(a, j);
+        return (
+          <div key={j} className="flex items-center gap-2">
+            <span className="w-1 self-stretch rounded-full" style={{ background: COULEUR[SEANCES[j].stat] }} />
+            <span className="flex-1 min-w-0 flex flex-col">
+              <span className="text-[10px] font-black tracking-widest text-white/70">{mot(j)} · {dans(EXOS[exerciceDuJour(a, j)].nom).toUpperCase()}</span>
+              <span className="text-xs text-white/80 truncate">{seanceDuJour(a, j)}</span>
+            </span>
+            {raison
+              ? <span className="text-[10px] font-black tracking-widest text-white/40">{raison === 'faite' ? mot('faite') : raison === 'blesse' ? mot('blesse') : mot('pris')}</span>
+              : <Bouton plein disabled={ev} onClick={() => surSeance(j)}>{mot('sentrainer')}</Bouton>}
+          </div>
+        );
+      })}
+    </Carte>
+  );
 
-      {/* la competition */}
-      <Carte titre={mot('competition')} icone={Trophy}>
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="font-black text-sm">{mot(comp.cle)}</span>
-          <span className="text-[10px] font-bold tracking-widest" style={{ color: leJour ? VERT : undefined }}>
-            {leJour ? mot('ce_dimanche') : direct ? quand(direct) : mot('dans', { n: a.prochaine - a.semaine })}
-          </span>
-        </div>
-        {direct && <p className="text-[11px] font-bold" style={{ color: VERT }}>{mot('direct')}</p>}
-        {a.objectif && (
-          <p className="text-[11px] text-white/60">
-            {mot('objectif', { o: mot(COMPETITIONS[NIVEAU_OBJECTIF[a.objectif]].cle) })} · {mot('assiduite', { f: a.assiduite.faites, p: a.assiduite.proposees })}
-            {picDeForme(a, a.niveau) && <span className="ml-1 font-black" style={{ color: VERT }}>· {mot('pic')}</span>}
-          </p>
+  const Programme = () => (
+    <Carte titre={dans(['LE PROGRAMME DE LA SEMAINE', 'THIS WEEK’S PLAN'])} icone={Flag}>
+      {!a.coach && <p className="text-[11px] text-white/50">{mot('seul')}</p>}
+      {JOURS.map(j => {
+        const l = lieuDeLExercice(a, exerciceDuJour(a, j)) as Lieu;
+        const fait = a.faites.includes(j);
+        return (
+          <button key={j} disabled={fait} onClick={() => aller(l)} className="flex items-center gap-2 text-left disabled:opacity-40">
+            <span className="w-1 self-stretch rounded-full" style={{ background: COULEUR[SEANCES[j].stat] }} />
+            <span className="flex-1 min-w-0 text-xs"><b>{mot(j)}</b> · {dans(EXOS[exerciceDuJour(a, j)].nom)}</span>
+            <span className="text-[10px] font-black tracking-widest" style={{ color: fait ? undefined : VERT }}>{fait ? mot('faite') : `${nomLieu(l)} ›`}</span>
+          </button>
+        );
+      })}
+    </Carte>
+  );
+
+  switch (lieu) {
+    case 'maison': return (
+      <>
+        <p className="text-xs text-white/70">{dans(['Ta chambre, ton lit, le frigo des parents. La semaine se termine ici.', 'Your room, your bed, your parents’ fridge. The week ends here.'])}</p>
+        <Programme />
+        <Bouton plein className="py-3" disabled={leJour || ev} onClick={() => changer(() => semaineSuivante(a))}>
+          {dans(['DORMIR · FINIR LA SEMAINE', 'SLEEP · END THE WEEK'])}
+        </Bouton>
+        {leJour && <p className="text-[11px] text-amber-300/80">{dans(['Dimanche, c’est la compétition : passe d’abord à la gare.', 'Sunday is race day: go to the station first.'])}</p>}
+        <Carte><Barres a={a} /></Carte>
+        <Bouton onClick={() => setMiroir(m => !m)}>{dans(['LE MIROIR · CHANGER DE STYLE', 'THE MIRROR · CHANGE STYLE'])}</Bouton>
+        {miroir && <ChoixApparence ap={apparenceDe(a)} onChange={surApparence} />}
+        {a.palmares.length > 0 && (
+          <Carte titre={mot('palmares')} icone={Trophy}>
+            {a.palmares.slice(0, 6).map((p, i) => (
+              <p key={i} className="text-xs text-white/75 flex justify-between gap-2">
+                <span className="truncate">{mot(COMPETITIONS[p.niveau].cle)} · {p.epreuve} m</span>
+                <span className="tabular-nums shrink-0">{p.chrono === null ? mot('faux') : `${mot('place', { o: ord(p.place) })} · ${p.chrono.toFixed(2)}`}</span>
+              </p>
+            ))}
+          </Carte>
         )}
-        {leJour && (
-          <>
+        {a.journal.length > 0 && (
+          <Carte titre={mot('journal')} icone={BookOpen}>
+            {a.journal.slice(0, 8).map((l, i) => (
+              <p key={i} className="text-[11px] text-white/60 leading-snug"><span className="text-white/35 tabular-nums">S{l.s} · </span>{dans([l.fr, l.en])}</p>
+            ))}
+          </Carte>
+        )}
+        <div className="flex items-center justify-center gap-2 pt-1 text-[11px] text-white/45">
+          {!efface ? <button onClick={() => setEfface(true)} className="underline">{mot('recommencer')}</button> : <>
+            <span>{mot('sur')}</span>
+            <button onClick={onEffacer} className="font-black text-red-400">{mot('oui')}</button>
+            <button onClick={() => setEfface(false)} className="font-black text-white/70">{mot('non')}</button>
+          </>}
+        </div>
+      </>
+    );
+
+    case 'gare': {
+      const comp = COMPETITIONS[a.niveau];
+      const cout = coutDuDeplacement(a, a.niveau), payable = a.argent >= cout;
+      return (
+        <Carte titre={mot('competition')} icone={Trophy}>
+          <span className="font-black text-sm">{mot(comp.cle)}</span>
+          {!leJour ? <p className="text-xs text-white/60">{dans(['Le train attendra : ta prochaine compétition n’est pas pour ce dimanche.', 'The train can wait: your next meet isn’t this Sunday.'])}</p> : <>
             <p className="text-[11px] text-white/60">
               {cout === 0 ? mot('paye') : mot('deplacement', { n: cout })}
               {!payable && <span className="text-red-400"> · {mot('pas_moyens')}</span>}
             </p>
-            {!a.specialite && (
-              <div className="flex gap-2">
-                {EPREUVES.map(e => <Bouton key={e} plein={epreuve === e} onClick={() => setEpreuve(e)} className="flex-1">{e} m</Bouton>)}
-              </div>
-            )}
+            {!a.specialite && <div className="flex gap-2">{EPREUVES.map(e => <Bouton key={e} plein={epreuve === e} onClick={() => setEpreuve(e)} className="flex-1">{e} m</Bouton>)}</div>}
             <div className="flex gap-2">
-              <Bouton plein className="flex-1 py-3 text-sm" disabled={!payable || a.blessure > 0 || !!ev} onClick={courir}>
+              <Bouton plein className="flex-1 py-3 text-sm" disabled={!payable || a.blessure > 0 || ev}
+                      onClick={() => { if (partirALaCompetition(a, a.specialite || epreuve)) demanderReouverture(); }}>
                 {mot('courir')} · {a.specialite || epreuve} m
               </Bouton>
-              <Bouton disabled={!!ev} onClick={() => changer(() => forfait(a))}>{mot('forfait')}</Bouton>
+              <Bouton disabled={ev} onClick={() => changer(() => forfait(a))}>{mot('forfait')}</Bouton>
             </div>
-          </>
-        )}
-      </Carte>
+          </>}
+        </Carte>
+      );
+    }
 
-      {/* la semaine */}
-      <Carte titre={mot('semaine', { n: a.semaine })} icone={Flag}>
-        {!a.coach && <p className="text-[11px] text-white/50">{mot('seul')}</p>}
-        {JOURS.map(j => {
-          const raison = seancePossible(a, j);
-          return (
-            <div key={j} className="flex items-center gap-2">
-              <span className="w-1 self-stretch rounded-full" style={{ background: COULEUR[SEANCES[j].stat] }} />
-              <span className="flex-1 min-w-0 flex flex-col">
-                <span className="text-[10px] font-black tracking-widest text-white/70">
-                  {mot(j)} · {mot(SEANCES[j].stat).toUpperCase()}
-                </span>
-                <span className="text-xs text-white/80 truncate">{seanceDuJour(a, j)}</span>
-              </span>
-              {raison
-                ? <span className="text-[10px] font-black tracking-widest text-white/40">
-                    {raison === 'faite' ? mot('faite') : raison === 'blesse' ? mot('blesse') : mot('pris')}
-                  </span>
-                : <Bouton plein disabled={!!ev} onClick={() => setSeance(j)}>{mot('sentrainer')}</Bouton>}
-            </div>
-          );
-        })}
-        <div className="flex items-center gap-2 opacity-60">
-          <span className="w-1 self-stretch rounded-full bg-white/20" />
-          <span className="flex-1 text-[10px] font-black tracking-widest text-white/70">
-            {mot('dimanche')} · {leJour ? mot('competition') : mot('repos').toUpperCase()}
-          </span>
-        </div>
-        <Bouton className="py-3 mt-1" disabled={leJour || !!ev} onClick={() => changer(() => semaineSuivante(a))}>
-          {mot('fin_semaine')}
+    case 'kine': {
+      const r = a.kine ? 'fait' : a.argent < prixDuKine(a) ? 'argent' : null;
+      return (
+        <>
+          <p className="text-xs text-white/70">{dans(['Massage, étirements, un œil sur tes ischios. Le kiné fait baisser la fatigue et raccourcit une blessure d’une semaine.', 'Massage, stretching, an eye on your hamstrings. The physio lowers fatigue and shortens an injury by a week.'])}</p>
+          <Bouton plein className="py-3" disabled={!!r || ev} onClick={() => changer(() => { chezLeKine(a); })}>
+            {r === 'fait' ? dans(['DÉJÀ VU CETTE SEMAINE', 'ALREADY SEEN THIS WEEK']) : `${dans(['UNE SÉANCE', 'ONE SESSION'])} · ${prixDuKine(a)} €`}
+          </Bouton>
+          {a.club && <p className="text-[11px] text-white/50">{dans(['Le club prend la moitié.', 'The club pays half.'])}</p>}
+        </>
+      );
+    }
+
+    case 'parc': case 'piscine': return (
+      <>
+        {lieu === 'parc' && seancesIci.length > 0 && <Seances />}
+        <p className="text-xs text-white/70">{lieu === 'parc'
+          ? dans(['Un footing léger autour du lac : le corps récupère, la tête aussi.', 'An easy jog round the lake: the body recovers, and the mind.'])
+          : dans(['Quelques longueurs souples à la piscine Alice Milliat : la récupération active des sprinteurs.', 'A few easy lengths at the Alice Milliat pool: the sprinter’s active recovery.'])}</p>
+        <Bouton plein className="py-3" disabled={!!a.footing || a.blessure > 0 || ev} onClick={() => changer(() => { footingAuParc(a); })}>
+          {a.footing ? dans(['DÉJÀ FAIT CETTE SEMAINE', 'ALREADY DONE THIS WEEK']) : lieu === 'parc' ? dans(['FOOTING DE RÉCUPÉRATION', 'RECOVERY JOG']) : dans(['NAGER POUR RÉCUPÉRER', 'SWIM TO RECOVER'])}
         </Bouton>
-      </Carte>
+      </>
+    );
 
-      {/* l'argent */}
-      <Carte titre={mot('boulots')} icone={Briefcase}>
-        {a.boulot ? <p className="text-xs text-white/60">{mot('boulot_pris')}</p> : (
-          <div className="grid grid-cols-3 gap-2">
-            {BOULOTS.map(b => (
-              <button key={b.id} disabled={!!ev || (!!b.prend && a.faites.includes(b.prend))}
-                      onClick={() => changer(() => { prendreUnBoulot(a, b.id); })}
-                      className="rounded-xl border border-white/15 bg-white/5 p-2 text-left disabled:opacity-35 hover:enabled:bg-white/10">
-                <span className="block text-xs font-black">{mot(b.id)}</span>
-                <span className="block text-[10px] text-white/60">+{b.gain} € · {mot('fatigue').toLowerCase()} +{b.fatigue}</span>
-                {b.prend && <span className="block text-[10px] text-amber-300/80">{mot('prend_samedi')}</span>}
-              </button>
-            ))}
-          </div>
-        )}
-      </Carte>
-
+    case 'boutique': return (
       <Carte titre={mot('boutique')} icone={ShoppingBag}>
-        {!boutique ? <Bouton onClick={() => setBoutique(true)}>{mot('boutique')} ›</Bouton> : MATERIEL.map(p => {
+        {MATERIEL.map(p => {
           const r = achatPossible(a, p.id);
           if (r === 'avant') return null;
           const effets = [
@@ -425,65 +647,79 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
           );
         })}
       </Carte>
+    );
 
-      {/* le club, la reputation */}
-      <Carte titre={mot('club')} icone={Users}>
-        <p className="text-xs">{a.club ? `${mot(a.club)} · ${mot(a.coach || '')}` : mot('sans_club')}</p>
-        {a.club && (
-          <div className="grid grid-cols-3 gap-2">
-            {(['coach', 'club', 'rival'] as const).map(k => (
-              <div key={k} className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-bold text-white/60">{mot(`rel_${k}`)} {a.relations[k] > 0 ? '+' : ''}{a.relations[k]}</span>
-                <Jauge v={a.relations[k] + 100} max={200} couleur={a.relations[k] >= 0 ? VERT : '#FF5A5F'} />
-              </div>
-            ))}
-          </div>
-        )}
-        <p className="flex flex-wrap gap-x-3 text-[11px] text-white/60">
-          <span className="flex items-center gap-1"><Star size={11} /> {mot('reputation', { n: a.reputation })}</span>
-          <span className="flex items-center gap-1"><Smartphone size={11} /> {mot('abonnes', { n: a.abonnes })}</span>
-          {a.sponsors.length > 0 && <span>{mot('sponsors', { n: a.sponsors.length })}</span>}
-        </p>
-      </Carte>
-
-      {a.palmares.length > 0 && (
-        <Carte titre={mot('palmares')} icone={Trophy}>
-          {a.palmares.slice(0, 6).map((p, i) => (
-            <p key={i} className="text-xs text-white/75 flex justify-between gap-2">
-              <span className="truncate">{mot(COMPETITIONS[p.niveau].cle)} · {p.epreuve} m</span>
-              <span className="tabular-nums shrink-0">
-                {p.chrono === null ? mot('faux') : `${mot('place', { o: ord(p.place) })} · ${p.chrono.toFixed(2)}`}
-              </span>
-            </p>
-          ))}
+    case 'marche': case 'livraison': case 'babysitting': {
+      const b = BOULOTS.find(x => x.id === BOULOT_DU_LIEU[lieu])!;
+      const pris = !!a.boulot;
+      return (
+        <Carte titre={mot('boulots')} icone={Briefcase}>
+          <span className="text-sm font-black">{mot(b.id)}</span>
+          <span className="text-[11px] text-white/60">+{b.gain} € · {mot('fatigue').toLowerCase()} +{b.fatigue}{b.prend ? ` · ${mot('prend_samedi')}` : ''}</span>
+          <Bouton plein disabled={pris || ev || (!!b.prend && a.faites.includes(b.prend))} onClick={() => changer(() => { prendreUnBoulot(a, b.id); })}>
+            {pris ? mot('boulot_pris') : dans(['TRAVAILLER', 'WORK'])}
+          </Bouton>
         </Carte>
-      )}
+      );
+    }
 
-      {a.journal.length > 0 && (
-        <Carte titre={mot('journal')} icone={BookOpen}>
-          {a.journal.slice(0, 8).map((l, i) => (
-            <p key={i} className="text-[11px] text-white/60 leading-snug">
-              <span className="text-white/35 tabular-nums">S{l.s} · </span>{dans([l.fr, l.en])}
+    case 'club_quartier': case 'club_horizon': {
+      const membre = club === lieu;
+      return (
+        <>
+          {membre && seancesIci.length > 0 && <Seances />}
+          <Carte titre={mot('club')} icone={Users}>
+            {membre ? (
+              <>
+                <p className="text-xs">{mot(a.club!)} · {mot(a.coach || '')}</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['coach', 'club', 'rival'] as const).map(k => (
+                    <div key={k} className="flex flex-col gap-0.5">
+                      <span className="text-[10px] font-bold text-white/60">{mot(`rel_${k}`)} {a.relations[k] > 0 ? '+' : ''}{a.relations[k]}</span>
+                      <Jauge v={a.relations[k] + 100} max={200} couleur={a.relations[k] >= 0 ? VERT : '#FF5A5F'} />
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : <p className="text-xs text-white/60">{a.club ? dans(['Ce n’est pas ton club. On te regarde passer.', 'Not your club. They watch you go by.']) : dans(['Pas encore de licence ici. Les entraîneurs viendront peut-être te voir après une course.', 'No licence here yet. The coaches may come and find you after a race.'])}</p>}
+            <p className="flex flex-wrap gap-x-3 text-[11px] text-white/60">
+              <span className="flex items-center gap-1"><Star size={11} /> {mot('reputation', { n: a.reputation })}</span>
+              <span className="flex items-center gap-1"><Smartphone size={11} /> {mot('abonnes', { n: a.abonnes })}</span>
+              {a.sponsors.length > 0 && <span>{mot('sponsors', { n: a.sponsors.length })}</span>}
             </p>
-          ))}
-        </Carte>
-      )}
+          </Carte>
+        </>
+      );
+    }
 
-      <div className="flex items-center justify-center gap-2 pt-2 text-[11px] text-white/45">
-        {!efface ? <button onClick={() => setEfface(true)} className="underline">{mot('recommencer')}</button> : <>
-          <span>{mot('sur')}</span>
-          <button onClick={onEffacer} className="font-black text-red-400">{mot('oui')}</button>
-          <button onClick={() => setEfface(false)} className="font-black text-white/70">{mot('non')}</button>
-        </>}
-      </div>
+    case 'stade': case 'cote': return (
+      <>
+        <p className="text-xs text-white/70">{lieu === 'stade'
+          ? dans(['La piste rouge de huit couloirs, la halle couverte pour l’hiver. C’est ici qu’on devient sprinteur.', 'The red eight-lane track, the indoor hall for winter. This is where you become a sprinter.'])
+          : dans(['Une rue qui monte dur. Les côtes, c’est la force des jambes — et du mental.', 'A street that climbs hard. Hills build leg power — and mind.'])}</p>
+        {seancesIci.length ? <Seances /> : <p className="text-[11px] text-white/50">{dans(['Rien de prévu ici cette semaine.', 'Nothing planned here this week.'])}</p>}
+        {ailleurs.length > 0 && <Programme />}
+      </>
+    );
 
-      {ev && <Dialogue a={a} onRepondu={() => { sauver(a); maj(); }} />}
-      {seance && (
-        <SeanceJeu jour={seance} a={a}
-                   onFin={() => { setSeance(null); sauver(a); maj(); }} />
-      )}
-    </Voile>
-  );
+    case 'college': return (
+      <>
+        <p className="text-xs text-white/70">{dans(['Les cours, les copains, le prof d’EPS qui t’a repéré. Il te suit de loin.', 'Classes, friends, the PE teacher who spotted you. He keeps an eye on you.'])}</p>
+        {a.objectif && <p className="text-[11px] text-white/60">{mot('objectif', { o: mot(COMPETITIONS[NIVEAU_OBJECTIF[a.objectif]].cle) })} · {mot('assiduite', { f: a.assiduite.faites, p: a.assiduite.proposees })}</p>}
+        <Carte><Barres a={a} /></Carte>
+      </>
+    );
+
+    case 'lycee': return <p className="text-xs text-white/70">{dans(['Le lycée Marc Bloch t’attend en seconde. Les horaires aménagés, ça se demande.', 'Marc Bloch high school awaits you in year 10. Adjusted timetables can be asked for.'])}</p>;
+
+    case 'mairie': return (
+      <>
+        <p className="text-xs text-white/70">{dans(['La ville suit ses sportifs. Un bon palmarès et on parle de toi aux trophées des sports.', 'The town follows its athletes. A good record and you’ll be named at the sports awards.'])}</p>
+        <p className="flex flex-wrap gap-x-3 text-[11px] text-white/60"><span className="flex items-center gap-1"><Star size={11} /> {mot('reputation', { n: a.reputation })}</span></p>
+      </>
+    );
+  }
+  return null;
 }
 
 /* ===========================================================================

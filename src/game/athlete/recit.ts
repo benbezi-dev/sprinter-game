@@ -84,10 +84,10 @@ export const EVENEMENTS: Evenement[] = [
     id: 'intro',
     qui: ['M. Roche, prof d’EPS', 'Mr Roche, PE teacher'],
     texte: a => a.origine === 'aisee'
-      ? ['« Je t’ai chronométré au 50 m : tu as quelque chose. Il y a la compétition scolaire du district dans quatre semaines. Tes parents ont déjà proposé de t’y conduire. »',
-         '“I timed you over 50 m: you’ve got something. The district school meet is in four weeks. Your parents already offered to drive you.”']
-      : ['« Je t’ai chronométré au 50 m : tu as quelque chose. Il y a la compétition scolaire du district dans quatre semaines. Le bus scolaire y va, c’est gratuit. »',
-         '“I timed you over 50 m: you’ve got something. The district school meet is in four weeks. The school bus goes, it’s free.”'],
+      ? ['« Je t’ai chronométré au 50 m : tu as quelque chose. Il y a la compétition scolaire du district dans deux semaines. Tes parents ont déjà proposé de t’y conduire. »',
+         '“I timed you over 50 m: you’ve got something. The district school meet is in two weeks. Your parents already offered to drive you.”']
+      : ['« Je t’ai chronométré au 50 m : tu as quelque chose. Il y a la compétition scolaire du district dans deux semaines. Le bus scolaire y va, c’est gratuit. »',
+         '“I timed you over 50 m: you’ve got something. The district school meet is in two weeks. The school bus goes, it’s free.”'],
     choix: [
       { t: ['« J’y serai. »', '“I’ll be there.”'], d: ['Moral +10', 'Morale +10'], faire: a => moral(a, 10) },
       { t: ['« Vous croyez vraiment ? »', '“You really think so?”'], d: ['Il te montre les éducatifs. Technique +2', 'He shows you drills. Technique +2'],
