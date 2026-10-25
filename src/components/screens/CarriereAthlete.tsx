@@ -17,6 +17,7 @@ import {
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
+  etape, categorie, LOYER, SALAIRE,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
@@ -26,9 +27,10 @@ import {
 } from '@/game/athlete/carriere';
 import { mot, dans, seanceDuJour, lang, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe, lookDePersonne } from '@/game/athlete/apparence';
-import { type Personne, GENS, PERSONNES, ouEst, lienDe, etiquette, interactionsAvec, interagir } from '@/game/athlete/gens';
+import { type Personne, GENS, PERSONNES, ouEst, lienDe, etiquette, interactionsAvec, interagir, roleDe } from '@/game/athlete/gens';
 import { Ville, LIEUX, type Lieu } from '@/game/athlete/ville';
 import { SeanceJeu } from './SeancesAthlete';
+import { nomDuClub, logoDuClub, CLUB_PARTENAIRE } from '@/game/athlete/partenaires';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE D'ATHLETE — les ecrans du mode
@@ -119,7 +121,7 @@ export function PanneauAthlete() {
             </div>
             <div className="text-xs text-white/70">
               {mot(COMPETITIONS[a.niveau].cle)} · {mot('argent', { n: a.argent })}
-              {a.club ? ` · ${mot(a.club)}` : ''}
+              {a.club ? ` · ${nomDuClub(a.club, mot(a.club))}` : ''}
             </div>
             <Barres a={a} compact />
           </>
@@ -289,6 +291,10 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
   const [origine, setOrigine] = useState<Origine | null>(null);
   const [voie, setVoie] = useState<Voie | null>(null);
   const [spe, setSpe] = useState<Epreuve>('100');
+  const [age, setAge] = useState(14);
+  const vie = age <= 14 ? dans(['Collège · chez tes parents · compétition scolaire', 'Secondary school · living with parents · school meet'])
+    : age <= 17 ? dans(['Lycée · chez tes parents', 'High school · living with parents'])
+    : dans(['Vie active · ton appart, un loyer, un travail · départementaux d’entrée', 'Working life · your own flat, rent, a job · straight to county level']);
   const choix = (actif: boolean) =>
     `w-full text-left rounded-2xl border-2 p-3 transition-colors ${actif ? 'bg-white/10' : 'bg-white/[0.03] border-white/10 hover:bg-white/[0.07]'}`;
 
@@ -306,6 +312,14 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
         </>
       ) : (
         <>
+          <Carte titre={dans(['TON ÂGE', 'YOUR AGE'])}>
+            <div className="flex items-baseline justify-between">
+              <span className="font-black font-display text-3xl tabular-nums">{age} {dans(['ans', 'yrs'])}</span>
+              <span className="text-[11px] font-black tracking-widest" style={{ color: VERT }}>{dans(categorie(age)).toUpperCase()}</span>
+            </div>
+            <input type="range" min={12} max={35} step={1} value={age} onChange={e => setAge(+e.target.value)} className="w-full accent-[#3DDC84]" aria-label={dans(['Âge', 'Age'])} />
+            <p className="text-xs text-white/65">{vie}</p>
+          </Carte>
           <Carte titre={mot('famille')}>
             {(['aisee', 'modeste'] as Origine[]).map(o => (
               <button key={o} onClick={() => setOrigine(o)} className={choix(origine === o)}
@@ -332,7 +346,7 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
           <div className="flex gap-2">
             <Bouton onClick={() => setEtape('corps')}>‹</Bouton>
             <Bouton plein disabled={!origine || !voie} className="flex-1 py-4 text-base"
-                    onClick={() => origine && voie && onFini(nouvelAthlete(getSavedName() || 'TOI', origine, voie, spe, ap))}>
+                    onClick={() => origine && voie && onFini(nouvelAthlete(getSavedName() || 'TOI', origine, voie, spe, ap, age))}>
               {mot('lancer')}
             </Bouton>
           </div>
@@ -357,8 +371,11 @@ const NOMS_LIEUX: Record<Lieu, [string, string]> = {
   boutique: ['Magasin de sport', 'Sports shop'], marche: ['Marché', 'Market'], livraison: ['Pizzeria', 'Pizzeria'],
   babysitting: ['Les voisins', 'Neighbours'], gare: ['Gare', 'Station'], cote: ['La côte', 'The hill'],
   parc: ['Parc', 'Park'], piscine: ['Piscine', 'Pool'], mairie: ['Mairie', 'Town hall'],
+  travail: ['Ton travail', 'Your job'], parents: ['Chez tes parents', 'Your parents’ home'],
 };
-const nomLieu = (l: Lieu) => dans(NOMS_LIEUX[l]);
+/** Le nom d'un lieu ; pour un adulte, la maison est son appartement. */
+const nomLieu = (l: Lieu, a?: Athlete) => (l === 'maison' && a && etape(a) === 'adulte' ? dans(['Ton appart', 'Your flat'])
+  : l === 'club_quartier' && CLUB_PARTENAIRE ? CLUB_PARTENAIRE.court : dans(NOMS_LIEUX[l]));
 const NOMS_JOURS: [string, string][] = [['Lundi', 'Monday'], ['Mardi', 'Tuesday'], ['Mercredi', 'Wednesday'], ['Jeudi', 'Thursday'], ['Vendredi', 'Friday'], ['Samedi', 'Saturday'], ['Dimanche', 'Sunday']];
 const nomDuJour = (j: number) => dans(NOMS_JOURS[j]);
 const horloge = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
@@ -369,12 +386,13 @@ const ICONES_BESOINS: Record<Besoin, typeof Zap> = { energie: Zap, faim: Utensil
 const NOMS_ACTIONS: Record<string, [string, string]> = {
   dormir: ['Dormir jusqu’au matin', 'Sleep till morning'], sieste: ['Faire une sieste', 'Take a nap'], manger: ['Manger en famille', 'Eat with the family'],
   douche: ['Prendre une douche', 'Have a shower'], devoirs: ['Faire ses devoirs', 'Do homework'], console: ['Jouer à la console', 'Play video games'],
-  telephone: ['Appeler un ami', 'Call a friend'], cours: ['Aller en cours', 'Go to class'], pizza: ['Manger une pizza', 'Eat a pizza'],
+  telephone: ['Appeler un ami', 'Call a friend'], cours: ['Aller en cours', 'Go to class'], cours_lycee: ['Aller en cours', 'Go to class'],
+  travail: ['Aller travailler', 'Go to work'], manger_parents: ['Manger avec tes parents', 'Eat with your parents'], pizza: ['Manger une pizza', 'Eat a pizza'],
   fruits: ['Acheter des fruits', 'Buy fruit'], discuter_parc: ['Discuter sur un banc', 'Chat on a bench'], discuter_club: ['Discuter avec le groupe', 'Chat with the squad'],
 };
 const RAISONS: Record<string, [string, string]> = {
   heure: ['Pas à cette heure', 'Not at this time'], argent: ['Pas assez d’argent', 'Not enough money'], fait: ['Déjà fait', 'Already done'],
-  'week-end': ['Pas le week-end', 'Not at weekends'], pas_ce_jour: ['Pas aujourd’hui', 'Not today'], pas_l_heure: ['Après les cours : 16 h 30 – 21 h (samedi 9 h – 19 h)', 'After school: 4:30–9 pm (Saturday 9 am–7 pm)'],
+  'week-end': ['Pas le week-end', 'Not at weekends'], etape: ['Pas à ton âge', 'Not at your age'], pas_ce_jour: ['Pas aujourd’hui', 'Not today'], pas_l_heure: ['Après les cours : 16 h 30 – 21 h (samedi 9 h – 19 h)', 'After school: 4:30–9 pm (Saturday 9 am–7 pm)'],
 };
 const effetsTexte = (e: Partial<Record<Besoin, number>>) =>
   Object.entries(e).filter(([, v]) => v).map(([k, v]) => `${dans(NOMS_BESOINS[k as Besoin])} ${v! > 0 ? '+' : ''}${v}`).join(' · ');
@@ -386,13 +404,14 @@ function noterEpuise(a: Athlete) {
 
 /** Les actions de la journee qu'on peut faire dans ce lieu. */
 function Actions({ a, lieu, ev, changer }: { a: Athlete; lieu: string; ev: boolean; changer: (f: () => void) => void }) {
-  const liste = ACTIONS.filter(x => x.lieu === lieu);
+  // ce qui ne concerne pas l'age (le college a 25 ans) n'apparait pas
+  const liste = ACTIONS.filter(x => x.lieu === lieu && actionPossible(a, x.id) !== 'etape');
   if (!liste.length) return null;
   return (
     <Carte titre={dans(['FAIRE', 'DO'])}>
       {liste.map(x => {
         const r = actionPossible(a, x.id);
-        const duree = x.duree === 'nuit' ? dans(['la nuit', 'overnight']) : x.duree === 'cours' ? dans(['jusqu’à 16 h 30', 'till 4:30 pm']) : `${x.duree} min`;
+        const duree = x.duree === 'nuit' ? dans(['la nuit', 'overnight']) : x.duree === 'cours' ? (x.id === 'travail' ? dans([`jusqu’à 17 h · +${SALAIRE} €`, `till 5 pm · +€${SALAIRE}`]) : dans(['jusqu’à 16 h 30', 'till 4:30 pm'])) : `${x.duree} min`;
         return (
           <div key={x.id} className="flex items-center gap-2">
             <span className="flex-1 min-w-0 flex flex-col">
@@ -431,7 +450,8 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
     const v = new Ville(hote.current, {
       look: lookDe(apparenceDe(a), true),
       depart: a.position || null,
-      nom: nomLieu,
+      nom: l => nomLieu(l, a),
+      adulte: etape(a) === 'adulte',
       surLieu: l => setLieu(l),
       surPosition: p => { a.position = p; },
       surPret: () => setPret(true),
@@ -553,10 +573,10 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
       {/* aller a : la liste des lieux, a pied ou tout de suite */}
       {menu && (
         <Feuille titre={dans(['ALLER À', 'GO TO'])} onFermer={() => setMenu(false)}>
-          {(Object.keys(LIEUX) as Lieu[]).map(l => (
+          {(Object.keys(LIEUX) as Lieu[]).filter(l => l !== 'parents' || etape(a) === 'adulte').map(l => (
             <div key={l} className="flex items-center gap-2">
               <span className="flex-1 min-w-0 flex flex-col">
-                <span className="text-sm font-black truncate">{nomLieu(l)}</span>
+                <span className="text-sm font-black truncate">{nomLieu(l, a)}</span>
                 <span className="text-[10px] text-white/50 truncate">{LIEUX[l].vrai || 'Val-de-Reuil'} · {Math.round((ville.current?.distance(l) || 0) / 10) * 10} m</span>
               </span>
               <Bouton onClick={() => aller(l)}>{dans(['À PIED', 'WALK'])}</Bouton>
@@ -568,7 +588,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
 
       {/* le lieu ou l'on vient d'entrer */}
       {lieu && (
-        <Feuille titre={nomLieu(lieu).toUpperCase()} sous={LIEUX[lieu].vrai} onFermer={() => { sauver(a); setLieu(null); }}>
+        <Feuille titre={nomLieu(lieu, a).toUpperCase()} sous={LIEUX[lieu].vrai} onFermer={() => { sauver(a); setLieu(null); }}>
           <Ici a={a} lieu={lieu} parler={p => { setLieu(null); setPersonne(p); }} />
           <DansLeLieu lieu={lieu} a={a} ev={!!ev} leJour={leJour} changer={changer} aller={aller}
                       surSeance={j => setSeance(j)} onEffacer={onEffacer}
@@ -577,7 +597,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
       )}
 
       {personne && (
-        <Feuille titre={dans(GENS[personne].nom(a)).toUpperCase()} sous={dans(GENS[personne].role)} onFermer={() => { sauver(a); setPersonne(null); }}>
+        <Feuille titre={dans(GENS[personne].nom(a)).toUpperCase()} sous={dans(roleDe(a, personne))} onFermer={() => { sauver(a); setPersonne(null); }}>
           <FicheDePersonne a={a} p={personne} ev={!!ev} changer={changer} />
         </Feuille>
       )}
@@ -748,7 +768,9 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
   switch (lieu) {
     case 'maison': return (
       <>
-        <p className="text-xs text-white/70">{dans(['Ta chambre, ton lit, le frigo des parents. Dormir le dimanche soir fait tourner la semaine.', 'Your room, your bed, your parents’ fridge. Sleeping on Sunday night turns the week.'])}</p>
+        <p className="text-xs text-white/70">{etape(a) === 'adulte'
+          ? dans([`Ton appartement. Le loyer (${LOYER} €) tombe le dimanche soir, quand la semaine tourne.`, `Your flat. Rent (€${LOYER}) is due on Sunday night, when the week turns.`])
+          : dans(['Ta chambre, ton lit, le frigo des parents. Dormir le dimanche soir fait tourner la semaine.', 'Your room, your bed, your parents’ fridge. Sleeping on Sunday night turns the week.'])}</p>
         {leJour && <p className="text-[11px] text-amber-300/80">{dans(['Aujourd’hui, c’est la compétition : passe à la gare avant de te coucher.', 'Today is race day: go to the station before bed.'])}</p>}
         <Actions a={a} lieu="maison" ev={ev} changer={changer} />
         <Programme />
@@ -886,7 +908,10 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
           <Carte titre={mot('club')} icone={Users}>
             {membre ? (
               <>
-                <p className="text-xs">{mot(a.club!)} · {mot(a.coach || '')}</p>
+                <p className="text-xs flex items-center gap-2">
+                  {a.club === 'quartier' && logoDuClub() && <img src={logoDuClub()!} alt="" className="h-8 w-auto" />}
+                  {nomDuClub(a.club!, mot(a.club!))} · {mot(a.coach || '')}
+                </p>
                 <div className="grid grid-cols-3 gap-2">
                   {(['coach', 'club', 'rival'] as const).map(k => (
                     <div key={k} className="flex flex-col gap-0.5">
@@ -919,15 +944,39 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
 
     case 'college': return (
       <>
-        <p className="text-xs text-white/70">{dans(['Les cours, les copains, le prof d’EPS qui t’a repéré. Il te suit de loin.', 'Classes, friends, the PE teacher who spotted you. He keeps an eye on you.'])}</p>
+        <p className="text-xs text-white/70">{etape(a) === 'college' ? dans(['Les cours, les copains, le prof d’EPS qui t’a repéré. Il te suit de loin.', 'Classes, friends, the PE teacher who spotted you. He keeps an eye on you.']) : dans(['Ton ancien collège. Les souvenirs du cross de sixième.', 'Your old secondary school. Memories of the year-7 cross-country.'])}</p>
         <Actions a={a} lieu="college" ev={ev} changer={changer} />
-        <p className="text-[11px] text-white/60">{dans(['Bulletin', 'Report card'])} · {Math.round(a.ecole ?? 60)} / 100</p>
+        {etape(a) === 'college' && <p className="text-[11px] text-white/60">{dans(['Bulletin', 'Report card'])} · {Math.round(a.ecole ?? 60)} / 100</p>}
         {a.objectif && <p className="text-[11px] text-white/60">{mot('objectif', { o: mot(COMPETITIONS[NIVEAU_OBJECTIF[a.objectif]].cle) })} · {mot('assiduite', { f: a.assiduite.faites, p: a.assiduite.proposees })}</p>}
         <Carte><Barres a={a} /></Carte>
       </>
     );
 
-    case 'lycee': return <p className="text-xs text-white/70">{dans(['Le lycée Marc Bloch t’attend en seconde. Les horaires aménagés, ça se demande.', 'Marc Bloch high school awaits you in year 10. Adjusted timetables can be asked for.'])}</p>;
+    case 'lycee': return (
+      <>
+        <p className="text-xs text-white/70">{etape(a) === 'lycee'
+          ? dans(['Ton lycée. Les horaires aménagés pour les sportifs, ça se demande à Mme Sarr.', 'Your high school. Adjusted timetables for athletes can be asked of Ms Sarr.'])
+          : etape(a) === 'college' ? dans(['Le lycée Marc Bloch t’attend en seconde.', 'Marc Bloch high school awaits you in year 10.']) : dans(['Ton ancien lycée.', 'Your old high school.'])}</p>
+        <Actions a={a} lieu="lycee" ev={ev} changer={changer} />
+        {etape(a) === 'lycee' && <p className="text-[11px] text-white/60">{dans(['Bulletin', 'Report card'])} · {Math.round(a.ecole ?? 60)} / 100</p>}
+      </>
+    );
+
+    case 'travail': return (
+      <>
+        <p className="text-xs text-white/70">{etape(a) === 'adulte'
+          ? dans(['La zone d’activité des Lacs : ton boulot de la semaine, de 9 h à 17 h. Il paie le loyer ; il te laisse les soirs pour t’entraîner.', 'The Les Lacs business park: your weekday job, 9 am to 5 pm. It pays the rent and leaves your evenings for training.'])
+          : dans(['Des entrepôts, des bureaux. Pas encore pour toi.', 'Warehouses, offices. Not for you yet.'])}</p>
+        <Actions a={a} lieu="travail" ev={ev} changer={changer} />
+      </>
+    );
+
+    case 'parents': return (
+      <>
+        <p className="text-xs text-white/70">{dans(['La maison de ton enfance. Il y a toujours une assiette pour toi.', 'Your childhood home. There’s always a plate for you.'])}</p>
+        <Actions a={a} lieu="parents" ev={ev} changer={changer} />
+      </>
+    );
 
     case 'mairie': return (
       <>

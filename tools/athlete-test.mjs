@@ -228,6 +228,27 @@ titre('les gens');
   ok('l\'etiquette suit la relation', R.etiquette(90)[0] === 'Inséparables' && R.etiquette(-60)[0] === 'En froid');
 }
 
+titre('l\'age et les etapes de vie');
+{
+  const jeune = R.nouvelAthlete('T', 'modeste', 'polyvalent', null, undefined, 13);
+  ok('13 ans : college, scolaire, l\'histoire du prof', R.etape(jeune) === 'college' && jeune.niveau === 0 && jeune.evenement === 'intro');
+  const lyc = R.nouvelAthlete('T', 'modeste', 'polyvalent', null, undefined, 16); lyc.heure = 8 * 60;
+  ok('16 ans : le lycee, pas le college', R.etape(lyc) === 'lycee' && R.actionPossible(lyc, 'cours') === 'etape' && R.actionPossible(lyc, 'cours_lycee') === null);
+  const ad = R.nouvelAthlete('T', 'modeste', 'polyvalent', null, undefined, 26); ad.heure = 8 * 60;
+  ok('26 ans : vie active, pas de lycee, departementaux d\'entree', R.etape(ad) === 'adulte' && R.actionPossible(ad, 'cours_lycee') === 'etape' && ad.niveau === 1 && ad.evenement === null);
+  const m0 = ad.argent;
+  R.faireUneAction(ad, 'travail');
+  ok('une journee de travail : 17 h, salaire verse', ad.heure === 17 * 60 && ad.argent === m0 + R.SALAIRE);
+  const m1 = ad.argent; R.finirLaSemaine(ad);
+  ok('le loyer tombe en fin de semaine', ad.argent === m1 - R.LOYER);
+  ok('le releve de compte garde la trace', ad.compte[0].fr === 'Loyer' && ad.compte[1].fr === 'Salaire');
+  ok('categories d\'age', R.categorie(13)[0] === 'Benjamin' && R.categorie(15)[0] === 'Minime' && R.categorie(26)[0] === 'Senior' && R.categorie(36)[0] === 'Master');
+  ok('adulte : Ines au travail, le patron aussi', (() => { ad.jour = 1; ad.heure = 10 * 60; return R.ouEst(ad, 'amie') === 'travail' && R.ouEst(ad, 'prof') === 'travail' && R.roleDe(ad, 'prof')[0] === 'Ton patron'; })());
+  ok('adulte : les parents chez eux', (() => { ad.heure = 20 * 60; return R.ouEst(ad, 'maman') === 'parents'; })());
+  const r = R.conclureLaCompetition(R.nouvelAthlete('T', 'aisee', 'polyvalent', null), '100', 1, 12.34);
+  ok('un premier chrono est un record personnel', r.record);
+}
+
 titre('le calage sur le direct, a partir de la France');
 {
   const a = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);

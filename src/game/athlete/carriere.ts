@@ -15,7 +15,7 @@ import { CARRIERE_ATHLETE_OUVERTE } from '../canal';
 import {
   type Athlete, type Epreuve, COMPETITIONS, reglages, coutDuDeplacement,
   conclureLaCompetition, finirLaSemaine, noter, declarerForfait, jourCale, type Resultat,
-  faireUneAction, avancer, heureDe, DIMANCHE,
+  faireUneAction, avancer, heureDe, DIMANCHE, payer,
   type RendezVousReel,
 } from './regles';
 import { tirerLaSemaine } from './recit';
@@ -135,7 +135,7 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve): boolean {
   const cout = coutDuDeplacement(a, a.niveau);
   if (a.argent < cout || a.blessure > 0 || !jourDeLAthlete(a).jour) return false;
   marquerLeRendezVous(a);
-  a.argent -= cout;
+  payer(a, -cout, 'Déplacement', 'Travel');
   sauver(a);
   const G = SprinterApp.G;
   enCourse = { a, epreuve, niveau: a.niveau };

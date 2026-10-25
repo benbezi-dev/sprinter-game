@@ -33,7 +33,7 @@ import { SprinterApp, SprinterCore } from '../engine';
 export type Lieu =
   | 'maison' | 'college' | 'stade' | 'club_quartier' | 'club_horizon' | 'kine'
   | 'boutique' | 'marche' | 'livraison' | 'babysitting' | 'gare' | 'cote' | 'parc'
-  | 'piscine' | 'mairie' | 'lycee';
+  | 'piscine' | 'mairie' | 'lycee' | 'travail' | 'parents';
 
 type P2 = [number, number];
 type Donnees = {
@@ -71,7 +71,12 @@ export const LIEUX: Record<Lieu, { ll?: P2; xz?: P2; vrai?: string }> = {
   parc: { xz: [608, -428], vrai: 'Parc de Sztum' },
   piscine: { ll: [49.27233, 1.21526], vrai: 'Piscine Alice Milliat' },
   mairie: { ll: [49.27293, 1.21662], vrai: 'Mairie' },
+  travail: { xz: [-96, -580], vrai: 'Zone d’activité des Lacs' },
+  // chez les parents : la maison de l'enfance ; un adulte habite son appartement, pres de la gare
+  parents: { ll: [49.2722, 1.2088] },
 };
+/** L'appartement d'un athlete adulte (Options.adulte) : la ou la maison de l'enfance etait. */
+const APPARTEMENT: P2 = [49.2748, 1.2226];
 
 /* ------------------------------------------------------------- le reseau */
 
@@ -407,6 +412,8 @@ type Options = {
   surPosition?: (p: P2) => void;
   /** La ville est prete (le fichier lu, la scene construite). */
   surPret?: () => void;
+  /** Un adulte : son appartement a la place de la maison, ses parents chez eux. */
+  adulte?: boolean;
   /** On a touche quelqu'un (gens.ts). */
   surPersonne?: (id: string) => void;
 };
@@ -748,7 +755,9 @@ export class Ville {
 
     // les lieux du jeu : leur porte (le point du reseau le plus proche), une enseigne
     for (const l of Object.keys(LIEUX) as Lieu[]) {
-      const L = LIEUX[l], [x, z] = L.xz || xz(L.ll!);
+      // la maison des parents n'est un lieu a part que pour un adulte
+      if (l === 'parents' && !this.o.adulte) continue;
+      const L = l === 'maison' && this.o.adulte ? { ll: APPARTEMENT } : LIEUX[l], [x, z] = L.xz || xz(L.ll!);
       const k = this.pietons.proche(x, z, 200);
       this.portes[l] = k >= 0 ? [this.pietons.xs[k], this.pietons.zs[k]] : [x, z];
       const el = document.createElement('div');

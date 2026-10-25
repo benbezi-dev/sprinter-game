@@ -18,7 +18,7 @@
 // des partenaires reels (docs/carriere-athlete.md). Ce fichier n'importe que
 // les regles, et rien qui dessine.
 
-import { type Athlete, type Epreuve, type Objectif, club, noter, NATIONAL } from './regles';
+import { type Athlete, type Epreuve, type Objectif, club, noter, NATIONAL, payer } from './regles';
 
 type Texte = [string, string];
 
@@ -52,7 +52,7 @@ function rejoindre(a: Athlete, id: string) {
   const c = club(id);
   if (!c) return;
   const gratuit = c.gratuitPourModeste && a.origine === 'modeste';
-  if (!gratuit) a.argent -= c.licence;
+  if (!gratuit) payer(a, -c.licence, 'Licence du club', 'Club licence');
   a.club = c.id;
   a.coach = c.coach;
   a.chapitre = 'club';
@@ -269,10 +269,10 @@ export const EVENEMENTS: Evenement[] = [
     choix: [
       { t: ['Partir en stage', 'Go to the camp'], d: ['−180 €. Toutes les stats +2, fatigue +20', '−€180. All stats +2, fatigue +20'],
         possible: a => a.argent >= 180,
-        faire: a => { a.argent -= 180; for (const k of ['vitesse', 'force', 'technique', 'endurance'] as const) a.stats[k] = Math.min(100, a.stats[k] + 2); fatigue(a, 20); rel(a, 'coach', 5); } },
+        faire: a => { payer(a, -180, 'Stage', 'Training camp'); for (const k of ['vitesse', 'force', 'technique', 'endurance'] as const) a.stats[k] = Math.min(100, a.stats[k] + 2); fatigue(a, 20); rel(a, 'coach', 5); } },
       { t: ['Le club t’aide : moitié prix', 'The club helps: half price'], d: ['−90 €. Toutes les stats +2', '−€90. All stats +2'],
         possible: a => a.origine === 'modeste' && a.relations.club >= 15 && a.argent >= 90,
-        faire: a => { a.argent -= 90; for (const k of ['vitesse', 'force', 'technique', 'endurance'] as const) a.stats[k] = Math.min(100, a.stats[k] + 2); fatigue(a, 20); rel(a, 'club', 5); } },
+        faire: a => { payer(a, -90, 'Stage', 'Training camp'); for (const k of ['vitesse', 'force', 'technique', 'endurance'] as const) a.stats[k] = Math.min(100, a.stats[k] + 2); fatigue(a, 20); rel(a, 'club', 5); } },
       { t: ['Rester à la maison', 'Stay home'], d: ['Moral −5', 'Morale −5'], faire: a => moral(a, -5) },
     ],
   },
@@ -286,7 +286,7 @@ export const EVENEMENTS: Evenement[] = [
     choix: [
       { t: ['Partir avec le groupe', 'Go with the group'], d: ['−250 €. Réputation +8, moral +12', '−€250. Reputation +8, morale +12'],
         possible: a => a.argent >= 250,
-        faire: a => { a.argent -= 250; a.reputation += 8; moral(a, 12); rel(a, 'club', 8); } },
+        faire: a => { payer(a, -250, 'Voyage du club', 'Club trip'); a.reputation += 8; moral(a, 12); rel(a, 'club', 8); } },
       { t: ['Pas cette fois', 'Not this time'], faire: a => moral(a, -4) },
     ],
   },

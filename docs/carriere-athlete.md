@@ -13,6 +13,28 @@ aller en cours, s'entraîner, voir ses amis, travailler), on joue chaque séance
 comme un vrai exercice, et on court chaque compétition dans le moteur de course
 du jeu. Les Sims pour la vie, Sprinter pour le sport.
 
+## Le modèle : Lagos Life, en athlète
+
+L'auteur, 25/10 : « Lagos Life, ce modèle de jeu mais basé sur la carrière
+d'athlète du niveau le plus bas au plus haut, en plus poussé en graphisme et
+jouabilité, plus basé sur le sport et la gestion de la carrière ».
+[Lagos Life](https://www.techloy.com/lagos-life-nigerian-browser-games/) est un
+simulateur de vie dans une ville réelle et partagée : un départ riche (« Nepo »)
+ou pauvre (« Lapo »), des besoins, un téléphone qui sert de centre (emplois,
+carrière), une carte et des transports qui coûtent, un logement, et d'autres
+vrais joueurs dans la même ville.
+
+| Lagos Life | La carrière d'athlète |
+|---|---|
+| Lagos | Val-de-Reuil (OpenStreetMap) ✓ |
+| Nepo / Lapo | Famille aisée / modeste ✓ |
+| Faim, énergie, hygiène, social | Les mêmes, plus le plaisir et la fatigue musculaire ✓ |
+| Le téléphone : emplois, carrière | Le téléphone : agenda, messages, carrière, classement, banque, contacts, carte ▶ |
+| Danfo, transports payants | À pied, vélo, bus Transbord ▶ |
+| Emplois et carrière | La carrière sportive : catégories, niveaux, records, classement, sélections ; les petits boulots à côté |
+| Logement, biens, entreprises | Plus tard : appartement près du pôle, matériel, équipementier, agent |
+| Autres vrais joueurs, élections | Plus tard : les athlètes des autres joueurs dans la ville et au classement, défis entre eux |
+
 ## Les quatre piliers
 
 | Pilier | Ce que le joueur fait | D'où vient le plaisir |
@@ -93,13 +115,28 @@ programme d'une semaine à l'autre ; seul, on fait ce qu'on peut au parc et à l
 côte. À venir : échauffement avant les courses, relais (passage de témoin),
 pliométrie, travail en salle l'hiver.
 
-## Les gens (tranche 2)
+## Les gens (tranche 2) ✓
 
 Parents, entraîneur, prof d'EPS, meilleur·e ami·e, rival·e, partenaire
 d'entraînement, kiné, plus tard agent, préparateur mental, nutritionniste. On
 les croise dans la ville ; on leur parle (discuter, plaisanter, demander
 conseil, s'entraîner ensemble, inviter). Chaque relation va de -100 à 100 et
 ouvre ou ferme des histoires.
+
+## Le téléphone (tranche 2 bis) ▶
+
+Le centre de commande, comme dans Lagos Life :
+- **Agenda** : la semaine, ses séances (où, quand), les cours, la compétition.
+- **Messages** : le coach rappelle la séance, Inès propose de sortir, Yanis
+  chambre avant la course, les parents réagissent au résultat.
+- **Carrière** : âge et catégorie FFA, niveau, records personnels par épreuve,
+  palmarès, prochaine compétition.
+- **Classement** : ta place parmi les sprinteurs de ta catégorie, épreuve par
+  épreuve, qui bouge quand tu bats ton record.
+- **Banque** : chaque entrée et sortie d'argent.
+- **Contacts** : les proches, appeler.
+- **Carte** : Val-de-Reuil vue d'en haut ; y aller à pied, à vélo (à acheter)
+  ou en bus (un ticket), chacun avec son temps et son prix.
 
 ## Humeurs, envies, aspirations (tranche 3)
 

@@ -19,7 +19,7 @@
 // `a.relations` (coach, rival) comme le recit ; les autres vivent dans `a.liens`.
 // Ce fichier ne depend que des regles : l'ecran et la ville le lisent.
 
-import { type Athlete, type Besoin, besoinsDe, jourDe, heureDe, avancer, noter } from './regles';
+import { type Athlete, type Besoin, besoinsDe, jourDe, heureDe, avancer, noter, payer, etape } from './regles';
 
 export type Personne = 'maman' | 'papa' | 'prof' | 'coach' | 'amie' | 'rival' | 'partenaire';
 export type Texte = [string, string];
@@ -27,7 +27,8 @@ export type Texte = [string, string];
 export const GENS: Record<Personne, { nom: (a: Athlete) => Texte; role: Texte; f: boolean }> = {
   maman: { nom: () => ['Ta mère', 'Your mum'], role: ['Famille', 'Family'], f: true },
   papa: { nom: () => ['Ton père', 'Your dad'], role: ['Famille', 'Family'], f: false },
-  prof: { nom: () => ['M. Roche', 'Mr Roche'], role: ['Prof d’EPS', 'PE teacher'], f: false },
+  // le prof d'EPS au college et au lycee ; a l'age adulte, c'est le patron qui tient ce role dans la semaine
+  prof: { nom: a => (etape(a) === 'college' ? ['M. Roche', 'Mr Roche'] : etape(a) === 'lycee' ? ['Mme Sarr', 'Ms Sarr'] : ['M. Lefèvre', 'Mr Lefèvre']), role: ['Prof d’EPS', 'PE teacher'], f: false },
   coach: {
     nom: a => (a.club === 'horizon' ? ['Coach Mireille', 'Coach Mireille'] : ['Coach Dédé', 'Coach Dédé']),
     role: ['Ton entraîneur', 'Your coach'], f: false,
@@ -40,7 +41,12 @@ export const PERSONNES = Object.keys(GENS) as Personne[];
 
 /* ---------------------------------------------------------------- ou ils sont */
 
-type LieuDeVie = 'maison' | 'college' | 'stade' | 'club_quartier' | 'club_horizon' | 'parc' | 'marche' | 'gare';
+type LieuDeVie = 'maison' | 'college' | 'lycee' | 'travail' | 'parents' | 'stade' | 'club_quartier' | 'club_horizon' | 'parc' | 'marche' | 'gare';
+
+/** Le role d'une personne, selon l'etape de vie (le prof devient le patron). */
+export const roleDe = (a: Athlete, p: Personne): Texte =>
+  p === 'prof' ? (etape(a) === 'adulte' ? ['Ton patron', 'Your boss'] : etape(a) === 'lycee' ? ['Prof d’EPS du lycée', 'High school PE teacher'] : GENS.prof.role)
+  : p === 'amie' && etape(a) === 'adulte' ? ['Ta meilleure amie, collègue', 'Your best friend, a colleague'] : GENS[p].role;
 
 const entre = (h: number, a: number, b: number) => h >= a * 60 && h < b * 60;
 const JOURS_SEANCE = [0, 2, 4];                   // lundi, mercredi, vendredi
@@ -50,14 +56,18 @@ export function ouEst(a: Athlete, p: Personne): LieuDeVie | null {
   const j = jourDe(a), h = heureDe(a), semaine = j < 5;
   const salle: LieuDeVie = a.club === 'horizon' ? 'club_horizon' : 'stade';
   const seance = (JOURS_SEANCE.includes(j) && entre(h, 16.5, 20.5)) || (j === 5 && entre(h, 9, 13));
+  const e = etape(a);
+  // l'ecole, ou le travail ; la maison des parents, qu'on quitte a l'age adulte
+  const ecole: LieuDeVie = e === 'college' ? 'college' : e === 'lycee' ? 'lycee' : 'travail';
+  const chezEux: LieuDeVie = e === 'adulte' ? 'parents' : 'maison';
   switch (p) {
-    case 'maman': return entre(h, 6.5, 8) || entre(h, 18, 23.5) || (!semaine && entre(h, 9, 23.5)) ? (j === 5 && entre(h, 9, 12) ? 'marche' : 'maison') : null;
-    case 'papa': return entre(h, 6.5, 7.75) || entre(h, 19, 23.5) || (j === 6 && entre(h, 9, 23.5)) ? 'maison' : j === 5 && entre(h, 14, 18) ? 'stade' : null;
-    case 'prof': return semaine && entre(h, 8, 17) ? 'college' : null;
+    case 'maman': return entre(h, 6.5, 8) || entre(h, 18, 23.5) || (!semaine && entre(h, 9, 23.5)) ? (j === 5 && entre(h, 9, 12) ? 'marche' : chezEux) : null;
+    case 'papa': return entre(h, 6.5, 7.75) || entre(h, 19, 23.5) || (j === 6 && entre(h, 9, 23.5)) ? chezEux : j === 5 && entre(h, 14, 18) ? 'stade' : null;
+    case 'prof': return semaine && entre(h, 8, 17) ? ecole : null;
     case 'coach': return a.club && seance ? salle : null;
-    case 'amie': return semaine && entre(h, 8, 16.5) ? 'college' : (semaine && entre(h, 17, 20)) || (j === 5 && entre(h, 14, 19)) ? 'parc' : null;
+    case 'amie': return semaine && entre(h, 8, 16.5) ? ecole : (semaine && entre(h, 17, 20)) || (j === 5 && entre(h, 14, 19)) ? 'parc' : null;
     // Yanis s'entraine aux memes heures ; sans club, on le voit au stade municipal
-    case 'rival': return seance ? (a.club ? salle : 'stade') : semaine && entre(h, 8, 16.5) ? 'college' : null;
+    case 'rival': return seance ? (a.club ? salle : 'stade') : semaine && entre(h, 8, 16.5) && e !== 'adulte' ? ecole : null;
     case 'partenaire': return a.club && seance ? salle : null;
   }
 }
@@ -184,8 +194,8 @@ export const INTERACTIONS: Interaction[] = [
     faire: (a, p, alea) => {
       a.argentParents = true;
       const aisee = a.origine === 'aisee', v = lienDe(a, p);
-      if (aisee && v > 0) { a.argent += 25; return ['« Tiens, 25 €. Pour tes pointes, pas pour les bonbons. »', '“Here, €25. For your spikes, not for sweets.”']; }
-      if (!aisee && v > 30 && alea() < 0.6) { a.argent += 8; return ['« C’est tout ce que j’ai ce mois-ci, mon cœur. »', '“That’s all I have this month, love.”']; }
+      if (aisee && v > 0) { payer(a, 25, 'Les parents', 'Parents'); return ['« Tiens, 25 €. Pour tes pointes, pas pour les bonbons. »', '“Here, €25. For your spikes, not for sweets.”']; }
+      if (!aisee && v > 30 && alea() < 0.6) { payer(a, 8, 'Les parents', 'Parents'); return ['« C’est tout ce que j’ai ce mois-ci, mon cœur. »', '“That’s all I have this month, love.”']; }
       changerLien(a, p, -3);
       return ['« L’argent ne pousse pas sur les arbres. »', '“Money doesn’t grow on trees.”'];
     },
@@ -198,7 +208,7 @@ export const INTERACTIONS: Interaction[] = [
     id: 'pizza', avec: ['amie'], duree: 60, texte: ['Inviter à manger une pizza (24 €)', 'Invite for a pizza (€24)'],
     possible: a => (a.argent < 24 ? ['Pas assez d’argent', 'Not enough money'] : null),
     faire: (a, p, alea) => {
-      a.argent -= 24; changerLien(a, p, 12); besoin(a, 'faim', 60); besoin(a, 'social', 30); besoin(a, 'plaisir', 20);
+      payer(a, -24, 'Pizza avec Inès', 'Pizza with Inès'); changerLien(a, p, 12); besoin(a, 'faim', 60); besoin(a, 'social', 30); besoin(a, 'plaisir', 20);
       return parmi<Texte>([['« La meilleure soirée de la semaine. »', '“Best evening of the week.”'], ['« Tu m’invites ? T’es le meilleur. »', '“You’re paying? You’re the best.”']], alea);
     },
   },

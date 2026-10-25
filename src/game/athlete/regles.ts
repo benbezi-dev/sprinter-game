@@ -75,6 +75,12 @@ export type Athlete = {
   besoins?: Record<Besoin, number>;
   /** L'ecole : 0 a 100, les cours et les devoirs la montent, secher la fait baisser. */
   ecole?: number;
+  /** LE TELEPHONE (telephone.ts) : le releve de compte, les messages, les records, l'age, le velo. */
+  compte?: { s: number; j: number; m: number; fr: string; en: string }[];
+  messages?: { de: string; fr: string; en: string; s: number; j: number; h: number; lu?: boolean }[];
+  records?: Partial<Record<Epreuve, number>>;
+  age?: number;
+  velo?: boolean;
   /** LES GENS (gens.ts) : les relations hors coach et rival, qui l'on a vu cette semaine. */
   liens?: Record<string, number>;
   vus_semaine?: string[];
@@ -161,7 +167,7 @@ export function chezLeKine(a: Athlete): null | 'fait' | 'argent' {
   if (a.kine) return 'fait';
   const p = prixDuKine(a);
   if (a.argent < p) return 'argent';
-  a.argent -= p;
+  payer(a, -p, 'Kiné', 'Physio');
   a.kine = true;
   a.fatigue = borne(a.fatigue - 25, 0, 100);
   if (a.blessure > 0) a.blessure -= 1;
@@ -305,6 +311,35 @@ export const APPARENCE: Apparence = { corps: 'f', peau: 'miel', coiffure: 'ponyt
 const borne = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const rond = (v: number) => Math.round(v * 10) / 10;
 
+/**
+ * Tout mouvement d'argent passe par ici : le solde, et une ligne au releve de
+ * la banque (le telephone). `m` positif : on recoit ; negatif : on paie.
+ */
+export function payer(a: Athlete, m: number, fr: string, en: string) {
+  if (!m) return;
+  a.argent += m;
+  (a.compte ||= []).unshift({ s: a.semaine, j: a.jour ?? 0, m, fr, en });
+  if (a.compte.length > 40) a.compte.length = 40;
+}
+
+/** L'age fait la categorie d'age de l'athletisme (une par saison). Jamais presentee comme celle d'une federation : l'auteur n'a pas de contrat avec la FFA (25/10). */
+export const SAISON = 36;
+export type Etape = 'college' | 'lycee' | 'adulte';
+/** L'etape de vie : le college jusqu'a 14 ans, le lycee jusqu'a 17, la vie active ensuite. */
+export const etape = (a: Athlete): Etape => ((a.age ?? 14) <= 14 ? 'college' : (a.age ?? 14) <= 17 ? 'lycee' : 'adulte');
+export const LOYER = 110;
+export const SALAIRE = 65;
+
+export function categorie(age: number): [string, string] {
+  if (age <= 13) return ['Benjamin', 'Under-14'];
+  if (age <= 15) return ['Minime', 'Under-16'];
+  if (age <= 17) return ['Cadet', 'Under-18'];
+  if (age <= 19) return ['Junior', 'Under-20'];
+  if (age <= 22) return ['Espoir', 'Under-23'];
+  if (age >= 35) return ['Master', 'Masters'];
+  return ['Senior', 'Senior'];
+}
+
 export function noter(a: Athlete, fr: string, en: string) {
   a.journal.unshift({ s: a.semaine, fr, en });
   if (a.journal.length > 40) a.journal.length = 40;
@@ -313,17 +348,19 @@ export function noter(a: Athlete, fr: string, en: string) {
 /* ------------------------------------------------------------ la naissance */
 
 export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, specialite: Epreuve | null,
-                             apparence: Apparence = APPARENCE): Athlete {
+                             apparence: Apparence = APPARENCE, age = 14): Athlete {
   const aisee = origine === 'aisee';
-  return {
+  // un adulte a deja un corps forme, un peu d'argent de cote, et ne passe plus par le scolaire
+  const adulte = age >= 18, plus = adulte ? 6 : age >= 15 ? 3 : 0;
+  const a: Athlete = {
     v: 2,
     nom: nom || 'TOI',
     origine,
     voie,
     specialite: voie === 'specialiste' ? (specialite || '100') : null,
     apparence: { ...apparence },
-    stats: { vitesse: 28, force: 24, technique: 22, endurance: 26 },
-    argent: aisee ? 600 : 20,
+    stats: { vitesse: 28 + plus, force: 24 + plus, technique: 22 + plus, endurance: 26 + plus },
+    argent: adulte ? (aisee ? 900 : 150) : aisee ? 600 : 20,
     fatigue: 0,
     moral: 70,
     blessure: 0,
@@ -335,7 +372,7 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
     objectif: null,
     // Une famille aisee equipe son enfant des le premier jour.
     materiel: aisee ? ['pointes1', 'tenue'] : [],
-    niveau: 0,
+    niveau: adulte ? 1 : 0,
     prochaine: 3,
     reputation: 0,
     abonnes: 0,
@@ -351,7 +388,14 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
     heure: 7 * 60,
     besoins: { energie: 90, faim: 80, hygiene: 90, social: 70, plaisir: 70 },
     ecole: 60,
+    age,
+    compte: [],
+    messages: [],
+    records: {},
   };
+  // l'histoire commence par le prof d'EPS au college ; a l'age adulte, elle commence sans lui
+  if (adulte) a.evenement = null;
+  return a;
 }
 
 /* ------------------------------------------------------------ s'entrainer */
@@ -431,7 +475,7 @@ export function prendreUnBoulot(a: Athlete, id: string): boolean {
   if (!b || a.boulot) return false;
   if (b.prend && a.faites.includes(b.prend)) return false;
   a.boulot = id;
-  a.argent += b.gain;
+  payer(a, b.gain, 'Petit boulot', 'Side job');
   a.fatigue = borne(a.fatigue + b.fatigue, 0, 100);
   return true;
 }
@@ -449,7 +493,7 @@ export function achatPossible(a: Athlete, id: string): null | 'possede' | 'argen
 export function acheter(a: Athlete, id: string): boolean {
   if (achatPossible(a, id)) return false;
   const p = piece(id)!;
-  a.argent -= p.prix;
+  payer(a, -p.prix, 'Matériel', 'Kit');
   if (p.remplace) a.materiel = a.materiel.filter(x => x !== p.remplace);
   a.materiel.push(id);
   return true;
@@ -527,6 +571,8 @@ export type Resultat = {
   reputation: number;
   /** Champion du monde ? */
   sommet: boolean;
+  /** Un nouveau record personnel ? */
+  record?: boolean;
 };
 
 /**
@@ -539,17 +585,21 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   const podium = chrono !== null && place <= QUALIFIES;
   const prime = podium ? Math.round(c.prime * (place === 1 ? 1 : place === 2 ? 0.6 : 0.4)) : 0;
   const rep = podium ? Math.round(c.reputation * (place === 1 ? 1 : 0.6)) : Math.round(c.reputation * 0.15);
-  a.argent += prime;
+  payer(a, prime, 'Prime de course', 'Prize money');
   a.reputation += rep;
   a.abonnes += rep * (a.niveau >= NATIONAL ? 40 : 10);
   a.moral = borne(a.moral + (place === 1 ? 15 : podium ? 8 : -10), 0, 100);
   a.palmares.unshift({ s: a.semaine, niveau, epreuve, place, chrono });
+  // le record personnel : le meilleur chrono de l'epreuve
+  const rec = a.records ||= {};
+  const record = chrono !== null && (rec[epreuve] === undefined || chrono < rec[epreuve]!);
+  if (record) rec[epreuve] = Math.round(chrono! * 100) / 100;
   const sommet = niveau === COMPETITIONS.length - 1 && place === 1 && chrono !== null;
   if (podium && niveau < COMPETITIONS.length - 1) a.niveau += 1;
   a.prochaine = a.semaine + ecart(a.niveau);
   // Un nouveau cycle commence : l'assiduite se recompte jusqu'a la prochaine.
   a.assiduite = { proposees: 0, faites: 0 };
-  return { niveau, epreuve, place, chrono, qualifie: podium && niveau < COMPETITIONS.length - 1, prime, reputation: rep, sommet };
+  return { niveau, epreuve, place, chrono, qualifie: podium && niveau < COMPETITIONS.length - 1, prime, reputation: rep, sommet, record };
 }
 
 /** Ne pas aller a la competition (pas les moyens, blesse, ou choix). */
@@ -592,8 +642,11 @@ export const ARGENT_DE_POCHE = 30;
 export function finirLaSemaine(a: Athlete) {
   const recup = a.materiel.reduce((s, id) => s + (piece(id)?.recup || 0), 0);
   a.fatigue = borne(a.fatigue - 45 - recup, 0, 100);
-  if (a.origine === 'aisee') a.argent += ARGENT_DE_POCHE;
-  a.argent += a.sponsors.length * 60;
+  if (a.origine === 'aisee' && etape(a) !== 'adulte') payer(a, ARGENT_DE_POCHE, 'Argent de poche', 'Pocket money');
+  if (etape(a) === 'adulte') payer(a, -LOYER, 'Loyer', 'Rent');
+  payer(a, a.sponsors.length * 60, 'Sponsors', 'Sponsors');
+  // une nouvelle saison : un an de plus, peut-etre une nouvelle categorie
+  if (a.semaine % SAISON === 0) a.age = (a.age ?? 14) + 1;
   // Trois seances proposees par semaine (le samedi reste un bonus).
   if (a.blessure === 0) a.assiduite.proposees += 3;
   const faitesSemaine = a.faites.filter(j => j !== 'samedi').length;
@@ -649,7 +702,9 @@ export function avancer(a: Athlete, minutes: number, effets: Partial<Record<Beso
   if (enSemaine(a) && h0 < 9 * 60 && h >= 9 * 60 && !a.cours) {
     a.ecole = borne((a.ecole ?? 60) - 5, 0, 100);
     a.moral = borne(a.moral - 3, 0, 100);
-    noter(a, 'Absent au collège : le CPE a appelé à la maison.', 'Missed school: the office called home.');
+    const e = etape(a);
+    if (e === 'adulte') noter(a, 'Absent au travail : le patron n’est pas content, et la journée n’est pas payée.', 'Missed work: the boss isn’t happy, and the day isn’t paid.');
+    else noter(a, e === 'lycee' ? 'Absent au lycée : la vie scolaire a appelé tes parents.' : 'Absent au collège : le CPE a appelé à la maison.', e === 'lycee' ? 'Missed school: the office called your parents.' : 'Missed school: the office called home.');
     out.push('absence');
   }
   while (h >= 24 * 60) { h -= 24 * 60; a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
@@ -691,6 +746,9 @@ export const ACTIONS: Action[] = [
   { id: 'console', lieu: 'maison', duree: 60, effets: { plaisir: 40, energie: -2 } },
   { id: 'telephone', lieu: 'maison', duree: 30, effets: { social: 28, plaisir: 6 } },
   { id: 'cours', lieu: 'college', duree: 'cours', effets: { social: 30, faim: 45, energie: -10 }, quand: [7 * 60, 9 * 60], semaine: true },
+  { id: 'cours_lycee', lieu: 'lycee', duree: 'cours', effets: { social: 28, faim: 45, energie: -12 }, quand: [7 * 60, 9 * 60], semaine: true },
+  { id: 'travail', lieu: 'travail', duree: 'cours', effets: { social: 15, faim: 40, energie: -16 }, quand: [7 * 60, 9 * 60], semaine: true },
+  { id: 'manger_parents', lieu: 'parents', duree: 45, effets: { faim: 70, social: 20, plaisir: 6 } },
   { id: 'pizza', lieu: 'livraison', duree: 40, cout: 12, effets: { faim: 70, plaisir: 16 } },
   { id: 'fruits', lieu: 'marche', duree: 15, cout: 5, effets: { faim: 25, energie: 4 }, quand: [8 * 60, 13 * 60] },
   { id: 'discuter_parc', lieu: 'parc', duree: 30, effets: { social: 22, plaisir: 8 } },
@@ -699,10 +757,13 @@ export const ACTIONS: Action[] = [
 export const action = (id: string) => ACTIONS.find(x => x.id === id);
 
 /** Peut-on faire cette action maintenant ? Rend la raison sinon. */
-export function actionPossible(a: Athlete, id: string): null | 'heure' | 'argent' | 'fait' | 'week-end' {
+export function actionPossible(a: Athlete, id: string): null | 'heure' | 'argent' | 'fait' | 'week-end' | 'etape' {
   const x = action(id); if (!x) return 'heure';
+  // l'ecole et le travail suivent l'age
+  const e = etape(a);
+  if ((id === 'cours' && e !== 'college') || (id === 'cours_lycee' && e !== 'lycee') || (id === 'travail' && e !== 'adulte')) return 'etape';
   if (x.semaine && !enSemaine(a)) return 'week-end';
-  if (x.id === 'cours' && a.cours) return 'fait';
+  if (x.duree === 'cours' && a.cours) return 'fait';
   const h = heureDe(a);
   if (x.quand && (h < x.quand[0] || h > x.quand[1])) return 'heure';
   if (x.cout && a.argent < x.cout) return 'argent';
@@ -717,10 +778,12 @@ export function actionPossible(a: Athlete, id: string): null | 'heure' | 'argent
 export function faireUneAction(a: Athlete, id: string): null | string {
   const r = actionPossible(a, id); if (r) return r;
   const x = action(id)!;
-  if (x.cout) a.argent -= x.cout;
+  if (x.cout) payer(a, -x.cout, x.id === 'pizza' ? 'Pizzeria' : 'Marché', x.id === 'pizza' ? 'Pizzeria' : 'Market');
   if (x.duree === 'nuit') { dormir(a); return null; }
   if (x.duree === 'cours') {
     a.cours = true;
+    // la journee de travail finit a 17 h et se paie ; la journee de cours finit a 16 h 30
+    if (id === 'travail') { avancer(a, Math.max(30, 17 * 60 - heureDe(a)), x.effets); payer(a, SALAIRE, 'Salaire', 'Wages'); return null; }
     a.ecole = borne((a.ecole ?? 60) + 3, 0, 100);
     avancer(a, Math.max(30, 16 * 60 + 30 - heureDe(a)), x.effets);
     return null;

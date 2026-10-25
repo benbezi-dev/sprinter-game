@@ -9,6 +9,7 @@ import { mot, dans, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe } from '@/game/athlete/apparence';
 import { POSTURES } from '@/game/athlete/postures';
 import { bonusDeSeance } from '@/game/athlete/gens';
+import { CLUB_PARTENAIRE, logoDuClub } from '@/game/athlete/partenaires';
 
 /* ---------------------------------------------------------------------------
    LES SEANCES : UN MINI-JEU PAR VRAI EXERCICE, JOUE PAR L'ATHLETE
@@ -105,6 +106,9 @@ function plusBas(caps: any[]): number {
 const fixe = (i: number) => ((Math.sin(i * 127.1) * 43758.5453) % 1 + 1) % 1;
 
 type Particule = { x: number; y: number; vx: number; vy: number; t: number; c: string; r: number };
+
+/** Le logo du club partenaire, charge une fois (partenaires.ts). */
+const LOGO: HTMLImageElement | null = (() => { const s = logoDuClub(); if (!s || typeof Image === 'undefined') return null; const i = new Image(); i.src = s; return i; })();
 
 function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -244,6 +248,19 @@ function decor(c: CanvasRenderingContext2D, e: EtatScene, W: number, H: number, 
         c.beginPath(); c.arc(x + 7, tY + 10 + r * (tH - 16) / 4, 4, 0, Math.PI * 2); c.fill();
       }
       c.fillStyle = '#5E9450'; c.fillRect(0, tY + tH, W, H * 0.07);
+      // le club partenaire (partenaires.ts) : ses panneaux defilent au bord de la piste
+      if (CLUB_PARTENAIRE) {
+        const pas = W * 0.7, off2 = ((d * ppm) % pas + pas) % pas;
+        for (let x = -off2; x < W + pas; x += pas) {
+          c.fillStyle = CLUB_PARTENAIRE.couleurs[0]; c.fillRect(x, tY + tH + 2, W * 0.5, H * 0.05);
+          if (LOGO && LOGO.complete && LOGO.naturalWidth) {
+            const h = H * 0.042, l = h * LOGO.naturalWidth / LOGO.naturalHeight;
+            c.drawImage(LOGO, x + 6, tY + tH + 2 + H * 0.004, l, h);
+          }
+          c.fillStyle = CLUB_PARTENAIRE.couleurs[1]; c.font = `900 ${Math.round(H * 0.026)}px system-ui`; c.textAlign = 'left';
+          c.fillText(CLUB_PARTENAIRE.court, x + H * 0.1, tY + tH + H * 0.035);
+        }
+      }
       // la piste : rouge, couloirs blancs plus espaces vers l'avant (la perspective)
       const pY = tY + tH + H * 0.07;
       c.fillStyle = '#C8553D'; c.fillRect(0, pY, W, H - pY);
