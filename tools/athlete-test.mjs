@@ -391,5 +391,16 @@ titre('le plafond : un dixieme au plus');
   ok('le debutant perd franchement', chrono('100', 8, null) - chrono('100', 8, R.reglages(a, 0)) < -0.3);
 }
 
+titre('les tours : series, demies, finale (format du direct)');
+{
+  const t = R.apresLeTour;
+  ok('1er et 2e de serie : demi-finale, en direct', t('serie', 2).suivant === 'demie' && !t('serie', 2).auTemps);
+  ok('3e et 4e de serie : demi-finale au temps', t('serie', 4).suivant === 'demie' && t('serie', 3).auTemps);
+  ok('5e de serie : elimine, 21e', t('serie', 5).suivant === null && t('serie', 5).placeFinale === 21);
+  ok('4e de demie : finale au temps', t('demie', 4).suivant === 'finale' && t('demie', 4).auTemps);
+  ok('8e de demie : 16e', t('demie', 8).suivant === null && t('demie', 8).placeFinale === 16);
+  ok('la finale ne qualifie pour rien', t('finale', 1).suivant === null && t('finale', 1).placeFinale === 1);
+}
+
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
 process.exit(e ? 1 : 0);

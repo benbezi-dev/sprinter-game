@@ -58,6 +58,8 @@ const ord = (n: number) => {
   const N = (globalThis as any).SprinterI18N;
   return N && N.ord ? N.ord(n) : String(n);
 };
+/** « place » est feminin : la 1re place, pas « 1er place ». */
+const ordPlace = (n: number) => (n === 1 ? dans(['1re', ord(1)]) : ord(n));
 
 /** L'athlete en memoire pour la visite : le meme objet pour tous les ecrans. */
 let courant: Athlete | null | undefined;
@@ -864,7 +866,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
             {a.palmares.slice(0, 6).map((p, i) => (
               <p key={i} className="text-xs text-white/75 flex justify-between gap-2">
                 <span className="truncate">{mot(COMPETITIONS[p.niveau].cle)} · {p.epreuve} m</span>
-                <span className="tabular-nums shrink-0">{p.chrono === null ? mot('faux') : `${mot('place', { o: ord(p.place) })} · ${p.chrono.toFixed(2)}`}</span>
+                <span className="tabular-nums shrink-0">{p.chrono === null ? mot('faux') : `${mot('place', { o: ordPlace(p.place) })} · ${p.chrono.toFixed(2)}`}</span>
               </p>
             ))}
           </Carte>
@@ -1120,8 +1122,10 @@ export function FinDeCourseAthlete() {
     (SprinterApp as any).goHome();
   };
   const suivant = r && r.qualifie ? COMPETITIONS[r.niveau + 1] : null;
-  // qualifie en serie : la finale de l'apres-midi, sans repayer le deplacement
-  const finale = () => { const a = athlete(); if (a && r) partirALaCompetition(a, r.epreuve, true); };
+  // qualifie : le tour suivant, l'apres-midi ou le soir, sans repayer le deplacement
+  const tourSuivant = () => { const a = athlete(); if (a && r?.suivant && r.suivant !== 'serie') partirALaCompetition(a, r.epreuve, r.suivant); };
+  const NOM_DU_TOUR: Record<string, [string, string]> = { serie: ['SÉRIE', 'HEAT'], demie: ['DEMI-FINALE', 'SEMI-FINAL'], finale: ['FINALE', 'FINAL'] };
+  const vers: [string, string] = r?.suivant === 'demie' ? ['LA DEMI-FINALE', 'THE SEMI-FINAL'] : ['LA FINALE', 'THE FINAL'];
 
   return (
     <div className="absolute inset-0 z-30 pointer-events-auto flex items-center justify-center
@@ -1132,13 +1136,15 @@ export function FinDeCourseAthlete() {
             <span className="text-[10px] font-bold tracking-[0.28em]" style={{ color: VERT }}>
               {mot(COMPETITIONS[r.niveau].cle).toUpperCase()} · {r.epreuve} M
             </span>
-            {r.tour && <span className="text-[10px] font-black tracking-[0.3em] text-white/60">{r.tour === 'serie' ? dans(['SÉRIE', 'HEAT']) : dans(['FINALE', 'FINAL'])}</span>}
+            {r.tour && <span className="text-[10px] font-black tracking-[0.3em] text-white/60">{dans(NOM_DU_TOUR[r.tour])}</span>}
             <span className={`font-black font-display text-3xl sm:text-4xl uppercase tracking-tight leading-[0.95]
-                              ${r.chrono !== null && (r.place <= 3 || r.finale) ? 'text-white' : 'text-destructive'}`}>
-              {r.finale ? dans(['QUALIFIÉ·E POUR LA FINALE', 'THROUGH TO THE FINAL'])
-                : r.sommet ? mot('sommet') : r.chrono === null ? mot('faux') : r.tour === 'serie' ? dans(['ÉLIMINÉ·E EN SÉRIE', 'OUT IN THE HEATS']) : mot('place', { o: ord(r.place) })}
+                              ${r.chrono !== null && (r.place <= 3 || r.suivant) ? 'text-white' : 'text-destructive'}`}>
+              {r.suivant ? `${dans(['QUALIFIÉ·E', 'THROUGH'])}${r.auTemps ? dans([' AU TEMPS', ' ON TIME']) : ''} ${dans(['POUR', 'TO'])} ${dans(vers)}`
+                : r.sommet ? mot('sommet') : r.chrono === null ? mot('faux')
+                : r.tour === 'serie' ? dans(['ÉLIMINÉ·E EN SÉRIE', 'OUT IN THE HEATS']) : r.tour === 'demie' ? dans(['ÉLIMINÉ·E EN DEMI-FINALE', 'OUT IN THE SEMI-FINALS'])
+                : mot('place', { o: ordPlace(r.place) })}
             </span>
-            {r.chrono !== null && <span className="font-black tabular-nums text-xl">{r.chrono.toFixed(2)} s{r.finale ? ` · ${ord(r.place)}` : ''}</span>}
+            {r.chrono !== null && <span className="font-black tabular-nums text-xl">{r.chrono.toFixed(2)} s{r.suivant ? ` · ${ord(r.place)}` : ''}</span>}
             {r.vent != null && (
               <span className="text-xs" style={{ color: r.homologue ? undefined : '#F5A623' }}>
                 {dans(['Vent', 'Wind'])} {r.vent > 0 ? '+' : ''}{r.vent.toFixed(1)} m/s{!r.homologue && dans([' · trop de vent : record non homologué', ' · wind too strong: not a legal record'])}
@@ -1146,7 +1152,7 @@ export function FinDeCourseAthlete() {
             )}
             {r.record && <span className="text-sm font-black" style={{ color: VERT }}>{dans(['RECORD PERSONNEL !', 'PERSONAL BEST!'])}</span>}
             {r.blessure && <span className="text-sm font-bold text-red-400">{dans(BLESSURES[r.blessure].nom)} · {dans(['va voir le médecin du sport', 'see the sports doctor'])}</span>}
-            {!r.finale && (
+            {!r.suivant && (
               <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
                 {suivant ? mot('qualifie', { c: mot(suivant.cle) }) : !r.sommet ? mot('pas_qualifie', { n: ecart(r.niveau) }) : null}
               </span>
@@ -1156,8 +1162,8 @@ export function FinDeCourseAthlete() {
             </span>
           </>
         )}
-        {r?.finale && <Bouton plein className="px-8 py-3 mt-2" onClick={finale}>{dans(['COURIR LA FINALE', 'RUN THE FINAL'])}</Bouton>}
-        <Bouton plein={!r?.finale} className="px-8 py-3 mt-2" onClick={retour}>{r?.finale ? dans(['Renoncer à la finale', 'Skip the final']) : mot('retour_carriere')}</Bouton>
+        {r?.suivant && <Bouton plein className="px-8 py-3 mt-2" onClick={tourSuivant}>{dans(['COURIR', 'RUN'])} {dans(vers)}</Bouton>}
+        <Bouton plein={!r?.suivant} className="px-8 py-3 mt-2" onClick={retour}>{r?.suivant ? dans(['Renoncer', 'Withdraw']) : mot('retour_carriere')}</Bouton>
       </motion.div>
     </div>
   );

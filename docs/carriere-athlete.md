@@ -165,9 +165,12 @@ Sources citées dans le relevé ; ce qui n'est pas vérifié en ligne est marqu�
 ## Courir (tranche 5) — en partie ✓
 
 ✓ Échauffement à la gare, vent affiché (record homologué à +2,0 m/s au plus,
-pas de vent au 400 m), séries puis finale à partir du niveau France (les 3
-premiers de la série passent), certificat médical de la saison exigé des
-adultes. Reste : chambre d'appel, photo-finish, interview, réseaux.
+pas de vent au 400 m), certificat médical de la saison exigé des adultes.
+✓ À partir des France, le format du championnat en direct : séries, demi-finales
+(13 h 30), finale (19 h) ; 2 qualifiés directs par course et 2 au temps (le
+direct repêche 8 sur 4 séries et 4 sur 2 demies). La date des France, d'Europe
+et du Monde suit l'édition annoncée en direct quand il y en a une
+(`rendezVousDe`) ; sinon le dimanche de la semaine de jeu. Reste : chambre d'appel, photo-finish, interview, réseaux.
 
 ## Le corps (tranche 5) ✓ — des conséquences, pas du hasard
 
@@ -186,6 +189,12 @@ tibia atteint le grade 3), l'examen adapté retire une semaine d'arrêt ; sans
 diagnostic, l'arrêt s'allonge d'une semaine. Reste à charge : rien pour un
 mineur de famille aisée, 15 % pour un mineur, 35 % pour un adulte,
 l'ostéopathe jamais remboursé. Montants de jeu, pas des tarifs réels.
+
+## Interclubs (après toutes les épreuves)
+
+L'auteur, 25/10 : « lorsque toutes les épreuves seront prêtes, on mettra en
+place les interclubs avec chaque club inscrit dans le jeu ». À faire une fois
+toutes les épreuves jouables ; les clubs réels seulement avec accord écrit.
 
 ## Ce qui ne change pas
 

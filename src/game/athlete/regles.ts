@@ -590,12 +590,30 @@ export type Resultat = {
   /** Le vent (m/s, 100 et 200 m), et si le chrono vaut record (vent de +2,0 au plus). */
   vent?: number | null;
   homologue?: boolean;
-  /** A partir des France : la serie du matin, qualifie pour la finale ? */
-  tour?: 'serie' | 'finale';
-  finale?: boolean;
+  /** A partir des France : le tour couru, et le tour suivant s'il est qualifie (au temps ou non). */
+  tour?: Tour;
+  suivant?: Tour;
+  auTemps?: boolean;
   /** Blesse pendant la course ? */
   blessure?: TypeBlessure;
 };
+
+/**
+ * LES TOURS, au format du championnat en direct (worker/src/championnats-config.js) :
+ * 4 series de 8, 2 demi-finales de 8, la finale ; par course, 2 qualifies directs
+ * et le repechage au temps (8 sur 4 series, 4 sur 2 demies). Le dimanche du direct
+ * donne les heures : demies a 13 h 30, finale a 19 h.
+ */
+export type Tour = 'serie' | 'demie' | 'finale';
+export const HEURE_DU_TOUR: Record<Tour, number> = { serie: 10 * 60 + 30, demie: 13 * 60 + 30, finale: 19 * 60 };
+export function apresLeTour(tour: Tour, place: number): { suivant: Tour | null; auTemps: boolean; placeFinale: number } {
+  if (tour === 'finale') return { suivant: null, auTemps: false, placeFinale: place };
+  // shortcut: seule la course du joueur est courue ; le repechage au temps vaut deux places
+  // par course (3e et 4e), ce qu'il donne en moyenne en direct. Simuler les autres courses si l'on veut l'exact.
+  if (place <= 4) return { suivant: tour === 'serie' ? 'demie' : 'finale', auTemps: place > 2, placeFinale: place };
+  // elimine : 17e a 32e en serie, 9e a 16e en demie
+  return { suivant: null, auTemps: false, placeFinale: place + (tour === 'serie' ? 16 : 8) };
+}
 
 /**
  * Ranger une competition courue. Les trois premiers montent d'un niveau ;
