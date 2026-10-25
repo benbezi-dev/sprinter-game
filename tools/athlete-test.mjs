@@ -160,6 +160,38 @@ titre('les exercices, le kine, le parc');
   ok('la semaine suivante, on peut y retourner', !a.kine && !a.footing);
 }
 
+titre('la journee, comme les Sims');
+{
+  const a = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);
+  ok('on se reveille un lundi a 7 h', a.jour === 0 && a.heure === 420);
+  const f0 = a.besoins.faim;
+  R.avancer(a, 60);
+  ok('une heure passe : la faim baisse', a.besoins.faim < f0 && a.heure === 480);
+  ok('a 8 h, on peut aller en cours', R.actionPossible(a, 'cours') === null);
+  const ev = R.avancer(a, 61);
+  ok('9 h passe sans cours : absence notee', ev.includes('absence') && a.ecole < 60);
+  const b = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); b.heure = 8 * 60;
+  R.faireUneAction(b, 'cours');
+  ok('les cours menent a 16 h 30', b.heure === 990 && b.cours && b.ecole > 60);
+  ok('pas deux fois les cours', R.actionPossible(b, 'cours') === 'fait');
+  ok('lundi 16 h 30 : la seance du lundi est ouverte', R.seanceMaintenant(b, 'lundi') === null);
+  ok('mais pas celle du mercredi', R.seanceMaintenant(b, 'mercredi') === 'pas_ce_jour');
+  b.heure = 22 * 60; b.besoins.energie = 20;
+  R.faireUneAction(b, 'dormir');
+  ok('dormir : mardi 7 h, l\'energie remontee', b.jour === 1 && b.heure === 420 && b.besoins.energie > 90);
+  const c = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); c.evenement = null;
+  c.jour = 6; c.heure = 22 * 60; c.semaine = c.prochaine;
+  const s0 = c.semaine;
+  R.faireUneAction(c, 'dormir');
+  ok('dormir le dimanche soir tourne la semaine', c.semaine === s0 + 1 && c.jour === 0);
+  ok('une competition manquee devient un forfait', c.journal.some(l => /Forfait/.test(l.fr)));
+  const d = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);
+  const plein = R.gainDeSeance(d, 'lundi', 1).vitesse;
+  d.besoins.energie = 5; d.besoins.faim = 5;
+  ok('a jeun et sans sommeil, la seance rend moins', R.gainDeSeance(d, 'lundi', 1).vitesse < plein);
+  ok('la pizza coute', (() => { const e = R.nouvelAthlete('T', 'modeste', 'polyvalent', null); e.argent = 5; return R.actionPossible(e, 'pizza') === 'argent'; })());
+}
+
 titre('le calage sur le direct, a partir de la France');
 {
   const a = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);

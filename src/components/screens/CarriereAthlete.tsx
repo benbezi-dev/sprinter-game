@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import {
   Footprints, ChevronRight, ChevronLeft, X, Trophy, Wallet, HeartPulse, BatteryMedium,
   Briefcase, ShoppingBag, Users, BookOpen, Flag, Star, Smartphone, MapPin, RotateCcw, RotateCw,
+  Zap, Utensils, ShowerHead, MessageCircle, Smile, Pause, Play, FastForward,
 } from 'lucide-react';
 import { PANNEAU } from '@/lib/mouvement';
 import { SprinterApp, useGameStore } from '@/game/engine';
@@ -15,11 +16,12 @@ import {
   bonusMateriel, coutDuDeplacement, picDeForme,
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
+  type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
   charger, sauver, semaineSuivante, partirALaCompetition, conclureLaCourse,
-  chargerCalendrier, jourDeLAthlete, forfait,
+  chargerCalendrier, jourDeLAthlete, forfait, agir,
   rangerLaCourse, aRouvrir, demanderReouverture,
 } from '@/game/athlete/carriere';
 import { mot, dans, seanceDuJour, lang, EXOS } from '@/game/athlete/mots';
@@ -356,7 +358,57 @@ const NOMS_LIEUX: Record<Lieu, [string, string]> = {
   parc: ['Parc', 'Park'], piscine: ['Piscine', 'Pool'], mairie: ['Mairie', 'Town hall'],
 };
 const nomLieu = (l: Lieu) => dans(NOMS_LIEUX[l]);
+const NOMS_JOURS: [string, string][] = [['Lundi', 'Monday'], ['Mardi', 'Tuesday'], ['Mercredi', 'Wednesday'], ['Jeudi', 'Thursday'], ['Vendredi', 'Friday'], ['Samedi', 'Saturday'], ['Dimanche', 'Sunday']];
+const nomDuJour = (j: number) => dans(NOMS_JOURS[j]);
+const horloge = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
+const NOMS_BESOINS: Record<Besoin, [string, string]> = {
+  energie: ['Énergie', 'Energy'], faim: ['Faim', 'Hunger'], hygiene: ['Hygiène', 'Hygiene'], social: ['Social', 'Social'], plaisir: ['Plaisir', 'Fun'],
+};
+const ICONES_BESOINS: Record<Besoin, typeof Zap> = { energie: Zap, faim: Utensils, hygiene: ShowerHead, social: MessageCircle, plaisir: Smile };
+const NOMS_ACTIONS: Record<string, [string, string]> = {
+  dormir: ['Dormir jusqu’au matin', 'Sleep till morning'], sieste: ['Faire une sieste', 'Take a nap'], manger: ['Manger en famille', 'Eat with the family'],
+  douche: ['Prendre une douche', 'Have a shower'], devoirs: ['Faire ses devoirs', 'Do homework'], console: ['Jouer à la console', 'Play video games'],
+  telephone: ['Appeler un ami', 'Call a friend'], cours: ['Aller en cours', 'Go to class'], pizza: ['Manger une pizza', 'Eat a pizza'],
+  fruits: ['Acheter des fruits', 'Buy fruit'], discuter_parc: ['Discuter sur un banc', 'Chat on a bench'], discuter_club: ['Discuter avec le groupe', 'Chat with the squad'],
+};
+const RAISONS: Record<string, [string, string]> = {
+  heure: ['Pas à cette heure', 'Not at this time'], argent: ['Pas assez d’argent', 'Not enough money'], fait: ['Déjà fait', 'Already done'],
+  'week-end': ['Pas le week-end', 'Not at weekends'], pas_ce_jour: ['Pas aujourd’hui', 'Not today'], pas_l_heure: ['Après les cours : 16 h 30 – 21 h (samedi 9 h – 19 h)', 'After school: 4:30–9 pm (Saturday 9 am–7 pm)'],
+};
+const effetsTexte = (e: Partial<Record<Besoin, number>>) =>
+  Object.entries(e).filter(([, v]) => v).map(([k, v]) => `${dans(NOMS_BESOINS[k as Besoin])} ${v! > 0 ? '+' : ''}${v}`).join(' · ');
+
+function noterEpuise(a: Athlete) {
+  a.moral = Math.max(0, a.moral - 6);
+  a.journal.unshift({ s: a.semaine, fr: 'Épuisé : tu t’es endormi en rentrant.', en: 'Exhausted: you fell asleep on the way home.' });
+}
+
+/** Les actions de la journee qu'on peut faire dans ce lieu. */
+function Actions({ a, lieu, ev, changer }: { a: Athlete; lieu: string; ev: boolean; changer: (f: () => void) => void }) {
+  const liste = ACTIONS.filter(x => x.lieu === lieu);
+  if (!liste.length) return null;
+  return (
+    <Carte titre={dans(['FAIRE', 'DO'])}>
+      {liste.map(x => {
+        const r = actionPossible(a, x.id);
+        const duree = x.duree === 'nuit' ? dans(['la nuit', 'overnight']) : x.duree === 'cours' ? dans(['jusqu’à 16 h 30', 'till 4:30 pm']) : `${x.duree} min`;
+        return (
+          <div key={x.id} className="flex items-center gap-2">
+            <span className="flex-1 min-w-0 flex flex-col">
+              <span className="text-xs font-black">{dans(NOMS_ACTIONS[x.id] || [x.id, x.id])}</span>
+              <span className="text-[10px] text-white/55">{duree}{x.cout ? ` · ${x.cout} €` : ''}{effetsTexte(x.effets) ? ` · ${effetsTexte(x.effets)}` : ''}</span>
+              {r && <span className="text-[10px] text-amber-300/80">{dans(RAISONS[r])}</span>}
+            </span>
+            <Bouton plein disabled={!!r || ev} onClick={() => changer(() => { agir(a, x.id); })}>{dans(['OK', 'GO'])}</Bouton>
+          </div>
+        );
+      })}
+    </Carte>
+  );
+}
 const BOULOT_DU_LIEU: Partial<Record<Lieu, string>> = { marche: 'marche', livraison: 'livraison', babysitting: 'babysitting' };
+/** Le temps que prend chaque petit boulot, en minutes. */
+const DUREE_BOULOT: Record<string, number> = { babysitting: 180, livraison: 120, marche: 240 };
 const lieuDuClub = (a: Athlete): Lieu | null => (a.club === 'horizon' ? 'club_horizon' : a.club === 'quartier' ? 'club_quartier' : null);
 
 function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void; onEffacer: () => void }) {
@@ -365,6 +417,8 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   const [lieu, setLieu] = useState<Lieu | null>(null);
   const [menu, setMenu] = useState(false);
   const [pret, setPret] = useState(false);
+  // la vitesse du temps : minutes de jeu par seconde (0 : pause), comme les Sims
+  const [vitesse, setVitesse] = useState(1);
   const hote = useRef<HTMLDivElement>(null);
   const ville = useRef<Ville | null>(null);
   const changer = (f: () => void) => { f(); sauver(a); maj(); };
@@ -389,10 +443,37 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   // la ville se fige tant qu'un lieu, une seance, un dialogue ou le menu est ouvert
   useEffect(() => { ville.current?.pause(!!(lieu || seance || ev || menu)); }, [lieu, seance, ev, menu]);
 
+  // LE TEMPS QUI PASSE : une seconde, `vitesse` minutes ; rien ne bouge
+  // pendant qu'un lieu, une seance, un dialogue ou le menu est ouvert.
+  const fige = !!(lieu || seance || ev || menu);
+  useEffect(() => { ville.current?.heure(heureDe(a)); });
+  useEffect(() => {
+    if (fige || !vitesse || !pret) return;
+    let n = 0;
+    const id = setInterval(() => {
+      const quoi = avancer(a, vitesse);
+      ville.current?.heure(heureDe(a));
+      // plus d'energie : on rentre se coucher, comme un Sim qui s'effondre
+      if (quoi.includes('epuise')) {
+        noterEpuise(a);
+        ville.current?.filerA('maison');
+        agir(a, 'dormir');
+      }
+      if (++n % 10 === 0) sauver(a);
+      maj();
+    }, 1000);
+    return () => clearInterval(id);
+  }, [fige, vitesse, pret]);
+
   const comp = COMPETITIONS[a.niveau];
-  const { jour: leJour, date: direct } = jourDeLAthlete(a);
+  const { jour: leJour, date: direct, cetteSemaine } = jourDeLAthlete(a);
   const aller = (l: Lieu) => { setLieu(null); setMenu(false); ville.current?.allerA(l); };
-  const filer = (l: Lieu) => { setMenu(false); ville.current?.filerA(l); };
+  // y aller tout de suite : le bus ou le velo, ca prend quand meme un peu de temps
+  const filer = (l: Lieu) => {
+    setMenu(false);
+    avancer(a, 5 + Math.round((ville.current?.distance(l) || 0) / 220));
+    ville.current?.filerA(l);
+  };
 
   return createPortal(
     <div className="fixed inset-0 z-[70] bg-[#A9D3F0] text-foreground select-none">
@@ -408,6 +489,18 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
               <span className="font-black font-display text-base truncate" style={{ color: VERT }}>{a.nom}</span>
               <span className="text-[10px] font-bold tracking-widest text-white/60 shrink-0">{mot('semaine', { n: a.semaine })}</span>
             </div>
+            <div className="flex items-center justify-between gap-2 mt-0.5">
+              <span className="font-black tabular-nums text-sm text-white">{nomDuJour(jourDe(a))} {horloge(heureDe(a))}</span>
+              <span className="flex gap-1">
+                {[0, 1, 3, 10].map(v => (
+                  <button key={v} onClick={() => setVitesse(v)} aria-label={v ? `×${v}` : 'pause'}
+                          className={`w-7 h-6 rounded-md flex items-center justify-center ${vitesse === v ? 'text-black' : 'text-white/70 bg-white/10'}`}
+                          style={vitesse === v ? { background: VERT } : undefined}>
+                    {v === 0 ? <Pause size={12} /> : v === 1 ? <Play size={12} /> : v === 3 ? <FastForward size={12} /> : <span className="text-[9px] font-black">×10</span>}
+                  </button>
+                ))}
+              </span>
+            </div>
             <div className="grid grid-cols-3 gap-2 mt-1 text-[10px] text-white/70">
               <span className="flex items-center gap-1 tabular-nums"><Wallet size={11} /> {mot('argent', { n: a.argent })}</span>
               <span className="flex flex-col gap-0.5"><span className="flex items-center gap-1"><BatteryMedium size={11} /> {Math.round(a.fatigue)}</span>
@@ -418,18 +511,34 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
             <button onClick={() => aller('gare')} className="mt-1.5 w-full flex items-center justify-between gap-2 text-[10px] font-bold text-left">
               <span className="truncate text-white/80"><Trophy size={10} className="inline -mt-0.5" /> {mot(comp.cle)}</span>
               <span className="shrink-0 tracking-widest" style={{ color: leJour ? VERT : undefined }}>
-                {leJour ? mot('ce_dimanche') : direct ? quand(direct) : mot('dans', { n: a.prochaine - a.semaine })}
+                {leJour ? dans(['AUJOURD’HUI', 'TODAY']) : cetteSemaine && !direct ? mot('ce_dimanche') : direct ? quand(direct) : mot('dans', { n: a.prochaine - a.semaine })}
               </span>
             </button>
           </div>
           <div className="flex flex-col gap-1.5">
             <button onClick={onFermer} aria-label={mot('fermer')} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><X size={18} /></button>
-            <button onClick={() => setMenu(true)} aria-label={dans(['Aller à', 'Go to'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><MapPin size={18} /></button>
+            <button onClick={() => { setLieu(null); setMenu(true); }} aria-label={dans(['Aller à', 'Go to'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><MapPin size={18} /></button>
             <button onClick={() => ville.current?.tourner(-1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCcw size={16} /></button>
             <button onClick={() => ville.current?.tourner(1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCw size={16} /></button>
           </div>
         </div>
       </div>
+
+      {/* les besoins, comme les jauges d'un Sim */}
+      {!lieu && !menu && (
+        <div className="absolute left-[max(env(safe-area-inset-left),0.5rem)] bottom-[max(env(safe-area-inset-bottom),0.5rem)] w-44 rounded-2xl bg-[rgba(8,18,14,0.86)] backdrop-blur p-2 flex flex-col gap-1 shadow-xl">
+          {BESOINS.map(k => {
+            const v = besoinsDe(a)[k], I = ICONES_BESOINS[k];
+            return (
+              <div key={k} className="flex items-center gap-1.5">
+                <I size={11} className="shrink-0 text-white/70" />
+                <span className="text-[9px] font-bold tracking-wider text-white/70 w-14 truncate">{dans(NOMS_BESOINS[k])}</span>
+                <span className="flex-1"><Jauge v={v} couleur={v < 25 ? '#FF5A5F' : v < 50 ? '#F5A623' : VERT} /></span>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* aller a : la liste des lieux, a pied ou tout de suite */}
       {menu && (
@@ -502,17 +611,18 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
   const Seances = () => (
     <Carte titre={dans(['S’ENTRAÎNER ICI', 'TRAIN HERE'])} icone={Flag}>
       {seancesIci.map(j => {
-        const raison = seancePossible(a, j);
+        const raison = seancePossible(a, j), quand_ = seanceMaintenant(a, j);
         return (
           <div key={j} className="flex items-center gap-2">
             <span className="w-1 self-stretch rounded-full" style={{ background: COULEUR[SEANCES[j].stat] }} />
             <span className="flex-1 min-w-0 flex flex-col">
               <span className="text-[10px] font-black tracking-widest text-white/70">{mot(j)} · {dans(EXOS[exerciceDuJour(a, j)].nom).toUpperCase()}</span>
               <span className="text-xs text-white/80 truncate">{seanceDuJour(a, j)}</span>
+              {!raison && quand_ && <span className="text-[10px] text-amber-300/80">{dans(RAISONS[quand_])}</span>}
             </span>
             {raison
               ? <span className="text-[10px] font-black tracking-widest text-white/40">{raison === 'faite' ? mot('faite') : raison === 'blesse' ? mot('blesse') : mot('pris')}</span>
-              : <Bouton plein disabled={ev} onClick={() => surSeance(j)}>{mot('sentrainer')}</Bouton>}
+              : <Bouton plein disabled={ev || !!quand_} onClick={() => surSeance(j)}>{mot('sentrainer')}</Bouton>}
           </div>
         );
       })}
@@ -539,12 +649,10 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
   switch (lieu) {
     case 'maison': return (
       <>
-        <p className="text-xs text-white/70">{dans(['Ta chambre, ton lit, le frigo des parents. La semaine se termine ici.', 'Your room, your bed, your parents’ fridge. The week ends here.'])}</p>
+        <p className="text-xs text-white/70">{dans(['Ta chambre, ton lit, le frigo des parents. Dormir le dimanche soir fait tourner la semaine.', 'Your room, your bed, your parents’ fridge. Sleeping on Sunday night turns the week.'])}</p>
+        {leJour && <p className="text-[11px] text-amber-300/80">{dans(['Aujourd’hui, c’est la compétition : passe à la gare avant de te coucher.', 'Today is race day: go to the station before bed.'])}</p>}
+        <Actions a={a} lieu="maison" ev={ev} changer={changer} />
         <Programme />
-        <Bouton plein className="py-3" disabled={leJour || ev} onClick={() => changer(() => semaineSuivante(a))}>
-          {dans(['DORMIR · FINIR LA SEMAINE', 'SLEEP · END THE WEEK'])}
-        </Bouton>
-        {leJour && <p className="text-[11px] text-amber-300/80">{dans(['Dimanche, c’est la compétition : passe d’abord à la gare.', 'Sunday is race day: go to the station first.'])}</p>}
         <Carte><Barres a={a} /></Carte>
         <Bouton onClick={() => setMiroir(m => !m)}>{dans(['LE MIROIR · CHANGER DE STYLE', 'THE MIRROR · CHANGE STYLE'])}</Bouton>
         {miroir && <ChoixApparence ap={apparenceDe(a)} onChange={surApparence} />}
@@ -581,7 +689,9 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
       return (
         <Carte titre={mot('competition')} icone={Trophy}>
           <span className="font-black text-sm">{mot(comp.cle)}</span>
-          {!leJour ? <p className="text-xs text-white/60">{dans(['Le train attendra : ta prochaine compétition n’est pas pour ce dimanche.', 'The train can wait: your next meet isn’t this Sunday.'])}</p> : <>
+          {!leJour ? <p className="text-xs text-white/60">{jourDe(a) !== DIMANCHE && jourDeLAthlete(a).cetteSemaine
+            ? dans(['C’est ce dimanche. Reviens le jour J, le train part le matin.', 'It’s this Sunday. Come back on the day, the train leaves in the morning.'])
+            : dans(['Le train attendra : ta prochaine compétition n’est pas pour ce dimanche.', 'The train can wait: your next meet isn’t this Sunday.'])}</p> : <>
             <p className="text-[11px] text-white/60">
               {cout === 0 ? mot('paye') : mot('deplacement', { n: cout })}
               {!payable && <span className="text-red-400"> · {mot('pas_moyens')}</span>}
@@ -604,7 +714,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
       return (
         <>
           <p className="text-xs text-white/70">{dans(['Massage, étirements, un œil sur tes ischios. Le kiné fait baisser la fatigue et raccourcit une blessure d’une semaine.', 'Massage, stretching, an eye on your hamstrings. The physio lowers fatigue and shortens an injury by a week.'])}</p>
-          <Bouton plein className="py-3" disabled={!!r || ev} onClick={() => changer(() => { chezLeKine(a); })}>
+          <Bouton plein className="py-3" disabled={!!r || ev} onClick={() => changer(() => { if (!chezLeKine(a)) avancer(a, 45, { plaisir: 4 }); })}>
             {r === 'fait' ? dans(['DÉJÀ VU CETTE SEMAINE', 'ALREADY SEEN THIS WEEK']) : `${dans(['UNE SÉANCE', 'ONE SESSION'])} · ${prixDuKine(a)} €`}
           </Bouton>
           {a.club && <p className="text-[11px] text-white/50">{dans(['Le club prend la moitié.', 'The club pays half.'])}</p>}
@@ -615,10 +725,11 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
     case 'parc': case 'piscine': return (
       <>
         {lieu === 'parc' && seancesIci.length > 0 && <Seances />}
+        {lieu === 'parc' && <Actions a={a} lieu="parc" ev={ev} changer={changer} />}
         <p className="text-xs text-white/70">{lieu === 'parc'
           ? dans(['Un footing léger autour du lac : le corps récupère, la tête aussi.', 'An easy jog round the lake: the body recovers, and the mind.'])
           : dans(['Quelques longueurs souples à la piscine Alice Milliat : la récupération active des sprinteurs.', 'A few easy lengths at the Alice Milliat pool: the sprinter’s active recovery.'])}</p>
-        <Bouton plein className="py-3" disabled={!!a.footing || a.blessure > 0 || ev} onClick={() => changer(() => { footingAuParc(a); })}>
+        <Bouton plein className="py-3" disabled={!!a.footing || a.blessure > 0 || ev} onClick={() => changer(() => { if (footingAuParc(a)) avancer(a, 45, { hygiene: -25, energie: -4, plaisir: 8 }); })}>
           {a.footing ? dans(['DÉJÀ FAIT CETTE SEMAINE', 'ALREADY DONE THIS WEEK']) : lieu === 'parc' ? dans(['FOOTING DE RÉCUPÉRATION', 'RECOVERY JOG']) : dans(['NAGER POUR RÉCUPÉRER', 'SWIM TO RECOVER'])}
         </Bouton>
       </>
@@ -653,13 +764,16 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
       const b = BOULOTS.find(x => x.id === BOULOT_DU_LIEU[lieu])!;
       const pris = !!a.boulot;
       return (
+        <>
+        <Actions a={a} lieu={lieu} ev={ev} changer={changer} />
         <Carte titre={mot('boulots')} icone={Briefcase}>
           <span className="text-sm font-black">{mot(b.id)}</span>
-          <span className="text-[11px] text-white/60">+{b.gain} € · {mot('fatigue').toLowerCase()} +{b.fatigue}{b.prend ? ` · ${mot('prend_samedi')}` : ''}</span>
-          <Bouton plein disabled={pris || ev || (!!b.prend && a.faites.includes(b.prend))} onClick={() => changer(() => { prendreUnBoulot(a, b.id); })}>
+          <span className="text-[11px] text-white/60">{Math.round(DUREE_BOULOT[b.id] / 60)} h · +{b.gain} € · {mot('fatigue').toLowerCase()} +{b.fatigue}{b.prend ? ` · ${mot('prend_samedi')}` : ''}</span>
+          <Bouton plein disabled={pris || ev || (!!b.prend && a.faites.includes(b.prend))} onClick={() => changer(() => { if (prendreUnBoulot(a, b.id)) avancer(a, DUREE_BOULOT[b.id] || 120, { energie: -8 }); })}>
             {pris ? mot('boulot_pris') : dans(['TRAVAILLER', 'WORK'])}
           </Bouton>
         </Carte>
+        </>
       );
     }
 
@@ -668,6 +782,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
       return (
         <>
           {membre && seancesIci.length > 0 && <Seances />}
+          {membre && <Actions a={a} lieu="club" ev={ev} changer={changer} />}
           <Carte titre={mot('club')} icone={Users}>
             {membre ? (
               <>
@@ -705,6 +820,8 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
     case 'college': return (
       <>
         <p className="text-xs text-white/70">{dans(['Les cours, les copains, le prof d’EPS qui t’a repéré. Il te suit de loin.', 'Classes, friends, the PE teacher who spotted you. He keeps an eye on you.'])}</p>
+        <Actions a={a} lieu="college" ev={ev} changer={changer} />
+        <p className="text-[11px] text-white/60">{dans(['Bulletin', 'Report card'])} · {Math.round(a.ecole ?? 60)} / 100</p>
         {a.objectif && <p className="text-[11px] text-white/60">{mot('objectif', { o: mot(COMPETITIONS[NIVEAU_OBJECTIF[a.objectif]].cle) })} · {mot('assiduite', { f: a.assiduite.faites, p: a.assiduite.proposees })}</p>}
         <Carte><Barres a={a} /></Carte>
       </>

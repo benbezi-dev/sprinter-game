@@ -15,6 +15,7 @@ import { CARRIERE_ATHLETE_OUVERTE } from '../canal';
 import {
   type Athlete, type Epreuve, COMPETITIONS, reglages, coutDuDeplacement,
   conclureLaCompetition, finirLaSemaine, noter, declarerForfait, jourCale, type Resultat,
+  faireUneAction, avancer, heureDe, DIMANCHE,
   type RendezVousReel,
 } from './regles';
 import { tirerLaSemaine } from './recit';
@@ -35,6 +36,8 @@ export function charger(): Athlete | null {
       for (const p of d.palmares || []) p.niveau = cran(p.niveau);
       d.v = 2;
     }
+    // les sauvegardes d'avant la journee : on se reveille un lundi matin
+    if (d.jour === undefined) { d.jour = 0; d.heure = 7 * 60; }
     return d.v === 2 ? d as Athlete : null;
   } catch { return null; }
 }
@@ -44,6 +47,18 @@ export function sauver(a: Athlete | null) {
     if (a) localStorage.setItem(CLE, JSON.stringify(a));
     else localStorage.removeItem(CLE);
   } catch { /* stockage ferme : la carriere vit le temps de la visite */ }
+}
+
+/**
+ * Faire une action de la journee (regles.ts, ACTIONS). Si elle a tourne la
+ * semaine (dormir le dimanche soir), la vie du club tire son evenement.
+ */
+export function agir(a: Athlete, id: string): null | string {
+  const s = a.semaine;
+  const r = faireUneAction(a, id);
+  if (!r && a.semaine !== s && !a.evenement) a.evenement = tirerLaSemaine(a, Math.random);
+  sauver(a);
+  return r;
 }
 
 /** Tourner la semaine, tirer son evenement, et ranger. */
@@ -75,7 +90,12 @@ export function rendezVousDe(niveau: number): RendezVousReel | null {
 }
 
 /** Le jour de competition de cet athlete, cale sur le direct quand il y a lieu. */
-export const jourDeLAthlete = (a: Athlete, maintenant = Date.now()) => jourCale(a, rendezVousDe(a.niveau), maintenant);
+export function jourDeLAthlete(a: Athlete, maintenant = Date.now()) {
+  const c = jourCale(a, rendezVousDe(a.niveau), maintenant);
+  // la journee existe : on ne court que le dimanche (sauf un vrai championnat, a sa date)
+  if (c.date === null && a.jour !== undefined) return { jour: c.jour && a.jour === DIMANCHE, date: null, cetteSemaine: c.jour };
+  return { ...c, cetteSemaine: c.jour };
+}
 
 /** Un vrai championnat ne se court qu'une fois : on le marque des qu'on part, ou qu'on renonce. */
 function marquerLeRendezVous(a: Athlete) {
@@ -87,7 +107,8 @@ function marquerLeRendezVous(a: Athlete) {
 export function forfait(a: Athlete) {
   marquerLeRendezVous(a);
   declarerForfait(a);
-  semaineSuivante(a);
+  // sans journee (anciennes sauvegardes), la semaine tourne ici ; sinon au coucher du dimanche
+  if (a.jour === undefined) semaineSuivante(a); else sauver(a);
 }
 
 /* --------------------------------------------------- la competition */
@@ -128,7 +149,7 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve): boolean {
  */
 export function rangerLaCourse() {
   const G = SprinterApp.G;
-  if (enCourse) { declarerForfait(enCourse.a); semaineSuivante(enCourse.a); }
+  if (enCourse) { declarerForfait(enCourse.a); if (enCourse.a.jour === undefined) semaineSuivante(enCourse.a); else sauver(enCourse.a); }
   enCourse = null;
   if (!G) return;
   G.reglagesJoueur = null;
@@ -157,7 +178,9 @@ export function conclureLaCourse(a: Athlete): Resultat | null {
   const [fr, en] = MOTS[COMPETITIONS[r.niveau].cle];
   noter(a, `${fr} — ${r.epreuve} m : ${moi === null ? 'faux départ' : `${place === 1 ? '1er' : `${place}e`} en ${moi.toFixed(2)} s`}`,
            `${en} — ${r.epreuve} m: ${moi === null ? 'false start' : `P${place} in ${moi.toFixed(2)} s`}`);
-  semaineSuivante(a);
+  // la competition prend la journee ; la semaine tourne au coucher
+  if (a.jour === undefined) semaineSuivante(a);
+  else { avancer(a, Math.max(0, 18 * 60 - heureDe(a)), { energie: -25, hygiene: -40 }); sauver(a); }
   enCourse = null;
   concluPour = G.runners;
   dernier = r;

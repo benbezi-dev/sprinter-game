@@ -186,6 +186,19 @@ function toile(l: number, h: number, peindre: (c: CanvasRenderingContext2D) => v
 const mat = (couleur: string | number, o: THREE.MeshStandardMaterialParameters = {}) =>
   new THREE.MeshStandardMaterial({ color: couleur, roughness: 0.9, metalness: 0, ...o });
 
+/** La meme travee, la nuit : seules certaines fenetres sont allumees. */
+function traveeNuit() {
+  return toile(512, 384, c => {
+    c.fillStyle = '#000'; c.fillRect(0, 0, 512, 384);
+    // quatre travees sur quatre etages dans une seule image : pas toutes les memes fenetres allumees
+    for (let i = 0; i < 4; i++) for (let j = 0; j < 4; j++) for (const x of [16, 76]) {
+      if (((i * 7 + j * 3 + x) % 5) > 1) continue;
+      c.fillStyle = ['#FFD9A0', '#FFE7B8', '#FFC97A'][(i + j) % 3];
+      c.fillRect(i * 128 + x, j * 96 + 26, 36, 50);
+    }
+  });
+}
+
 /** Une travee de facade (4 m x 3 m) : deux fenetres sur un mur blanc, que la couleur du batiment teinte. */
 function travee(petite: boolean) {
   return toile(128, 96, c => {
@@ -401,6 +414,10 @@ export class Ville {
   private scene = new THREE.Scene();
   private camera = new THREE.OrthographicCamera(-10, 10, 10, -10, 0.1, 800);
   private soleil = new THREE.DirectionalLight('#FFF1D6', 2.4);
+  private ciel = new THREE.HemisphereLight('#E4F0FF', '#6E8A5A', 1.25);
+  private lampe = mat('#FFF4D2', { emissive: '#FFE6A0', emissiveIntensity: 0.7 });
+  private heureDuJour = 15 * 60;
+  private murs: THREE.MeshStandardMaterial | null = null;
   private monde = new THREE.Group();
   private pietons!: Reseau;
   private chaussee!: Reseau;
@@ -440,7 +457,7 @@ export class Ville {
 
     this.scene.background = new THREE.Color('#A9D3F0');
     this.scene.fog = new THREE.Fog('#BFDDF3', 260, 480);
-    this.scene.add(new THREE.HemisphereLight('#E4F0FF', '#6E8A5A', 1.25));
+    this.scene.add(this.ciel);
     this.soleil.castShadow = true;
     this.soleil.shadow.mapSize.set(2048, 2048);
     const sc = this.soleil.shadow.camera;
@@ -497,6 +514,32 @@ export class Ville {
   pause(oui: boolean) { this.enPause = oui; if (oui && this.moi) { this.moi.route = []; this.touches.clear(); } }
   tourner(sens: 1 | -1) { this.azimutVise += sens * Math.PI / 2; }
   zoomer(f: number) { this.zoom = Math.min(2.4, Math.max(0.35, this.zoom * f)); this.redimensionner(); }
+
+  /**
+   * L'heure qu'il est (minutes depuis minuit) : le soleil se leve et se
+   * couche, le ciel passe du bleu au rose puis a la nuit, les lampadaires
+   * s'allument.
+   */
+  heure(h: number) {
+    if (Math.abs(h - this.heureDuJour) < 1) return;
+    this.heureDuJour = h;
+    const t = h / 60;
+    // jour : 1 de 8 h a 18 h, 0 la nuit, en pente a l'aube et au crepuscule
+    const jour = Math.max(0, Math.min(1, Math.min((t - 6) / 2, (21 - t) / 2.5)));
+    const dore = Math.max(0, 1 - Math.abs(t - 19.5) / 1.6) + Math.max(0, 1 - Math.abs(t - 7) / 1.2) * 0.7;
+    const c = (a: string, b: string, k: number) => new THREE.Color(a).lerp(new THREE.Color(b), k);
+    const fond = c('#0E1A33', '#A9D3F0', jour).lerp(new THREE.Color('#F2A97E'), dore * 0.45);
+    (this.scene.background as THREE.Color).copy(fond);
+    (this.scene.fog as THREE.Fog).color.copy(fond);
+    this.soleil.color.copy(c('#9DB4E8', '#FFF1D6', jour).lerp(new THREE.Color('#FFB27A'), dore * 0.6));
+    this.soleil.intensity = 0.35 + 2.1 * jour;
+    this.ciel.intensity = 0.45 + 0.8 * jour;
+    this.ciel.color.copy(c('#4A5F99', '#E4F0FF', jour));
+    this.lampe.emissiveIntensity = jour < 0.4 ? 2.4 : 0.15;
+    // les fenetres s'allument au crepuscule
+    if (this.murs) this.murs.emissiveIntensity = Math.max(0, 1 - jour * 1.6) * 0.9;
+    this.rendu.toneMappingExposure = 0.9 + 0.15 * jour;
+  }
 
   /** Marcher jusqu'a un lieu (le chemin par les rues). */
   allerA(l: Lieu) {
@@ -614,7 +657,9 @@ export class Ville {
       // l'acrotere : un liseré net qui dessine le haut des murs
       if (!maison && h >= 4) ruban(acroteres, [...p, p[0]], 0.45, h + 0.03);
     });
-    this.poser(murs, mat('#ffffff', { map: travee(false), vertexColors: true }), true, true);
+    const nuit = traveeNuit(); nuit.repeat.set(0.25, 0.25);
+    this.murs = mat('#ffffff', { map: travee(false), vertexColors: true, emissiveMap: nuit, emissive: '#FFFFFF', emissiveIntensity: 0 });
+    this.poser(murs, this.murs, true, true);
     this.poser(mursPetits, mat('#ffffff', { map: travee(true), vertexColors: true }), true, true);
     this.poser(toits, mat('#ffffff', { vertexColors: true, roughness: 0.95 }), true, true);
     this.poser(tuiles, mat('#ffffff', { vertexColors: true, roughness: 0.8 }), true, true);
@@ -655,7 +700,7 @@ export class Ville {
       }
     }
     this.instancier(new THREE.CylinderGeometry(0.07, 0.09, 5, 6), mat('#3A3F46', { metalness: 0.5 }), lampes, 2.5);
-    this.instancier(new THREE.SphereGeometry(0.22, 10, 6), mat('#FFF4D2', { emissive: '#FFE6A0', emissiveIntensity: 0.7 }), lampes, 5.1);
+    this.instancier(new THREE.SphereGeometry(0.22, 10, 6), this.lampe, lampes, 5.1);
     garees.slice(0, 260).forEach((c, i) => { const v = voiture(COULEURS_AUTO[i % COULEURS_AUTO.length]); v.position.set(c.x, SOL - 0.02, c.z); v.rotation.y = c.a; g.add(v); });
 
     // les reseaux : a pied partout, en voiture sur les rues

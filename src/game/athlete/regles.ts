@@ -68,6 +68,15 @@ export type Athlete = {
   relations: { coach: number; club: number; rival: number };
   sponsors: string[];
   chapitre: Chapitre;
+  /** LA JOURNEE (game/athlete/regles.ts, « la journee ») : le jour (0 = lundi), l'heure en minutes. */
+  jour?: number;
+  heure?: number;
+  /** Les besoins, de 0 (vide) a 100 (comble). Absents des sauvegardes d'avant : BESOINS_PLEINS. */
+  besoins?: Record<Besoin, number>;
+  /** L'ecole : 0 a 100, les cours et les devoirs la montent, secher la fait baisser. */
+  ecole?: number;
+  /** Deja alle en cours aujourd'hui ? */
+  cours?: boolean;
   /** Deja passe chez le kine, deja fait son footing cette semaine ? */
   kine?: boolean;
   footing?: boolean;
@@ -330,6 +339,10 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
     journal: [],
     palmares: [],
     assiduite: { proposees: 0, faites: 0 },
+    jour: 0,
+    heure: 7 * 60,
+    besoins: { energie: 90, faim: 80, hygiene: 90, social: 70, plaisir: 70 },
+    ecole: 60,
   };
 }
 
@@ -360,7 +373,7 @@ export function gainDeSeance(a: Athlete, j: Jour, score: number): Partial<Record
   const forme = 1 - Math.max(0, a.fatigue - 50) / 100;
   const outil = a.materiel.some(id => piece(id)?.seance === j) ? 1.15 : 1;
   const moral = 0.85 + 0.3 * (a.moral / 100);
-  const base = 3.2 * q * encadrement * forme * outil * moral;
+  const base = 3.2 * q * encadrement * forme * outil * moral * formeDuJour(a);
   const cles = a.specialite ? CLES_EPREUVE[a.specialite] : [];
   const spe = (st: Stat) => (a.voie === 'specialiste' && cles.includes(st) ? 1.2 : 1);
   // Le polyvalent gagne moins vite sur l'essentiel mais plus sur le reste.
@@ -382,7 +395,9 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
   if (seancePossible(a, j)) return null;
   a.faites.push(j);
   if (j !== 'samedi') a.assiduite.faites += 1;
-  if (a.fatigue >= 85 && alea() < 0.35) {
+  // epuise, ou sans energie ni rien dans le ventre : le corps lache
+  const vide = a.besoins ? Math.min(a.besoins.energie, a.besoins.faim) : 100;
+  if ((a.fatigue >= 85 && alea() < 0.35) || (vide < 12 && alea() < 0.2)) {
     a.blessure = 2;
     a.moral = borne(a.moral - 15, 0, 100);
     noter(a, 'Blessé à l’entraînement : deux semaines d’arrêt.', 'Injured in training: two weeks off.');
@@ -397,6 +412,7 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
     a.stats[k] = v;
   }
   a.fatigue = borne(a.fatigue + SEANCES[j].fatigue, 0, 100);
+  if (a.besoins) avancer(a, DUREE_SEANCE, { energie: -18, faim: -12, hygiene: -40 });
   return { gains, blessure: false };
 }
 
@@ -580,4 +596,149 @@ export function finirLaSemaine(a: Athlete) {
   a.boulot = null;
   a.kine = false;
   a.footing = false;
+}
+
+/* ------------------------------------------------------------ la journee */
+
+// LE TEMPS QUI PASSE, COMME DANS LES SIMS (docs/carriere-athlete.md). Une
+// minute de jeu par seconde dans la ville ; chaque action prend son temps ; on
+// dort la nuit. Les besoins baissent a l'heure, et les remplir est la moitie
+// du jeu : une seance a jeun et sans sommeil vaut moins, et se paie.
+
+export type Besoin = 'energie' | 'faim' | 'hygiene' | 'social' | 'plaisir';
+export const BESOINS: Besoin[] = ['energie', 'faim', 'hygiene', 'social', 'plaisir'];
+export const BESOINS_PLEINS: Record<Besoin, number> = { energie: 90, faim: 80, hygiene: 90, social: 70, plaisir: 70 };
+/** Ce que chaque besoin perd par heure eveillee. */
+// une journee de 16 h eveillee, cours et entrainement compris, doit tenir : il reste ~20 d'energie au coucher
+const BAISSE: Record<Besoin, number> = { energie: 3, faim: 6.5, hygiene: 3, social: 2.5, plaisir: 3 };
+export const JOUR_DE: Record<Jour, number> = { lundi: 0, mercredi: 2, vendredi: 4, samedi: 5 };
+export const DIMANCHE = 6;
+export const DUREE_SEANCE = 90;
+export const REVEIL = 7 * 60;
+
+export const besoinsDe = (a: Athlete) => (a.besoins ||= { ...BESOINS_PLEINS });
+export const jourDe = (a: Athlete) => a.jour ?? 0;
+export const heureDe = (a: Athlete) => a.heure ?? REVEIL;
+const enSemaine = (a: Athlete) => jourDe(a) < 5;
+
+/** La forme du jour : de 0,7 (vide) a 1 (repose et nourri). */
+export function formeDuJour(a: Athlete): number {
+  if (!a.besoins) return 1;
+  return 0.7 + 0.3 * Math.min(a.besoins.energie, a.besoins.faim) / 100;
+}
+
+/**
+ * Faire passer `minutes`. Les besoins baissent (en plus des `effets` de ce
+ * qu'on fait), minuit change de jour, et le college note une absence a 9 h.
+ * Rend ce qui s'est passe : 'absence', 'epuise' (plus d'energie : on
+ * s'endort ou l'on est).
+ */
+export function avancer(a: Athlete, minutes: number, effets: Partial<Record<Besoin, number>> = {}): string[] {
+  const b = besoinsDe(a), out: string[] = [];
+  const h0 = heureDe(a);
+  for (const k of BESOINS) b[k] = borne(b[k] - BAISSE[k] * minutes / 60 + (effets[k] || 0), 0, 100);
+  let h = h0 + minutes;
+  if (enSemaine(a) && h0 < 9 * 60 && h >= 9 * 60 && !a.cours) {
+    a.ecole = borne((a.ecole ?? 60) - 5, 0, 100);
+    a.moral = borne(a.moral - 3, 0, 100);
+    noter(a, 'Absent au collège : le CPE a appelé à la maison.', 'Missed school: the office called home.');
+    out.push('absence');
+  }
+  while (h >= 24 * 60) { h -= 24 * 60; a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
+  a.heure = h;
+  if (b.energie <= 0) out.push('epuise');
+  // un ventre vide et une tete fatiguee pesent sur le moral
+  if (b.faim < 15 || b.energie < 15) a.moral = borne(a.moral - minutes / 60, 0, 100);
+  return out;
+}
+
+/** La fenetre d'entrainement : apres les cours en semaine, en journee le samedi. */
+export function seanceMaintenant(a: Athlete, j: Jour): null | 'pas_ce_jour' | 'pas_l_heure' {
+  if (jourDe(a) !== JOUR_DE[j]) return 'pas_ce_jour';
+  const h = heureDe(a);
+  if (j === 'samedi' ? h < 9 * 60 || h > 19 * 60 : h < 16 * 60 + 30 || h > 21 * 60) return 'pas_l_heure';
+  return null;
+}
+
+export type Action = {
+  id: string;
+  /** Le lieu de la ville (ville.ts) ou l'action se fait. */
+  lieu: string;
+  /** Sa duree en minutes ; 'nuit' : jusqu'au reveil. */
+  duree: number | 'nuit' | 'cours';
+  cout?: number;
+  effets: Partial<Record<Besoin, number>>;
+  moral?: number;
+  /** Quand c'est possible : [debut, fin] en minutes, et en semaine seulement ? */
+  quand?: [number, number];
+  semaine?: boolean;
+};
+
+export const ACTIONS: Action[] = [
+  { id: 'dormir', lieu: 'maison', duree: 'nuit', effets: {}, quand: [20 * 60, 24 * 60 - 1] },
+  { id: 'sieste', lieu: 'maison', duree: 60, effets: { energie: 16 } },
+  { id: 'manger', lieu: 'maison', duree: 30, effets: { faim: 60, social: 6 } },
+  { id: 'douche', lieu: 'maison', duree: 15, effets: { hygiene: 85 } },
+  { id: 'devoirs', lieu: 'maison', duree: 60, effets: { plaisir: -6 }, quand: [16 * 60, 23 * 60] },
+  { id: 'console', lieu: 'maison', duree: 60, effets: { plaisir: 40, energie: -2 } },
+  { id: 'telephone', lieu: 'maison', duree: 30, effets: { social: 28, plaisir: 6 } },
+  { id: 'cours', lieu: 'college', duree: 'cours', effets: { social: 30, faim: 45, energie: -10 }, quand: [7 * 60, 9 * 60], semaine: true },
+  { id: 'pizza', lieu: 'livraison', duree: 40, cout: 12, effets: { faim: 70, plaisir: 16 } },
+  { id: 'fruits', lieu: 'marche', duree: 15, cout: 5, effets: { faim: 25, energie: 4 }, quand: [8 * 60, 13 * 60] },
+  { id: 'discuter_parc', lieu: 'parc', duree: 30, effets: { social: 22, plaisir: 8 } },
+  { id: 'discuter_club', lieu: 'club', duree: 30, effets: { social: 25 } },
+];
+export const action = (id: string) => ACTIONS.find(x => x.id === id);
+
+/** Peut-on faire cette action maintenant ? Rend la raison sinon. */
+export function actionPossible(a: Athlete, id: string): null | 'heure' | 'argent' | 'fait' | 'week-end' {
+  const x = action(id); if (!x) return 'heure';
+  if (x.semaine && !enSemaine(a)) return 'week-end';
+  if (x.id === 'cours' && a.cours) return 'fait';
+  const h = heureDe(a);
+  if (x.quand && (h < x.quand[0] || h > x.quand[1])) return 'heure';
+  if (x.cout && a.argent < x.cout) return 'argent';
+  return null;
+}
+
+/**
+ * Faire une action : payer, prendre le temps, remplir les besoins. Dormir
+ * mene au reveil du lendemain ; dormir le dimanche soir tourne la semaine
+ * (et une competition non courue devient un forfait).
+ */
+export function faireUneAction(a: Athlete, id: string): null | string {
+  const r = actionPossible(a, id); if (r) return r;
+  const x = action(id)!;
+  if (x.cout) a.argent -= x.cout;
+  if (x.duree === 'nuit') { dormir(a); return null; }
+  if (x.duree === 'cours') {
+    a.cours = true;
+    a.ecole = borne((a.ecole ?? 60) + 3, 0, 100);
+    avancer(a, Math.max(30, 16 * 60 + 30 - heureDe(a)), x.effets);
+    return null;
+  }
+  avancer(a, x.duree, x.effets);
+  if (x.moral) a.moral = borne(a.moral + x.moral, 0, 100);
+  if (id === 'devoirs') a.ecole = borne((a.ecole ?? 60) + 2, 0, 100);
+  return null;
+}
+
+/** Dormir jusqu'au reveil. Les heures de sommeil font l'energie (8 h : plein). */
+export function dormir(a: Athlete) {
+  const b = besoinsDe(a), h = heureDe(a);
+  const duree = h <= REVEIL ? REVEIL - h : 24 * 60 - h + REVEIL;
+  const dimanche = jourDe(a) === DIMANCHE && h > REVEIL;
+  // la nuit : la faim baisse doucement, l'energie remonte, les muscles recuperent
+  b.energie = borne(b.energie + duree / 60 * 12.5, 0, 100);
+  b.faim = borne(b.faim - duree / 60 * 2.5, 0, 100);
+  b.hygiene = borne(b.hygiene - duree / 60 * 1.5, 0, 100);
+  a.fatigue = borne(a.fatigue - duree / 60 * 0.6, 0, 100);
+  if (duree < 7 * 60) a.moral = borne(a.moral - 4, 0, 100);
+  if (h > REVEIL) { a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
+  a.heure = REVEIL;
+  // le dimanche soir, la semaine tourne ; une competition manquee est un forfait
+  if (dimanche) {
+    if (jourDeCompetition(a)) declarerForfait(a);
+    finirLaSemaine(a);
+  }
 }
