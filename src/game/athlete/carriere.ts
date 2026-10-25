@@ -14,7 +14,7 @@ import { SprinterApp } from '../engine';
 import { CARRIERE_ATHLETE_OUVERTE } from '../canal';
 import {
   type Athlete, type Epreuve, COMPETITIONS, reglages, coutDuDeplacement,
-  conclureLaCompetition, finirLaSemaine, noter, type Resultat,
+  conclureLaCompetition, finirLaSemaine, noter, declarerForfait, type Resultat,
 } from './regles';
 import { tirerLaSemaine } from './recit';
 
@@ -43,8 +43,8 @@ export function semaineSuivante(a: Athlete, alea: () => number = Math.random) {
 
 /* --------------------------------------------------- la competition */
 
-/** Ce qu'on garde pendant que la course tourne. */
-let enCourse: { epreuve: Epreuve; niveau: number } | null = null;
+/** Ce qu'on garde pendant que la course tourne : `a` est l'objet des ecrans. */
+let enCourse: { a: Athlete; epreuve: Epreuve; niveau: number } | null = null;
 /** Rouvrir le tableau de bord de la carriere en revenant a l'accueil. */
 let rouvrir = false;
 
@@ -63,16 +63,21 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve): boolean {
   a.argent -= cout;
   sauver(a);
   const G = SprinterApp.G;
-  enCourse = { epreuve, niveau: a.niveau };
+  enCourse = { a, epreuve, niveau: a.niveau };
   G.reglagesJoueur = reglages(a, a.niveau);
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLaCourse;
   (SprinterApp as any).startOneShot([epreuve], { levelIdx: COMPETITIONS[a.niveau].plateau, etiquette: 'athlete' });
   return true;
 }
 
-/** Retirer le corps de l'athlete : rien ne doit suivre le joueur ailleurs. */
+/**
+ * Retirer le corps de l'athlete : rien ne doit suivre le joueur ailleurs.
+ * Une course quittee avant l'ecran de fin est un forfait : le deplacement est
+ * perdu et la semaine tourne — sinon on la recourait en payant deux fois.
+ */
 export function rangerLaCourse() {
   const G = SprinterApp.G;
+  if (enCourse) { declarerForfait(enCourse.a); semaineSuivante(enCourse.a); }
   enCourse = null;
   if (!G) return;
   G.reglagesJoueur = null;
@@ -102,6 +107,7 @@ export function conclureLaCourse(a: Athlete): Resultat | null {
   noter(a, `${nom} — ${r.epreuve} m : ${place}e${moi !== null ? ` en ${moi.toFixed(2)} s` : ''}`,
            `${nom} — ${r.epreuve} m: P${place}${moi !== null ? ` in ${moi.toFixed(2)} s` : ''}`);
   semaineSuivante(a);
+  enCourse = null;
   concluPour = G.runners;
   dernier = r;
   return r;
