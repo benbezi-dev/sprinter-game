@@ -11,6 +11,7 @@ import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
 import { chargementFini, partChargee } from '@/game/chargement';
+import { dessinSuspendu } from '@/game/dessin-suspendu';
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
 function pointDuPersonnage(G: any): [number, number] {
@@ -208,6 +209,8 @@ export function GameCanvas() {
     // L'accueil le demande au moment ou il apparait — voir accueilPose dans
     // game/scene-accueil.ts.
     const frame = (now: number, redessin = false) => {
+      // une scene plein ecran (la ville de la carriere) couvre l'accueil : on ne le dessine pas
+      if (!redessin && dessinSuspendu() && SprinterApp.G.state === 'title') { rafRef.current = requestAnimationFrame(frame); return; }
       // LE TEMPO DU MONDE MULTIPLIE LE PAS, ET APRES LE PLAFOND. Plafonner
       // ensuite laisserait un ralenti relever un `dt` deja ecrete — le plafond
       // protege le moteur d'un bond apres un onglet en veille, le tempo ne doit

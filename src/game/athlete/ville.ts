@@ -253,6 +253,24 @@ class Tampon {
 
 const HAUT: number[] = [0, 1, 0];
 
+// LA VILLE EN TUILES (25/10, mesure sur Mac M1 : 1,1 million de triangles dessines a chaque
+// image pour 34 a 60 m de rue a l'ecran). Chaque piece fusionnee et chaque lot d'objets repetes
+// est coupe en tuiles de TUILE metres, chacune avec sa sphere englobante : three.js ne dessine
+// que celles que la camera (ou la lumiere des ombres) voit.
+const TUILE = 150;
+const cleTuile = (x: number, z: number) => `${Math.floor(x / TUILE)},${Math.floor(z / TUILE)}`;
+/** Un tampon coupe en tuiles, triangle par triangle, selon son centre. */
+function enTuiles(t: Tampon): Tampon[] {
+  const parTuile = new Map<string, Tampon>(), couleur = t.col.length > 0;
+  for (let i = 0, n = t.pos.length / 9; i < n; i++) {
+    const p = t.pos, k = cleTuile((p[i * 9] + p[i * 9 + 3] + p[i * 9 + 6]) / 3, (p[i * 9 + 2] + p[i * 9 + 5] + p[i * 9 + 8]) / 3);
+    let u = parTuile.get(k); if (!u) parTuile.set(k, (u = new Tampon()));
+    u.pos.push(...p.slice(i * 9, i * 9 + 9)); u.nor.push(...t.nor.slice(i * 9, i * 9 + 9)); u.uv.push(...t.uv.slice(i * 6, i * 6 + 6));
+    if (couleur) u.col.push(...t.col.slice(i * 9, i * 9 + 9));
+  }
+  return [...parTuile.values()];
+}
+
 /** Un polygone plat a la hauteur y. */
 function aplat(t: Tampon, p: P2[], y: number, echelleUV = 0, couleur?: THREE.Color) {
   if (p.length < 3) return;
@@ -600,6 +618,7 @@ export class Ville {
   private id = 0;
   private dernier = 0;
   private touches = new Set<string>();
+  private pixels = 2;
   /** Courir par defaut (le bouton du tableau de bord), et les metres courus depuis la derniere lecture. */
   private enCourse = false; private metres = 0;
   private dernierAppui = 0;
@@ -998,21 +1017,29 @@ export class Ville {
   /** Fige un tampon en une piece de la scene. */
   private poser(t: Tampon, m: THREE.MeshStandardMaterial, ombre: boolean, recoit: boolean, y = 0) {
     if (!t.pos.length) return;
-    const mesh = new THREE.Mesh(t.geometrie(), m);
-    mesh.position.y = y; mesh.castShadow = ombre; mesh.receiveShadow = recoit;
-    this.monde.add(mesh);
+    for (const u of enTuiles(t)) {
+      const mesh = new THREE.Mesh(u.geometrie(), m);
+      mesh.position.y = y; mesh.castShadow = ombre; mesh.receiveShadow = recoit;
+      this.monde.add(mesh);
+    }
   }
 
   private instancier(geo: THREE.BufferGeometry, m: THREE.Material, pts: P2[], dy: number, varie = 0) {
     if (!pts.length) return;
-    const im = new THREE.InstancedMesh(geo, m, pts.length);
     const q = new THREE.Quaternion();
-    pts.forEach(([x, z], i) => {
-      const s = 1 + varie * ((((i * 37) % 10) / 10) - 0.5);
-      im.setMatrixAt(i, new THREE.Matrix4().compose(new THREE.Vector3(x, SOL + dy * s, z), q, new THREE.Vector3(s, s, s)));
-    });
-    im.castShadow = true; im.receiveShadow = true;
-    this.monde.add(im);
+    // un lot par tuile (voir TUILE) : la sphere englobante de chacun permet d'ecarter ceux hors champ
+    const parTuile = new Map<string, number[]>();
+    pts.forEach(([x, z], i) => { const k = cleTuile(x, z); (parTuile.get(k) || parTuile.set(k, []).get(k)!).push(i); });
+    for (const idx of parTuile.values()) {
+      const im = new THREE.InstancedMesh(geo, m, idx.length);
+      idx.forEach((i, j) => {
+        const [x, z] = pts[i], s = 1 + varie * ((((i * 37) % 10) / 10) - 0.5);
+        im.setMatrixAt(j, new THREE.Matrix4().compose(new THREE.Vector3(x, SOL + dy * s, z), q, new THREE.Vector3(s, s, s)));
+      });
+      im.computeBoundingSphere();
+      im.castShadow = true; im.receiveShadow = true;
+      this.monde.add(im);
+    }
   }
 
   private montrerMarque([x, z]: P2) { this.marque.position.set(x, SOL + 0.05, z); this.marque.visible = true; }
@@ -1021,8 +1048,9 @@ export class Ville {
 
   private redimensionner = () => {
     const l = this.hote.clientWidth || 1, h = this.hote.clientHeight || 1;
-    // Jamais moins de deux pixels par point, et l'anticrenelage toujours.
-    this.rendu.setPixelRatio(Math.min(3, Math.max(2, window.devicePixelRatio || 1)));
+    // Deux pixels par point (net sans payer le triple des ecrans les plus denses), l'anticrenelage
+    // toujours ; un appareil qui rame y redescend a 1,5 (voir la boucle)
+    this.rendu.setPixelRatio(this.pixels);
     this.rendu.setSize(l, h, false);
     // la LARGEUR vue, en metres : un telephone en portrait voit une rue et ses deux trottoirs
     const vue = (l < h ? 34 : 60) / this.zoom, asp = l / h;
@@ -1208,6 +1236,10 @@ export class Ville {
     this.lesEtiquettes();
 
     if (dt > 0.045) this.lent++; else this.lent = Math.max(0, this.lent - 1);
+    if (this.lent > 90 && !this.rendu.shadowMap.enabled && this.pixels > 1.5) {
+      // les ombres deja coupees et toujours lent : moins de pixels
+      this.pixels = 1.5; this.lent = 0; this.redimensionner();
+    }
     if (this.lent > 90 && this.rendu.shadowMap.enabled) {
       this.rendu.shadowMap.enabled = false;
       this.scene.traverse(o => { const m = o as THREE.Mesh; if (m.material) (Array.isArray(m.material) ? m.material : [m.material]).forEach(x => (x.needsUpdate = true)); });

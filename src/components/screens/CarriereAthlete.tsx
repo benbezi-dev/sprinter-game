@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { PANNEAU, RESSORT, DUREE, COURBE, TRANSITION } from '@/lib/mouvement';
 import { conseil, journee, seanceDuJourDe, heureSeance } from '@/game/athlete/guide';
+import { suspendreLeDessin } from '@/game/dessin-suspendu';
 import { type Moment, type Tenue, TENUES, tenue, tenuesDu, GARDE_ROBE_DE_DEPART, momentDe } from '@/game/athlete/garde-robe';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
@@ -654,6 +655,8 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   const [pret, setPret] = useState(false);
   // la vitesse du temps : minutes de jeu par seconde (0 : pause), comme les Sims
   const [vitesse, setVitesse] = useState(1);
+  // la ville couvre l'ecran : le moteur ne redessine pas son accueil derriere elle
+  useEffect(() => { suspendreLeDessin(true); return () => suspendreLeDessin(false); }, []);
   // courir partout (« le personnage peut aussi courir pour aller plus vite », l'auteur, 25/10)
   const [course, setCourse] = useState(false);
   // la camera : de dessus (la ville entiere) ou derriere le joueur (« Eyes » de Lagos Life)
