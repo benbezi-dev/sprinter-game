@@ -8,6 +8,7 @@ import {
 import { mot, dans, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe } from '@/game/athlete/apparence';
 import { POSTURES } from '@/game/athlete/postures';
+import { bonusDeSeance } from '@/game/athlete/gens';
 
 /* ---------------------------------------------------------------------------
    LES SEANCES : UN MINI-JEU PAR VRAI EXERCICE, JOUE PAR L'ATHLETE
@@ -834,7 +835,8 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
   const [res, setRes] = useState<{ score: number; r: ResultatSeance | null } | null>(null);
   const finir = (s: number) => {
     const score = borne(s);
-    setRes({ score, r: faireLaSeance(a, jour, score, Math.random) });
+    // le conseil du coach, la seance a deux, la confiance du coach : la seance rend plus
+    setRes({ score, r: faireLaSeance(a, jour, score, Math.random, bonusDeSeance(a)) });
     // le corps se pose : bras leves si la seance est belle, debout sinon
     const c = scene.current.corps;
     c.v = 0; c.posture = { w: 0 }; c.marche = 0; scene.current.barre = null; scene.current.vol = 0;

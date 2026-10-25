@@ -22,6 +22,7 @@ import { tirerLaSemaine } from './recit';
 import { MOTS } from './mots';
 import { recapMondial } from '../championnats';
 import { lookDe, apparenceDe } from './apparence';
+import { laSemainePasse } from './gens';
 
 const CLE = 'sprinter_athlete_v1';
 
@@ -56,7 +57,10 @@ export function sauver(a: Athlete | null) {
 export function agir(a: Athlete, id: string): null | string {
   const s = a.semaine;
   const r = faireUneAction(a, id);
-  if (!r && a.semaine !== s && !a.evenement) a.evenement = tirerLaSemaine(a, Math.random);
+  if (!r && a.semaine !== s) {
+    laSemainePasse(a);
+    if (!a.evenement) a.evenement = tirerLaSemaine(a, Math.random);
+  }
   sauver(a);
   return r;
 }

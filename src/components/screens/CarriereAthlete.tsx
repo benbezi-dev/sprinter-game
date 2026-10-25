@@ -25,7 +25,8 @@ import {
   rangerLaCourse, aRouvrir, demanderReouverture,
 } from '@/game/athlete/carriere';
 import { mot, dans, seanceDuJour, lang, EXOS } from '@/game/athlete/mots';
-import { lookDe, apparenceDe } from '@/game/athlete/apparence';
+import { lookDe, apparenceDe, lookDePersonne } from '@/game/athlete/apparence';
+import { type Personne, GENS, PERSONNES, ouEst, lienDe, etiquette, interactionsAvec, interagir } from '@/game/athlete/gens';
 import { Ville, LIEUX, type Lieu } from '@/game/athlete/ville';
 import { SeanceJeu } from './SeancesAthlete';
 
@@ -416,6 +417,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   const [seance, setSeance] = useState<Jour | null>(null);
   const [lieu, setLieu] = useState<Lieu | null>(null);
   const [menu, setMenu] = useState(false);
+  const [personne, setPersonne] = useState<Personne | null>(null);
   const [pret, setPret] = useState(false);
   // la vitesse du temps : minutes de jeu par seconde (0 : pause), comme les Sims
   const [vitesse, setVitesse] = useState(1);
@@ -433,6 +435,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
       surLieu: l => setLieu(l),
       surPosition: p => { a.position = p; },
       surPret: () => setPret(true),
+      surPersonne: id => { setLieu(null); setMenu(false); setPersonne(id as Personne); },
     });
     ville.current = v;
     return () => { sauver(a); v.detruire(); ville.current = null; };
@@ -441,12 +444,19 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
 
   const ev = evenement(a.evenement);
   // la ville se fige tant qu'un lieu, une seance, un dialogue ou le menu est ouvert
-  useEffect(() => { ville.current?.pause(!!(lieu || seance || ev || menu)); }, [lieu, seance, ev, menu]);
+  useEffect(() => { ville.current?.pause(!!(lieu || seance || ev || menu || personne)); }, [lieu, seance, ev, menu, personne]);
 
   // LE TEMPS QUI PASSE : une seconde, `vitesse` minutes ; rien ne bouge
   // pendant qu'un lieu, une seance, un dialogue ou le menu est ouvert.
-  const fige = !!(lieu || seance || ev || menu);
-  useEffect(() => { ville.current?.heure(heureDe(a)); });
+  const fige = !!(lieu || seance || ev || menu || personne);
+  // l'heure, et qui est ou a cette heure-la (gens.ts)
+  useEffect(() => {
+    ville.current?.heure(heureDe(a));
+    ville.current?.gens(PERSONNES.flatMap(p => {
+      const l = ouEst(a, p);
+      return l ? [{ id: p, nom: dans(GENS[p].nom(a)), lieu: l as Lieu, look: lookDePersonne(a, p) }] : [];
+    }));
+  });
   useEffect(() => {
     if (fige || !vitesse || !pret) return;
     let n = 0;
@@ -559,9 +569,16 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
       {/* le lieu ou l'on vient d'entrer */}
       {lieu && (
         <Feuille titre={nomLieu(lieu).toUpperCase()} sous={LIEUX[lieu].vrai} onFermer={() => { sauver(a); setLieu(null); }}>
+          <Ici a={a} lieu={lieu} parler={p => { setLieu(null); setPersonne(p); }} />
           <DansLeLieu lieu={lieu} a={a} ev={!!ev} leJour={leJour} changer={changer} aller={aller}
                       surSeance={j => setSeance(j)} onEffacer={onEffacer}
                       surApparence={ap => changer(() => { a.apparence = ap; ville.current?.habiller(lookDe(ap, true)); })} />
+        </Feuille>
+      )}
+
+      {personne && (
+        <Feuille titre={dans(GENS[personne].nom(a)).toUpperCase()} sous={dans(GENS[personne].role)} onFermer={() => { sauver(a); setPersonne(null); }}>
+          <FicheDePersonne a={a} p={personne} ev={!!ev} changer={changer} />
         </Feuille>
       )}
 
@@ -572,13 +589,95 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   );
 }
 
+/** Qui est la, dans ce lieu, en ce moment. */
+function Ici({ a, lieu, parler }: { a: Athlete; lieu: Lieu; parler: (p: Personne) => void }) {
+  const la = PERSONNES.filter(p => ouEst(a, p) === lieu);
+  if (!la.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1.5 items-center">
+      <span className="text-[10px] font-black tracking-widest text-white/50">{dans(['ICI', 'HERE'])}</span>
+      {la.map(p => (
+        <button key={p} onClick={() => parler(p)} className="rounded-full bg-white/90 text-[#0F2A1E] px-2.5 py-1 text-[11px] font-black">
+          {dans(GENS[p].nom(a))} · {dans(['parler', 'talk'])}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** La jauge d'une relation, de -100 a 100, avec son mot. */
+function Lien({ v }: { v: number }) {
+  const c = v < -15 ? '#FF5A5F' : v < 15 ? '#B9C2C9' : v < 50 ? '#7BD88F' : VERT;
+  return (
+    <div className="flex flex-col gap-0.5">
+      <div className="relative h-2 rounded-full bg-white/10 overflow-hidden">
+        <div className="absolute inset-y-0 left-1/2 w-px bg-white/30" />
+        <div className="absolute inset-y-0 rounded-full" style={{ left: `${Math.min(50, 50 + v / 2)}%`, width: `${Math.abs(v) / 2}%`, background: c }} />
+      </div>
+      <span className="text-[10px] font-bold" style={{ color: c }}>{dans(etiquette(v))} · {v > 0 ? '+' : ''}{v}</span>
+    </div>
+  );
+}
+
+/** La fiche d'une personne : la relation, ce qu'elle dit, ce qu'on peut faire avec elle. */
+function FicheDePersonne({ a, p, ev, changer }: { a: Athlete; p: Personne; ev: boolean; changer: (f: () => void) => void }) {
+  const [bulle, setBulle] = useState<[string, string] | null>(null);
+  return (
+    <>
+      <Lien v={lienDe(a, p)} />
+      {bulle && (
+        <div className="relative rounded-2xl bg-white text-[#10251C] px-3 py-2 text-sm font-semibold leading-snug shadow-lg">
+          {dans(bulle)}
+          <span className="absolute -top-1.5 left-6 w-3 h-3 rotate-45 bg-white" />
+        </div>
+      )}
+      <Carte titre={dans(['INTERAGIR', 'INTERACT'])} icone={MessageCircle}>
+        {interactionsAvec(p).map(i => {
+          const refus = i.possible?.(a, p);
+          return (
+            <button key={i.id} disabled={!!refus || ev}
+                    onClick={() => changer(() => { const r = interagir(a, p, i.id); setBulle(r.replique || r.refus || null); })}
+                    className="flex items-center justify-between gap-2 rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-left disabled:opacity-40 hover:enabled:bg-white/10">
+              <span className="flex flex-col">
+                <span className="text-xs font-black">{dans(i.texte)}</span>
+                {refus && <span className="text-[10px] text-amber-300/80">{dans(refus)}</span>}
+              </span>
+              <span className="text-[10px] text-white/50 shrink-0">{i.duree} min</span>
+            </button>
+          );
+        })}
+      </Carte>
+    </>
+  );
+}
+
+/** Tes proches : les relations, et ou chacun se trouve en ce moment. */
+function Proches({ a }: { a: Athlete }) {
+  return (
+    <Carte titre={dans(['TES PROCHES', 'YOUR PEOPLE'])} icone={Users}>
+      {PERSONNES.filter(p => (p !== 'coach' && p !== 'partenaire') || a.club).map(p => {
+        const l = ouEst(a, p);
+        return (
+          <div key={p} className="flex flex-col gap-0.5">
+            <span className="flex justify-between gap-2 text-xs">
+              <b>{dans(GENS[p].nom(a))}</b>
+              <span className="text-[10px] text-white/50">{l ? nomLieu(l as Lieu) : dans(['ailleurs', 'elsewhere'])}</span>
+            </span>
+            <Lien v={lienDe(a, p)} />
+          </div>
+        );
+      })}
+    </Carte>
+  );
+}
+
 /** Une feuille qui monte du bas de l'ecran. */
 function Feuille({ titre, sous, onFermer, children }: { titre: string; sous?: string; onFermer: () => void; children: React.ReactNode }) {
   return (
     <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center px-[max(env(safe-area-inset-left),0.5rem)] pr-[max(env(safe-area-inset-right),0.5rem)] pb-[max(env(safe-area-inset-bottom),0.5rem)]">
       <motion.div {...PANNEAU} className="w-full max-w-lg max-h-[68vh] overflow-y-auto rounded-2xl border p-3 flex flex-col gap-2 shadow-2xl"
                   style={{ borderColor: `${VERT}66`, background: 'linear-gradient(160deg, #10251CF5, #0A1410F7)' }}>
-        <div className="flex items-start justify-between gap-2 sticky top-0">
+        <div className="flex items-start justify-between gap-2 sticky -top-3 -mx-3 px-3 pt-3 pb-1 -mt-3 z-10 rounded-t-2xl bg-[#10251C]">
           <div className="min-w-0">
             <h3 className="font-black font-display text-xl tracking-wide" style={{ color: VERT }}>{titre}</h3>
             {sous && <p className="text-[10px] font-bold tracking-widest text-white/50">{sous}</p>}
@@ -653,6 +752,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
         {leJour && <p className="text-[11px] text-amber-300/80">{dans(['Aujourd’hui, c’est la compétition : passe à la gare avant de te coucher.', 'Today is race day: go to the station before bed.'])}</p>}
         <Actions a={a} lieu="maison" ev={ev} changer={changer} />
         <Programme />
+        <Proches a={a} />
         <Carte><Barres a={a} /></Carte>
         <Bouton onClick={() => setMiroir(m => !m)}>{dans(['LE MIROIR · CHANGER DE STYLE', 'THE MIRROR · CHANGE STYLE'])}</Bouton>
         {miroir && <ChoixApparence ap={apparenceDe(a)} onChange={surApparence} />}

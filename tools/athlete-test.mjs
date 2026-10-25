@@ -23,7 +23,8 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
 const dir = mkdtempSync(join(tmpdir(), 'athlete-'));
 const entree = join(dir, 'entree.ts');
 writeFileSync(entree, `export * from '${join(process.cwd(), 'src/game/athlete/regles.ts')}';
-export * from '${join(process.cwd(), 'src/game/athlete/recit.ts')}';`);
+export * from '${join(process.cwd(), 'src/game/athlete/recit.ts')}';
+export * from '${join(process.cwd(), 'src/game/athlete/gens.ts')}';`);
 const sortie = join(dir, 'athlete.mjs');
 await build({ entryPoints: [entree], bundle: true, format: 'esm', platform: 'node', outfile: sortie, logLevel: 'silent' });
 const R = await import(sortie);
@@ -190,6 +191,41 @@ titre('la journee, comme les Sims');
   d.besoins.energie = 5; d.besoins.faim = 5;
   ok('a jeun et sans sommeil, la seance rend moins', R.gainDeSeance(d, 'lundi', 1).vitesse < plein);
   ok('la pizza coute', (() => { const e = R.nouvelAthlete('T', 'modeste', 'polyvalent', null); e.argent = 5; return R.actionPossible(e, 'pizza') === 'argent'; })());
+}
+
+titre('les gens');
+{
+  const a = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);
+  a.heure = 9 * 60;
+  ok('lundi 9 h : le prof et Ines au college', R.ouEst(a, 'prof') === 'college' && R.ouEst(a, 'amie') === 'college');
+  ok('sans club : pas de coach', R.ouEst(a, 'coach') === null);
+  a.heure = 17 * 60 + 30;
+  ok('lundi 17 h 30 : Ines au parc, Yanis au stade', R.ouEst(a, 'amie') === 'parc' && R.ouEst(a, 'rival') === 'stade');
+  a.heure = 20 * 60;
+  ok('le soir, les parents a la maison', R.ouEst(a, 'maman') === 'maison' && R.ouEst(a, 'papa') === 'maison');
+  a.club = 'horizon'; a.coach = 'mireille'; a.heure = 18 * 60;
+  ok('au club Horizon, le coach a la salle du club', R.ouEst(a, 'coach') === 'club_horizon');
+  const v0 = R.lienDe(a, 'amie');
+  const r = R.interagir(a, 'amie', 'discuter', () => 0.5);
+  ok('discuter avec Ines : une replique, la relation monte', r.replique && R.lienDe(a, 'amie') > v0);
+  ok('le temps passe', a.heure === 18 * 60 + 15);
+  a.argent = 10;
+  ok('la pizza demande 24 euros', !!R.interagir(a, 'amie', 'pizza').refus);
+  ok('pas de chambrage avec sa mere', !!R.interagir(a, 'maman', 'chambrer').refus);
+  R.interagir(a, 'coach', 'conseil', () => 0);
+  const b = R.bonusDeSeance(a);
+  ok('le conseil du coach : un bonus pour la seance suivante, une fois', b > 0.05 && R.bonusDeSeance(a) < b);
+  const plein = R.gainDeSeance(a, 'lundi', 1), bonifie = R.gainDeSeance(a, 'lundi', 1, 0.1);
+  ok('le bonus fait gagner plus', bonifie.vitesse > plein.vitesse);
+  a.argent = 0; const avant = R.lienDe(a, 'papa');
+  R.interagir(a, 'papa', 'argent', () => 0);
+  ok('famille aisee : papa donne 25 euros, une fois par semaine', a.argent === 25 && !!R.interagir(a, 'papa', 'argent').refus);
+  const loin = R.lienDe(a, 'prof');
+  a.vus_semaine = [];
+  R.laSemainePasse(a);
+  ok('une semaine sans se voir : la relation retombe', R.lienDe(a, 'prof') === loin - 2 && !a.argentParents);
+  ok('chaque personne a de quoi faire', R.PERSONNES.every(p => R.interactionsAvec(p).length >= 2));
+  ok('l\'etiquette suit la relation', R.etiquette(90)[0] === 'Inséparables' && R.etiquette(-60)[0] === 'En froid');
 }
 
 titre('le calage sur le direct, a partir de la France');

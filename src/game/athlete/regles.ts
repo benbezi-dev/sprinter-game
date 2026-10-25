@@ -75,6 +75,14 @@ export type Athlete = {
   besoins?: Record<Besoin, number>;
   /** L'ecole : 0 a 100, les cours et les devoirs la montent, secher la fait baisser. */
   ecole?: number;
+  /** LES GENS (gens.ts) : les relations hors coach et rival, qui l'on a vu cette semaine. */
+  liens?: Record<string, number>;
+  vus_semaine?: string[];
+  /** Deja demande de l'argent aux parents cette semaine ? */
+  argentParents?: boolean;
+  /** Pour la prochaine seance : le conseil du coach, l'entrainement a deux (part de gain en plus). */
+  conseil?: number;
+  ensemble?: number;
   /** Deja alle en cours aujourd'hui ? */
   cours?: boolean;
   /** Deja passe chez le kine, deja fait son footing cette semaine ? */
@@ -365,7 +373,7 @@ const reste = (v: number) => Math.max(0.08, 1 - v / 115);
  * de 0 a 1 (le mini-jeu). Une seance ratee rend quand meme un peu : on est
  * venu, on a couru.
  */
-export function gainDeSeance(a: Athlete, j: Jour, score: number): Partial<Record<Stat, number>> {
+export function gainDeSeance(a: Athlete, j: Jour, score: number, bonus = 0): Partial<Record<Stat, number>> {
   const s = SEANCES[j];
   const q = 0.25 + 0.75 * borne(score, 0, 1);
   const c = club(a.club);
@@ -373,7 +381,7 @@ export function gainDeSeance(a: Athlete, j: Jour, score: number): Partial<Record
   const forme = 1 - Math.max(0, a.fatigue - 50) / 100;
   const outil = a.materiel.some(id => piece(id)?.seance === j) ? 1.15 : 1;
   const moral = 0.85 + 0.3 * (a.moral / 100);
-  const base = 3.2 * q * encadrement * forme * outil * moral * formeDuJour(a);
+  const base = 3.2 * q * encadrement * forme * outil * moral * formeDuJour(a) * (1 + bonus);
   const cles = a.specialite ? CLES_EPREUVE[a.specialite] : [];
   const spe = (st: Stat) => (a.voie === 'specialiste' && cles.includes(st) ? 1.2 : 1);
   // Le polyvalent gagne moins vite sur l'essentiel mais plus sur le reste.
@@ -391,7 +399,7 @@ export type Seance = { gains: Partial<Record<Stat, number>>; blessure: boolean }
  * blessure : au-dessus de 85 de fatigue, une chance sur trois de s'arreter
  * deux semaines — et la seance ne rapporte rien.
  */
-export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => number): Seance | null {
+export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => number, bonus = 0): Seance | null {
   if (seancePossible(a, j)) return null;
   a.faites.push(j);
   if (j !== 'samedi') a.assiduite.faites += 1;
@@ -403,7 +411,7 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
     noter(a, 'Blessé à l’entraînement : deux semaines d’arrêt.', 'Injured in training: two weeks off.');
     return { gains: {}, blessure: true };
   }
-  const gains = gainDeSeance(a, j, score);
+  const gains = gainDeSeance(a, j, score, bonus);
   // Au plafond du niveau, la seance entretient sans faire monter : c'est la competition qui ouvre la suite.
   const plafond = COMPETITIONS[a.niveau].plafond;
   for (const k of Object.keys(gains) as Stat[]) {

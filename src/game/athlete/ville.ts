@@ -407,7 +407,12 @@ type Options = {
   surPosition?: (p: P2) => void;
   /** La ville est prete (le fichier lu, la scene construite). */
   surPret?: () => void;
+  /** On a touche quelqu'un (gens.ts). */
+  surPersonne?: (id: string) => void;
 };
+
+/** Une personne du jeu dans la ville : ou elle est, a quoi elle ressemble. */
+export type Habitant = { id: string; nom: string; lieu: Lieu; look: any };
 
 export class Ville {
   private rendu: THREE.WebGLRenderer;
@@ -424,6 +429,8 @@ export class Ville {
   private portes = {} as Record<Lieu, P2>;
   private moi: Personne | null = null;
   private passants: Personne[] = [];
+  /** Les gens du jeu (gens.ts) presents en ce moment, et leur etiquette. */
+  private habitants = new Map<string, { p: Personne; lieu: Lieu; el: HTMLDivElement; flane: number }>();
   private roulent: { v: THREE.Group; route: P2[]; dir: THREE.Vector3 }[] = [];
   private enseignes: THREE.Object3D[] = [];
   private cible = new THREE.Vector3();
@@ -539,6 +546,38 @@ export class Ville {
     // les fenetres s'allument au crepuscule
     if (this.murs) this.murs.emissiveIntensity = Math.max(0, 1 - jour * 1.6) * 0.9;
     this.rendu.toneMappingExposure = 0.9 + 0.15 * jour;
+  }
+
+  /**
+   * Qui est ou, maintenant (gens.ts, ouEst). Les absents s'effacent ; un
+   * nouveau venu apparait pres de la porte de son lieu ; celui qui change de
+   * lieu y est deja (on ne le suit pas a travers la ville).
+   */
+  gens(liste: Habitant[]) {
+    if (!this.moi) return;
+    const vus = new Set(liste.map(h => h.id));
+    for (const [id, h] of this.habitants) {
+      if (vus.has(id)) continue;
+      this.scene.remove(h.p.sprite, h.p.ombre); h.el.remove(); this.habitants.delete(id);
+    }
+    liste.forEach((h, i) => {
+      const [x, z] = this.portes[h.lieu];
+      const ici = this.habitants.get(h.id);
+      if (ici && ici.lieu === h.lieu) return;
+      // autour de la porte, chacun a sa place : on ne s'empile pas
+      const a = (i * 2.4) % (Math.PI * 2), r = 2.6 + (i % 3) * 0.9;
+      const px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+      if (ici) { ici.p.pos.set(px, 0, pz); ici.p.route = []; ici.p.placer(); ici.lieu = h.lieu; return; }
+      const p = new Personne(h.look, px, pz, this.scene, 200);
+      const el = document.createElement('div');
+      el.textContent = h.nom;
+      el.style.cssText = 'position:absolute;left:0;top:0;pointer-events:auto;cursor:pointer;white-space:nowrap;z-index:1;'
+        + 'padding:2px 8px;border-radius:999px;background:rgba(255,255,255,0.92);color:#0F2A1E;font:800 10px system-ui,sans-serif;'
+        + 'box-shadow:0 2px 6px rgba(0,0,0,.25)';
+      el.addEventListener('click', ev => { ev.stopPropagation(); if (!this.enPause) this.o.surPersonne?.(h.id); });
+      this.hote.appendChild(el);
+      this.habitants.set(h.id, { p, lieu: h.lieu, el, flane: Math.random() * 4 });
+    });
   }
 
   /** Marcher jusqu'a un lieu (le chemin par les rues). */
@@ -814,6 +853,10 @@ export class Ville {
     this.pointeurs.delete(e.pointerId); this.pince = 0;
     if (!seul || this.bouge || this.enPause || !this.moi) return;
     const p = this.solSous(e); if (!p) return;
+    // une personne touchee : on lui parle
+    for (const [id, h] of this.habitants) {
+      if (Math.hypot(h.p.pos.x - p.x, h.p.pos.z - p.z) < 2.2) { this.o.surPersonne?.(id); return; }
+    }
     // pres de la porte d'un lieu : c'est lui qu'on vise
     for (const l of Object.keys(this.portes) as Lieu[]) {
       if (Math.hypot(this.portes[l][0] - p.x, this.portes[l][1] - p.z) < 6) {
@@ -897,6 +940,18 @@ export class Ville {
       }
       r.v.rotation.y = Math.atan2(r.dir.x, r.dir.z);
     }
+    // les gens du jeu flanent pres de leur lieu, et se tournent vers toi quand tu approches
+    for (const [, h] of this.habitants) {
+      h.p.avancer(dt, 1.2);
+      h.flane -= dt;
+      if (h.flane <= 0 && !h.p.route.length) {
+        h.flane = 3 + Math.random() * 5;
+        const [x, z] = this.portes[h.lieu];
+        const k = this.pietons.proche(x + (Math.random() - 0.5) * 10, z + (Math.random() - 0.5) * 10, 12);
+        if (k >= 0) h.p.route = this.pietons.chemin(this.pietons.proche(h.p.pos.x, h.p.pos.z), k).slice(0, 4);
+      }
+      if (!h.p.route.length && Math.hypot(moi.pos.x - h.p.pos.x, moi.pos.z - h.p.pos.z) < 8) h.p.dir.set(moi.pos.x - h.p.pos.x, 0, moi.pos.z - h.p.pos.z).normalize();
+    }
     if (this.marque.visible) this.marque.rotation.z += dt * 1.5;
 
     // la camera suit, tourne en douceur ; le soleil suit pour garder l'ombre nette
@@ -912,7 +967,10 @@ export class Ville {
     for (const e of this.enseignes) e.scale.setScalar(1 + 0.08 * Math.sin(t / 380));
 
     moi.peindre(this.camera);
-    if (Math.floor(t / 66) !== Math.floor((t - dt * 1000) / 66)) for (const p of this.passants) p.peindre(this.camera);
+    if (Math.floor(t / 66) !== Math.floor((t - dt * 1000) / 66)) {
+      for (const p of this.passants) p.peindre(this.camera);
+      for (const [, h] of this.habitants) h.p.peindre(this.camera);
+    }
 
     this.rendu.render(this.scene, this.camera);
     this.lesEtiquettes();
@@ -927,6 +985,13 @@ export class Ville {
 
   private lesEtiquettes() {
     const l = this.hote.clientWidth, h = this.hote.clientHeight;
+    for (const [, g] of this.habitants) {
+      const q = g.p.pos.clone(); q.y = 4.4; q.project(this.camera);
+      const x = (q.x + 1) / 2 * l, y = (1 - q.y) / 2 * h;
+      const dehors = x < -60 || x > l + 60 || y < -20 || y > h + 40;
+      g.el.style.display = dehors ? 'none' : '';
+      if (!dehors) g.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%,-100%)`;
+    }
     for (const { el, p } of this.etiquettes) {
       const q = p.clone().project(this.camera);
       const x = (q.x + 1) / 2 * l, y = (1 - q.y) / 2 * h;

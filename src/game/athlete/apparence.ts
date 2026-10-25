@@ -21,3 +21,30 @@ export function lookDe(ap: Apparence, enVille: boolean) {
     ? { ...base, civil: true, manches: c, pantalon: [44, 46, 64], shoe: [240, 240, 244] }
     : { ...base, shorts: [30, 32, 48] });
 }
+
+/**
+ * A quoi ressemblent les gens du jeu (gens.ts). Les parents ont la peau de
+ * l'athlete — c'est sa famille ; les autres sont tires une fois pour toutes
+ * sur leur nom, comme les coureurs de la piste. Tous en tenue de ville, sauf
+ * ceux du club, en tenue d'entrainement.
+ */
+const cacheGens = new Map<string, any>();
+export function lookDePersonne(a: Athlete, p: string): any {
+  const ap = apparenceDe(a), cle = `${p}|${ap.peau}`;
+  const deja = cacheGens.get(cle); if (deja) return deja;
+  const C = SprinterCore as any;
+  const base = C.lookFor('athlete-' + p, 'divers');
+  const sport = p === 'coach' || p === 'partenaire' || p === 'rival';
+  const famille = p === 'maman' || p === 'papa';
+  const corps = p === 'maman' || p === 'amie' || p === 'partenaire' ? 'f' : p === 'coach' && a.club === 'horizon' ? 'f' : 'm';
+  const look = C.look({
+    ...base, build: corps,
+    skin: famille ? ap.peau : base.skin,
+    hair: famille ? (corps === 'f' ? 'bun' : 'crop') : base.hair,
+    h: famille ? (corps === 'f' ? 1.66 : 1.8) : p === 'prof' || p === 'coach' ? 1.76 : base.h,
+    ...(sport ? { jersey: p === 'rival' ? [200, 40, 40] : base.jersey } : { civil: true, manches: base.jersey, pantalon: p === 'prof' ? [70, 60, 50] : [50, 52, 70] }),
+    lunettes: p === 'prof' ? [30, 30, 34] : base.lunettes,
+  });
+  cacheGens.set(cle, look);
+  return look;
+}
