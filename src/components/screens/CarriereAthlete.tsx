@@ -17,7 +17,7 @@ import {
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
-  etape, categorie, LOYER, SALAIRE,
+  etape, categorie, LOYER, SALAIRE, payer,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
@@ -29,6 +29,8 @@ import { mot, dans, seanceDuJour, lang, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe, lookDePersonne } from '@/game/athlete/apparence';
 import { type Personne, GENS, PERSONNES, ouEst, lienDe, etiquette, interactionsAvec, interagir, roleDe } from '@/game/athlete/gens';
 import { Ville, LIEUX, type Lieu } from '@/game/athlete/ville';
+import { Telephone, type App } from './TelephoneAthlete';
+import { type Mode, voyager, nonLus, messagesDuReveil, messagesDeBienvenue } from '@/game/athlete/telephone';
 import { SeanceJeu } from './SeancesAthlete';
 import { nomDuClub, logoDuClub, CLUB_PARTENAIRE } from '@/game/athlete/partenaires';
 
@@ -106,7 +108,8 @@ export function PanneauAthlete() {
   const [ouvert, setOuvert] = useState(() => !!athlete() && aRouvrir());
   const [creation, setCreation] = useState(false);
 
-  const cree = (n: Athlete) => { courant = n; sauver(n); setA(n); setCreation(false); setOuvert(true); };
+  // le premier matin, le telephone a deja ses messages (telephone.ts)
+  const cree = (n: Athlete) => { messagesDeBienvenue(n); messagesDuReveil(n); courant = n; sauver(n); setA(n); setCreation(false); setOuvert(true); };
   const efface = () => { courant = null; sauver(null); setA(null); setOuvert(false); };
 
   return (
@@ -376,6 +379,7 @@ const NOMS_LIEUX: Record<Lieu, [string, string]> = {
 /** Le nom d'un lieu ; pour un adulte, la maison est son appartement. */
 const nomLieu = (l: Lieu, a?: Athlete) => (l === 'maison' && a && etape(a) === 'adulte' ? dans(['Ton appart', 'Your flat'])
   : l === 'club_quartier' && CLUB_PARTENAIRE ? CLUB_PARTENAIRE.court : dans(NOMS_LIEUX[l]));
+const PRIX_VELO = 120;
 const NOMS_JOURS: [string, string][] = [['Lundi', 'Monday'], ['Mardi', 'Tuesday'], ['Mercredi', 'Wednesday'], ['Jeudi', 'Thursday'], ['Vendredi', 'Friday'], ['Samedi', 'Saturday'], ['Dimanche', 'Sunday']];
 const nomDuJour = (j: number) => dans(NOMS_JOURS[j]);
 const horloge = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(Math.floor(m % 60)).padStart(2, '0')}`;
@@ -435,7 +439,8 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
   const [, maj] = useReducer((x: number) => x + 1, 0);
   const [seance, setSeance] = useState<Jour | null>(null);
   const [lieu, setLieu] = useState<Lieu | null>(null);
-  const [menu, setMenu] = useState(false);
+  // le telephone : ferme (null), ou l'appli ouverte ; et le lieu a montrer sur la carte
+  const [tel, setTel] = useState<App | null>(null);
   const [personne, setPersonne] = useState<Personne | null>(null);
   const [pret, setPret] = useState(false);
   // la vitesse du temps : minutes de jeu par seconde (0 : pause), comme les Sims
@@ -455,7 +460,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
       surLieu: l => setLieu(l),
       surPosition: p => { a.position = p; },
       surPret: () => setPret(true),
-      surPersonne: id => { setLieu(null); setMenu(false); setPersonne(id as Personne); },
+      surPersonne: id => { setLieu(null); setTel(null); setPersonne(id as Personne); },
     });
     ville.current = v;
     return () => { sauver(a); v.detruire(); ville.current = null; };
@@ -464,11 +469,11 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
 
   const ev = evenement(a.evenement);
   // la ville se fige tant qu'un lieu, une seance, un dialogue ou le menu est ouvert
-  useEffect(() => { ville.current?.pause(!!(lieu || seance || ev || menu || personne)); }, [lieu, seance, ev, menu, personne]);
+  useEffect(() => { ville.current?.pause(!!(lieu || seance || ev || tel || personne)); }, [lieu, seance, ev, tel, personne]);
 
   // LE TEMPS QUI PASSE : une seconde, `vitesse` minutes ; rien ne bouge
   // pendant qu'un lieu, une seance, un dialogue ou le menu est ouvert.
-  const fige = !!(lieu || seance || ev || menu || personne);
+  const fige = !!(lieu || seance || ev || tel || personne);
   // l'heure, et qui est ou a cette heure-la (gens.ts)
   useEffect(() => {
     ville.current?.heure(heureDe(a));
@@ -497,11 +502,13 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
 
   const comp = COMPETITIONS[a.niveau];
   const { jour: leJour, date: direct, cetteSemaine } = jourDeLAthlete(a);
-  const aller = (l: Lieu) => { setLieu(null); setMenu(false); ville.current?.allerA(l); };
-  // y aller tout de suite : le bus ou le velo, ca prend quand meme un peu de temps
-  const filer = (l: Lieu) => {
-    setMenu(false);
-    avancer(a, 5 + Math.round((ville.current?.distance(l) || 0) / 220));
+  // partir vers un lieu : a pied on y marche dans la ville ; a velo ou en bus on y est,
+  // le temps du trajet passe et le ticket se paie (telephone.ts, trajet)
+  const aller = (l: Lieu, mode: Mode = 'pied') => {
+    setLieu(null); setTel(null);
+    if (mode === 'pied') { ville.current?.allerA(l); return; }
+    if (voyager(a, mode, Math.round((ville.current?.distance(l) || 0) * 1.3))) return;
+    sauver(a);
     ville.current?.filerA(l);
   };
 
@@ -547,7 +554,11 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
           </div>
           <div className="flex flex-col gap-1.5">
             <button onClick={onFermer} aria-label={mot('fermer')} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><X size={18} /></button>
-            <button onClick={() => { setLieu(null); setMenu(true); }} aria-label={dans(['Aller à', 'Go to'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><MapPin size={18} /></button>
+            <button onClick={() => { setLieu(null); setTel('accueil'); }} aria-label={dans(['Téléphone', 'Phone'])} className="relative w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center">
+              <Smartphone size={18} />
+              {nonLus(a) > 0 && <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center">{nonLus(a)}</span>}
+            </button>
+            <button onClick={() => { setLieu(null); setTel('carte'); }} aria-label={dans(['Carte', 'Map'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><MapPin size={18} /></button>
             <button onClick={() => ville.current?.tourner(-1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCcw size={16} /></button>
             <button onClick={() => ville.current?.tourner(1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCw size={16} /></button>
           </div>
@@ -555,7 +566,7 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
       </div>
 
       {/* les besoins, comme les jauges d'un Sim */}
-      {!lieu && !menu && (
+      {!lieu && !tel && (
         <div className="absolute left-[max(env(safe-area-inset-left),0.5rem)] bottom-[max(env(safe-area-inset-bottom),0.5rem)] w-44 rounded-2xl bg-[rgba(8,18,14,0.86)] backdrop-blur p-2 flex flex-col gap-1 shadow-xl">
           {BESOINS.map(k => {
             const v = besoinsDe(a)[k], I = ICONES_BESOINS[k];
@@ -570,20 +581,10 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
         </div>
       )}
 
-      {/* aller a : la liste des lieux, a pied ou tout de suite */}
-      {menu && (
-        <Feuille titre={dans(['ALLER À', 'GO TO'])} onFermer={() => setMenu(false)}>
-          {(Object.keys(LIEUX) as Lieu[]).filter(l => l !== 'parents' || etape(a) === 'adulte').map(l => (
-            <div key={l} className="flex items-center gap-2">
-              <span className="flex-1 min-w-0 flex flex-col">
-                <span className="text-sm font-black truncate">{nomLieu(l, a)}</span>
-                <span className="text-[10px] text-white/50 truncate">{LIEUX[l].vrai || 'Val-de-Reuil'} · {Math.round((ville.current?.distance(l) || 0) / 10) * 10} m</span>
-              </span>
-              <Bouton onClick={() => aller(l)}>{dans(['À PIED', 'WALK'])}</Bouton>
-              <Bouton plein onClick={() => filer(l)}>{dans(['Y ALLER', 'GO'])}</Bouton>
-            </div>
-          ))}
-        </Feuille>
+      {/* le telephone : messages, agenda, carriere, classement, banque, contacts, carte */}
+      {tel && (
+        <Telephone a={a} ville={ville.current} depart={tel} nom={l => nomLieu(l, a)} changer={changer}
+                   onFermer={() => { sauver(a); setTel(null); }} aller={aller} />
       )}
 
       {/* le lieu ou l'on vient d'entrer */}
@@ -859,6 +860,16 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
 
     case 'boutique': return (
       <Carte titre={mot('boutique')} icone={ShoppingBag}>
+        {/* le velo : traverser Val-de-Reuil en quelques minutes, sans ticket (telephone.ts, trajet) */}
+        <div className="flex items-center gap-2">
+          <span className="flex-1 min-w-0 flex flex-col">
+            <span className="text-xs font-black">{dans(['Vélo de ville', 'City bike'])}</span>
+            <span className="text-[10px] text-white/55">{dans(['Les trajets 3 fois plus vite qu’à pied, gratuits', 'Trips 3× faster than walking, free'])}</span>
+          </span>
+          {a.velo
+            ? <span className="text-[10px] font-black tracking-widest" style={{ color: VERT }}>{mot('possede')}</span>
+            : <Bouton disabled={a.argent < PRIX_VELO} onClick={() => changer(() => { payer(a, -PRIX_VELO, 'Vélo', 'Bike'); a.velo = true; })}>{PRIX_VELO} €</Bouton>}
+        </div>
         {MATERIEL.map(p => {
           const r = achatPossible(a, p.id);
           if (r === 'avant') return null;

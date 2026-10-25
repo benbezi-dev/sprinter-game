@@ -67,6 +67,13 @@ export function messagesDuReveil(a: Athlete, alea: () => number = Math.random) {
   if (a.argent < 0) envoyer(a, 'banque', [`Votre compte est à découvert (${a.argent} €).`, `Your account is overdrawn (€${a.argent}).`]);
 }
 
+/** Le premier matin : la famille et Ines souhaitent bonne chance. */
+export function messagesDeBienvenue(a: Athlete) {
+  if (etape(a) === 'adulte') envoyer(a, 'maman', ['Alors, ce premier matin dans ton appart ? Passe manger dimanche.', 'So, first morning in your flat? Come for lunch on Sunday.']);
+  else envoyer(a, 'maman', ['Bonne première journée ! Le petit-déj est sur la table.', 'Have a great first day! Breakfast is on the table.']);
+  envoyer(a, 'amie', ['Alors, il paraît que tu te mets à l’athlé ?? 😄 Je veux tout savoir.', 'So I hear you’re getting into athletics?? 😄 Tell me everything.']);
+}
+
 /** Les reactions a une course : la famille, l'amie, le coach, le rival. */
 export function messagesDeCourse(a: Athlete, r: Resultat) {
   const podium = r.chrono !== null && r.place <= 3, ch = r.chrono !== null ? r.chrono.toFixed(2) : '';

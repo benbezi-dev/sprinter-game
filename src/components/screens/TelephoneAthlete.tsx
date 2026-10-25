@@ -147,7 +147,7 @@ function Messages({ a }: { a: Athlete }) {
       {l.map((m, i) => (
         <div key={i} className="flex gap-3 px-4 py-3 border-b border-white/5">
           <span className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-black text-white" style={{ background: couleurAuteur(m.de as Auteur) }}>
-            {nomAuteur(a, m.de).replace(/^(Ta |Ton |M\. |Mme |Coach |Le |Your |Mr |Ms )/, '').charAt(0)}
+            {nomAuteur(a, m.de).replace(/^(Ta |Ton |M\. |Mme |Coach |Le |Your |Mr |Ms )/, '').charAt(0).toUpperCase()}
           </span>
           <span className="flex-1 min-w-0">
             <span className="flex justify-between gap-2">
@@ -289,7 +289,7 @@ function Contacts({ a, nom, changer }: { a: Athlete; nom: (l: Lieu) => string; c
         return (
           <div key={p} className="px-4 py-3 border-b border-white/5 text-white">
             <div className="flex items-center gap-3">
-              <span className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-black" style={{ background: couleurAuteur(p) }}>{dans(GENS[p].nom(a)).replace(/^(Ta |Ton |M\. |Mme |Coach |Your |Mr |Ms )/, '').charAt(0)}</span>
+              <span className="w-10 h-10 shrink-0 rounded-full flex items-center justify-center font-black" style={{ background: couleurAuteur(p) }}>{dans(GENS[p].nom(a)).replace(/^(Ta |Ton |M\. |Mme |Coach |Your |Mr |Ms )/, '').charAt(0).toUpperCase()}</span>
               <span className="flex-1 min-w-0">
                 <span className="block text-sm font-black truncate">{dans(GENS[p].nom(a))}</span>
                 <span className="block text-[11px] text-white/55 truncate">{dans(roleDe(a, p))} · {dans(etiquette(v))} · {l ? nom(l as Lieu) : dans(['ailleurs', 'elsewhere'])}</span>

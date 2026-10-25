@@ -24,7 +24,8 @@ const dir = mkdtempSync(join(tmpdir(), 'athlete-'));
 const entree = join(dir, 'entree.ts');
 writeFileSync(entree, `export * from '${join(process.cwd(), 'src/game/athlete/regles.ts')}';
 export * from '${join(process.cwd(), 'src/game/athlete/recit.ts')}';
-export * from '${join(process.cwd(), 'src/game/athlete/gens.ts')}';`);
+export * from '${join(process.cwd(), 'src/game/athlete/gens.ts')}';
+export * from '${join(process.cwd(), 'src/game/athlete/telephone.ts')}';`);
 const sortie = join(dir, 'athlete.mjs');
 await build({ entryPoints: [entree], bundle: true, format: 'esm', platform: 'node', outfile: sortie, logLevel: 'silent' });
 const R = await import(sortie);
@@ -247,6 +248,36 @@ titre('l\'age et les etapes de vie');
   ok('adulte : les parents chez eux', (() => { ad.heure = 20 * 60; return R.ouEst(ad, 'maman') === 'parents'; })());
   const r = R.conclureLaCompetition(R.nouvelAthlete('T', 'aisee', 'polyvalent', null), '100', 1, 12.34);
   ok('un premier chrono est un record personnel', r.record);
+}
+
+titre('le telephone');
+{
+  const a = R.nouvelAthlete('T', 'modeste', 'polyvalent', null);
+  a.club = 'quartier'; a.coach = 'dede'; a.jour = 6; a.heure = 22 * 60; a.evenement = null;
+  R.faireUneAction(a, 'dormir'); R.messagesDuReveil(a, () => 0.99);
+  ok('lundi matin avec un club : le coach rappelle la seance', a.messages.some(m => m.de === 'coach' && /Ce soir 18 h/.test(m.fr)));
+  ok('les messages arrivent non lus', R.nonLus(a) > 0);
+  R.toutLire(a);
+  ok('et se lisent', R.nonLus(a) === 0);
+  const c = R.classement(a, '100');
+  ok('un classement de quarante, sans record : dernier', c.total === 40 && c.moi.temps === null && c.moi.rang === 40);
+  a.records = { '100': 9.0 };
+  ok('avec un record imbattable : premier', R.classement(a, '100').moi.rang === 1);
+  ok('le classement est toujours le meme', R.classement(a, '200').lignes[3].nom === R.classement(a, '200').lignes[3].nom);
+  a.heure = 23 * 60;
+  ok('pas de bus la nuit', !!R.trajet(a, 'bus', 1000).refus);
+  ok('pas de velo sans velo', !!R.trajet(a, 'velo', 1000).refus);
+  a.heure = 10 * 60; a.velo = true;
+  ok('le velo va trois fois plus vite qu\'a pied', R.trajet(a, 'velo', 1500).minutes * 3 <= R.trajet(a, 'pied', 1500).minutes + 6);
+  const m0 = a.argent; R.voyager(a, 'bus', 1500);
+  ok('le bus coute un ticket et du temps', a.argent === m0 - R.TICKET && a.heure > 10 * 60);
+  const sem = R.agenda(a);
+  ok('l\'agenda : sept jours, cours en semaine, seance le lundi', sem.length === 7 && sem[0].some(r => r.quoi[0] === 'Cours') && sem[0].length === 2);
+  const ad = R.nouvelAthlete('T', 'modeste', 'polyvalent', null, undefined, 25);
+  ok('adulte : le travail a l\'agenda', R.agenda(ad)[1].some(r => r.quoi[0] === 'Travail'));
+  const r = R.conclureLaCompetition(a, '100', 2, 11.5);
+  R.messagesDeCourse(a, r);
+  ok('apres un podium : papa et le coach ecrivent', a.messages.some(m => m.de === 'papa') && a.messages.some(m => m.de === 'coach' && /11\.50/.test(m.fr)));
 }
 
 titre('le calage sur le direct, a partir de la France');
