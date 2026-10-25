@@ -23,6 +23,7 @@ import { MOTS } from './mots';
 import { recapMondial } from '../championnats';
 import { lookDe, apparenceDe } from './apparence';
 import { laSemainePasse } from './gens';
+import { messagesDuReveil, messagesDeCourse } from './telephone';
 
 const CLE = 'sprinter_athlete_v1';
 
@@ -61,6 +62,8 @@ export function agir(a: Athlete, id: string): null | string {
     laSemainePasse(a);
     if (!a.evenement) a.evenement = tirerLaSemaine(a, Math.random);
   }
+  // au reveil, le telephone vibre : le coach, Ines, la famille (telephone.ts)
+  if (!r && id === 'dormir') messagesDuReveil(a);
   sauver(a);
   return r;
 }
@@ -179,6 +182,7 @@ export function conclureLaCourse(a: Athlete): Resultat | null {
   const ordre: any[] = G.ranking || [];
   const place = moi === null ? (G.runners || []).length : Math.max(1, ordre.indexOf(G.player) + 1);
   const r = conclureLaCompetition(a, enCourse.epreuve, place, moi);
+  messagesDeCourse(a, r);
   const [fr, en] = MOTS[COMPETITIONS[r.niveau].cle];
   noter(a, `${fr} — ${r.epreuve} m : ${moi === null ? 'faux départ' : `${place === 1 ? '1er' : `${place}e`} en ${moi.toFixed(2)} s`}`,
            `${en} — ${r.epreuve} m: ${moi === null ? 'false start' : `P${place} in ${moi.toFixed(2)} s`}`);

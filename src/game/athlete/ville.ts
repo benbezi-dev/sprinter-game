@@ -36,7 +36,7 @@ export type Lieu =
   | 'piscine' | 'mairie' | 'lycee' | 'travail' | 'parents';
 
 type P2 = [number, number];
-type Donnees = {
+export type Donnees = {
   origine: [number, number];
   batiments: { p: P2[]; h: number; t: string; n?: string; a?: string }[];
   routes: { l: P2[]; w: number; t: string; n?: string }[];
@@ -47,6 +47,13 @@ type Donnees = {
   pistes: { p: P2[]; sport: string; ferme: boolean; lanes?: number }[];
   parkings: P2[][];
 };
+
+/** Les donnees de la ville, lues une fois et partagees (la ville 3D, la carte du telephone). */
+let donnees: Promise<Donnees> | null = null;
+export function chargerVille(): Promise<Donnees> {
+  const base = (import.meta as any).env?.BASE_URL || '/';
+  return (donnees ||= fetch(base + 'athlete/val-de-reuil.json').then(r => r.json()));
+}
 
 /* ----------------------------------------------------------------- les lieux */
 
@@ -499,8 +506,7 @@ export class Ville {
     window.addEventListener('keyup', this.relache);
     window.addEventListener('resize', this.redimensionner);
 
-    const base = (import.meta as any).env?.BASE_URL || '/';
-    fetch(base + 'athlete/val-de-reuil.json').then(r => r.json()).then((d: Donnees) => {
+    chargerVille().then((d: Donnees) => {
       if (this.arrete) return;
       this.construire(d);
       this.o.surPret?.();
@@ -605,6 +611,12 @@ export class Ville {
     this.o.surPosition?.([x, z]);
     setTimeout(() => { if (!this.arrete) this.o.surLieu(l); }, 900);
   }
+
+  /** Ou se tient le joueur (metres), ou null avant que la ville soit prete. */
+  position(): P2 | null { return this.moi ? [this.moi.pos.x, this.moi.pos.z] : null; }
+
+  /** La porte d'un lieu (metres), ou null s'il n'existe pas ici. */
+  porte(l: Lieu): P2 | null { return this.portes[l] || null; }
 
   /** La distance a pied jusqu'a un lieu, a vol d'oiseau, en metres. */
   distance(l: Lieu): number {
