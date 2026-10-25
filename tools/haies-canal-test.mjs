@@ -19,6 +19,7 @@ import { build } from 'esbuild';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { doublurePrecharge } from './doublure-precharge.mjs';
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -49,7 +50,7 @@ async function jeuDe(canal) {
     `export { haiesEnCours } from '${src('haies-course.js')}';`,
   ].join('\n'));
   await build({
-    entryPoints: [entree], outfile: sortie, bundle: true,
+    entryPoints: [entree], outfile: sortie, bundle: true, plugins: [doublurePrecharge],
     format: 'esm', platform: 'node', logLevel: 'silent',
     define: {
       'import.meta.env.VITE_CANAL': JSON.stringify(canal),
