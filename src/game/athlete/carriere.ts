@@ -13,9 +13,9 @@
 import { SprinterApp } from '../engine';
 import { CARRIERE_ATHLETE_OUVERTE } from '../canal';
 import {
-  type Athlete, type Epreuve, COMPETITIONS, reglages, coutDuDeplacement,
+  type Athlete, type Epreuve, COMPETITIONS, NATIONAL, reglages, coutDuDeplacement,
   conclureLaCompetition, finirLaSemaine, noter, declarerForfait, jourCale, type Resultat,
-  faireUneAction, avancer, heureDe, DIMANCHE, payer,
+  faireUneAction, avancer, heureDe, DIMANCHE, payer, tirerLeCorps, BLESSURES,
   type RendezVousReel,
 } from './regles';
 import { tirerLaSemaine } from './recit';
@@ -23,7 +23,8 @@ import { MOTS } from './mots';
 import { recapMondial } from '../championnats';
 import { lookDe, apparenceDe } from './apparence';
 import { laSemainePasse } from './gens';
-import { messagesDuReveil, messagesDeCourse } from './telephone';
+import { messagesDuReveil, messagesDeCourse, envoyer } from './telephone';
+import { certificatRequis } from './sante';
 
 const CLE = 'sprinter_athlete_v1';
 
@@ -121,7 +122,8 @@ export function forfait(a: Athlete) {
 /* --------------------------------------------------- la competition */
 
 /** Ce qu'on garde pendant que la course tourne : `a` est l'objet des ecrans. */
-let enCourse: { a: Athlete; epreuve: Epreuve; niveau: number } | null = null;
+/** `tour` : une course unique, ou la serie puis la finale a partir des France ; `vent` en m/s (null au 400 m). */
+let enCourse: { a: Athlete; epreuve: Epreuve; niveau: number; vent: number | null; tour: 'unique' | 'serie' | 'finale' } | null = null;
 /** Rouvrir le tableau de bord de la carriere en revenant a l'accueil. */
 let rouvrir = false;
 
@@ -133,15 +135,21 @@ export function demanderReouverture() { rouvrir = true; }
  * le corps de l'athlete sur le coureur, lancer le one shot. Rend false si le
  * deplacement n'est pas payable (le tableau de bord grise deja le bouton).
  */
-export function partirALaCompetition(a: Athlete, epreuve: Epreuve): boolean {
+export function partirALaCompetition(a: Athlete, epreuve: Epreuve, finale = false): boolean {
   if (!CARRIERE_ATHLETE_OUVERTE) return false;
-  const cout = coutDuDeplacement(a, a.niveau);
-  if (a.argent < cout || a.blessure > 0 || !jourDeLAthlete(a).jour) return false;
-  marquerLeRendezVous(a);
-  payer(a, -cout, 'Déplacement', 'Travel');
+  if (a.blessure > 0) return false;
+  if (!finale) {
+    const cout = coutDuDeplacement(a, a.niveau);
+    if (a.argent < cout || !jourDeLAthlete(a).jour || certificatRequis(a)) return false;
+    marquerLeRendezVous(a);
+    payer(a, -cout, 'Déplacement', 'Travel');
+  }
   sauver(a);
   const G = SprinterApp.G;
-  enCourse = { a, epreuve, niveau: a.niveau };
+  // le vent du jour (100 et 200 m) : il ne change pas la course — le plafond d'un dixieme
+  // vaut aussi pour lui —, il decide seulement si un record est homologue (+2,0 m/s au plus)
+  const vent = epreuve === '400' ? null : Math.round((-1.5 + Math.random() * 4.5) * 10) / 10;
+  enCourse = { a, epreuve, niveau: a.niveau, vent, tour: finale ? 'finale' : a.niveau >= NATIONAL ? 'serie' : 'unique' };
   G.reglagesJoueur = { ...reglages(a, a.niveau), plateau: COMPETITIONS[a.niveau].chronos || null,
                        look: lookDe(apparenceDe(a), false) };
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLaCourse;
@@ -181,8 +189,31 @@ export function conclureLaCourse(a: Athlete): Resultat | null {
   const moi = G.player && G.player.finishTime != null ? G.player.finishTime : null;
   const ordre: any[] = G.ranking || [];
   const place = moi === null ? (G.runners || []).length : Math.max(1, ordre.indexOf(G.player) + 1);
-  const r = conclureLaCompetition(a, enCourse.epreuve, place, moi);
+  // LA SERIE DU MATIN (a partir des France) : les trois premiers vont en finale l'apres-midi ;
+  // les autres sont elimines — la competition se conclut sur une place hors podium
+  if (enCourse.tour === 'serie' && moi !== null && place <= 3) {
+    const vent = enCourse.vent, homologue = vent === null || vent <= 2.0, rec = a.records ||= {};
+    const record = homologue && (rec[enCourse.epreuve] === undefined || moi < rec[enCourse.epreuve]!);
+    if (record) rec[enCourse.epreuve] = Math.round(moi * 100) / 100;
+    const corps = tirerLeCorps(a, 'course');
+    const r: Resultat = { niveau: a.niveau, epreuve: enCourse.epreuve, place, chrono: moi, qualifie: false, prime: 0, reputation: 0, sommet: false,
+      record, vent, homologue, tour: 'serie', finale: !corps.blessure, blessure: corps.blessure };
+    noter(a, `Série : ${place === 1 ? '1er' : `${place}e`} en ${moi.toFixed(2)} s — qualifié pour la finale.`, `Heat: P${place} in ${moi.toFixed(2)} s — through to the final.`);
+    avancer(a, 180, { energie: -10 });
+    sauver(a);
+    enCourse = null; concluPour = G.runners; dernier = r;
+    return r;
+  }
+  const tour = enCourse.tour;
+  const r = conclureLaCompetition(a, enCourse.epreuve, tour === 'serie' && moi !== null ? place + 8 : place, moi, enCourse.vent);
+  if (tour !== 'unique') r.tour = tour;
   messagesDeCourse(a, r);
+  // le corps a couru lui aussi : sans echauffement, les ischios en premier
+  const corps = tirerLeCorps(a, 'course');
+  if (corps.blessure) {
+    r.blessure = corps.blessure;
+    envoyer(a, 'maman', [`On a vu que tu boitais en sortant… Va voir le médecin du sport.`, `We saw you limping afterwards… Go and see the sports doctor.`]);
+  } else if (corps.gene) envoyer(a, a.club ? 'coach' : 'maman', [`${BLESSURES[corps.gene].gene[0]} Fais attention cette semaine.`, `${BLESSURES[corps.gene].gene[1]} Be careful this week.`]);
   const [fr, en] = MOTS[COMPETITIONS[r.niveau].cle];
   noter(a, `${fr} — ${r.epreuve} m : ${moi === null ? 'faux départ' : `${place === 1 ? '1er' : `${place}e`} en ${moi.toFixed(2)} s`}`,
            `${en} — ${r.epreuve} m: ${moi === null ? 'false start' : `P${place} in ${moi.toFixed(2)} s`}`);

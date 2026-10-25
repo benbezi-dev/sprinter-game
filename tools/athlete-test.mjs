@@ -25,7 +25,8 @@ const entree = join(dir, 'entree.ts');
 writeFileSync(entree, `export * from '${join(process.cwd(), 'src/game/athlete/regles.ts')}';
 export * from '${join(process.cwd(), 'src/game/athlete/recit.ts')}';
 export * from '${join(process.cwd(), 'src/game/athlete/gens.ts')}';
-export * from '${join(process.cwd(), 'src/game/athlete/telephone.ts')}';`);
+export * from '${join(process.cwd(), 'src/game/athlete/telephone.ts')}';
+export * from '${join(process.cwd(), 'src/game/athlete/sante.ts')}';`);
 const sortie = join(dir, 'athlete.mjs');
 await build({ entryPoints: [entree], bundle: true, format: 'esm', platform: 'node', outfile: sortie, logLevel: 'silent' });
 const R = await import(sortie);
@@ -45,12 +46,12 @@ titre('les seances');
   const r = R.faireLaSeance(a, 'lundi', 1, toujours(0.99));
   ok('la seance s\'applique', r && a.stats.vitesse > 28 && a.faites.includes('lundi'));
   ok('pas deux fois la meme seance', R.faireLaSeance(a, 'lundi', 1, toujours(0.99)) === null);
-  a.fatigue = 90;
+  a.fatigue = 96;
   const b = R.faireLaSeance(a, 'mercredi', 1, toujours(0));
-  ok('s\'entrainer epuise blesse', b && b.blessure && a.blessure === 2);
+  ok('s\'entrainer epuise : le surmenage', b && b.blessure && b.type === 'surmenage' && a.blessure >= 1 && a.blessureType === 'surmenage');
   ok('blesse : plus de seance', R.seancePossible(a, 'vendredi') === 'blesse');
   R.finirLaSemaine(a); R.finirLaSemaine(a);
-  ok('deux semaines plus tard, gueri', a.blessure === 0);
+  ok('deux semaines plus tard, gueri', a.blessure === 0 && a.blessureType === null);
   const s = R.nouvelAthlete('T', 'aisee', 'specialiste', '100');
   const p = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); p.evenement = null; p.stats.vitesse = 35.5;
   R.faireLaSeance(p, 'lundi', 1, toujours(0.99));
@@ -278,6 +279,66 @@ titre('le telephone');
   const r = R.conclureLaCompetition(a, '100', 2, 11.5);
   R.messagesDeCourse(a, r);
   ok('apres un podium : papa et le coach ecrivent', a.messages.some(m => m.de === 'papa') && a.messages.some(m => m.de === 'coach' && /11\.50/.test(m.fr)));
+}
+
+titre('le corps : des consequences, pas du hasard');
+{
+  // la meme semaine jouee deux fois donne exactement le meme corps
+  const jouer = () => {
+    const a = R.nouvelAthlete('T', 'aisee', 'specialiste', '100'); a.club = 'quartier'; a.coach = 'dede'; a.evenement = null;
+    const vu = [];
+    for (let k = 0; k < 6; k++) { a.faites = []; a.fatigue = 75; const r = R.faireLaSeance(a, 'lundi', 1, Math.random); vu.push(r && (r.blessure ? 'B' : r.gene ? 'G' : '.')); }
+    return { vu: vu.join(''), usure: JSON.stringify(a.usure), blessure: a.blessure };
+  };
+  const x = jouer(), y = jouer();
+  ok('sans hasard : deux fois la meme histoire', x.vu === y.vu && x.usure === y.usure && x.blessure === y.blessure, `${x.vu} / ${y.vu}`);
+  ok('des departs fatigues a repetition : une gene, puis la blessure', /G.*B/.test(x.vu), x.vu);
+  const a = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); a.age = 20;
+  const sans = R.usurePrevue(a, 'course').ischio; a.echauffe = true;
+  const avec = R.usurePrevue(a, 'course').ischio;
+  ok('courir sans echauffement use bien plus les ischios', sans >= avec + 10, `${sans} / ${avec}`);
+  const f = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); f.age = 20;
+  const frais = R.usurePrevue(f, 'cotes').achille; f.fatigue = 90; f.besoins.energie = 20;
+  ok('fatigue et vide : la meme seance use plus', R.usurePrevue(f, 'cotes').achille > frais * 1.8);
+  const n = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); n.usure = { ischio: 70, periostite: 0, achille: 0, cheville: 0 }; R.majGene(n);
+  ok('a 70 sur les ischios : la gene', n.gene === 'ischio');
+  n.heure = 22 * 60; R.faireUneAction(n, 'dormir');
+  ok('une bonne nuit fait redescendre', n.usure.ischio < 70);
+  n.argent = 100; R.chezLeKine(n);
+  ok('le kine traite la zone la plus usee : plus de gene', n.usure.ischio < 50 && n.gene === null);
+  const g = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); g.usure = { ischio: 101, periostite: 0, achille: 0, cheville: 0 };
+  R.tirerLeCorps(g, 'gainage');
+  ok('pousse au-dela de 100 : grade 3, la plus longue absence', g.blessureType === 'ischio' && g.blessureGrade === 3 && g.blessure === 7);
+}
+
+titre('l\'espace sante');
+{
+  const a = R.nouvelAthlete('T', 'modeste', 'polyvalent', null, undefined, 20); a.argent = 500;
+  a.usure = { ischio: 93, periostite: 0, achille: 0, cheville: 0 };
+  R.tirerLeCorps(a, 'gainage');
+  ok('blesse : grade 2 des ischios', a.blessureType === 'ischio' && a.blessureGrade === 2 && a.blessure === 4);
+  ok('sans diagnostic, on ne connait que la douleur', R.etatDeSante(a).titre[0].startsWith('Douleur'));
+  ok('pas d\'IRM sans prescription', !!R.soinPossible(a, 'irm'));
+  const m0 = a.argent; R.soigner(a, 'medecin');
+  ok('le medecin nomme la blessure, prescrit l\'IRM, et c\'est paye en partie', a.diagnostic && R.soinPossible(a, 'irm') === null && a.argent === m0 - R.resteACharge(a, 'medecin'));
+  ok('il delivre aussi le certificat de la saison', !R.certificatRequis(a));
+  R.soigner(a, 'irm');
+  ok('l\'IRM lit le grade, la reeducation adaptee fait gagner une semaine', a.diagnostic.grade === 2 && a.blessure === 3);
+  const p = R.nouvelAthlete('T', 'modeste', 'polyvalent', null); p.argent = 500;
+  p.usure = { ischio: 0, periostite: 101, achille: 0, cheville: 0 }; R.tirerLeCorps(p, 'gainage'); R.soigner(p, 'medecin'); R.soigner(p, 'radio');
+  ok('un tibia pousse au grade 3 : la radio trouve la fracture de fatigue', p.diagnostic.fracture === true);
+  const q = R.nouvelAthlete('T', 'modeste', 'polyvalent', null); q.argent = 500;
+  q.usure = { ischio: 0, periostite: 88, achille: 0, cheville: 0 }; R.tirerLeCorps(q, 'gainage'); R.soigner(q, 'medecin'); R.soigner(q, 'radio');
+  ok('grade 1 : pas de fracture', !q.diagnostic.fracture);
+  const riche = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);
+  ok('mineur, famille aisee : les parents paient tout', R.resteACharge(riche, 'irm') === 0 && R.resteACharge(riche, 'osteo') === 0);
+  const adulte = R.nouvelAthlete('T', 'aisee', 'polyvalent', null, undefined, 25);
+  ok('adulte sans certificat : il faut voir le medecin pour courir', R.certificatRequis(adulte));
+  ok('l\'osteo n\'est pas rembourse', R.resteACharge(adulte, 'osteo') === 55);
+  const nd = R.nouvelAthlete('T', 'modeste', 'polyvalent', null);
+  nd.usure = { ischio: 0, periostite: 0, achille: 0, cheville: 86 }; R.tirerLeCorps(nd, 'gainage');
+  const w = nd.blessure; R.finirLaSemaine(nd);
+  ok('sans diagnostic, la blessure dure une semaine de plus', nd.blessure === w);
 }
 
 titre('le calage sur le direct, a partir de la France');

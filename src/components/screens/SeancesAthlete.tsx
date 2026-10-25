@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { SprinterApp, SprinterCore } from '@/game/engine';
 import {
   type Athlete, type Jour, type Exercice, type Stat, type Seance as ResultatSeance,
-  SEANCES, exerciceDuJour, faireLaSeance,
+  SEANCES, BLESSURES, exerciceDuJour, faireLaSeance,
 } from '@/game/athlete/regles';
 import { mot, dans, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe } from '@/game/athlete/apparence';
@@ -902,7 +902,7 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
               <>
                 <span className="font-black font-display text-3xl text-white">{mot('score', { n: Math.round(res.score * 100) })}</span>
                 {res.r?.blessure
-                  ? <span className="text-red-400 font-bold">{mot('blessure_s')}</span>
+                  ? <span className="text-red-400 font-bold">{res.r.type ? dans(BLESSURES[res.r.type].nom) : mot('blessure_s')} · {a.blessure} {dans(['sem. d’arrêt', 'wk out'])}</span>
                   : res.r && (
                     <div className="flex gap-3">
                       {Object.entries(res.r.gains).map(([k, v]) => (
@@ -910,6 +910,7 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
                       ))}
                     </div>
                   )}
+                {res.r?.gene && <span className="text-amber-300 text-sm font-bold">⚠ {dans(BLESSURES[res.r.gene].gene)}</span>}
                 <button onClick={onFin} className="mt-1 rounded-xl px-8 py-3 font-black tracking-widest text-black" style={{ background: VERT }}>
                   {mot('continuer')}
                 </button>

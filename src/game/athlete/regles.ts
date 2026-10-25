@@ -89,6 +89,20 @@ export type Athlete = {
   /** Pour la prochaine seance : le conseil du coach, l'entrainement a deux (part de gain en plus). */
   conseil?: number;
   ensemble?: number;
+  /** LE CORPS : la blessure en cours, la gene qui previent, les jours d'effort, l'echauffement fait. */
+  blessureType?: TypeBlessure | null;
+  gene?: TypeBlessure | null;
+  charge?: number[];
+  echauffe?: boolean;
+  /** L'usure de chaque zone (0 a 100), le grade de la blessure en cours. */
+  usure?: Record<Zone, number>;
+  blessureGrade?: 1 | 2 | 3;
+  /** LA SANTE (sante.ts) : ce que le medecin et l'imagerie ont dit, l'osteo de la semaine, le certificat de la saison. */
+  diagnostic?: { type: TypeBlessure; grade?: 1 | 2 | 3; examen?: 'radio' | 'irm'; fracture?: boolean } | null;
+  osteo?: boolean;
+  certificat?: number;
+  /** Une blessure jamais diagnostiquee prend une semaine de plus (une fois). */
+  retard?: boolean;
   /** Deja alle en cours aujourd'hui ? */
   cours?: boolean;
   /** Deja passe chez le kine, deja fait son footing cette semaine ? */
@@ -171,6 +185,10 @@ export function chezLeKine(a: Athlete): null | 'fait' | 'argent' {
   a.kine = true;
   a.fatigue = borne(a.fatigue - 25, 0, 100);
   if (a.blessure > 0) a.blessure -= 1;
+  // le kine s'occupe de la zone la plus usee : une gene prise a temps ne devient pas une blessure
+  const gene = a.gene;
+  soulager(a, 22, true);
+  if (gene && !a.gene) noter(a, 'Le kiné a traité la gêne à temps.', 'The physio caught the niggle in time.');
   noter(a, 'Chez le kiné : massage, étirements, le corps respire.', 'At the physio: massage, stretching, the body breathes.');
   return null;
 }
@@ -180,6 +198,7 @@ export function footingAuParc(a: Athlete): boolean {
   if (a.footing || a.blessure > 0) return false;
   a.footing = true;
   a.fatigue = borne(a.fatigue - 12, 0, 100);
+  soulager(a, 5);
   a.moral = borne(a.moral + 4, 0, 100);
   return true;
 }
@@ -436,7 +455,7 @@ export function gainDeSeance(a: Athlete, j: Jour, score: number, bonus = 0): Par
   };
 }
 
-export type Seance = { gains: Partial<Record<Stat, number>>; blessure: boolean };
+export type Seance = { gains: Partial<Record<Stat, number>>; blessure: boolean; type?: TypeBlessure; gene?: TypeBlessure };
 
 /**
  * Faire la seance du jour `j` avec ce score. S'entrainer epuise expose a la
@@ -447,14 +466,9 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
   if (seancePossible(a, j)) return null;
   a.faites.push(j);
   if (j !== 'samedi') a.assiduite.faites += 1;
-  // epuise, ou sans energie ni rien dans le ventre : le corps lache
-  const vide = a.besoins ? Math.min(a.besoins.energie, a.besoins.faim) : 100;
-  if ((a.fatigue >= 85 && alea() < 0.35) || (vide < 12 && alea() < 0.2)) {
-    a.blessure = 2;
-    a.moral = borne(a.moral - 15, 0, 100);
-    noter(a, 'Blessé à l’entraînement : deux semaines d’arrêt.', 'Injured in training: two weeks off.');
-    return { gains: {}, blessure: true };
-  }
+  // le corps : la charge, la fatigue, l'energie decident du risque (voir « le corps »)
+  const corps = tirerLeCorps(a, exerciceDuJour(a, j));
+  if (corps.blessure) return { gains: {}, blessure: true, type: corps.blessure };
   const gains = gainDeSeance(a, j, score, bonus);
   // Au plafond du niveau, la seance entretient sans faire monter : c'est la competition qui ouvre la suite.
   const plafond = COMPETITIONS[a.niveau].plafond;
@@ -465,7 +479,7 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
   }
   a.fatigue = borne(a.fatigue + SEANCES[j].fatigue, 0, 100);
   if (a.besoins) avancer(a, DUREE_SEANCE, { energie: -18, faim: -12, hygiene: -40 });
-  return { gains, blessure: false };
+  return { gains, blessure: false, gene: corps.gene };
 }
 
 /* ------------------------------------------------------------ l'argent */
@@ -573,13 +587,21 @@ export type Resultat = {
   sommet: boolean;
   /** Un nouveau record personnel ? */
   record?: boolean;
+  /** Le vent (m/s, 100 et 200 m), et si le chrono vaut record (vent de +2,0 au plus). */
+  vent?: number | null;
+  homologue?: boolean;
+  /** A partir des France : la serie du matin, qualifie pour la finale ? */
+  tour?: 'serie' | 'finale';
+  finale?: boolean;
+  /** Blesse pendant la course ? */
+  blessure?: TypeBlessure;
 };
 
 /**
  * Ranger une competition courue. Les trois premiers montent d'un niveau ;
  * les autres retentent le meme `ecart` semaines plus tard.
  */
-export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: number, chrono: number | null): Resultat {
+export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: number, chrono: number | null, vent: number | null = null): Resultat {
   const niveau = a.niveau;
   const c = COMPETITIONS[niveau];
   const podium = chrono !== null && place <= QUALIFIES;
@@ -592,14 +614,16 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   a.palmares.unshift({ s: a.semaine, niveau, epreuve, place, chrono });
   // le record personnel : le meilleur chrono de l'epreuve
   const rec = a.records ||= {};
-  const record = chrono !== null && (rec[epreuve] === undefined || chrono < rec[epreuve]!);
+  // un record ne vaut que par vent reglementaire : +2,0 m/s au plus (le 400 m, lui, n'a pas de mesure de vent)
+  const homologue = vent === null || vent <= 2.0;
+  const record = chrono !== null && homologue && (rec[epreuve] === undefined || chrono < rec[epreuve]!);
   if (record) rec[epreuve] = Math.round(chrono! * 100) / 100;
   const sommet = niveau === COMPETITIONS.length - 1 && place === 1 && chrono !== null;
   if (podium && niveau < COMPETITIONS.length - 1) a.niveau += 1;
   a.prochaine = a.semaine + ecart(a.niveau);
   // Un nouveau cycle commence : l'assiduite se recompte jusqu'a la prochaine.
   a.assiduite = { proposees: 0, faites: 0 };
-  return { niveau, epreuve, place, chrono, qualifie: podium && niveau < COMPETITIONS.length - 1, prime, reputation: rep, sommet, record };
+  return { niveau, epreuve, place, chrono, qualifie: podium && niveau < COMPETITIONS.length - 1, prime, reputation: rep, sommet, record, vent, homologue };
 }
 
 /** Ne pas aller a la competition (pas les moyens, blesse, ou choix). */
@@ -651,7 +675,11 @@ export function finirLaSemaine(a: Athlete) {
   if (a.blessure === 0) a.assiduite.proposees += 3;
   const faitesSemaine = a.faites.filter(j => j !== 'samedi').length;
   if (a.blessure === 0 && faitesSemaine === 0) a.moral = borne(a.moral - 5, 0, 100);
+  // sans diagnostic, on reprend trop tot et l'on retarde : une semaine de plus, une fois
+  if (a.blessure > 0 && !a.diagnostic && !a.retard) { a.blessure += 1; a.retard = true; }
   if (a.blessure > 0) a.blessure -= 1;
+  if (a.blessure === 0) { a.blessureType = null; a.diagnostic = null; a.retard = false; }
+  a.osteo = false;
   a.semaine += 1;
   a.faites = [];
   a.boulot = null;
@@ -749,6 +777,7 @@ export const ACTIONS: Action[] = [
   { id: 'cours_lycee', lieu: 'lycee', duree: 'cours', effets: { social: 28, faim: 45, energie: -12 }, quand: [7 * 60, 9 * 60], semaine: true },
   { id: 'travail', lieu: 'travail', duree: 'cours', effets: { social: 15, faim: 40, energie: -16 }, quand: [7 * 60, 9 * 60], semaine: true },
   { id: 'manger_parents', lieu: 'parents', duree: 45, effets: { faim: 70, social: 20, plaisir: 6 } },
+  { id: 'echauffement', lieu: 'gare', duree: 25, effets: { energie: -3, hygiene: -6 } },
   { id: 'pizza', lieu: 'livraison', duree: 40, cout: 12, effets: { faim: 70, plaisir: 16 } },
   { id: 'fruits', lieu: 'marche', duree: 15, cout: 5, effets: { faim: 25, energie: 4 }, quand: [8 * 60, 13 * 60] },
   { id: 'discuter_parc', lieu: 'parc', duree: 30, effets: { social: 22, plaisir: 8 } },
@@ -788,6 +817,7 @@ export function faireUneAction(a: Athlete, id: string): null | string {
     avancer(a, Math.max(30, 16 * 60 + 30 - heureDe(a)), x.effets);
     return null;
   }
+  if (id === 'echauffement') a.echauffe = true;
   avancer(a, x.duree, x.effets);
   if (x.moral) a.moral = borne(a.moral + x.moral, 0, 100);
   if (id === 'devoirs') a.ecole = borne((a.ecole ?? 60) + 2, 0, 100);
@@ -804,6 +834,8 @@ export function dormir(a: Athlete) {
   b.faim = borne(b.faim - duree / 60 * 2.5, 0, 100);
   b.hygiene = borne(b.hygiene - duree / 60 * 1.5, 0, 100);
   a.fatigue = borne(a.fatigue - duree / 60 * 0.6, 0, 100);
+  // la nuit repare : 4 points d'usure par zone, mieux apres 8 h, moins sous 6 h
+  soulager(a, 4 * (duree >= 8 * 60 ? 1.5 : duree < 6 * 60 ? 0.5 : 1));
   if (duree < 7 * 60) a.moral = borne(a.moral - 4, 0, 100);
   if (h > REVEIL) { a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
   a.heure = REVEIL;
@@ -812,4 +844,117 @@ export function dormir(a: Athlete) {
     if (jourDeCompetition(a)) declarerForfait(a);
     finirLaSemaine(a);
   }
+}
+
+/* ------------------------------------------------------------ le corps */
+
+// LES BLESSURES SONT DES CONSEQUENCES, PAS DU HASARD (l'auteur, 25/10 : « les
+// blessures ne doivent pas etre un facteur de hasard mais de consequences »).
+//
+// Chaque zone du corps a son USURE, de 0 a 100. Chaque effort l'use selon ce
+// qu'il demande (les departs et la vitesse les ischios, les cotes et les
+// bondissements les tendons d'Achille et les chevilles, le tempo les tibias),
+// et d'autant plus qu'on le fait fatigue, sans energie, sans echauffement, ou
+// apres trop de seances en sept jours. La nuit, le kine, l'osteopathe, le
+// footing la font redescendre. A SEUIL_GENE, une gene previent ; a
+// SEUIL_BLESSURE, la zone casse — et ce qui a ete depasse fait la gravite
+// (le grade que lira l'IRM, la duree d'arret). Le surmenage vient d'une
+// fatigue poussee a bout. Rien n'est tire au sort : le joueur sait toujours
+// pourquoi. Les durees sont des ordres de grandeur, pas un avis medical.
+
+export type TypeBlessure = 'ischio' | 'periostite' | 'achille' | 'cheville' | 'surmenage';
+export type Zone = Exclude<TypeBlessure, 'surmenage'>;
+export const ZONES: Zone[] = ['ischio', 'periostite', 'achille', 'cheville'];
+export const NOMS_ZONES: Record<Zone, [string, string]> = {
+  ischio: ['Ischio-jambiers', 'Hamstrings'], periostite: ['Tibias', 'Shins'], achille: ['Tendons d’Achille', 'Achilles'], cheville: ['Chevilles', 'Ankles'],
+};
+export const SEUIL_GENE = 60, SEUIL_BLESSURE = 85;
+
+/** Les semaines d'arret selon le grade (1, 2, 3). */
+export const BLESSURES: Record<TypeBlessure, { nom: [string, string]; semaines: [number, number, number]; gene: [string, string] }> = {
+  ischio: { nom: ['Claquage des ischio-jambiers', 'Hamstring strain'], semaines: [2, 4, 7], gene: ['L’arrière de ta cuisse tire.', 'The back of your thigh feels tight.'] },
+  periostite: { nom: ['Périostite tibiale', 'Shin splints'], semaines: [2, 3, 8], gene: ['Ton tibia te fait mal quand tu appuies.', 'Your shin hurts when you press it.'] },
+  achille: { nom: ['Tendinite d’Achille', 'Achilles tendinitis'], semaines: [3, 5, 8], gene: ['Ton tendon d’Achille est raide le matin.', 'Your Achilles is stiff in the morning.'] },
+  cheville: { nom: ['Entorse de la cheville', 'Ankle sprain'], semaines: [1, 2, 4], gene: ['Ta cheville est fragile depuis la dernière séance.', 'Your ankle has felt weak since the last session.'] },
+  surmenage: { nom: ['Surmenage', 'Overtraining'], semaines: [1, 1, 2], gene: ['Tu te sens vidé, même après une nuit.', 'You feel drained, even after a night’s sleep.'] },
+};
+
+/** Ce que chaque effort use, zone par zone, a l'etat frais. */
+const USE: Record<Exercice | 'course', Partial<Record<Zone, number>>> = {
+  departs: { ischio: 9, cheville: 2 }, lancee: { ischio: 10 }, virage: { ischio: 6, cheville: 4, periostite: 2 },
+  cotes: { achille: 7, ischio: 4 }, muscu: { ischio: 3 }, bonds: { achille: 7, cheville: 5, periostite: 4 },
+  gammes: { periostite: 3 }, gainage: {}, fractionne: { ischio: 6, periostite: 4 }, tempo: { periostite: 5 },
+  course: { ischio: 12, achille: 3 },
+};
+
+const jourAbsolu = (a: Athlete) => a.semaine * 7 + (a.jour ?? 0);
+/** Les jours d'effort (seances et courses) des sept derniers jours. */
+export const chargeDe = (a: Athlete) => (a.charge || []).filter(j => jourAbsolu(a) - j < 7).length;
+export const usureDe = (a: Athlete) => (a.usure ||= { ischio: 0, periostite: 0, achille: 0, cheville: 0 });
+
+/** Ce qui multiplie l'usure : la fatigue, l'energie, la charge des sept jours. */
+export function facteurDEffort(a: Athlete): number {
+  let f = 1;
+  if (a.fatigue > 60) f *= 1 + (a.fatigue - 60) / 40;
+  if (a.besoins && a.besoins.energie < 30) f *= 1.3;
+  const ch = chargeDe(a);
+  if (ch >= 5) f *= 1 + 0.2 * (ch - 4);
+  return f;
+}
+
+/** Ce que cet effort va user, maintenant (pour prevenir le joueur avant). */
+export function usurePrevue(a: Athlete, quoi: Exercice | 'course'): Partial<Record<Zone, number>> {
+  const f = facteurDEffort(a), out: Partial<Record<Zone, number>> = {};
+  for (const z of ZONES) {
+    let u = (USE[quoi][z] || 0) * f;
+    if (z === 'periostite' && (a.age ?? 14) <= 15 && quoi !== 'gainage') u += 1;      // la croissance
+    if (z === 'ischio' && quoi === 'course' && !a.echauffe) u += 12;                  // pas d'echauffement
+    if (u) out[z] = Math.round(u * 10) / 10;
+  }
+  return out;
+}
+
+/** La gene : la zone la plus usee, si elle passe SEUIL_GENE. */
+export function majGene(a: Athlete) {
+  const u = usureDe(a);
+  const z = ZONES.reduce((m, x) => (u[x] > u[m] ? x : m), ZONES[0]);
+  a.gene = a.blessure === 0 && u[z] >= SEUIL_GENE ? z : null;
+}
+
+/**
+ * L'effort est fait : il use le corps, et le corps repond — rien, une gene,
+ * ou une blessure, selon ce qui a ete depasse.
+ */
+export function tirerLeCorps(a: Athlete, quoi: Exercice | 'course'): { blessure?: TypeBlessure; gene?: TypeBlessure } {
+  const u = usureDe(a), avant = a.gene;
+  for (const [z, v] of Object.entries(usurePrevue(a, quoi)) as [Zone, number][]) u[z] = Math.min(110, u[z] + v);
+  (a.charge ||= []).push(jourAbsolu(a));
+  a.charge = a.charge.filter(j => jourAbsolu(a) - j < 14);
+  if (quoi === 'course') a.echauffe = false;
+  // le surmenage : s'entrainer fatigue a bout
+  if (quoi !== 'course' && a.fatigue >= 95) return { blessure: blesser(a, 'surmenage', 1) };
+  const z = ZONES.reduce((m, x) => (u[x] > u[m] ? x : m), ZONES[0]);
+  if (u[z] >= SEUIL_BLESSURE) {
+    const grade = (u[z] >= 100 ? 3 : u[z] >= 92 ? 2 : 1) as 1 | 2 | 3;
+    u[z] = 45;                       // la zone blessee est mise au repos
+    return { blessure: blesser(a, z, grade) };
+  }
+  majGene(a);
+  return a.gene ? { gene: a.gene } : avant ? {} : {};
+}
+
+function blesser(a: Athlete, type: TypeBlessure, grade: 1 | 2 | 3): TypeBlessure {
+  a.blessure = BLESSURES[type].semaines[grade - 1];
+  a.blessureType = type; a.blessureGrade = grade; a.gene = null;
+  a.moral = borne(a.moral - 15, 0, 100);
+  noter(a, `${BLESSURES[type].nom[0]} : ${a.blessure} semaine${a.blessure > 1 ? 's' : ''} d’arrêt.`, `${BLESSURES[type].nom[1]}: ${a.blessure} week${a.blessure > 1 ? 's' : ''} out.`);
+  return type;
+}
+
+/** Faire redescendre l'usure : `points` partout, ou sur la zone la plus usee. */
+export function soulager(a: Athlete, points: number, laPire = false) {
+  const u = usureDe(a);
+  if (laPire) { const z = ZONES.reduce((m, x) => (u[x] > u[m] ? x : m), ZONES[0]); u[z] = Math.max(0, u[z] - points); }
+  else for (const z of ZONES) u[z] = Math.max(0, u[z] - points);
+  majGene(a);
 }

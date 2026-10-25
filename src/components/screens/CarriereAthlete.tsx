@@ -17,7 +17,7 @@ import {
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
-  etape, categorie, LOYER, SALAIRE, payer,
+  etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
@@ -33,6 +33,7 @@ import { Telephone, type App } from './TelephoneAthlete';
 import { type Mode, voyager, nonLus, messagesDuReveil, messagesDeBienvenue } from '@/game/athlete/telephone';
 import { SeanceJeu } from './SeancesAthlete';
 import { nomDuClub, logoDuClub, CLUB_PARTENAIRE } from '@/game/athlete/partenaires';
+import { type Soin, etatDeSante, soigner, soinPossible, resteACharge, certificatRequis, EXAMEN } from '@/game/athlete/sante';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE D'ATHLETE — les ecrans du mode
@@ -370,7 +371,7 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
 const NOMS_LIEUX: Record<Lieu, [string, string]> = {
   maison: ['Maison', 'Home'], college: ['Collège', 'School'], lycee: ['Lycée', 'High school'],
   stade: ['Stade', 'Stadium'], club_quartier: ['Les Foulées du Quartier', 'Les Foulées du Quartier'],
-  club_horizon: ['Horizon Athlétisme', 'Horizon Athletics'], kine: ['Kiné', 'Physio'],
+  club_horizon: ['Horizon Athlétisme', 'Horizon Athletics'], kine: ['Espace santé', 'Health centre'],
   boutique: ['Magasin de sport', 'Sports shop'], marche: ['Marché', 'Market'], livraison: ['Pizzeria', 'Pizzeria'],
   babysitting: ['Les voisins', 'Neighbours'], gare: ['Gare', 'Station'], cote: ['La côte', 'The hill'],
   parc: ['Parc', 'Park'], piscine: ['Piscine', 'Pool'], mairie: ['Mairie', 'Town hall'],
@@ -391,7 +392,7 @@ const NOMS_ACTIONS: Record<string, [string, string]> = {
   dormir: ['Dormir jusqu’au matin', 'Sleep till morning'], sieste: ['Faire une sieste', 'Take a nap'], manger: ['Manger en famille', 'Eat with the family'],
   douche: ['Prendre une douche', 'Have a shower'], devoirs: ['Faire ses devoirs', 'Do homework'], console: ['Jouer à la console', 'Play video games'],
   telephone: ['Appeler un ami', 'Call a friend'], cours: ['Aller en cours', 'Go to class'], cours_lycee: ['Aller en cours', 'Go to class'],
-  travail: ['Aller travailler', 'Go to work'], manger_parents: ['Manger avec tes parents', 'Eat with your parents'], pizza: ['Manger une pizza', 'Eat a pizza'],
+  echauffement: ['S’échauffer : gammes, accélérations', 'Warm up: drills, strides'], travail: ['Aller travailler', 'Go to work'], manger_parents: ['Manger avec tes parents', 'Eat with your parents'], pizza: ['Manger une pizza', 'Eat a pizza'],
   fruits: ['Acheter des fruits', 'Buy fruit'], discuter_parc: ['Discuter sur un banc', 'Chat on a bench'], discuter_club: ['Discuter avec le groupe', 'Chat with the squad'],
 };
 const RAISONS: Record<string, [string, string]> = {
@@ -545,6 +546,11 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
               <span className="flex flex-col gap-0.5"><span className="flex items-center gap-1"><HeartPulse size={11} /> {Math.round(a.moral)}</span>
                 <Jauge v={a.moral} couleur="#C58BFF" /></span>
             </div>
+            {etatDeSante(a) && (
+              <button onClick={() => aller('kine')} className={`mt-1.5 w-full rounded-lg px-2 py-1 text-[10px] font-black text-left truncate ${etatDeSante(a)!.grave ? 'bg-red-500/25 text-red-200' : 'bg-amber-400/20 text-amber-200'}`}>
+                {etatDeSante(a)!.grave ? '✚ ' : '⚠ '}{dans(etatDeSante(a)!.titre)}
+              </button>
+            )}
             <button onClick={() => aller('gare')} className="mt-1.5 w-full flex items-center justify-between gap-2 text-[10px] font-bold text-left">
               <span className="truncate text-white/80"><Trophy size={10} className="inline -mt-0.5" /> {mot(comp.cle)}</span>
               <span className="shrink-0 tracking-widest" style={{ color: leJour ? VERT : undefined }}>
@@ -607,6 +613,77 @@ function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () =>
       {seance && <SeanceJeu jour={seance} a={a} onFin={() => { setSeance(null); sauver(a); maj(); }} />}
     </div>,
     document.body,
+  );
+}
+
+/** Ton corps : l'usure de chaque zone (regles.ts, « le corps »), la charge des sept jours. */
+function Corps({ a }: { a: Athlete }) {
+  const u = usureDe(a);
+  return (
+    <Carte titre={dans(['TON CORPS', 'YOUR BODY'])}>
+      {ZONES.map(z => {
+        const v = Math.round(u[z]), c = v >= SEUIL_BLESSURE - 10 ? '#FF5A5F' : v >= SEUIL_GENE ? '#F5A623' : VERT;
+        return (
+          <div key={z} className="flex flex-col gap-0.5">
+            <span className="flex justify-between text-[10px] font-bold text-white/70"><span>{dans(NOMS_ZONES[z])}</span><span className="tabular-nums">{v} / {SEUIL_BLESSURE}</span></span>
+            <Jauge v={v} max={SEUIL_BLESSURE} couleur={c} />
+          </div>
+        );
+      })}
+      <p className="text-[10px] text-white/50">{dans(['Séances sur 7 jours', 'Sessions in 7 days'])} : {chargeDe(a)} · {dans(['Fatigue', 'Fatigue'])} {Math.round(a.fatigue)}</p>
+    </Carte>
+  );
+}
+
+/** L'Espace sante : le medecin du sport, l'imagerie a Louviers, le kine, l'osteopathe (sante.ts). */
+function EspaceSante({ a, ev, changer }: { a: Athlete; ev: boolean; changer: (f: () => void) => void }) {
+  const [bulle, setBulle] = useState<[string, string] | null>(null);
+  const etat = etatDeSante(a);
+  const ex = a.diagnostic && a.blessureType ? EXAMEN[a.blessureType] : null;
+  const soin = (s: Soin, titre: [string, string], quoi: [string, string], duree: string) => {
+    const refus = soinPossible(a, s), prix = resteACharge(a, s);
+    return (
+      <div className="flex items-center gap-2">
+        <span className="flex-1 min-w-0 flex flex-col">
+          <span className="text-xs font-black">{dans(titre)}</span>
+          <span className="text-[10px] text-white/55">{dans(quoi)} · {duree} · {prix ? `${prix} €` : dans(['pris en charge', 'covered'])}</span>
+          {refus && <span className="text-[10px] text-amber-300/80">{dans(refus)}</span>}
+        </span>
+        <Bouton plein disabled={!!refus || ev} onClick={() => changer(() => { const r = soigner(a, s); setBulle('texte' in r ? r.texte : r.refus); })}>{dans(['OK', 'GO'])}</Bouton>
+      </div>
+    );
+  };
+  const kineRefus = a.kine ? 'fait' : a.argent < prixDuKine(a) ? 'argent' : null;
+  return (
+    <>
+      {etat ? (
+        <div className={`rounded-2xl p-3 ${etat.grave ? 'bg-red-500/15 border border-red-400/40' : 'bg-amber-400/10 border border-amber-300/30'}`}>
+          <p className="text-sm font-black">{dans(etat.titre)}</p>
+          {etat.detail && <p className="text-[11px] text-white/70">{dans(etat.detail)}</p>}
+        </div>
+      ) : <p className="text-xs text-white/70">{dans(['Tout va bien. Un suivi régulier évite les blessures.', 'All good. Regular check-ups prevent injuries.'])}</p>}
+      {bulle && <div className="rounded-2xl bg-white text-[#10251C] px-3 py-2 text-sm font-semibold leading-snug">{dans(bulle)}</div>}
+      <Corps a={a} />
+      <Carte titre={dans(['SOIGNANTS', 'CARE'])}>
+        {soin('medecin', ['Médecin du sport', 'Sports doctor'], ['Diagnostic, examens, certificat médical', 'Diagnosis, scans, medical certificate'], '40 min')}
+        <div className="flex items-center gap-2">
+          <span className="flex-1 min-w-0 flex flex-col">
+            <span className="text-xs font-black">{dans(['Kiné', 'Physio'])}</span>
+            <span className="text-[10px] text-white/55">{dans(['Massage, rééducation : fatigue −25, une semaine d’arrêt de moins', 'Massage, rehab: fatigue −25, one week less out'])} · 45 min · {prixDuKine(a)} €{a.club ? dans([' (moitié club)', ' (club pays half)']) : ''}</span>
+            {kineRefus && <span className="text-[10px] text-amber-300/80">{kineRefus === 'fait' ? dans(['Déjà vu cette semaine', 'Already seen this week']) : dans(['Pas assez d’argent', 'Not enough money'])}</span>}
+          </span>
+          <Bouton plein disabled={!!kineRefus || ev} onClick={() => changer(() => { if (!chezLeKine(a)) avancer(a, 45, { plaisir: 4 }); setBulle(['« On relâche tout ça. Étire-toi ce soir. »', '“Let’s loosen all that. Stretch tonight.”']); })}>{dans(['OK', 'GO'])}</Bouton>
+        </div>
+        {soin('osteo', ['Ostéopathe', 'Osteopath'], ['Soulage une gêne et la fatigue, non remboursé', 'Eases a niggle and fatigue, not reimbursed'], '50 min')}
+      </Carte>
+      {ex && (
+        <Carte titre={dans(['IMAGERIE · CLINIQUE DE LOUVIERS', 'IMAGING · LOUVIERS CLINIC'])}>
+          {ex === 'irm'
+            ? soin('irm', ['IRM', 'MRI'], ['Le grade de la lésion, la vraie durée d’arrêt', 'The injury grade, the real time out'], dans(['3 h avec le bus', '3 h by bus']))
+            : soin('radio', ['Radiographie', 'X-ray'], ['Écarter une fracture', 'Rule out a fracture'], dans(['3 h avec le bus', '3 h by bus']))}
+        </Carte>
+      )}
+    </>
   );
 }
 
@@ -730,6 +807,9 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
 
   const Seances = () => (
     <Carte titre={dans(['S’ENTRAÎNER ICI', 'TRAIN HERE'])} icone={Flag}>
+      {a.gene && a.blessure === 0 && (
+        <p className="text-[11px] text-amber-300/90">⚠ {dans(BLESSURES[a.gene].gene)} {dans(NOMS_ZONES[a.gene as Zone])} : {Math.round(usureDe(a)[a.gene as Zone])} / {SEUIL_BLESSURE}. {dans(['Une séance qui les sollicite peut casser. Le kiné, l’ostéo et le sommeil font redescendre.', 'A session that loads them may break them. Physio, osteo and sleep bring it down.'])}</p>
+      )}
       {seancesIci.map(j => {
         const raison = seancePossible(a, j), quand_ = seanceMaintenant(a, j);
         return (
@@ -812,6 +892,9 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
       return (
         <Carte titre={mot('competition')} icone={Trophy}>
           <span className="font-black text-sm">{mot(comp.cle)}</span>
+          {leJour && certificatRequis(a) && <p className="text-[11px] text-amber-300/90">{dans(['Pas de certificat médical pour cette saison : passe d’abord par le médecin du sport (Espace santé).', 'No medical certificate this season: see the sports doctor first (Health centre).'])}</p>}
+          {leJour && <Actions a={a} lieu="gare" ev={ev} changer={changer} />}
+          {leJour && <p className="text-[11px] text-white/50">{a.echauffe ? dans(['Échauffé·e : les ischios sont prêts.', 'Warmed up: your hamstrings are ready.']) : dans(['Sans échauffement, le risque de claquage monte.', 'Without a warm-up, the risk of a strain goes up.'])}</p>}
           {!leJour ? <p className="text-xs text-white/60">{jourDe(a) !== DIMANCHE && jourDeLAthlete(a).cetteSemaine
             ? dans(['C’est ce dimanche. Reviens le jour J, le train part le matin.', 'It’s this Sunday. Come back on the day, the train leaves in the morning.'])
             : dans(['Le train attendra : ta prochaine compétition n’est pas pour ce dimanche.', 'The train can wait: your next meet isn’t this Sunday.'])}</p> : <>
@@ -821,7 +904,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
             </p>
             {!a.specialite && <div className="flex gap-2">{EPREUVES.map(e => <Bouton key={e} plein={epreuve === e} onClick={() => setEpreuve(e)} className="flex-1">{e} m</Bouton>)}</div>}
             <div className="flex gap-2">
-              <Bouton plein className="flex-1 py-3 text-sm" disabled={!payable || a.blessure > 0 || ev}
+              <Bouton plein className="flex-1 py-3 text-sm" disabled={!payable || a.blessure > 0 || ev || certificatRequis(a)}
                       onClick={() => { if (partirALaCompetition(a, a.specialite || epreuve)) demanderReouverture(); }}>
                 {mot('courir')} · {a.specialite || epreuve} m
               </Bouton>
@@ -832,18 +915,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
       );
     }
 
-    case 'kine': {
-      const r = a.kine ? 'fait' : a.argent < prixDuKine(a) ? 'argent' : null;
-      return (
-        <>
-          <p className="text-xs text-white/70">{dans(['Massage, étirements, un œil sur tes ischios. Le kiné fait baisser la fatigue et raccourcit une blessure d’une semaine.', 'Massage, stretching, an eye on your hamstrings. The physio lowers fatigue and shortens an injury by a week.'])}</p>
-          <Bouton plein className="py-3" disabled={!!r || ev} onClick={() => changer(() => { if (!chezLeKine(a)) avancer(a, 45, { plaisir: 4 }); })}>
-            {r === 'fait' ? dans(['DÉJÀ VU CETTE SEMAINE', 'ALREADY SEEN THIS WEEK']) : `${dans(['UNE SÉANCE', 'ONE SESSION'])} · ${prixDuKine(a)} €`}
-          </Bouton>
-          {a.club && <p className="text-[11px] text-white/50">{dans(['Le club prend la moitié.', 'The club pays half.'])}</p>}
-        </>
-      );
-    }
+    case 'kine': return <EspaceSante a={a} ev={ev} changer={changer} />;
 
     case 'parc': case 'piscine': return (
       <>
@@ -1048,6 +1120,8 @@ export function FinDeCourseAthlete() {
     (SprinterApp as any).goHome();
   };
   const suivant = r && r.qualifie ? COMPETITIONS[r.niveau + 1] : null;
+  // qualifie en serie : la finale de l'apres-midi, sans repayer le deplacement
+  const finale = () => { const a = athlete(); if (a && r) partirALaCompetition(a, r.epreuve, true); };
 
   return (
     <div className="absolute inset-0 z-30 pointer-events-auto flex items-center justify-center
@@ -1058,20 +1132,32 @@ export function FinDeCourseAthlete() {
             <span className="text-[10px] font-bold tracking-[0.28em]" style={{ color: VERT }}>
               {mot(COMPETITIONS[r.niveau].cle).toUpperCase()} · {r.epreuve} M
             </span>
+            {r.tour && <span className="text-[10px] font-black tracking-[0.3em] text-white/60">{r.tour === 'serie' ? dans(['SÉRIE', 'HEAT']) : dans(['FINALE', 'FINAL'])}</span>}
             <span className={`font-black font-display text-3xl sm:text-4xl uppercase tracking-tight leading-[0.95]
-                              ${r.chrono !== null && r.place <= 3 ? 'text-white' : 'text-destructive'}`}>
-              {r.sommet ? mot('sommet') : r.chrono === null ? mot('faux') : mot('place', { o: ord(r.place) })}
+                              ${r.chrono !== null && (r.place <= 3 || r.finale) ? 'text-white' : 'text-destructive'}`}>
+              {r.finale ? dans(['QUALIFIÉ·E POUR LA FINALE', 'THROUGH TO THE FINAL'])
+                : r.sommet ? mot('sommet') : r.chrono === null ? mot('faux') : r.tour === 'serie' ? dans(['ÉLIMINÉ·E EN SÉRIE', 'OUT IN THE HEATS']) : mot('place', { o: ord(r.place) })}
             </span>
-            {r.chrono !== null && <span className="font-black tabular-nums text-xl">{r.chrono.toFixed(2)} s</span>}
-            <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
-              {suivant ? mot('qualifie', { c: mot(suivant.cle) }) : !r.sommet ? mot('pas_qualifie', { n: ecart(r.niveau) }) : null}
-            </span>
+            {r.chrono !== null && <span className="font-black tabular-nums text-xl">{r.chrono.toFixed(2)} s{r.finale ? ` · ${ord(r.place)}` : ''}</span>}
+            {r.vent != null && (
+              <span className="text-xs" style={{ color: r.homologue ? undefined : '#F5A623' }}>
+                {dans(['Vent', 'Wind'])} {r.vent > 0 ? '+' : ''}{r.vent.toFixed(1)} m/s{!r.homologue && dans([' · trop de vent : record non homologué', ' · wind too strong: not a legal record'])}
+              </span>
+            )}
+            {r.record && <span className="text-sm font-black" style={{ color: VERT }}>{dans(['RECORD PERSONNEL !', 'PERSONAL BEST!'])}</span>}
+            {r.blessure && <span className="text-sm font-bold text-red-400">{dans(BLESSURES[r.blessure].nom)} · {dans(['va voir le médecin du sport', 'see the sports doctor'])}</span>}
+            {!r.finale && (
+              <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
+                {suivant ? mot('qualifie', { c: mot(suivant.cle) }) : !r.sommet ? mot('pas_qualifie', { n: ecart(r.niveau) }) : null}
+              </span>
+            )}
             <span className="text-xs text-white/60">
               {r.prime > 0 && `${mot('prime', { n: r.prime })} · `}{mot('rep_plus', { n: r.reputation })}
             </span>
           </>
         )}
-        <Bouton plein className="px-8 py-3 mt-2" onClick={retour}>{mot('retour_carriere')}</Bouton>
+        {r?.finale && <Bouton plein className="px-8 py-3 mt-2" onClick={finale}>{dans(['COURIR LA FINALE', 'RUN THE FINAL'])}</Bouton>}
+        <Bouton plein={!r?.finale} className="px-8 py-3 mt-2" onClick={retour}>{r?.finale ? dans(['Renoncer à la finale', 'Skip the final']) : mot('retour_carriere')}</Bouton>
       </motion.div>
     </div>
   );

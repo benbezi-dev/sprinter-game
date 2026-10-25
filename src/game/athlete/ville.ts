@@ -574,6 +574,9 @@ export class Ville {
       this.scene.remove(h.p.sprite, h.p.ombre); h.el.remove(); this.habitants.delete(id);
     }
     liste.forEach((h, i) => {
+      // shortcut: une ville batie pour un mineur n'a pas de porte « parents » ; si l'athlete
+      // passe adulte en cours de visite, ses parents n'apparaissent qu'a la reouverture
+      if (!this.portes[h.lieu]) return;
       const [x, z] = this.portes[h.lieu];
       const ici = this.habitants.get(h.id);
       if (ici && ici.lieu === h.lieu) return;
