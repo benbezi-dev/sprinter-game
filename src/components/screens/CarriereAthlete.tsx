@@ -22,7 +22,7 @@ import {
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
-  etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
+  soulager, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
   meetingPossible, meetingDe, DEPLACEMENT_MEETING,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
@@ -656,7 +656,240 @@ const BOULOT_DU_LIEU: Partial<Record<Lieu, string>> = { marche: 'marche', livrai
 const DUREE_BOULOT: Record<string, number> = { babysitting: 180, livraison: 120, marche: 240 };
 const lieuDuClub = (a: Athlete): Lieu | null => (a.club === 'horizon' ? 'club_horizon' : a.club === 'quartier' ? 'club_quartier' : null);
 
-function TableauDeBord({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void; onEffacer: () => void }) {
+/**
+ * LA VERSION SIMPLE, PAR DEFAUT (26/10). L'auteur, apres avoir rejoue les deux : « la toute
+ * premiere version de test etait vraiment pas mal finalement, simple et efficace, juste les
+ * mini-jeux ameliores », puis « donne-moi la version optimale a partir des deux ». Le tableau
+ * de bord du 24/10 — la semaine, les seances, la course du dimanche — sur les regles
+ * d'aujourd'hui (tours, departementaux, calendrier, meetings, sante) et avec les mini-jeux
+ * illustres (SeancesAthlete.tsx). La ville de Val-de-Reuil reste, derriere ?ville=1.
+ */
+const VILLE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('ville');
+function TableauDeBord(p: { a: Athlete; onFermer: () => void; onEffacer: () => void }) {
+  return VILLE ? <VieEnVille {...p} /> : <Semaine {...p} />;
+}
+
+function Semaine({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void; onEffacer: () => void }) {
+  const [, maj] = useReducer((x: number) => x + 1, 0);
+  const [seance, setSeance] = useState<Jour | null>(null);
+  const [boutique, setBoutique] = useState(false);
+  const [sante, setSante] = useState(false);
+  const [efface, setEfface] = useState(false);
+  const [epreuve, setEpreuve] = useState<Epreuve>(a.specialite || '100');
+  const changer = (f: () => void) => { f(); sauver(a); maj(); };
+  useEffect(() => { chargerCalendrier().then(maj).catch(() => {}); }, []);
+
+  const comp = COMPETITIONS[a.niveau];
+  // ICI, PAS D'HEURE NI DE JOUR : la semaine se joue d'un bloc, et la course est son dimanche
+  const dim = { ...a, jour: DIMANCHE } as Athlete;
+  const leJour = jourDeLAthlete(dim).jour;
+  const auDimanche = () => { a.jour = DIMANCHE; };
+  // les sept nuits de la semaine reparent le corps comme le coucher de la ville (dormir : 6 points par nuit de 8 h)
+  const cout = coutDuDeplacement(a, a.niveau), payable = a.argent >= cout;
+  const sansCertificat = leJour && certificatRequis(a);
+  const ev = evenement(a.evenement);
+  const ep = a.specialite || epreuve;
+  const courir = () => { auDimanche(); if (partirALaCompetition(a, ep)) demanderReouverture(); };
+  const choixEpreuve = !a.specialite && (
+    <div className="flex gap-2">{EPREUVES.map(e => <Bouton key={e} plein={epreuve === e} onClick={() => setEpreuve(e)} className="flex-1">{e} m</Bouton>)}</div>
+  );
+
+  return (
+    <Voile>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="font-black font-display text-2xl tracking-wide truncate" style={{ color: VERT }}>{a.nom}</h2>
+          <p className="text-[10px] font-bold tracking-widest text-white/60">
+            {mot('semaine', { n: a.semaine })}
+            {a.specialite ? ` · ${a.specialite} m` : ` · ${mot('polyvalent').toUpperCase()}`}
+            {a.club ? ` · ${nomDuClub(a.club, mot(a.club)).toUpperCase()}` : ''}
+          </p>
+        </div>
+        <button onClick={onFermer} aria-label={mot('fermer')} className="p-2 text-white/70 hover:text-white"><X size={20} /></button>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="rounded-xl bg-white/[0.04] border border-white/10 p-2 flex flex-col gap-1">
+          <span className="flex items-center gap-1 text-white/60"><Wallet size={12} /> €</span>
+          <span className="font-black tabular-nums text-base">{mot('argent', { n: a.argent })}</span>
+        </div>
+        <div className="rounded-xl bg-white/[0.04] border border-white/10 p-2 flex flex-col gap-1">
+          <span className="flex items-center gap-1 text-white/60"><BatteryMedium size={12} /> {mot('fatigue')}</span>
+          <span className="font-black tabular-nums">{Math.round(a.fatigue)}</span>
+          <Jauge v={a.fatigue} couleur={a.fatigue >= 85 ? '#FF5A5F' : a.fatigue >= 60 ? '#F5A623' : VERT} />
+        </div>
+        <div className="rounded-xl bg-white/[0.04] border border-white/10 p-2 flex flex-col gap-1">
+          <span className="flex items-center gap-1 text-white/60"><HeartPulse size={12} /> {mot('moral')}</span>
+          <span className="font-black tabular-nums">{Math.round(a.moral)}</span>
+          <Jauge v={a.moral} couleur="#C58BFF" />
+        </div>
+      </div>
+
+      <Carte><Barres a={a} /></Carte>
+
+      {/* la competition : le championnat du niveau, ou un meeting de club les autres dimanches */}
+      <Carte titre={mot('competition')} icone={Trophy}>
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="font-black text-sm">{mot(comp.cle)}</span>
+          <span className="text-[10px] font-bold tracking-widest" style={{ color: leJour ? VERT : undefined }}>
+            {leJour ? mot('ce_dimanche') : mot('dans', { n: Math.max(1, a.prochaine - a.semaine) })}
+          </span>
+        </div>
+        {a.objectif && (
+          <p className="text-[11px] text-white/60">
+            {mot('objectif', { o: mot(COMPETITIONS[NIVEAU_OBJECTIF[a.objectif]].cle) })} · {mot('assiduite', { f: a.assiduite.faites, p: a.assiduite.proposees })}
+            {picDeForme(a, a.niveau) && <span className="ml-1 font-black" style={{ color: VERT }}>· {mot('pic')}</span>}
+          </p>
+        )}
+        {leJour ? <>
+          {sansCertificat && <p className="text-[11px] text-amber-300/90">{dans(['Pas de certificat médical pour cette saison : passe d’abord par l’espace santé.', 'No medical certificate this season: go through the health space first.'])}</p>}
+          <p className="text-[11px] text-white/60">
+            {cout === 0 ? mot('paye') : mot('deplacement', { n: cout })}
+            {!payable && <span className="text-red-400"> · {mot('pas_moyens')}</span>}
+          </p>
+          {choixEpreuve}
+          <div className="flex gap-2">
+            <Bouton plein className="flex-1 py-3 text-sm" disabled={!payable || a.blessure > 0 || !!ev || sansCertificat} onClick={courir}>
+              {mot('courir')} · {ep} m
+            </Bouton>
+            <Bouton disabled={!!ev} onClick={() => changer(() => { auDimanche(); forfait(a); })}>{mot('forfait')}</Bouton>
+          </div>
+        </> : a.niveau >= 1 && (() => {
+          const refus = meetingPossible(dim, false);
+          return (
+            <div className="rounded-xl bg-white/[0.05] p-2.5 flex flex-col gap-1.5">
+              <span className="text-xs font-black">{dans(meetingDe(a))} · {dans(['meeting de club', 'club meet'])}</span>
+              <span className="text-[10px] text-white/55">{dans(['Ne qualifie pour rien, compte pour ton record.', 'Qualifies for nothing, counts for your record.'])}</span>
+              {refus && <span className="text-[10px] text-amber-300/80">{dans(refus)}</span>}
+              {!refus && choixEpreuve}
+              <Bouton plein disabled={!!refus || !!ev} onClick={() => { auDimanche(); if (partirAuMeeting(a, ep)) demanderReouverture(); }}>{dans(['COURIR LE MEETING', 'RUN THE MEET'])}</Bouton>
+            </div>
+          );
+        })()}
+      </Carte>
+
+      {/* la semaine : une seance par jour, chacune un mini-jeu */}
+      <Carte titre={mot('semaine', { n: a.semaine })} icone={Flag}>
+        {!a.coach && <p className="text-[11px] text-white/50">{mot('seul')}</p>}
+        {JOURS.map(j => {
+          const raison = seancePossible(a, j);
+          return (
+            <div key={j} className="flex items-center gap-2">
+              <span className="w-1 self-stretch rounded-full" style={{ background: COULEUR[SEANCES[j].stat] }} />
+              <span className="flex-1 min-w-0 flex flex-col">
+                <span className="text-[10px] font-black tracking-widest text-white/70">{mot(j)} · {dans(EXOS[exerciceDuJour(a, j)].nom).toUpperCase()}</span>
+                <span className="text-xs text-white/80 truncate">{seanceDuJour(a, j)}</span>
+              </span>
+              {raison
+                ? <span className="text-[10px] font-black tracking-widest text-white/40">{raison === 'faite' ? mot('faite') : raison === 'blesse' ? mot('blesse') : mot('pris')}</span>
+                : <Bouton plein disabled={!!ev} onClick={() => setSeance(j)}>{mot('sentrainer')}</Bouton>}
+            </div>
+          );
+        })}
+        <div className="flex items-center gap-2 opacity-60">
+          <span className="w-1 self-stretch rounded-full bg-white/20" />
+          <span className="flex-1 text-[10px] font-black tracking-widest text-white/70">{mot('dimanche')} · {leJour ? mot('competition') : mot('repos').toUpperCase()}</span>
+        </div>
+        <Bouton className="py-3 mt-1" disabled={leJour || !!ev} onClick={() => changer(() => { soulager(a, 7 * 6); semaineSuivante(a); a.jour = 0; })}>{mot('fin_semaine')}</Bouton>
+      </Carte>
+
+      {/* le corps : l'usure, les soins, le certificat (sante.ts) */}
+      <Carte titre={dans(['SANTÉ', 'HEALTH'])} icone={HeartPulse}>
+        {!sante ? <Bouton onClick={() => setSante(true)}>{dans(['ESPACE SANTÉ', 'HEALTH SPACE'])} ›</Bouton> : <EspaceSante a={a} ev={!!ev} changer={changer} />}
+      </Carte>
+
+      <Carte titre={mot('boulots')} icone={Briefcase}>
+        {a.boulot ? <p className="text-xs text-white/60">{mot('boulot_pris')}</p> : (
+          <div className="grid grid-cols-3 gap-2">
+            {BOULOTS.map(b => (
+              <button key={b.id} disabled={!!ev || (!!b.prend && a.faites.includes(b.prend))}
+                      onClick={() => changer(() => { prendreUnBoulot(a, b.id); })}
+                      className="rounded-xl border border-white/15 bg-white/5 p-2 text-left disabled:opacity-35 hover:enabled:bg-white/10">
+                <span className="block text-xs font-black">{mot(b.id)}</span>
+                <span className="block text-[10px] text-white/60">+{b.gain} € · {mot('fatigue').toLowerCase()} +{b.fatigue}</span>
+                {b.prend && <span className="block text-[10px] text-amber-300/80">{mot('prend_samedi')}</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </Carte>
+
+      <Carte titre={mot('boutique')} icone={ShoppingBag}>
+        {!boutique ? <Bouton onClick={() => setBoutique(true)}>{mot('boutique')} ›</Bouton> : MATERIEL.map(p => {
+          const r = achatPossible(a, p.id);
+          if (r === 'avant') return null;
+          const effets = [
+            p.course && Object.entries(p.course).map(([k, v]) => `${mot(k)} +${v}`).join(', ') + ` ${mot('en_course')}`,
+            p.seance && mot('seance_plus', { j: mot(p.seance).split(' ')[0].toLowerCase() }),
+            p.recup && mot('recup_d', { n: p.recup }),
+          ].filter(Boolean).join(' · ');
+          return (
+            <div key={p.id} className="flex items-center gap-2">
+              <span className="flex-1 min-w-0 flex flex-col">
+                <span className="text-xs font-black">{mot(p.id)}</span>
+                <span className="text-[10px] text-white/55">{effets}</span>
+              </span>
+              {r === 'possede'
+                ? <span className="text-[10px] font-black tracking-widest" style={{ color: VERT }}>{mot('possede')}</span>
+                : <Bouton disabled={!!r} onClick={() => changer(() => { acheter(a, p.id); })}>{p.prix} €</Bouton>}
+            </div>
+          );
+        })}
+      </Carte>
+
+      <Carte titre={mot('club')} icone={Users}>
+        <p className="text-xs">{a.club ? `${nomDuClub(a.club, mot(a.club))} · ${mot(a.coach || '')}` : mot('sans_club')}</p>
+        {a.club && (
+          <div className="grid grid-cols-3 gap-2">
+            {(['coach', 'club', 'rival'] as const).map(k => (
+              <div key={k} className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-bold text-white/60">{mot(`rel_${k}`)} {a.relations[k] > 0 ? '+' : ''}{a.relations[k]}</span>
+                <Jauge v={a.relations[k] + 100} max={200} couleur={a.relations[k] >= 0 ? VERT : '#FF5A5F'} />
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="flex flex-wrap gap-x-3 text-[11px] text-white/60">
+          <span className="flex items-center gap-1"><Star size={11} /> {mot('reputation', { n: a.reputation })}</span>
+          <span className="flex items-center gap-1"><Smartphone size={11} /> {mot('abonnes', { n: a.abonnes })}</span>
+          {a.sponsors.length > 0 && <span>{mot('sponsors', { n: a.sponsors.length })}</span>}
+        </p>
+      </Carte>
+
+      {a.palmares.length > 0 && (
+        <Carte titre={mot('palmares')} icone={Trophy}>
+          {a.palmares.slice(0, 6).map((p, i) => (
+            <p key={i} className="text-xs text-white/75 flex justify-between gap-2">
+              <span className="truncate">{p.meeting ?? mot(COMPETITIONS[p.niveau].cle)} · {p.epreuve} m</span>
+              <span className="tabular-nums shrink-0">{p.chrono === null ? mot('faux') : `${mot('place', { o: ord(p.place) })} · ${p.chrono.toFixed(2)}`}</span>
+            </p>
+          ))}
+        </Carte>
+      )}
+
+      {a.journal.length > 0 && (
+        <Carte titre={mot('journal')} icone={BookOpen}>
+          {a.journal.slice(0, 8).map((l, i) => (
+            <p key={i} className="text-[11px] text-white/60 leading-snug"><span className="text-white/35 tabular-nums">S{l.s} · </span>{dans([l.fr, l.en])}</p>
+          ))}
+        </Carte>
+      )}
+
+      <div className="flex items-center justify-center gap-2 pt-2 text-[11px] text-white/45">
+        {!efface ? <button onClick={() => setEfface(true)} className="underline">{mot('recommencer')}</button> : <>
+          <span>{mot('sur')}</span>
+          <button onClick={onEffacer} className="font-black text-red-400">{mot('oui')}</button>
+          <button onClick={() => setEfface(false)} className="font-black text-white/70">{mot('non')}</button>
+        </>}
+      </div>
+
+      {ev && <Dialogue a={a} onRepondu={() => { sauver(a); maj(); }} />}
+      {seance && <SeanceJeu jour={seance} a={a} onFin={() => { setSeance(null); sauver(a); maj(); }} />}
+    </Voile>
+  );
+}
+
+function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void; onEffacer: () => void }) {
   const [, maj] = useReducer((x: number) => x + 1, 0);
   const [seance, setSeance] = useState<Jour | null>(null);
   const [lieu, setLieu] = useState<Lieu | null>(null);
