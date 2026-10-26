@@ -132,8 +132,12 @@ export function calageSalle(T: any): { sx: number; x0: number; y0: number } {
   return { sx: 1, x0: DEPART_60, y0: -RS - (NC_DROITE / 2) * CW_DROITE };
 }
 export const estEnSalle = (T: any, race: any) => !!(T && (T.salle || (race && race.salleDroite)));
-/** Le survol de presentation : dehors, autour du batiment (l'exterieur Tripo), puis la plongee vers le depart. */
-export const SURVOL_SALLE = { cx: -S / 2, cy: -RS, rx: 105, ry: 78, z: 40 };
+/**
+ * Le survol de presentation, DANS la salle (« la vue de presentation doit commencer du ciel, mais dans
+ * le stade, pas depuis le toit », l'auteur, 26/10) : un tour au-dessus de l'anneau, sous les treillis
+ * (leur membrure basse est a 10,4 m), au-dessus de la coursive ; puis la plongee vers le depart.
+ */
+export const SURVOL_SALLE = { cx: -S / 2, cy: -RS, rx: 36, ry: 21, z: 9.2, bosse: 0.8 };
 
 /* ------------------------------------------------------------------ les matieres */
 
@@ -150,26 +154,39 @@ function toile(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: n
 /** Un tirage fixe : la salle est la meme a chaque course. */
 function tirage(graine: number) { let a = graine; return () => ((a = (a * 16807) % 2147483647) / 2147483647); }
 
-/** Le grain du revetement coule (granulats de caoutchouc) : une couleur pointillee et son relief. */
+/**
+ * Le revetement coule (Mondo) : sur les photos (0661, France 2026), presque uni a distance de camera —
+ * mat, un grain tres fin, de legers reflets. (Un grain marque a ete essaye puis refuse : « la texture
+ * est trop marquee et ne ressemble pas », l'auteur, 26/10.) Des marbrures a peine visibles, le grain fin.
+ */
 function revetement(rgb: number[], graine: number) {
   const h = tirage(graine);
-  const N = 512;
-  const relief = new Float32Array(N * N);
+  const N = 512;   // 1,6 m par tuile : 3,1 mm par pixel
+  let relief: Float32Array | null = null;
   const couleur = toile(N, N, (c) => {
-    const im = c.createImageData(N, N);
+    c.fillStyle = `rgb(${rgb.join(',')})`; c.fillRect(0, 0, N, N);
+    // (dessine aussi aux bords opposes : la tuile se raccorde)
+    const rond = (x: number, y: number, r: number, style: string) => {
+      c.fillStyle = style;
+      for (const dx of [0, -N, N]) for (const dy of [0, -N, N]) { c.beginPath(); c.arc(x + dx, y + dy, r, 0, Math.PI * 2); c.fill(); }
+    };
+    for (let i = 0; i < 260; i++) rond(h() * N, h() * N, 25 + h() * 60, h() < 0.5 ? `rgba(255,255,255,${0.004 + h() * 0.006})` : `rgba(0,0,0,${0.004 + h() * 0.006})`);
+    for (let i = 0; i < 4000; i++) rond(h() * N, h() * N, 0.8 + h() * 1.0, h() < 0.5 ? `rgba(255,255,255,${0.02 + h() * 0.03})` : `rgba(0,0,0,${0.02 + h() * 0.03})`);
+    const im = c.getImageData(0, 0, N, N), d = im.data;
+    relief = new Float32Array(N * N);
     for (let i = 0; i < N * N; i++) {
-      const g = h(), k = 0.9 + 0.2 * g + (h() < 0.03 ? 0.18 : 0) - (h() < 0.03 ? 0.14 : 0);
-      relief[i] = g;
-      im.data[i * 4] = Math.min(255, rgb[0] * k); im.data[i * 4 + 1] = Math.min(255, rgb[1] * k); im.data[i * 4 + 2] = Math.min(255, rgb[2] * k); im.data[i * 4 + 3] = 255;
+      const k = 0.97 + 0.06 * h();
+      d[i * 4] = Math.min(255, d[i * 4] * k); d[i * 4 + 1] = Math.min(255, d[i * 4 + 1] * k); d[i * 4 + 2] = Math.min(255, d[i * 4 + 2] * k);
+      relief[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 765;
     }
     c.putImageData(im, 0, 0);
   });
-  // la normale, des differences du relief (un grain, pas des bosses)
+  const r = relief!;
   const normale = toile(N, N, (c) => {
     const im = c.createImageData(N, N);
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
-      const i = y * N + x, dx = relief[y * N + ((x + 1) % N)] - relief[i], dy = relief[((y + 1) % N) * N + x] - relief[i];
-      im.data[i * 4] = 128 - dx * 70; im.data[i * 4 + 1] = 128 - dy * 70; im.data[i * 4 + 2] = 255; im.data[i * 4 + 3] = 255;
+      const i = y * N + x, dx = r[y * N + ((x + 1) % N)] - r[i], dy = r[((y + 1) % N) * N + x] - r[i];
+      im.data[i * 4] = 128 - dx * 120; im.data[i * 4 + 1] = 128 - dy * 120; im.data[i * 4 + 2] = 255; im.data[i * 4 + 3] = 255;
     }
     c.putImageData(im, 0, 0);
   }, false);
@@ -178,7 +195,7 @@ function revetement(rgb: number[], graine: number) {
 function matRevetement(rgb: number[], graine: number, rep: number) {
   const { couleur, normale } = revetement(rgb, graine);
   couleur.repeat.set(rep, rep); normale.repeat.set(rep, rep);
-  return new THREE.MeshStandardMaterial({ map: couleur, normalMap: normale, normalScale: new THREE.Vector2(0.6, 0.6), roughness: 0.82, metalness: 0 });
+  return new THREE.MeshStandardMaterial({ map: couleur, normalMap: normale, normalScale: new THREE.Vector2(0.4, 0.4), roughness: 0.62, metalness: 0 });
 }
 /** Les lames de bois rouge du bandeau : verticales, chacune sa teinte et son veinage. */
 function lamesDeBois(base: number[], verticales: boolean, graine: number) {
@@ -339,6 +356,21 @@ export function construireSalle(ctx: ContexteSalle) {
   for (const m of [bleu, anthracite]) { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -2; }
   // les textures de revetement sont en metres : une tuile pour 1,6 m
   for (const m of [bleu, anthracite, plateau]) { m.map!.repeat.set(1 / 1.6, 1 / 1.6); m.normalMap!.repeat.set(1 / 1.6, 1 / 1.6); }
+  // LE TARTAN, sur l'anneau et la ligne droite du 60 m seulement (« texture tartan », « uniquement sur la
+  // piste anneau et 60 metres », l'auteur, 26/10) : le caoutchouc granule de ambientCG Rubber004 (CC0),
+  // ses niveaux de gris (moyenne 0,82) sous la couleur du couloir, son relief et sa rugosite ; une tuile
+  // pour 0,80 m. Le plateau et les couloirs d'elan des sauts gardent leur surface.
+  const tartan = (rgb: number[], base: THREE.MeshStandardMaterial) => {
+    if (exporter) return base;
+    const m = new THREE.MeshStandardMaterial({
+      color: new THREE.Color().setRGB(rgb[0] / 255 / 0.82, rgb[1] / 255 / 0.82, rgb[2] / 255 / 0.82, THREE.SRGBColorSpace),
+      map: photo('tartan.jpg', 0.8, false), normalMap: photo('tartan-relief.jpg', 0.8, false), normalScale: new THREE.Vector2(0.7, 0.7),
+      roughnessMap: photo('tartan-rugosite.jpg', 0.8, false), roughness: 1, metalness: 0,
+    });
+    m.polygonOffset = base.polygonOffset; m.polygonOffsetFactor = base.polygonOffsetFactor; m.polygonOffsetUnits = base.polygonOffsetUnits;
+    return m;
+  };
+  const tartanBleu = tartan(BLEU, bleu), tartanAnthracite = tartan(ANTHRACITE, anthracite);
 
   // LE PLATEAU : tout le sol de la halle, gris clair
   const sol = new THREE.PlaneGeometry(S + 2 * LONG, LY);
@@ -348,7 +380,7 @@ export function construireSalle(ctx: ContexteSalle) {
   for (let i = 0; i < uvSol.count; i++) uvSol.setXY(i, uvSol.getX(i) * (S + 2 * LONG), uvSol.getY(i) * LY);
 
   // L'ANNEAU : six couloirs alternes, et une bande d'anthracite derriere le sixieme jusqu'au muret
-  for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? anthracite : bleu, true, 'sol');
+  for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? tartanAnthracite : tartanBleu, true, 'sol');
   for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - LIGNE / 2, RS + k * CW + LIGNE / 2, 0.008), ligne, false, 'sol');
   // la corde : une lisse blanche en saillie au bord interieur
   ajouter(murAnneau(RS - 0.06, () => 0, () => 0.05), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.5 }), false);
@@ -367,7 +399,7 @@ export function construireSalle(ctx: ContexteSalle) {
     const m = ajouter(new THREE.ShapeGeometry(f), mat, lumiere !== '', lumiere); m.position.z = z;
     return m;
   };
-  for (let k = 0; k < NC_DROITE; k++) entreLesVirages(yD + k * CW_DROITE, yD + (k + 1) * CW_DROITE, 0.004, k % 2 ? anthracite : bleu);
+  for (let k = 0; k < NC_DROITE; k++) entreLesVirages(yD + k * CW_DROITE, yD + (k + 1) * CW_DROITE, 0.004, k % 2 ? tartanAnthracite : tartanBleu);
   for (let k = 0; k <= NC_DROITE; k++) { const y = yD + k * CW_DROITE; entreLesVirages(y - LIGNE / 2, y + LIGNE / 2, 0.008, ligne, ''); }
   /** Un trait blanc en travers du plateau, a plat. */
   const traitPlat = (x: number, y: number, lx: number, ly: number, mat: THREE.Material = ligne, z = 0.009) => {
@@ -453,6 +485,9 @@ export function construireSalle(ctx: ContexteSalle) {
   couloirElan(-54.8, 7.6, -8.0);
   bac(7.8, 17.0, -6.8, -12.1);
   for (const [x, y] of [[6.5, -8.0], [-5.5, -8.0]]) traitPlat(x, y, 0.2, 1.22, acierBlanc, 0.012);
+  // (les agres qui peuvent masquer la course : chacun note ou il commence, voir AGRES)
+  const debutAgres: [string, number][] = [];
+  debutAgres.push(['perche', g.children.length]);
   // la perche : son couloir, le butoir, le grand tapis rouge et bleu, ses deux montants et la barre
   couloirElan(14.5, -35.0, -3.95);
   boite(-35.0, -35.6, -3.65, -4.25, -0.2, 0.01, tapisG, false);                       // le butoir
@@ -461,11 +496,13 @@ export function construireSalle(ctx: ContexteSalle) {
   boite(-33.2, -35.6, -1.2, -3.5, 0, 0.42, tapisB); boite(-33.2, -35.6, -4.4, -6.7, 0, 0.42, tapisB); // les avancees
   for (const y of [-0.75, -7.15]) { boite(-35.4, -35.8, y - 0.2, y + 0.2, 0, 0.12, acierBlanc); boite(-35.55, -35.65, y - 0.05, y + 0.05, 0.12, 5.2, acierBlanc); }
   { const b = ajouter(new THREE.CylinderGeometry(0.025, 0.025, 6.4, 6), new THREE.MeshStandardMaterial({ color: 0xf0c020, roughness: 0.5 })); b.position.set(-35.6, -3.95, 4.6); }
+  debutAgres.push(['hauteur', g.children.length]);
   // la hauteur : le tapis (6,4 x 4 m), les deux poteaux et la barre, du cote de l'elan
   boite(0.5, -3.5, -24.4, -30.8, 0, 0.3, tapisR);
   boite(0.35, -3.35, -24.55, -30.65, 0.3, 0.75, tapisB);
   for (const y of [-24.3, -30.9]) { boite(-3.55, -3.95, y - 0.2, y + 0.2, 0, 0.1, acierBlanc); boite(-3.7, -3.8, y - 0.04, y + 0.04, 0.1, 2.6, acierBlanc); }
   { const b = ajouter(new THREE.CylinderGeometry(0.015, 0.015, 6.6, 6), new THREE.MeshStandardMaterial({ color: 0xe03a2a, roughness: 0.5 })); b.position.set(-3.75, -27.6, 1.85); }
+  debutAgres.push(['poids', g.children.length]);
   // le poids : le cercle (2,135 m), son butoir, le secteur de 34,92° et l'aire de chute
   {
     const cx = -47.6, cy = -27.66;
@@ -492,6 +529,29 @@ export function construireSalle(ctx: ContexteSalle) {
     }
   }
 
+
+  // LES AGRES NE MASQUENT PAS LA COURSE (« les prises de camera fonctionnent ? attention, l'aire de
+  // lancer peut obstruer le film depuis l'autre cote », l'auteur, 26/10) : la cage de lancer, les
+  // montants et les tapis de la perche et de la hauteur s'effacent quand ils passent entre la camera
+  // et ce qu'elle vise (le rail filme depuis la pelouse, au travers des aires). Ce qui est a plat
+  // (sable, cercle, traits) reste toujours.
+  const AGRES: { objets: THREE.Object3D[]; boite: THREE.Box3 }[] = [];
+  {
+    const fin = g.children.length, bornes = [...debutAgres.map(d => d[1]), fin];
+    for (let i = 0; i < debutAgres.length; i++) {
+      const objets = g.children.slice(bornes[i], bornes[i + 1]).filter((o: any) => {
+        if (!o.isMesh) return false;
+        o.updateMatrix(); o.geometry.computeBoundingBox();
+        const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrix);
+        return b.max.z > 0.25;
+      });
+      if (!objets.length) continue;
+      const boite = new THREE.Box3();
+      for (const o of objets as THREE.Mesh[]) boite.union(o.geometry.boundingBox!.clone().applyMatrix4(o.matrix));
+      AGRES.push({ objets, boite: boite.expandByScalar(0.4) });
+    }
+  }
+  const _fr = new THREE.Frustum(), _pv = new THREE.Matrix4(), _bw = new THREE.Box3(), _cw = new THREE.Vector3(), _vw = new THREE.Vector3();
 
   // LE TAPIS D'ARRET DU 60 M (« un gros tapis apres l'arrivee, derriere le dernier couloir de
   // l'anneau », l'auteur, 26/10 ; image 0661) : un mur de mousse bleue de 10 m sur 4,5 m, au nom de
@@ -911,8 +971,20 @@ export function construireSalle(ctx: ContexteSalle) {
      * Ou est la camera (repere du stade) : la charpente se cache au-dessus du toit (le plan venu
      * du 2D) ; l'exterieur ne se montre qu'au survol, la camera hors de la halle.
      */
-    camera: (x: number, y: number, z: number, survol: boolean) => {
+    camera: (x: number, y: number, z: number, survol: boolean, cam?: THREE.Camera, vise?: THREE.Vector3) => {
       toit.visible = z < H_TOIT - 0.3;
+      // (un agres dans le champ, plus pres de la camera que ce qu'elle vise, s'efface ; au survol, tout reste)
+      if (cam && vise) {
+        cam.updateMatrixWorld();
+        _fr.setFromProjectionMatrix(_pv.multiplyMatrices((cam as any).projectionMatrix, cam.matrixWorldInverse));
+        cam.getWorldPosition(_cw);
+        const loin = _cw.distanceTo(_vw.copy(vise)) - 1.5;
+        for (const a of AGRES) {
+          _bw.copy(a.boite).applyMatrix4(g.matrixWorld);
+          const gene = !survol && (_bw.containsPoint(_cw) || (_fr.intersectsBox(_bw) && _bw.distanceToPoint(_cw) < loin));
+          for (const o of a.objets) o.visible = !gene;
+        }
+      }
       const dedans = x > X0 - 0.5 && x < X1 + 0.5 && y > Y0 - 0.5 && y < Y1 + 0.5 && z < H_TOIT + 1.5;
       dehors.visible = survol && !dedans;
       g.visible = !dehors.visible;

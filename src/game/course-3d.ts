@@ -651,7 +651,7 @@ const DROITE0_100 = -12, DROITE1 = 100;       // la ligne droite, de la sortie d
 let sx = 1, x0 = 0, y0 = 0;
 // LE STADE COUVERT DE VAL-DE-REUIL (salle-3d.ts) : son anneau releve et sa ligne droite centrale
 let salleActive = false;
-let cameraSalle: ((x: number, y: number, z: number, survol: boolean) => void) | null = null;
+let cameraSalle: ((x: number, y: number, z: number, survol: boolean, cam?: THREE.Camera, vise?: THREE.Vector3) => void) | null = null;
 function caler(T: any) {
   salleActive = estEnSalle(T, (globalThis as any).SprinterApp?.G?.race);
   if (salleActive) { ({ sx, x0, y0 } = calageSalle(T)); return; }
@@ -665,6 +665,8 @@ const capIci = (c: number) => (sx < 0 ? c + Math.PI : c);
 // 23/10) : en virage, le moteur fait courir sur la ligne de mesure, a 20-30 cm du bord interieur.
 // La 3D pose blocs et coureurs au milieu du couloir, puis les ramene sur la ligne en dix metres.
 const milieu = (T: any, k: number) => {
+  // (la piste couverte : couloirs de 0,90 m, ligne de mesure a 0,20 m)
+  if (T.salle) return T.salle.couloir / 2 - (k ? T.salle.mesN : T.salle.mes1);
   const C = (globalThis as any).SprinterApp?.C;
   return T.curved && C ? LANE_W / 2 - (k ? C.MES_N : C.MES_1) : 0;
 };
@@ -875,6 +877,16 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
         for (const c of [choix(pal.peaux), choix(pal.coulMaillots), choix(pal.coulCheveux), choix(pal.coulPantalons)]) cartes.push(c.r, c.g, c.b);
       }
       if (cartes.length) { const f = laFoule(cartes); f.userData.sansReflet = true; salle.interieur.add(f); }
+    }
+    // LES BLOCS DE DEPART (« il n'y a de starting-block sur aucune epreuve », l'auteur, 26/10) : les
+    // memes que dehors, au milieu de chaque couloir, la ou le coureur part — a la hauteur du releve
+    if (blocLots) for (const { geo, mat } of blocLots) {
+      const l = new Lot(geo, mat, true);
+      for (let k = 0; k < (T.lanes || nCouloirs); k++) {
+        const p = ici(T.posDemi(0, k, milieu(T, k))), a = capIci(T.heading(0, k));
+        l.poser(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(0, 0, 1), a).setPosition(p[0], p[1], zSol(p[0], p[1])));
+      }
+      l.finir(salle.interieur);
     }
     return;
   }
@@ -2488,7 +2500,7 @@ export function rendre(App: any, dt: number) {
         if (volPlonge === -1) { camPos.copy(orbite(volT)); camVise.set(cx, cy, 0); }
         else {
           camPos.lerpVectors(volDepart, voulu, e);
-          camPos.z += Math.sin(u * Math.PI) * 6;            // la plongee s'arrondit
+          camPos.z += Math.sin(u * Math.PI) * (salleActive ? SURVOL_SALLE.bosse : 6);   // la plongee s'arrondit (sous le toit, a peine)
           camVise.lerpVectors(volVise0, vise, e);
         }
         camPret = true;
@@ -2503,7 +2515,7 @@ export function rendre(App: any, dt: number) {
     }
     camera.position.copy(camPos);
     // (y retourne : voir monde) — l'exterieur ne se montre qu'au survol, camera dehors
-    if (salleActive && cameraSalle) cameraSalle(camera.position.x, -camera.position.y, camera.position.z, survol);
+    if (salleActive && cameraSalle) cameraSalle(camera.position.x, -camera.position.y, camera.position.z, survol, camera, camVise);
     // LA CAMERA VIT (l'auteur, 22/10 : « cinematique et dynamique ») : au coup de
     // pistolet elle tremble un instant, et son champ s'ouvre avec la vitesse.
     if (G.state === 'race' && etatVu !== 'race') secousse = 0.28;

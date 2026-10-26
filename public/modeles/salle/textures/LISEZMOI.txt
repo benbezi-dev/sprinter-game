@@ -1,3 +1,4 @@
 Textures photo de la salle — Poly Haven (polyhaven.com), licence CC0, recompressees en 1k.
   bois-chene.jpg / bois-chene-relief.jpg  <- oak_wood_planks (diff, nor_gl), Dimitrios Savva
   bardage.jpg / bardage-relief.jpg        <- box_profile_metal_sheet (diff passe au gris, nor_gl)
+  tartan.jpg / tartan-relief.jpg / tartan-rugosite.jpg <- ambientCG Rubber004 (CC0, ambientcg.com) : couleur passee en niveaux (moyenne 0,82), 512 px
