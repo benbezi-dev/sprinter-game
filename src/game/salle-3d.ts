@@ -437,11 +437,12 @@ export function construireSalle(ctx: ContexteSalle) {
     m.receiveShadow = true;
   };
   // la longueur et le triple : deux couloirs d'elan cote a cote, un bac a chaque bout, leurs planches
-  couloirElan(-54.8, 7.6, -8.5);
-  couloirElan(-40.9, 7.6, -11.3);
-  bac(7.8, 17.0, -7.3, -12.6);
-  bac(-41.1, -49.9, -9.9, -12.7);
-  for (const [x, y] of [[6.5, -8.5], [-5.5, -8.5], [-29.7, -11.3], [-31.7, -11.3], [-33.8, -11.3], [-39.5, -11.3]]) traitPlat(x, y, 0.2, 1.22, acierBlanc, 0.012);
+  // (0,50 m plus pres de la ligne d'arrivee que sur le plan : la ligne droite a desormais 8 couloirs)
+  couloirElan(-54.8, 7.6, -8.0);
+  couloirElan(-40.9, 7.6, -10.8);
+  bac(7.8, 17.0, -6.8, -12.1);
+  bac(-41.1, -49.9, -9.4, -12.2);
+  for (const [x, y] of [[6.5, -8.0], [-5.5, -8.0], [-29.7, -10.8], [-31.7, -10.8], [-33.8, -10.8], [-39.5, -10.8]]) traitPlat(x, y, 0.2, 1.22, acierBlanc, 0.012);
   // la perche : son couloir, le butoir, le grand tapis rouge et bleu, ses deux montants et la barre
   couloirElan(14.5, -35.0, -3.95);
   boite(-35.0, -35.6, -3.65, -4.25, -0.2, 0.01, tapisG, false);                       // le butoir

@@ -1,8 +1,8 @@
 // LA PISTE COUVERTE — le stade couvert Jesse Owens, Val-de-Reuil.
 //
 // L'auteur, 25/10 : « la piste fait 200 m avec les virages releves, le 400 m fait
-// deux tours » ; virages a 15 degres, 6 couloirs sur l'anneau, 6 aussi sur la ligne
-// droite centrale (le 60 m ; le plan de la salle, img-010). Couloirs de 0,90 m, ligne
+// deux tours » ; virages releves, 6 couloirs sur l'anneau, 8 sur la ligne droite
+// centrale (le 60 m ; les blocs numerotes de 1 a 8 aux France U18-U20 de 2026). Couloirs de 0,90 m, ligne
 // de mesure a 0,20 m de la ligne au couloir 1 et au-dela.
 //
 // LA FORME (l'auteur, 26/10 : « deux lignes droites de 35 m + deux virages de 65 m,
@@ -84,7 +84,7 @@ function surVirage(X, Y) {
 
 export const SALLE = {
   rayon: H, couloir: COULOIR, mes1: MES, mesN: MES,
-  couloirs: 6, couloirsDroite: 6,
+  couloirs: 6, couloirsDroite: 8,   // (la ligne droite centrale : 8 couloirs aux France 2026 ; 6 sur le plan de 2009)
   inclinaison: 15 * Math.PI / 180,   // en moyenne : la pente se raidit vers l'exterieur (salle-3d.ts, profil)
   demiLong: A,
   virage, capVirage, longueurVirage, phiVirage, surVirage,
