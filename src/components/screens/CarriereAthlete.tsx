@@ -16,7 +16,7 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
   type Athlete, type Jour, type Stat, type Epreuve, type Origine, type Voie,
-  moyenneDes, exigePourMonter, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
+  moyenneDes, exigePourMonter, EPREUVES_SALLE, libelleEpreuve, type Course, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
   bonusMateriel, coutDuDeplacement, picDeForme,
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
@@ -788,6 +788,14 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
               {refus && <span className="text-[10px] text-amber-300/80">{dans(refus)}</span>}
               {!refus && choixEpreuve}
               <Bouton plein disabled={!!refus || !!ev} onClick={() => { auDimanche(); if (partirAuMeeting(a, ep)) demanderReouverture(); }}>{dans(['COURIR LE MEETING', 'RUN THE MEET'])}</Bouton>
+              {/* LA PISTE COUVERTE DE VAL-DE-REUIL : le 60 m sur la ligne droite, le 200 et le 400 sur l'anneau releve */}
+              <span className="text-xs font-black mt-1">{dans(['En salle · stade couvert Jesse Owens', 'Indoor · Jesse Owens hall'])}</span>
+              <span className="text-[10px] text-white/55">{dans(['L’anneau de 200 m aux virages relevés : le 400 m, c’est deux tours.', 'The 200 m banked ring: the 400 m is two laps.'])}</span>
+              <div className="flex gap-2">{EPREUVES_SALLE.map(e => (
+                <Bouton key={e} className="flex-1" disabled={!!refus || !!ev} onClick={() => { auDimanche(); if (partirAuMeeting(a, e)) demanderReouverture(); }}>
+                  {libelleEpreuve(e).replace(' salle', '')}
+                </Bouton>
+              ))}</div>
             </div>
           );
         })()}
@@ -885,7 +893,7 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
         <Carte titre={mot('palmares')} icone={Trophy}>
           {a.palmares.slice(0, 6).map((p, i) => (
             <p key={i} className="text-xs text-white/75 flex justify-between gap-2">
-              <span className="truncate">{p.meeting ?? mot(COMPETITIONS[p.niveau].cle)} · {p.epreuve} m</span>
+              <span className="truncate">{p.meeting ?? mot(COMPETITIONS[p.niveau].cle)} · {libelleEpreuve(p.epreuve)}</span>
               <span className="tabular-nums shrink-0">{p.chrono === null ? mot('faux') : `${mot('place', { o: ord(p.place) })} · ${p.chrono.toFixed(2)}`}</span>
             </p>
           ))}
@@ -1382,7 +1390,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
           <Carte titre={mot('palmares')} icone={Trophy}>
             {a.palmares.slice(0, 6).map((p, i) => (
               <p key={i} className="text-xs text-white/75 flex justify-between gap-2">
-                <span className="truncate">{p.meeting ?? mot(COMPETITIONS[p.niveau].cle)} · {p.epreuve} m</span>
+                <span className="truncate">{p.meeting ?? mot(COMPETITIONS[p.niveau].cle)} · {libelleEpreuve(p.epreuve)}</span>
                 <span className="tabular-nums shrink-0">{p.chrono === null ? mot('faux') : `${mot('place', { o: ordPlace(p.place) })} · ${p.chrono.toFixed(2)}`}</span>
               </p>
             ))}
@@ -1665,7 +1673,7 @@ export function FinDeCourseAthlete() {
   };
   const suivant = r && r.qualifie ? COMPETITIONS[r.niveau + 1] : null;
   // qualifie : le tour suivant, l'apres-midi ou le soir, sans repayer le deplacement
-  const tourSuivant = () => { const a = athlete(); if (a && r?.suivant && r.suivant !== 'serie') partirALaCompetition(a, r.epreuve, r.suivant); };
+  const tourSuivant = () => { const a = athlete(); if (a && r?.suivant && r.suivant !== 'serie') partirALaCompetition(a, r.epreuve as Epreuve, r.suivant); };
   const NOM_DU_TOUR: Record<string, [string, string]> = { serie: ['SÉRIE', 'HEAT'], demie: ['DEMI-FINALE', 'SEMI-FINAL'], finale: ['FINALE', 'FINAL'] };
   const vers: [string, string] = r?.suivant === 'demie' ? ['LA DEMI-FINALE', 'THE SEMI-FINAL'] : ['LA FINALE', 'THE FINAL'];
 
@@ -1676,7 +1684,7 @@ export function FinDeCourseAthlete() {
         {r && (
           <>
             <span className="text-[10px] font-bold tracking-[0.28em]" style={{ color: VERT }}>
-              {(r.meeting ? dans(r.meeting) : mot(COMPETITIONS[r.niveau].cle)).toUpperCase()} · {r.epreuve} M
+              {(r.meeting ? dans(r.meeting) : mot(COMPETITIONS[r.niveau].cle)).toUpperCase()} · {libelleEpreuve(r.epreuve).toUpperCase()}
             </span>
             {r.tour && <span className="text-[10px] font-black tracking-[0.3em] text-white/60">{dans(NOM_DU_TOUR[r.tour])}</span>}
             <span className={`font-black font-display text-3xl sm:text-4xl uppercase tracking-tight leading-[0.95]

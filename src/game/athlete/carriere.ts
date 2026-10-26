@@ -17,7 +17,7 @@ import {
   conclureLaCompetition, finirLaSemaine, noter, declarerForfait, jourCale, type Resultat,
   faireUneAction, avancer, heureDe, DIMANCHE, payer, tirerLeCorps, BLESSURES,
   type RendezVousReel, type Tour, apresLeTour, HEURE_DU_TOUR, SEMAINES_AVANT_FRANCE, rendezVousAvantFrance,
-  conclureLeMeeting, meetingDe, DEPLACEMENT_MEETING,
+  conclureLeMeeting, meetingDe, DEPLACEMENT_MEETING, type Course, enSalle, libelleEpreuve,
 } from './regles';
 import { tirerLaSemaine } from './recit';
 import { MOTS } from './mots';
@@ -126,7 +126,7 @@ export function forfait(a: Athlete) {
 
 /** Ce qu'on garde pendant que la course tourne : `a` est l'objet des ecrans. */
 /** `tour` : une course unique, ou serie, demie, finale a partir des France ; `vent` en m/s (null au 400 m). */
-let enCourse: { a: Athlete; epreuve: Epreuve; niveau: number; vent: number | null; tour: 'unique' | Tour; meeting?: boolean } | null = null;
+let enCourse: { a: Athlete; epreuve: Course; niveau: number; vent: number | null; tour: 'unique' | Tour; meeting?: boolean } | null = null;
 /** Rouvrir le tableau de bord de la carriere en revenant a l'accueil. */
 let rouvrir = false;
 
@@ -161,13 +161,14 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve, tour?: 'demie
 }
 
 /** Partir au meeting du dimanche (meetingPossible, regles.ts) : une course unique au plateau du niveau. */
-export function partirAuMeeting(a: Athlete, epreuve: Epreuve): boolean {
+export function partirAuMeeting(a: Athlete, epreuve: Course): boolean {
   if (!CARRIERE_ATHLETE_OUVERTE) return false;
   a.meeting = a.semaine;
   payer(a, -DEPLACEMENT_MEETING, meetingDe(a)[0], meetingDe(a)[1]);
   sauver(a);
   const G = SprinterApp.G;
-  const vent = epreuve === '400' ? null : Math.round((-1.5 + Math.random() * 4.5) * 10) / 10;
+  // en salle, pas de vent
+  const vent = epreuve === '400' || enSalle(epreuve) ? null : Math.round((-1.5 + Math.random() * 4.5) * 10) / 10;
   enCourse = { a, epreuve, niveau: a.niveau, vent, tour: 'unique', meeting: true };
   G.reglagesJoueur = { ...reglages(a, a.niveau), plateau: COMPETITIONS[a.niveau].chronos || null, look: lookDe(apparenceDe(a), false) };
   if (!G.surRetourAccueil) G.surRetourAccueil = rangerLaCourse;
@@ -232,15 +233,15 @@ export function conclureLaCourse(a: Athlete): Resultat | null {
     const r = conclureLeMeeting(a, enCourse.epreuve, place, moi, enCourse.vent);
     const corps = tirerLeCorps(a, 'course');
     if (corps.blessure) r.blessure = corps.blessure;
-    noter(a, `${r.meeting![0]} — ${r.epreuve} m : ${moi === null ? 'faux départ' : `${place === 1 ? '1er' : `${place}e`} en ${moi.toFixed(2)} s`}`,
-             `${r.meeting![1]} — ${r.epreuve} m: ${moi === null ? 'false start' : `P${place} in ${moi.toFixed(2)} s`}`);
+    noter(a, `${r.meeting![0]} — ${libelleEpreuve(r.epreuve)} : ${moi === null ? 'faux départ' : `${place === 1 ? '1er' : `${place}e`} en ${moi.toFixed(2)} s`}`,
+             `${r.meeting![1]} — ${libelleEpreuve(r.epreuve)}: ${moi === null ? 'false start' : `P${place} in ${moi.toFixed(2)} s`}`);
     avancer(a, Math.max(0, 18 * 60 - heureDe(a)), { energie: -20, hygiene: -30 });
     sauver(a);
     enCourse = null; concluPour = G.runners; dernier = r;
     return r;
   }
   const tour = enCourse.tour;
-  const r = conclureLaCompetition(a, enCourse.epreuve, suite ? suite.placeFinale : place, moi, enCourse.vent);
+  const r = conclureLaCompetition(a, enCourse.epreuve as Epreuve, suite ? suite.placeFinale : place, moi, enCourse.vent);
   if (tour !== 'unique') r.tour = tour;
   messagesDeCourse(a, r);
   // le corps a couru lui aussi : sans echauffement, les ischios en premier

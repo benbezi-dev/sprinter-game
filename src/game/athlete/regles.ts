@@ -29,6 +29,17 @@ export type Origine = 'aisee' | 'modeste';
 export type Voie = 'polyvalent' | 'specialiste';
 export type Epreuve = '100' | '200' | '400';
 export const EPREUVES: Epreuve[] = ['100', '200', '400'];
+/**
+ * LA PISTE COUVERTE DE VAL-DE-REUIL (piste-salle.js ; l'auteur, 25/10 : « on va ajouter les
+ * courses en salle »). Le 60 m sur la ligne droite centrale, le 200 m (un tour) et le 400 m
+ * (deux tours) sur l'anneau de 200 m. Courues aux meetings en salle du dimanche.
+ */
+export type EpreuveSalle = '60' | '200s' | '400s';
+export const EPREUVES_SALLE: EpreuveSalle[] = ['60', '200s', '400s'];
+export type Course = Epreuve | EpreuveSalle;
+export const enSalle = (e: Course) => (EPREUVES_SALLE as string[]).includes(e);
+/** « 60 m », « 200 m salle » : le nom d'une epreuve a l'ecran. */
+export const libelleEpreuve = (e: Course) => e === '200s' ? '200 m salle' : e === '400s' ? '400 m salle' : `${e} m`;
 export type Jour = 'lundi' | 'mercredi' | 'vendredi' | 'samedi';
 export const JOURS: Jour[] = ['lundi', 'mercredi', 'vendredi', 'samedi'];
 export type Objectif = 'france' | 'europe' | 'monde';
@@ -79,7 +90,7 @@ export type Athlete = {
   /** LE TELEPHONE (telephone.ts) : le releve de compte, les messages, les records, l'age, le velo. */
   compte?: { s: number; j: number; m: number; fr: string; en: string }[];
   messages?: { de: string; fr: string; en: string; s: number; j: number; h: number; lu?: boolean }[];
-  records?: Partial<Record<Epreuve, number>>;
+  records?: Partial<Record<Course, number>>;
   age?: number;
   velo?: boolean;
   /** LES GENS (gens.ts) : les relations hors coach et rival, qui l'on a vu cette semaine. */
@@ -129,7 +140,7 @@ export type Athlete = {
   evenement: string | null;
   vus: string[];
   journal: Ligne[];
-  palmares: { s: number; niveau: number; epreuve: Epreuve; place: number; chrono: number | null; meeting?: string }[];
+  palmares: { s: number; niveau: number; epreuve: Course; place: number; chrono: number | null; meeting?: string }[];
   /** L'assiduite du cycle : seances proposees, seances faites. */
   assiduite: { proposees: number; faites: number };
 };
@@ -593,7 +604,7 @@ function rond5(v: number) { return Math.round(v * 1e5) / 1e5; }
 
 export type Resultat = {
   niveau: number;
-  epreuve: Epreuve;
+  epreuve: Course;
   place: number;
   chrono: number | null;
   qualifie: boolean;
@@ -690,8 +701,9 @@ export function meetingPossible(a: Athlete, championnatAujourdhui: boolean): [st
   if (a.argent < DEPLACEMENT_MEETING) return ['Pas assez d’argent', 'Not enough money'];
   return null;
 }
-export function conclureLeMeeting(a: Athlete, epreuve: Epreuve, place: number, chrono: number | null, vent: number | null): Resultat {
-  const niveau = a.niveau, c = COMPETITIONS[niveau], nom = meetingDe(a);
+export function conclureLeMeeting(a: Athlete, epreuve: Course, place: number, chrono: number | null, vent: number | null): Resultat {
+  // en salle : le stade couvert de Val-de-Reuil (un lieu public, son vrai nom)
+  const niveau = a.niveau, c = COMPETITIONS[niveau], nom: [string, string] = enSalle(epreuve) ? ['Meeting en salle · Jesse Owens', 'Indoor meet · Jesse Owens'] : meetingDe(a);
   const podium = chrono !== null && place <= QUALIFIES;
   const prime = podium ? [0, 30, 20, 10][place] * Math.max(1, niveau) : 0;
   const rep = Math.round(c.reputation * (podium ? 0.4 : 0.1));

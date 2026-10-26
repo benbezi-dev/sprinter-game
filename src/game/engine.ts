@@ -5,6 +5,10 @@ import './coureur-hd.js';
 import './coureur-vedettes.js';
 import './coureur-premium.js';
 import './sprinter-core.js';
+// LA PISTE COUVERTE DE VAL-DE-REUIL (piste-salle.js) : le 60 m, le 200 et le 400 m en salle
+// rejoignent les epreuves du moteur ; seule la carriere d'athlete les court pour l'instant.
+import { COURSES_EN_SALLE } from './piste-salle.js';
+Object.assign((globalThis as any).SprinterCore.RACES, COURSES_EN_SALLE);
 import './chiffres-piste.js';
 // Le registre des images de decor : les modules qui suivent y prennent les
 // leurs, decodees, et le decompte attend celles qui manquent (chargement.ts).

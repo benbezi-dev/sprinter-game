@@ -6,7 +6,7 @@ import {
   Footprints, Bike, Bus, Wifi, BatteryFull, Phone,
 } from 'lucide-react';
 import {
-  type Athlete, type Epreuve, COMPETITIONS, EPREUVES, etape, categorie, jourDe, heureDe,
+  type Athlete, type Epreuve, COMPETITIONS, EPREUVES, libelleEpreuve, etape, categorie, jourDe, heureDe,
 } from '@/game/athlete/regles';
 import { type Personne, GENS, PERSONNES, ouEst, lienDe, etiquette, interagir, roleDe } from '@/game/athlete/gens';
 import { type Mode, type Auteur, toutLire, nonLus, classement, trajet, agenda } from '@/game/athlete/telephone';
@@ -214,7 +214,7 @@ function CarriereApp({ a }: { a: Athlete }) {
         <Bloc t={['PALMARÈS', 'RESULTS']}>
           {a.palmares.slice(0, 6).map((r, i) => (
             <div key={i} className="flex justify-between text-[12px] py-0.5">
-              <span className="truncate text-white/80">S{r.s} · {r.meeting ?? mot(COMPETITIONS[r.niveau].cle)} · {r.epreuve} m</span>
+              <span className="truncate text-white/80">S{r.s} · {r.meeting ?? mot(COMPETITIONS[r.niveau].cle)} · {libelleEpreuve(r.epreuve)}</span>
               <span className="tabular-nums font-bold shrink-0">{r.chrono === null ? mot('faux') : `${r.place}${r.place === 1 ? 'er' : 'e'} · ${r.chrono.toFixed(2)}`}</span>
             </div>
           ))}

@@ -30,6 +30,23 @@
       // se court a l'heure ou l'on joue, de jour comme de nuit (heure-du-jour.js)
       heure: true
     },
+    // LA HALLE DE VAL-DE-REUIL (stade couvert Jesse Owens ; piste-salle.js) : d'apres les
+    // replays des championnats U18-U20 (assets-sources/piste-couverte-val-de-reuil) — une
+    // piste bleue aux lignes blanches, l'interieur gris du plateau, un toit clair, des
+    // banderoles aux couleurs vives. Aucune marque ni federation sur les panneaux.
+    // Pas d'heure, pas de nuages : on est sous le toit ; le mur suit de pres les gradins.
+    salle: {
+      skyTop: [214, 222, 232], skyBot: [178, 190, 206], stars: 0,
+      grass: [128, 132, 140], grassEdge: [104, 108, 118],
+      trackA: [42, 82, 160], trackB: [34, 70, 140],
+      lane: [246, 248, 252], kerb: [252, 252, 252],
+      tread: [186, 190, 198], riser: [124, 130, 146], roof: [220, 226, 236],
+      barrier: [238, 240, 244],
+      panels: [[26, 44, 96], [214, 44, 122], [72, 172, 222], [240, 240, 246]],
+      crowdLo: [44, 46, 62], crowdHi: [246, 240, 232],
+      accent: [72, 172, 222], dust: [190, 196, 210],
+      horizon: 14
+    },
     // Le vide, et non une pelouse de nuit : `espace` le peuple d'etoiles, de
     // nebuleuses et de planetes qui defilent sous la piste, et `neon` allume
     // ses deux bords (voir decor-cosmos.js). Le fond est plus noir qu'avant
@@ -2289,7 +2306,8 @@
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
     const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
-    names.forEach((n, i) => {
+    // l'anneau couvert n'a que six couloirs : cinq adversaires autour du joueur (couloir 4)
+    (G.track.lanes < C.LANE_COUNT ? names.slice(0, G.track.lanes - 1) : names).forEach((n, i) => {
       // Seme pendant un defi : c'est CE tirage qui decide du plateau — qui
       // court a cote de toi, et en combien. Le laisser au hasard rendrait deux
       // defis « identiques » incomparables.
@@ -2670,7 +2688,7 @@
       G.champDirect = true;
       const l = opts.monCouloir;
       // Le couloir peint est l'indice plus un : voir indiceDuCouloir.
-      if (l >= 1 && l <= C.LANE_COUNT && G.player) G.player.lane = l - 1;
+      if (l >= 1 && l <= NL() && G.player) G.player.lane = l - 1;
     }
     // Un seul chemin, a deux comme a huit.
     //
@@ -6517,7 +6535,7 @@
     if (G.track.curved) {
       // Longueur d'arc entre deux echantillons de virage, pour convertir
       // l'espacement demande en nombre d'echantillons.
-      const arc = Math.PI * C.LANE_W * C.LANE_COUNT / ARC_STEPS;
+      const arc = Math.PI * C.LANE_W * NL() / ARC_STEPS;
       const n = Math.max(1, Math.round(pasMetres / Math.max(0.4, arc)));
       for (let i = 0; i < sm.length; i += n) out.push(sm[i]);
       return out;
@@ -6879,7 +6897,7 @@
     // facon (images-pretes.js).
     if (!DEC()) return;
     const vue = T.curved ? WROT * 180 / Math.PI : 0;
-    for (let e = 0; e < C.LANE_COUNT; e++) {
+    for (let e = 0; e < NL(); e++) {
       const q = T.pos(0, e);
       const g2 = ground(q[0], q[1]);
       const cap = capALEcran(q, T.heading(0, e), vue);
@@ -7043,7 +7061,7 @@
     if (th.clouds) drawClouds(ctx);
     const sm = samples();
     const rIn = T.curved ? T.edge(0) : 0;
-    const rOut = T.curved ? T.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
+    const rOut = T.curved ? T.edge(NL()) : C.LANE_W * NL();
     // La patrouille, puis la tour : tracees sur le ciel, avant tout le sol,
     // pour que les rideaux d'arbres lui passent devant le pied.
     const cdm = th.champDeMars && CDM();
@@ -7228,7 +7246,7 @@
       // ordre.
       const affiche = pubDeLaCourse(th), pub = affiche !== null;
       const reperes = pub ? reperesDeDistance(T)
-        .map(m => ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES))
+        .map(m => ptOf(T.markAt(m, NL() - 1), rOut + ECART_REPERES))
         .filter(Boolean) : null;
       // les panneaux hors du cadre ne se tracent pas ; l'alternance des
       // sponsors se compte toujours depuis le debut du trace
@@ -7400,10 +7418,10 @@
     // Le liseret interieur et le bord exterieur, eux, restent francs : ce
     // sont des reperes de course, pas des marques d'usage.
     if (!(cdm && cdm.lignes(ctx, apiCdm(), th, sm, rIn, rOut,
-                            (e) => T.curved ? T.edge(e) : e * C.LANE_W, C.LANE_COUNT))) {
+                            (e) => T.curved ? T.edge(e) : e * C.LANE_W, NL()))) {
       if (th.neon && COS()) COS().neon(ctx, PEINTRE, th, sm, rIn, rOut);
       rail(ctx, smPiste, rIn, rgb(th.kerb), 3);
-      for (let e = 1; e < C.LANE_COUNT; e++) {
+      for (let e = 1; e < NL(); e++) {
         rail(ctx, smPiste, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, th.ligneUsee || 0.87), 1.6);
       }
       rail(ctx, smPiste, rOut, th.ligneUsee ? rgba(th.lane, th.ligneUsee) : rgb(th.lane), 2.2);
@@ -7440,7 +7458,7 @@
     const markers = reperesDeDistance(T);
 
     for (const m of markers)
-      for (let e = 0; e < C.LANE_COUNT; e++)
+      for (let e = 0; e < NL(); e++)
         tick(m, e, 'rgba(255,255,255,0.90)', m === 0 ? 3 : 1.6);
 
     // Zones de transmission du relais, en jaune comme sur une piste.
@@ -7454,7 +7472,7 @@
     if (T.relay && T.legLength > 0) {
       for (let k = 1; k < T.legs; k++) {
         const z0 = k * T.legLength;
-        for (let e = 0; e < C.LANE_COUNT; e++) {
+        for (let e = 0; e < NL(); e++) {
           tick(z0, e, 'rgba(255,206,0,0.92)', 2.4);
           tick(z0 + C.RELAY_LAUNCH, e, 'rgba(255,206,0,0.92)', 2.4);
           tick(z0 + 20, e, 'rgba(255,206,0,0.45)', 1.4);
@@ -7468,7 +7486,7 @@
     // peinte au sol nulle part. Voir chiffres-piste.js.
     const CH = globalThis.ChiffresPiste;
     if (CH) {
-      for (let e = 0; e < C.LANE_COUNT; e++) {
+      for (let e = 0; e < NL(); e++) {
         const q = ptOf(T.markAt(-1.7, e), lineR(e) + C.LANE_W * 0.5);
         const p = ground(q[0], q[1]);
         if (p[0] < -60 || p[0] > G.VW + 60 || p[1] < -40 || p[1] > G.VH + 40) continue;
@@ -7487,7 +7505,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const m of markers) {
-      const q = ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES);
+      const q = ptOf(T.markAt(m, NL() - 1), rOut + ECART_REPERES);
       if (!q) continue;
       const p = ground(q[0], q[1]);
       if (p[0] < -80 || p[0] > G.VW + 80) continue;
@@ -7503,7 +7521,7 @@
     // complet. Elle, au moins, est bien radiale : tous les couloirs y
     // arrivent au meme endroit, c'est la definition d'une ligne d'arrivee.
     const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
-    for (let i = 0; i < C.LANE_COUNT * 2; i++) {
+    for (let i = 0; i < NL() * 2; i++) {
       const rr = rIn + i * C.LANE_W * 0.5;
       ctx.fillStyle = i % 2 ? 'rgb(56,58,72)' : '#fff';
       ctx.beginPath();
@@ -8688,9 +8706,13 @@
   function theme() {
     return eclaire(themeBrut());
   }
+  /** Le nombre de couloirs de la piste du moment : six sur l'anneau couvert (piste-salle.js). */
+  function NL() { return (G.track && G.track.lanes) || C.LANE_COUNT; }
 
   /** Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. */
   function themeBrut() {
+    // LA PISTE COUVERTE DE VAL-DE-REUIL (piste-salle.js) : sa halle, quel que soit le niveau
+    if (G.race && (G.race.salle || G.race.salleDroite)) return THEMES.salle;
     const lvl = LEVELS[G.levelIdx];
     return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
   }

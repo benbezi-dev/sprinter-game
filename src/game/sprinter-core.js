@@ -1550,15 +1550,50 @@
     this.relay = !!race.relay;
     this.legs = race.legs || 0;
     this.legLength = race.legLength || 0;
+    // LA PISTE COUVERTE (piste-salle.js) : un anneau qu'on tourne une ou deux
+    // fois, avec sa propre geometrie (rayon, couloirs, virages releves).
+    this.salle = race.salle || null;
+    if (this.salle) { this.total = race.total; this.fullLap = true; this.curved = true; }
+    // le nombre de couloirs : six sur l'anneau couvert, huit partout ailleurs
+    this.lanes = this.salle ? this.salle.couloirs : C.LANE_COUNT;
   }
+  // L'anneau couvert, couloir de rayon r : ou en est-on, `s` metres apres le
+  // depart ? On compte depuis l'arrivee (u, metres apres la ligne) : le depart en
+  // quinconce en sort tout seul, chaque couloir parcourant `total`. Meme repere
+  // que la piste exterieure : arrivee en (0, -r), premier virage autour de
+  // l'origine, ligne droite opposee en y = r, second virage autour de (S, 0).
+  // `theta` = angle tourne depuis la ligne (le cap vaut pi - theta), `bend` =
+  // 1 ou 2 dans un virage, 0 en ligne droite, `v` = angle dans le virage ou
+  // abscisse sur la droite.
+  Track.prototype.boucle = function (s, r) {
+    const S = this.straight, B = Math.PI * r, L = 2 * S + 2 * B;
+    const brut = s - this.total, n = Math.floor(brut / L);
+    let u = brut - n * L;
+    const tours = 2 * Math.PI * (n + (this.salle.tours || 1));
+    if (u < B) return { bend: 1, v: u / r, theta: u / r, tours, rem: B - u };
+    u -= B;
+    if (u < S) return { bend: 0, v: u, theta: Math.PI, tours, moitie: 0 };
+    u -= S;
+    if (u < B) return { bend: 2, v: u / r, theta: Math.PI + u / r, tours, rem: B - u };
+    return { bend: 0, v: u - B, theta: 2 * Math.PI, tours, moitie: 1 };
+  };
+  // Le point de la boucle `b` au rayon `r` (r peut differer du couloir : relais, bords peints).
+  Track.prototype.pointDeBoucle = function (b, r) {
+    const S = this.straight;
+    if (b.bend === 1) return [-r * Math.sin(b.v), -r * Math.cos(b.v)];
+    if (b.bend === 2) return [S + r * Math.sin(b.v), r * Math.cos(b.v)];
+    return b.moitie === 0 ? [b.v, r] : [S - b.v, -r];
+  };
   // Rayon de la ligne de mesure du couloir (lane compte a partir de zero) :
   // la trajectoire du coureur, pas le milieu du couloir.
   Track.prototype.radius = function (lane) {
+    const P = this.salle;
+    if (P) return lane === 0 ? P.rayon + P.mes1 : P.rayon + lane * P.couloir + P.mesN;
     return lane === 0 ? C.R1 + C.MES_1 : C.R1 + lane * C.LANE_W + C.MES_N;
   };
   // Rayon d'une ligne peinte : edge(0) est la corde, edge(8) le bord
   // exterieur du huitieme couloir.
-  Track.prototype.edge = function (e) { return C.R1 + e * C.LANE_W; };
+  Track.prototype.edge = function (e) { return this.salle ? this.salle.rayon + e * this.salle.couloir : C.R1 + e * C.LANE_W; };
   // Longueur du PREMIER virage, pour un rayon donne — et c'est la que se
   // fabrique le depart en quinconce.
   //
@@ -1574,6 +1609,8 @@
   // couloirs — 200 moins la ligne droite — et c'est l'angle balaye qui
   // diminue vers l'exterieur.
   Track.prototype.bend1 = function (r) {
+    // piste couverte : ce qui reste du premier virage au depart (depart en quinconce)
+    if (this.salle) { const b = this.boucle(0, r); return b.bend === 1 ? b.rem : 0; }
     return this.fullLap ? this.total - 2 * this.straight - Math.PI * r : this.arc;
   };
   Track.prototype.posR = function (v, r, onBend) {
@@ -1611,6 +1648,7 @@
   // tombe lui aussi sur cette ligne — le tour est parfait, comme sur une
   // vraie piste.
   Track.prototype.posAtR = function (s, r) {
+    if (this.salle) return this.pointDeBoucle(this.boucle(s, r), r);
     const A = this.bend1(r);
     if (this.fullLap && s >= A + this.straight) {
       return this.posLap2(s - A - this.straight, r);
@@ -1648,6 +1686,7 @@
   Track.prototype.posDemi = function (s, lane, dr) {
     if (!dr) return this.pos(s, lane);
     if (!this.curved) return [s, C.LANE_W * (lane + 0.5) + dr];
+    if (this.salle) { const rRef = this.radius(lane); return this.pointDeBoucle(this.boucle(s, rRef), rRef + dr); }
     const rRef = this.radius(lane), r = rRef + dr;
     const A = this.bend1(rRef);
     if (this.fullLap && s >= A + this.straight) {
@@ -1675,6 +1714,7 @@
   // parcourue, qui sur un virage ne sont pas alignes sur le meme rayon.
   Track.prototype.markAt = function (s, lane) {
     if (!this.curved) return [false, s, 0];
+    if (this.salle) { const b = this.boucle(s, this.radius(lane)); return b.bend ? [true, Math.PI - b.v, b.bend - 1] : [false, b.v, b.moitie]; }
     const r = this.radius(lane), A = this.bend1(r), S = this.straight;
     if (this.fullLap && s >= A + S) {
       const s2 = s - A - S, B = Math.PI * r;
@@ -1688,6 +1728,8 @@
   };
   Track.prototype.heading = function (s, lane) {
     if (!this.curved) return 0;
+    // cap continu sur plusieurs tours : pi au depart dans le premier virage, -pi a l'arrivee d'un tour
+    if (this.salle) { const b = this.boucle(s, this.radius(lane)); return Math.PI - b.theta - b.tours; }
     const r = this.radius(lane), A = this.bend1(r);
     if (this.fullLap && s >= A + this.straight) {
       const s2 = s - A - this.straight, B = Math.PI * r;
@@ -1705,7 +1747,8 @@
     const r = this.radius(lane), A = this.bend1(r);
     // Distance restant a courir dans le virage, ou null hors virage.
     let rem = null;
-    if (this.fullLap && s >= A + this.straight) {
+    if (this.salle) { const b = this.boucle(s, r); rem = b.bend ? b.rem : null; }
+    else if (this.fullLap && s >= A + this.straight) {
       const s2 = s - A - this.straight, B = Math.PI * r;
       if (s2 < B) rem = B - s2;
     } else if (s < A) {
