@@ -46,11 +46,12 @@ function profil(d: number) {
 // sec », l'auteur, 26/10) : il commence 20 m avant le virage, y arrive a 55 %, et ne devient plein
 // qu'au premier quart du virage ; la meme chose en sortie. Courbes a derivee nulle aux deux bouts.
 const TRANS = 20, PART_DROITE = 0.55, ENTREE = Math.PI / 4;
-// LE BORD DE L'ANNEAU, RELEVE SUR LE PLAN (img-010, 11,66 px/m) : le muret a 0,70 m du sixieme
-// couloir, le bord de la coursive a 1,90 m ; au coeur des virages, l'un et l'autre 1,15 m plus loin.
-const R_MUR = RS + W + 0.7;                           // le muret blanc
+// LE BORD DE L'ANNEAU : le muret blanc contre le sixieme couloir (« il n'y a pas de bande grise
+// apres le couloir 6 dans la salle », l'auteur, 26/10) ; le bord de la coursive a 1,90 m (le plan),
+// 1,15 m plus loin au coeur des virages.
+const R_MUR = RS + W + 0.05;                          // le muret blanc
 const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
-const EV = 1.15;                                      // l'evasement des virages
+const EV = 1.15;                                      // l'evasement de la coursive dans les virages
 const H_COURSIVE = 4.0;
 // les gradins de bois, sous la coursive (la visite filmee de 2025) : quatre marches de 0,80 m
 const N_G = 4, P_G = 0.8, R_G = R_MUR + 0.15;
@@ -238,7 +239,7 @@ function tour(r: number, partie = -1, ev = 0): PointTour[] {
   return pts;
 }
 /** La hauteur du revetement releve en un point du tour (le releve va jusqu'au muret, evase avec lui). */
-const zEn = (p: PointTour) => profil(Math.min(p.r, R_MUR + EV * p.g) - RS) * p.f;
+const zEn = (p: PointTour) => profil(Math.min(p.r, R_MUR) - RS) * p.f;
 
 /**
  * Une bande de l'anneau entre deux rayons (evases de ev0 et ev1), relevee, a dz au-dessus du
@@ -322,7 +323,6 @@ export function construireSalle(ctx: ContexteSalle) {
 
   // L'ANNEAU : six couloirs alternes, et une bande d'anthracite derriere le sixieme jusqu'au muret
   for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? anthracite : bleu, true, 'sol');
-  ajouter(bandeAnneau(RS + W, R_MUR, 0.004, -1, 0, EV), anthracite, true, 'sol');
   for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - LIGNE / 2, RS + k * CW + LIGNE / 2, 0.008), ligne, false, 'sol');
   // la corde : une lisse blanche en saillie au bord interieur
   ajouter(murAnneau(RS - 0.06, () => 0, () => 0.05), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.5 }), false);
@@ -455,10 +455,10 @@ export function construireSalle(ctx: ContexteSalle) {
 
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
   const blanc = new THREE.MeshStandardMaterial({ map: mur(BLANC, 5), roughness: 0.9 });
-  // (le haut du muret : le releve au muret, evase, plus 0,90 m — les gradins partent de la)
-  const hautMur = (p: PointTour) => profil(R_MUR + EV * p.g - RS) * p.f + 0.9;
-  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k, EV), double(blanc), 'coque');
-  enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, EV, EV, hautMur), blanc, 'coque');
+  // (le haut du muret : le releve au muret plus 0,90 m — les gradins partent de la)
+  const hautMur = (p: PointTour) => profil(R_MUR - RS) * p.f + 0.9;
+  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k), double(blanc), 'coque');
+  enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, 0, 0, hautMur), blanc, 'coque');
   // LES GRADINS DE BOIS (la visite filmee de 2025) : des planches HORIZONTALES d'un bois chaud,
   // quatre marches qui montent du muret jusque sous la coursive, tout autour de l'anneau
   const bois = lamesDeBois([176, 98, 52], false, 17); bois.repeat.set(1 / 3, 1 / 1.6);
@@ -466,10 +466,10 @@ export function construireSalle(ctx: ContexteSalle) {
   const zMarche = (i: number) => (p: PointTour) => { const b = hautMur(p); return b + (H_COURSIVE - b) * i / (N_G + 1); };
   for (let i = 0; i < N_G; i++) {
     const r = R_G + i * P_G;
-    enQuarts(k => murAnneau(r, zMarche(i), zMarche(i + 1), k, EV), double(matBois), 'coque');            // la contremarche
-    enQuarts(k => bandeAnneau(r, r + P_G, 0, k, EV, EV, zMarche(i + 1)), matBois, 'coque');              // la marche
+    enQuarts(k => murAnneau(r, zMarche(i), zMarche(i + 1), k), double(matBois), 'coque');            // la contremarche
+    enQuarts(k => bandeAnneau(r, r + P_G, 0, k, 0, 0, zMarche(i + 1)), matBois, 'coque');              // la marche
   }
-  enQuarts(k => murAnneau(R_G + N_G * P_G, zMarche(N_G), () => H_COURSIVE, k, EV), double(matBois), 'coque');
+  enQuarts(k => murAnneau(R_G + N_G * P_G, zMarche(N_G), () => H_COURSIVE, k), double(matBois), 'coque');
   // LA SALLE D'ECHAUFFEMENT, derriere une grande paroi vitree verte, sur la ligne opposee
   {
     const vert = new THREE.MeshStandardMaterial({ color: 0x5fae86, transparent: true, opacity: 0.62, roughness: 0.08, metalness: 0.1, depthWrite: false });
