@@ -525,9 +525,9 @@ export function construireSalle(ctx: ContexteSalle) {
     // (face a la piste, vers -x ; retournee comme les fresques du pignon : le monde est en miroir)
     face.position.set(xf - 0.01, -RS, base + hT / 2); face.scale.x = -1;
     face.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)));
-    // le matelas vertical gris-bleu, a sa gauche
+    // le matelas vertical gris-bleu, a sa gauche vu de la piste (image 0661 ; le monde est en miroir : y < -RS)
     const m2 = ajouter(new THREE.BoxGeometry(0.6, 1.6, hT * 0.95), new THREE.MeshStandardMaterial({ color: 0x3a4660, roughness: 0.85 }));
-    m2.position.set(xf + 0.2, -RS + 5.9, base + hT * 0.475); m2.castShadow = true;
+    m2.position.set(xf + 0.2, -RS - 5.9, base + hT * 0.475); m2.castShadow = true;
   }
 
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
