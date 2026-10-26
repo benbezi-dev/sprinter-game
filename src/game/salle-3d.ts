@@ -54,7 +54,7 @@ const RAMPE = Math.PI / 3, ENTREE = Math.PI / 4;   // (ENTREE : l'evasement de l
 const R_MUR = RS + W + 0.05;                          // le muret blanc
 const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
 const EV = 1.15;                                      // l'evasement de la coursive dans les virages
-const H_COURSIVE = 4.0;
+const H_COURSIVE = 5.0;                               // (la visite de 2025 : au niveau du haut de la tribune)
 const R_G = R_MUR + 0.15;                             // le passage derriere le muret commence la
 // la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; le long cote
 // oppose a 29 m de l'axe, celui de la tribune a 35 m (le plan : ses gradins vont jusque-la)
@@ -322,7 +322,8 @@ export function construireSalle(ctx: ContexteSalle) {
   };
   // les murs qui suivent l'anneau se voient des deux cotes (la piste et la coursive)
   const double = (mat: THREE.Material) => { const m2 = (mat as THREE.MeshStandardMaterial).clone(); m2.side = THREE.DoubleSide; return m2; };
-  const BLEU = [30, 92, 178], ANTHRACITE = [78, 80, 88], PLATEAU = [176, 176, 170], BLANC = [244, 245, 246];
+  // (les teintes relevees sur la visite de 2025 : un bleu moins sature, un plateau plus chaud)
+  const BLEU = [56, 100, 166], ANTHRACITE = [74, 74, 79], PLATEAU = [168, 163, 154], BLANC = [244, 245, 246];
   const bleu = matRevetement(BLEU, 11, 1), anthracite = matRevetement(ANTHRACITE, 23, 1);
   const plateau = matRevetement(PLATEAU, 37, 1);
   const ligne = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.93, 0.94, 0.95), roughness: 0.6 });
@@ -468,6 +469,16 @@ export function construireSalle(ctx: ContexteSalle) {
       const m = traitPlat(cx + Math.cos(a) * (1.12 + l / 2), cy + Math.sin(a) * (1.12 + l / 2), l, LIGNE, ligne, 0.018);
       m.rotation.z = a;
     }
+    // LA CAGE DE LANCER (la grande paroi verte vue de la tribune, 2025 ; le rectangle du plan) : un
+    // filet vert de 4,5 m sur des poteaux de bois, tout autour de l'aire
+    const filet = new THREE.MeshStandardMaterial({ color: 0x2fa64a, transparent: true, opacity: 0.38, roughness: 0.9, side: THREE.DoubleSide, depthWrite: false });
+    const poteau = new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 0.8 });
+    const xa = -25.4, xb = -49.6, ya = -22.9, yb = -32.5, hc = 4.5;
+    for (const [x0, y0, x1, y1] of [[xa, ya, xb, ya], [xa, yb, xb, yb], [xb, ya, xb, yb], [xa, ya, xa, yb]]) {
+      const l = Math.hypot(x1 - x0, y1 - y0), f = ajouter(new THREE.PlaneGeometry(l, hc), filet, false);
+      f.position.set((x0 + x1) / 2, (y0 + y1) / 2, hc / 2); f.rotation.set(Math.PI / 2, 0, Math.atan2(y1 - y0, x1 - x0), 'ZXY');
+      for (let t = 0; t <= l + 1e-6; t += l / Math.ceil(l / 3)) { const b = boite(x0 + (x1 - x0) * t / l - 0.06, x0 + (x1 - x0) * t / l + 0.06, y0 + (y1 - y0) * t / l - 0.06, y0 + (y1 - y0) * t / l + 0.06, 0, hc, poteau); b.castShadow = false; }
+    }
   }
 
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
@@ -476,6 +487,9 @@ export function construireSalle(ctx: ContexteSalle) {
   const hautMur = (p: PointTour) => profil(R_MUR - RS) * p.f + 0.9;
   enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k), double(blanc), 'coque');
   enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, 0, 0, hautMur), blanc, 'coque');
+  // (sur le muret des virages, une rambarde d'acier a deux lisses : la photo Wikimedia)
+  const acierRambarde = new THREE.MeshStandardMaterial({ color: 0x7a828a, roughness: 0.4, metalness: 0.6 });
+  for (const k of [1, 3]) for (const dz of [0.5, 1.0]) ajouter(murAnneau(R_MUR + 0.08, p => hautMur(p) + dz - 0.04, p => hautMur(p) + dz, k), acierRambarde, false);
   // SOUS LA COURSIVE, HORS DE LA TRIBUNE (la visite filmee de 2025, images 0199, 0353, 0485, 0661 :
   // « analyse bien la ligne droite opposee », l'auteur, 26/10) : derriere le muret, un passage au
   // sol ; au bord de la coursive, un mur — en bas, les grandes vitres vertes de la salle
@@ -485,8 +499,9 @@ export function construireSalle(ctx: ContexteSalle) {
   // (le chene, teinte du rouge orange des gradins de la salle)
   const matBois = new THREE.MeshStandardMaterial({ map: photo('bois-chene.jpg', 1.2, true, 0, bois), color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.62, 0.42, THREE.SRGBColorSpace),
     normalMap: exporter ? null : photo('bois-chene-relief.jpg', 1.2, false), roughness: 0.55 });
-  const H_VITRE = 2.6;
-  const passage = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.58, 0.59, 0.61, THREE.SRGBColorSpace), roughness: 0.9 });
+  const H_VITRE = 3.0;
+  // (le passage derriere le muret est bleu comme la piste : la photo Wikimedia)
+  const passage = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.24, 0.42, 0.66, THREE.SRGBColorSpace), roughness: 0.85 });
   for (const k of [1, 2, 3]) {
     ajouter(bandeAnneau(R_G, R_BOIS, 0, k, 0, EV, () => 0.005), passage, true, 'sol');                                   // le passage
     ajouter(murAnneau(R_BOIS, () => H_VITRE, () => H_COURSIVE, k, EV), double(matBois), true, 'coque');                  // le bandeau de bois
@@ -495,7 +510,8 @@ export function construireSalle(ctx: ContexteSalle) {
   // LA SALLE D'ECHAUFFEMENT, derriere les vitres vertes de toute la ligne opposee : ses montants, et au
   // fond son mur turquoise
   {
-    const vert = new THREE.MeshStandardMaterial({ color: 0x6fb894, transparent: true, opacity: 0.55, roughness: 0.08, metalness: 0.1, depthWrite: false });
+    // (des panneaux translucides cyan pale, pas des vitres sombres : la visite de 2025)
+    const vert = new THREE.MeshStandardMaterial({ color: 0xbfe6e3, transparent: true, opacity: 0.78, roughness: 0.3, metalness: 0, depthWrite: false });
     ajouter(murAnneau(R_BOIS, () => 0, () => H_VITRE, 2, 0), vert, false);
     const fond = new THREE.MeshStandardMaterial({ color: 0x4fb7c4, roughness: 0.8, side: THREE.DoubleSide });
     ajouter(murAnneau(R_BOIS + 4, () => 0, () => H_COURSIVE, 2, 0), fond, false);
@@ -523,7 +539,7 @@ export function construireSalle(ctx: ContexteSalle) {
   }
   const verre = new THREE.MeshStandardMaterial({ color: 0xcfe6f0, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false });
   for (const k of [1, 2, 3]) ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE, () => H_COURSIVE + 1.05, k, EV), verre, false);
-  const lisseRail = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.4, metalness: 0.7 });
+  const lisseRail = new THREE.MeshStandardMaterial({ color: 0x7a828a, roughness: 0.4, metalness: 0.7 });   // (acier gris, pas noir)
   for (const k of [1, 2, 3]) ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE + 1.02, () => H_COURSIVE + 1.1, k, EV), lisseRail, false);
   // LES GRADINS DU HAUT (« les gradins du dessus manquent cruellement de details », l'auteur, 26/10) :
   // sur place, la coursive porte un rang de sieges bleus derriere sa balustrade de verre a
@@ -605,7 +621,7 @@ export function construireSalle(ctx: ContexteSalle) {
 
   /** Une banderole bleu ciel au nom de la ville (le meme dessin partout ; aucune marque). */
   const matBandeVille = () => new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide, map: toile(512, 640, (c, w, h) => {
-    const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#6cc8ea'); gr.addColorStop(1, '#3a9ad6');
+    const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, '#2dbccb'); gr.addColorStop(1, '#1a9aaa');
     c.fillStyle = gr; c.fillRect(0, 0, w, h);
     c.fillStyle = '#ffffff'; c.font = '900 64px system-ui, sans-serif'; c.textAlign = 'center';
     c.fillText('VAL', w / 2, h * 0.42); c.fillText('DE REUIL', w / 2, h * 0.56);
@@ -716,7 +732,7 @@ export function construireSalle(ctx: ContexteSalle) {
   const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, LY), new THREE.MeshStandardMaterial({ map: plafondPhoto, color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.8, 0.6, THREE.SRGBColorSpace), roughness: 0.7 }));
   plafond.position.set(-S / 2, YC, H_TOIT); plafond.rotation.x = Math.PI; toit.add(plafond); plafond.userData.lumiere = 'coque';
   // les fermes d'acier, en travers, tous les 7,5 m : membrures haute et basse, montants en zigzag
-  const acier = new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.45, metalness: 0.7 });
+  const acier = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.45, metalness: 0.6 });   // (les fermes : acier gris clair)
   const geoBarre = new THREE.BoxGeometry(1, 1, 1);
   const barres = new THREE.InstancedMesh(geoBarre, acier, 4000);
   let nb = 0;
