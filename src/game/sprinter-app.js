@@ -8213,7 +8213,7 @@
       return false;
     }
     return V.dessiner(ctx, chemin, r.squelette || null,
-                      repereDuCoureur(r, headAng, lean, mirror, curved), ax, ay, k);
+                      repereDuCoureur(r, headAng, lean, mirror, curved), ax, ay, k, r.look);
   }
 
   /* ------------------------------------------------- reperes des coureurs */

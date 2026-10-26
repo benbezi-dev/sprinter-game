@@ -7,6 +7,7 @@
 import { SprinterCore } from '../engine';
 import { type Athlete, type Apparence, APPARENCE, COULEURS } from './regles';
 import { type Tenue, tenue, tenueDeVilleDe } from './garde-robe';
+import { origineDe } from './corps-gens';
 
 const CHEVEUX: Record<string, [number, number, number]> = {
   noir: [28, 22, 22], brun: [56, 36, 24], chatain: [92, 62, 36],
@@ -23,6 +24,7 @@ export function lookDe(ap: Apparence, enVille: boolean, porte: Tenue | null = nu
     : { ...base, shorts: [30, 32, 48] });
   // la tenue du moment (garde-robe.ts), que le corps 3D de la ville peint par zones
   if (porte) look.tenue = porte;
+  look.origine = ap.origine || origineDe('', look.skin);
   return look;
 }
 
@@ -34,7 +36,7 @@ export function lookDe(ap: Apparence, enVille: boolean, porte: Tenue | null = nu
  */
 const cacheGens = new Map<string, any>();
 export function lookDePersonne(a: Athlete, p: string): any {
-  const ap = apparenceDe(a), cle = `${p}|${ap.peau}`;
+  const ap = apparenceDe(a), cle = `${p}|${ap.peau}|${ap.origine}`;
   const deja = cacheGens.get(cle); if (deja) return deja;
   const C = SprinterCore as any;
   const base = C.lookFor('athlete-' + p, 'divers');
@@ -51,6 +53,7 @@ export function lookDePersonne(a: Athlete, p: string): any {
   });
   // en ville, une tenue tiree sur son nom ; ceux du club en tenue d'entrainement, a leurs couleurs
   look.tenue = sport ? { ...tenue('debardeur-short')!, haut: look.jersey || [200, 40, 40] } : tenueDeVilleDe(p, corps);
+  look.origine = famille ? ap.origine || origineDe('', look.skin) : origineDe(p, look.skin);
   cacheGens.set(cle, look);
   return look;
 }

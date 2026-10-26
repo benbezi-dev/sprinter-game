@@ -7,6 +7,9 @@ import {
 } from '@/game/athlete/regles';
 import { mot, dans, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe } from '@/game/athlete/apparence';
+import { tenue, GARDE_ROBE_DE_DEPART } from '@/game/athlete/garde-robe';
+import { cheminDe } from '@/game/athlete/corps-gens';
+import { charger, pret, dessiner } from '@/game/vedette-3d';
 import { POSTURES } from '@/game/athlete/postures';
 import { bonusDeSeance } from '@/game/athlete/gens';
 import { CLUB_PARTENAIRE, logoDuClub } from '@/game/athlete/partenaires';
@@ -146,7 +149,9 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
       c.beginPath(); c.ellipse(ax, sol, k * 0.42 * o, k * 0.09 * o, 0, 0, Math.PI * 2); c.fill();
       const yBarre = sol - (1.24 - 0.42 * (e.barre || 0)) * k, xBarre = ax - k * (0.06 + 0.12 * (e.barre || 0));
       if (e.barre !== null) barre(c, xBarre, yBarre, k, false);
-      A.drawFacetFigure(c, caps, ax, y, k);
+      const chemin = e.corps.look.maillage;
+      if (!(chemin && pret(chemin) && dessiner(c, chemin, e.corps.squelette || null,
+        A.repereDuCoureur(e.corps, e.cap, e.incline, false, false), ax, y, k, e.corps.look))) A.drawFacetFigure(c, caps, ax, y, k);
       if (e.barre !== null) barre(c, xBarre, yBarre, k, true);
 
       // la poussiere a chaque appui, les traits de vitesse, la sueur
@@ -220,9 +225,15 @@ function nuages(c: CanvasRenderingContext2D, W: number, H: number, t: number) {
   }
 }
 
-/** Une rangee d'arbres qui defile a `vitesse` fois le sol. */
-function arbres(c: CanvasRenderingContext2D, W: number, base: number, defile: number, ppm: number, vitesse: number, taille: number, teinte: string) {
-  const pas = taille * 2.6, off = ((defile * ppm * vitesse) % pas + pas) % pas;
+/**
+ * Une rangee d'arbres qui defile a `vitesse` fois le sol, de `metres` de haut.
+ * A L'ECHELLE DE L'ATHLETE (l'auteur, 26/10 : « redimensionne les personnes par rapport au
+ * decor, meme dans les mini-jeux ») : une rangee qui defile a 0,4 fois le sol est 2,5 fois plus
+ * loin, donc 2,5 fois plus petite — un arbre de 9 m y fait 3,6 m d'athlete, plus 0,7 m.
+ */
+function arbres(c: CanvasRenderingContext2D, W: number, base: number, defile: number, ppm: number, vitesse: number, metres: number, teinte: string) {
+  const taille = metres * ppm * vitesse;
+  const pas = taille * 1.4, off = ((defile * ppm * vitesse) % pas + pas) % pas;
   for (let x = -off - pas, i = 0; x < W + pas; x += pas, i++) {
     const s = taille * (0.8 + fixe(i + Math.floor(defile * ppm * vitesse / pas)) * 0.5);
     c.fillStyle = '#6B4A30'; c.fillRect(x - s * 0.07, base - s * 0.6, s * 0.14, s * 0.6);
@@ -303,7 +314,7 @@ function decor(c: CanvasRenderingContext2D, e: EtatScene, W: number, H: number, 
       c.lineTo(W, H); c.lineTo(0, H); c.fill();
       const p = Math.tan(e.pente);
       const yAt = (x: number) => sol - (x - ax) * p;
-      arbres(c, W, H * 0.5, d, ppm, 0.4, ppm * 0.7, '#4C8C4A');
+      arbres(c, W, H * 0.5, d, ppm, 0.4, 9, '#4C8C4A');
       c.fillStyle = '#6FA65B';
       c.beginPath(); c.moveTo(0, yAt(0)); c.lineTo(W, yAt(W)); c.lineTo(W, H); c.lineTo(0, H); c.fill();
       // le chemin de terre et les fanions tous les 10 m
@@ -322,8 +333,8 @@ function decor(c: CanvasRenderingContext2D, e: EtatScene, W: number, H: number, 
     case 'parc': {
       ciel(c, W, H, '#7DB9E8', '#E4F1F9'); nuages(c, W, H, t);
       c.fillStyle = '#8DBB74'; c.fillRect(0, H * 0.48, W, H);
-      arbres(c, W, H * 0.55, d, ppm, 0.35, ppm * 0.8, '#3F7D42');
-      arbres(c, W, H * 0.66, d, ppm, 0.7, ppm * 1.1, '#4C9A4E');
+      arbres(c, W, H * 0.55, d, ppm, 0.3, 10, '#3F7D42');
+      arbres(c, W, H * 0.66, d, ppm, 0.5, 7, '#4C9A4E');
       c.fillStyle = '#D9C8A3'; c.fillRect(0, sol - ppm * 0.35, W, ppm * 0.9);
       c.fillStyle = 'rgba(0,0,0,0.06)';
       const off = (d * ppm) % 60;
@@ -846,7 +857,13 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
   // le lieu decide du decor : seul, les seances de piste se font au parc
   const decor: Decor = !a.club && JEUX[ex].decor === 'piste' ? 'parc' : JEUX[ex].decor;
   const couleur = COULEUR[SEANCES[jour].stat];
-  const look = useRef(lookDe(apparenceDe(a), false));
+  // le corps MakeHuman de la ville (corps-gens.ts), dans sa tenue d'entrainement ; les facettes en attendant
+  const look = useRef((() => {
+    const l = lookDe(apparenceDe(a), false, tenue((a.garde || GARDE_ROBE_DE_DEPART).porte.entrainement));
+    l.maillage = cheminDe(l);
+    return l;
+  })());
+  useEffect(() => { charger(look.current.maillage); }, []);
   const scene = useRef<EtatScene>(nouvelEtat(look.current, decor));
   const [phase, setPhase] = useState<'pret' | 'jeu' | 'fini'>('pret');
   const [res, setRes] = useState<{ score: number; r: ResultatSeance | null } | null>(null);

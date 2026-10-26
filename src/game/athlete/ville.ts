@@ -33,7 +33,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { poser, type Modele } from '../vedette-3d';
-import { couleursDe, tenueDeVilleDe } from './garde-robe';
+import { tenueDeVilleDe } from './garde-robe';
+import { cheminDe, habiller, teindre, origineDe, type Teinte } from './corps-gens';
 
 export type Lieu =
   | 'maison' | 'college' | 'stade' | 'club_quartier' | 'club_horizon' | 'kine'
@@ -432,38 +433,29 @@ function habillageDe(b: Donnees['batiments'][number], i: number, h: number): { m
 // zones, pose a chaque image par `poser` (vedette-3d.ts) sur le squelette que le
 // moteur releve (r.squelette3D) : la marche et la course sont celles des tubes,
 // donc celles du jeu. Tant qu'il n'est pas charge, l'affiche peinte reste.
-// DEUX CORPS (« surtout pas un seul corps d'homme, fais femme et homme », l'auteur) :
-// tools/blender/corps_ville.py, Quaternius femme 1,68 m et homme 1,78 m, avec les zones
-// des vetements de ville (garde-robe.ts) ; le look choisit le sien par `build`.
-const gabarits: Record<'f' | 'm', THREE.Object3D | null> = { f: null, m: null };
-let gabaritDemande = false;
-function chargerLeCorps() {
-  if (gabaritDemande) return;
-  gabaritDemande = true;
-  const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
-  const base = (import.meta as any).env?.BASE_URL || '/';
-  for (const k of ['f', 'm'] as const) {
-    l.loadAsync(base + `modeles/corps-${k === 'f' ? 'femme' : 'homme'}.glb`).then(g => { gabarits[k] = g.scene; }).catch(() => { /* l'affiche reste */ });
+// DEUX CORPS (« surtout pas un seul corps d'homme, fais femme et homme », l'auteur), et depuis
+// le 26/10 (« pourquoi je ne peux pas avoir un personnage aussi abouti ? ») des corps MakeHuman :
+// vrai visage, vraie coiffure, vrais vetements (tools/blender/corps_mpfb.py). Un fichier par corps
+// et par SILHOUETTE (ce que couvre la tenue) ; la tenue de garde-robe.ts en donne les couleurs.
+// La deuxieme carte UV range la zone de chaque sommet ; le shader multiplie la texture (grise pour
+// les pieces teintes) par la couleur de sa zone.
+const gabarits = new Map<string, THREE.Object3D | null>();
+/** Le corps de ce look, s'il est charge ; sinon on le demande (l'affiche reste en attendant). */
+function gabaritDe(look: any): THREE.Object3D | null {
+  const chemin = cheminDe(look);
+  if (!gabarits.has(chemin)) {
+    gabarits.set(chemin, null);
+    const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+    const base = (import.meta as any).env?.BASE_URL || '/';
+    l.loadAsync(base + chemin).then(g => gabarits.set(chemin, g.scene)).catch(() => { /* l'affiche reste */ });
   }
+  return gabarits.get(chemin) || null;
 }
-const gabaritDe = (look: any) => gabarits[look && look.build === 'f' ? 'f' : 'm'];
-const SANS_CHEVEUX = new Set(['ras', 'shaved']);
-function corps3D(look: any): { m: Modele; mats: Record<string, THREE.MeshStandardMaterial>; hauteur: number } | null {
+function corps3D(look: any): { m: Modele; teinte: Teinte; cle: string; hauteur: number } | null {
   const gabarit = gabaritDe(look);
   if (!gabarit) return null;
   const copie = clonerSquelette(gabarit);
-  const mats: Record<string, THREE.MeshStandardMaterial> = {};
-  copie.traverse((o: any) => {
-    if (!o.isMesh) return;
-    o.frustumCulled = false; o.castShadow = true;
-    const liste = Array.isArray(o.material) ? o.material : [o.material];
-    const neufs = liste.map((m: any) => {
-      const zone = String(m.name || '').replace('Coureur_', '');
-      return (mats[zone] = new THREE.MeshStandardMaterial({ roughness: zone === 'peau' ? 0.55 : 0.7, metalness: 0 }));
-    });
-    o.material = Array.isArray(o.material) ? neufs : neufs[0];
-  });
-  teindre(mats, look);
+  const teinte = habiller(copie, look);
   const racine = new THREE.Group();
   racine.matrixAutoUpdate = false;
   racine.add(copie);
@@ -481,23 +473,7 @@ function corps3D(look: any): { m: Modele; mats: Record<string, THREE.MeshStandar
   const bassin = os.get('pelvis')!;
   const bassinParent = new THREE.Matrix4().multiplyMatrices(inv, bassin.parent!.matrixWorld);
   const boite = new THREE.Box3().setFromObject(copie);
-  return { m: { racine, os, ordre, repos, reposLocal, bassinParent } as unknown as Modele, mats, hauteur: boite.max.y - boite.min.y };
-}
-function teindre(mats: Record<string, THREE.MeshStandardMaterial>, L: any) {
-  if (!L) return;
-  const rgb = (v: number[] | undefined, d: number[], k = 1) => { const a = v || d; return new THREE.Color().setRGB(a[0] / 255 * k, a[1] / 255 * k, a[2] / 255 * k, THREE.SRGBColorSpace); };
-  mats.peau?.color.copy(rgb(L.skin, [180, 130, 100]));
-  // la tenue du moment : chaque zone a la couleur du haut, du bas, ou de la peau (garde-robe.ts)
-  if (L.tenue) {
-    const z = couleursDe(L.tenue, L.skin || [180, 130, 100], L.jersey);
-    for (const [k, v] of Object.entries(z)) mats[k]?.color.copy(rgb(v as number[], [128, 128, 128]));
-  } else {
-    for (const k of ['manches', 'avantbras', 'ventre', 'cuisses', 'mollets']) mats[k]?.color.copy(rgb(L.skin, [180, 130, 100]));
-    mats.maillot?.color.copy(rgb(L.jersey, [200, 40, 50]));
-    mats.short?.color.copy(rgb(L.shorts, [30, 30, 40]));
-    mats.pointes?.color.copy(rgb(L.shoe, [240, 240, 240]));
-  }
-  mats.cheveux?.color.copy(SANS_CHEVEUX.has(L.hair) ? rgb(L.skin, [180, 130, 100], 0.8) : rgb(L.hairCol, [20, 16, 14]));
+  return { m: { racine, os, ordre, repos, reposLocal, bassinParent } as unknown as Modele, teinte, cle: cheminDe(look), hauteur: boite.max.y - boite.min.y };
 }
 /** La glTF a y en haut comme la ville ; le moteur pose son coureur face a +x. */
 const _T = new THREE.Matrix4(), _R = new THREE.Matrix4(), _S = new THREE.Matrix4(), _vDos = new THREE.Vector3();
@@ -538,17 +514,15 @@ class Personne {
     this.ombre.rotation.x = -Math.PI / 2;
     scene.add(this.sprite, this.ombre);
     this.scene = scene;
-    chargerLeCorps();
     this.placer();
   }
 
   habiller(look: any) {
-    const avant = this.corps.look && this.corps.look.build;
     this.corps.look = look; this.dejaPeint = '';
     if (!this.m3) return;
-    // un autre corps (le miroir) : on refait le maillage a la prochaine image
-    if ((look && look.build) !== avant) { this.scene.remove(this.m3.m.racine); this.m3 = null; this.sprite.visible = true; return; }
-    teindre(this.m3.mats, look);
+    // un autre corps ou une autre silhouette (le miroir, l'heure) : on refait le maillage a la prochaine image
+    if (cheminDe(look) !== this.m3.cle) { this.scene.remove(this.m3.m.racine); this.m3 = null; this.sprite.visible = true; return; }
+    teindre(this.m3.teinte, this.m3.m.racine, look);
   }
   placer() {
     this.sprite.position.set(this.pos.x, SOL, this.pos.z); this.ombre.position.set(this.pos.x, SOL + 0.02, this.pos.z);
@@ -1112,6 +1086,7 @@ export class Ville {
       const base = C.lookFor('passant-' + i, 'divers');
       const look = C.look({ ...base, civil: true, manches: base.jersey, pantalon: [50, 52, 70] });
       look.tenue = tenueDeVilleDe('passant-' + i, look.build === 'f' ? 'f' : 'm');
+      look.origine = origineDe('passant-' + i, look.skin);
       const k = this.pietons.auHasard([dx, dz], 120);
       if (k >= 0) this.passants.push(new Personne(look, this.pietons.xs[k], this.pietons.zs[k], this.scene, 160));
     }

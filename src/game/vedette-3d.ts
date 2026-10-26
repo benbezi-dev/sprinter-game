@@ -27,6 +27,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { habiller, teindre, type Teinte } from './athlete/corps-gens';
 
 type Squelette = {
   hip: number[]; angB: number; lean: number; yawHip: number; yawTop: number; tete: number;
@@ -45,6 +46,8 @@ type Modele = {
   reposLocal: Map<THREE.Bone, THREE.Quaternion>;
   /** Le parent du bassin, au repos : pour y poser la hanche. */
   bassinParent: THREE.Matrix4;
+  /** Un corps des gens (athlete/corps-gens.ts) : ses zones a teindre au look de chaque dessin. */
+  teinte?: Teinte;
 };
 
 // Le repere du modele (glTF, y en haut) vers celui du jeu (z en haut) :
@@ -234,9 +237,18 @@ function preparer(racineGltf: THREE.Object3D): Modele {
   racine.matrixAutoUpdate = false;
   racine.add(racineGltf);
   racineGltf.updateMatrixWorld(true);
-  const os = new Map<string, THREE.Bone>();
+  // UN CORPS DES GENS (la carte des zones dans sa deuxieme UV) : sa matiere teinte, ni facettes ni liseret
+  let gens = false;
+  racineGltf.traverse((o: any) => { if (o.isMesh && o.geometry.getAttribute('uv1')) gens = true; });
+  if (gens) {
+    const teinte = habiller(racineGltf, null);
+    // LES DEUX FACES (26/10) : le repere du coureur est un miroir, qui retourne le sens des faces.
+    // Une vedette, d'une seule peau, n'en souffre pas ; sur un corps habille, seules les faces de
+    // dos restaient : on voyait l'interieur du dos, et la peau sous les vetements par-dessus.
+    racineGltf.traverse((o: any) => { if (o.isMesh) o.material.side = THREE.DoubleSide; });
+    return finir(racine, racineGltf, teinte);
+  }
   racineGltf.traverse((o: any) => {
-    if (o.isBone) os.set(o.name, o);
     if (o.isMesh) {
       o.frustumCulled = false;
       if (FACETTES && o.geometry.index) {
@@ -267,6 +279,12 @@ function preparer(racineGltf: THREE.Object3D): Modele {
       }
     }
   });
+  return finir(racine, racineGltf);
+}
+
+function finir(racine: THREE.Group, racineGltf: THREE.Object3D, teinte?: Teinte): Modele {
+  const os = new Map<string, THREE.Bone>();
+  racineGltf.traverse((o: any) => { if (o.isBone) os.set(o.name, o); });
   const prof = (b: THREE.Object3D) => { let n = 0; while (b.parent) { b = b.parent; n++; } return n; };
   const ordre = [...os.values()].sort((a, b) => prof(a) - prof(b));
   const repos = new Map<THREE.Bone, THREE.Quaternion>();
@@ -281,7 +299,7 @@ function preparer(racineGltf: THREE.Object3D): Modele {
   const bassinParent = new THREE.Matrix4().multiplyMatrices(inv, bassin.parent!.matrixWorld);
   scene.add(racine);
   racine.visible = false;
-  return { racine, os, ordre, repos, reposLocal, bassinParent };
+  return { racine, os, ordre, repos, reposLocal, bassinParent, teinte };
 }
 
 /**
@@ -479,7 +497,7 @@ function coteDeToile(Sd: number): number {
  * Rend faux si le maillage n'est pas pret — drawRunner dessine alors les tubes.
  */
 export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Squelette | null,
-                         repere: number[][], ax: number, ay: number, k: number): boolean {
+                         repere: number[][], ax: number, ay: number, k: number, look?: any): boolean {
   const m = modeles.get(chemin);
   const R = rendu;
   const C = moteur() && moteur().C;
@@ -503,6 +521,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, chemin: string, sq: Sque
     // le coin du bas a gauche (voir LA TOILE, plus haut)
     R.setViewport(0, 0, Sd, Sd);
     poser(m, sq);
+    if (m.teinte && look) teindre(m.teinte, m.racine, look);
     // le repere du coureur (tourne, bascule, miroir), puis le passage glTF -> jeu
     const [ex, ey, ez] = repere;
     const M = new THREE.Matrix4().set(ex[0], ey[0], ez[0], 0, ex[1], ey[1], ez[1], 0,

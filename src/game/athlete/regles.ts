@@ -21,6 +21,7 @@
 // CE FICHIER N'IMPORTE RIEN : le harnais (tools/athlete-test.mjs) le charge
 // seul, et le hasard arrive toujours en parametre.
 
+import type { Origine as Traits } from './corps-gens';
 export type Stat = 'vitesse' | 'force' | 'technique' | 'endurance';
 export const STATS: Stat[] = ['vitesse', 'force', 'technique', 'endurance'];
 
@@ -330,6 +331,8 @@ export type Apparence = {
   taille: number;
   /** L'index dans COULEURS : le maillot en course, le haut en ville. */
   couleur: number;
+  /** Les traits du visage et du corps (corps-gens.ts) ; absent des sauvegardes d'avant : d'apres la peau. */
+  origine?: Traits;
 };
 export const APPARENCE: Apparence = { corps: 'f', peau: 'miel', coiffure: 'ponytail', cheveux: 'chatain', taille: 1.72, couleur: 0 };
 

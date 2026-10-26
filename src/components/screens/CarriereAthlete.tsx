@@ -1,3 +1,5 @@
+import { ORIGINES, NOMS_ORIGINES, origineDe, cheminDe } from '@/game/athlete/corps-gens';
+import { charger as chargerMaillage, pret, dessiner } from '@/game/vedette-3d';
 import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
@@ -247,12 +249,17 @@ function Apercu({ ap, haut = 260 }: { ap: Apparence; haut?: number }) {
     const dpr = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
     cv.width = Math.round(haut * 0.8 * dpr); cv.height = Math.round(haut * dpr);
     const c = cv.getContext('2d')!, A = SprinterApp as any;
-    const corps = { look: lookDe(ap, true), stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0 };
+    // le corps MakeHuman de la ville (corps-gens.ts) : l'origine choisie s'y voit ; les facettes en attendant
+    const look = lookDe(ap, true, tenue(GARDE_ROBE_DE_DEPART.porte.ville));
+    look.maillage = cheminDe(look); chargerMaillage(look.maillage);
+    const corps = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0 } as any;
     let id = 0;
     const tic = (t: number) => {
       c.clearRect(0, 0, cv.width, cv.height);
-      const k = cv.height * 0.47;
-      A.drawFacetFigure(c, A.personCapsules(corps, -Math.PI / 2 + Math.sin(t / 1400) * 1.2, 0, false, false, A.niveauDetail(k)), cv.width / 2, cv.height * 0.96, k);
+      const k = cv.height * 0.47, cap = -Math.PI / 2 + Math.sin(t / 1400) * 1.2;
+      const caps = A.personCapsules(corps, cap, 0, false, false, A.niveauDetail(k));
+      if (!(pret(look.maillage) && dessiner(c, look.maillage, corps.squelette || null, A.repereDuCoureur(corps, cap, 0, false, false), cv.width / 2, cv.height * 0.96, k, look)))
+        A.drawFacetFigure(c, caps, cv.width / 2, cv.height * 0.96, k);
       id = requestAnimationFrame(tic);
     };
     id = requestAnimationFrame(tic);
@@ -274,6 +281,10 @@ function ChoixApparence({ ap, onChange }: { ap: Apparence; onChange: (a: Apparen
       <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['PEAU', 'SKIN'])}</span>
       <div className={ligne}>
         {PEAUX.map(p => <button key={p} aria-label={p} onClick={() => onChange({ ...ap, peau: p })} className={pastille(ap.peau === p)} style={{ background: rgb(PEAUX_RGB[p]) }} />)}
+      </div>
+      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['ORIGINE', 'HERITAGE'])}</span>
+      <div className={ligne}>
+        {ORIGINES.map(o => <Bouton key={o} plein={(ap.origine || origineDe('', PEAUX_RGB[ap.peau])) === o} onClick={() => onChange({ ...ap, origine: o })}>{dans(NOMS_ORIGINES[o])}</Bouton>)}
       </div>
       <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['COIFFURE', 'HAIR'])}</span>
       <div className={ligne}>
