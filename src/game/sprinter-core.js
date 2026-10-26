@@ -1685,6 +1685,8 @@
     // fois, avec sa propre geometrie (rayon, couloirs, virages releves).
     this.salle = race.salle || null;
     if (this.salle) { this.total = race.total; this.fullLap = true; this.curved = true; }
+    // le nombre de couloirs : six sur l'anneau couvert, huit partout ailleurs
+    this.lanes = this.salle ? this.salle.couloirs : C.LANE_COUNT;
   }
   // L'anneau couvert, couloir de rayon r : ou en est-on, `s` metres apres le
   // depart ? On compte depuis l'arrivee (u, metres apres la ligne) : le depart en

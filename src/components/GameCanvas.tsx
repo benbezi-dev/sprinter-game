@@ -19,7 +19,7 @@ import { chargementFini, partChargee } from '@/game/chargement';
 const RENDU_3D = (() => { try { return new URLSearchParams(location.search).get('rendu') !== '2d'; } catch { return true; } })();
 // Les epreuves deja faites en 3D, et les nuits du molosse (`nuit-*`, la ruelle de ruelle-3d.ts) ;
 // les autres (haies, relais, concours) restent en 2D.
-const EPREUVES_3D = new Set(['100', '200', '400']);
+const EPREUVES_3D = new Set(['100', '200', '400', '60', '200s', '400s']);
 let rendu3D: any = null;
 // LE REPERE DU JOUEUR EN 3D : un chevron jaune et « TOI » au-dessus de sa tete — le seul nom
 // ecrit sur la piste, comme en championnat

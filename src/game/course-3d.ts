@@ -39,6 +39,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
+import { construireSalle, zSol, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -648,7 +649,12 @@ const DROITE0_100 = -12, DROITE1 = 100;       // la ligne droite, de la sortie d
 // on le pousse jusqu'au virage du stade. Sur un tour complet, il finit sur l'autre
 // ligne droite, en sens inverse (y = -r, cap -pi) : on le retourne d'un demi-tour.
 let sx = 1, x0 = 0, y0 = 0;
+// LE STADE COUVERT DE VAL-DE-REUIL (salle-3d.ts) : son anneau releve et sa ligne droite centrale
+let salleActive = false;
+let cameraSalle: ((z: number) => void) | null = null;
 function caler(T: any) {
+  salleActive = estEnSalle(T, (globalThis as any).SprinterApp?.G?.race);
+  if (salleActive) { ({ sx, x0, y0 } = calageSalle(T)); return; }
   if (!T.curved) { sx = 1; x0 = 0; y0 = 0; }
   else if (T.fullLap) { sx = -1; x0 = DROITE1; y0 = -R_CORDE; }
   else { sx = 1; x0 = DROITE1 - T.straight; y0 = -R_CORDE; }
@@ -828,6 +834,18 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // cosmique, la piste qui flotte dans l'espace », l'auteur, 22/10).
   const espace = !!th.espace;
   voute = null; filante = null;
+  if (salleActive) {
+    // LA SALLE : sous le toit — ni ciel, ni heure, ni pelouse, ni gradins du stade ; sa propre lumiere
+    scene.background = new THREE.Color(SALLE_LUMIERE.fond);
+    scene.fog = new THREE.Fog(SALLE_LUMIERE.brume, 110, 320);
+    hemi.color.set(SALLE_LUMIERE.hemiCiel); hemi.groundColor.set(SALLE_LUMIERE.hemiSol); hemi.intensity = SALLE_LUMIERE.hemi;
+    soleil.color.set(SALLE_LUMIERE.soleilCouleur); soleil.intensity = SALLE_LUMIERE.soleil;
+    soleilDecal.set(-6, 10, 40);
+    uFoule.uLum.value = 1; uLisere.value = 0;
+    const salle = construireSalle({ stade, renderer });
+    pubAnim.push(salle.animer); cameraSalle = salle.camera;
+    return;
+  }
   if (espace) espaceAutour(th, hasard);
   if (th.stars) {
     const n = Math.min(espace ? 4000 : 2500, th.stars * (espace ? 16 : 8)), pts = new Float32Array(n * 3);
@@ -1970,7 +1988,7 @@ function poserLeCorps(App: any, r: any, p: number[], cap: number, lean: number, 
   const [ex, ey, ez] = App.repereDuCoureur(r, cap, lean, false, false);
   _M.set(ex[0], ey[0], ez[0], 0, ex[1], ey[1], ez[1], 0, ex[2], ey[2], ez[2], 0, 0, 0, 0, 1);
   const ke = k * (c.echelle || 1);
-  c.m.racine.matrix.multiplyMatrices(_T.makeTranslation(p[0], p[1], 0), _S.makeScale(ke, ke, ke))
+  c.m.racine.matrix.multiplyMatrices(_T.makeTranslation(p[0], p[1], salleActive ? zSol(p[0], p[1]) : 0), _S.makeScale(ke, ke, ke))
     .multiply(_M).multiply(Qgl);
   c.m.racine.matrixWorldNeedsUpdate = true;
   c.m.racine.visible = true;
@@ -2082,7 +2100,7 @@ function dessinerLesEffets(App: any) {
     const pq = ouCourt(T, p, d);
     const [ex, ey, ez] = App.repereDuCoureur(p, cap, lean, false, false);
     _M.set(ex[0], ey[0], ez[0], 0, ex[1], ey[1], ez[1], 0, ex[2], ey[2], ez[2], 0, 0, 0, 0, 1);
-    e.m.racine.matrix.multiplyMatrices(_T.makeTranslation(pq[0], pq[1], 0), _S.makeScale(k0, k0, k0)).multiply(_M).multiply(Qgl);
+    e.m.racine.matrix.multiplyMatrices(_T.makeTranslation(pq[0], pq[1], salleActive ? zSol(pq[0], pq[1]) : 0), _S.makeScale(k0, k0, k0)).multiply(_M).multiply(Qgl);
     e.m.racine.matrixWorldNeedsUpdate = true;
     // l'image remanente tient sa pleine force plus longtemps que le halo
     (e as any).mat.opacity = (1 - age * age) * 0.75 * (4 - k) / 3;
@@ -2417,6 +2435,8 @@ export function rendre(App: any, dt: number) {
         vise.set(c[0], -c[1], 1.0);
       }
     }
+    // dans la salle, la camera monte avec le relevement du virage (vise et voulu : _b et _a, y retourne)
+    if (salleActive) { const zs = zSol(_b.x, -_b.y); _a.z += zs; _b.z += zs; }
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
     // pas de survol pour la nuit du molosse (« pas de vue aerienne de presentation », l'auteur, 23/10)
@@ -2427,9 +2447,12 @@ export function rendre(App: any, dt: number) {
     // volPlonge : -1 avant la plongee, son instant pendant, -2 une fois finie
     if (volLance && !SURVOL && volPlonge !== -2) {
       volT += dt || 0.016;
-      const cx = 44, cy = R_CORDE;                         // le centre du stade (y retourne : voir monde)
+      const cx = salleActive ? SURVOL_SALLE.cx : 44, cy = salleActive ? -SURVOL_SALLE.cy : R_CORDE;   // le centre du stade (y retourne : voir monde)
       const tourne = (t: number) => -2.3 + t * 0.32;        // un lent tour de piste, vu de haut
-      const orbite = (t: number) => _c3.set(cx + Math.cos(tourne(t)) * 125, cy + Math.sin(tourne(t)) * 95, 62 - Math.min(12, t * 1.5));
+      // dans la salle, sous le toit : un tour du plateau a hauteur de coursive haute
+      const orbite = (t: number) => salleActive
+        ? _c3.set(cx + Math.cos(tourne(t)) * SURVOL_SALLE.rx, cy + Math.sin(tourne(t)) * SURVOL_SALLE.ry, SURVOL_SALLE.z)
+        : _c3.set(cx + Math.cos(tourne(t)) * 125, cy + Math.sin(tourne(t)) * 95, 62 - Math.min(12, t * 1.5));
       if (!intro && volPlonge === -1) {
         // la presentation est finie (ou n'existe pas) : la plongee commence, d'ou l'on est
         volPlonge = volT;
@@ -2456,6 +2479,7 @@ export function rendre(App: any, dt: number) {
       camPret = true;
     }
     camera.position.copy(camPos);
+    if (salleActive && cameraSalle) cameraSalle(camera.position.z);
     // LA CAMERA VIT (l'auteur, 22/10 : « cinematique et dynamique ») : au coup de
     // pistolet elle tremble un instant, et son champ s'ouvre avec la vitesse.
     if (G.state === 'race' && etatVu !== 'race') secousse = 0.28;
