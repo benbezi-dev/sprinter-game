@@ -54,7 +54,7 @@ const RAMPE = Math.PI / 3, ENTREE = Math.PI / 4;   // (ENTREE : l'evasement de l
 const R_MUR = RS + W + 0.05;                          // le muret blanc
 const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
 const EV = 1.15;                                      // l'evasement de la coursive dans les virages
-const H_COURSIVE = 5.0;                               // (la visite de 2025 : au niveau du haut de la tribune)
+const H_COURSIVE = 4.4;                               // (0463 : mesuree a l'echelle de la rambarde de 1 m)
 const R_G = R_MUR + 0.15;                             // le passage derriere le muret commence la
 // la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; le long cote
 // oppose a 29 m de l'axe, celui de la tribune a 35 m (le plan : ses gradins vont jusque-la)
@@ -319,10 +319,8 @@ export function construireSalle(ctx: ContexteSalle) {
   // tout l'interieur dans un groupe : on le cache quand la camera survole le batiment, dehors
   const g = new THREE.Group(); ctx.stade.add(g);
   // `lumiere` : la surface recoit la lumiere cuite dans Blender — 'sol' (vue de dessus) ou 'coque' (l'atlas)
-  // (les aires de concours vont dans `terrain`, retourne d'un bout a l'autre : voir plus bas)
-  let cible: THREE.Group = g;
   const ajouter = (geo: THREE.BufferGeometry, mat: THREE.Material, ombre = true, lumiere: '' | 'sol' | 'coque' = '') => {
-    const m = new THREE.Mesh(geo, mat); m.receiveShadow = ombre; cible.add(m);
+    const m = new THREE.Mesh(geo, mat); m.receiveShadow = ombre; g.add(m);
     if (lumiere) m.userData.lumiere = lumiere;
     return m;
   };
@@ -422,11 +420,11 @@ export function construireSalle(ctx: ContexteSalle) {
 
   // LES AIRES DE CONCOURS, au plateau, d'apres le plan, cotes relevees depuis le milieu de la salle
   // (« tapis de perche et couloir d'elan, bac de saut en longueur et triple, les tapis de saut en
-  // hauteur et l'aire de lancer de poids », l'auteur, 26/10). Le plan est dessine de l'autre cote :
-  // la visite de 2025 (image 0661) met la perche et le sautoir pres du virage qui suit l'arrivee.
-  // Les cotes du plan restent, le groupe est retourne d'un bout a l'autre de la salle.
-  const terrain = new THREE.Group(); terrain.scale.x = -1; terrain.position.x = -S; g.add(terrain);
-  cible = terrain;
+  // hauteur et l'aire de lancer de poids », l'auteur, 26/10). Le plan est dans le bon sens (visite de
+  // 2025) : la perche pres du virage d'avant l'arrivee (0067, 0243, 0331, 0815), le sautoir dans le
+  // virage d'apres (0353, 0661), la hauteur au bout oppose cote arrivee (0067), la cage verte et le
+  // poids cote perche le long de la ligne opposee (0067, 0463). Un seul sautoir : celui du virage
+  // d'avant l'arrivee, au plan de 2009, n'est sur aucune image de 2025.
   const sable = new THREE.MeshStandardMaterial({ map: grainDeSable(), roughness: 1 });
   const bordure = new THREE.MeshStandardMaterial({ color: 0xd9d9d6, roughness: 0.8 });
   const tapisR = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.80, 0.14, 0.16, THREE.SRGBColorSpace), roughness: 0.7 });
@@ -450,13 +448,11 @@ export function construireSalle(ctx: ContexteSalle) {
     const m = traitPlat((x0 + x1) / 2, (y0 + y1) / 2, Math.abs(x1 - x0), Math.abs(y1 - y0), sable, 0.016);
     m.receiveShadow = true;
   };
-  // la longueur et le triple : deux couloirs d'elan cote a cote, un bac a chaque bout, leurs planches
+  // la longueur et le triple : le couloir d'elan, le bac, les deux planches
   // (0,50 m plus pres de la ligne d'arrivee que sur le plan : la ligne droite a desormais 8 couloirs)
   couloirElan(-54.8, 7.6, -8.0);
-  couloirElan(-40.9, 7.6, -10.8);
   bac(7.8, 17.0, -6.8, -12.1);
-  bac(-41.1, -49.9, -9.4, -12.2);
-  for (const [x, y] of [[6.5, -8.0], [-5.5, -8.0], [-29.7, -10.8], [-31.7, -10.8], [-33.8, -10.8], [-39.5, -10.8]]) traitPlat(x, y, 0.2, 1.22, acierBlanc, 0.012);
+  for (const [x, y] of [[6.5, -8.0], [-5.5, -8.0]]) traitPlat(x, y, 0.2, 1.22, acierBlanc, 0.012);
   // la perche : son couloir, le butoir, le grand tapis rouge et bleu, ses deux montants et la barre
   couloirElan(14.5, -35.0, -3.95);
   boite(-35.0, -35.6, -3.65, -4.25, -0.2, 0.01, tapisG, false);                       // le butoir
@@ -496,7 +492,6 @@ export function construireSalle(ctx: ContexteSalle) {
     }
   }
 
-  cible = g;
 
   // LE TAPIS D'ARRET DU 60 M (« un gros tapis apres l'arrivee, derriere le dernier couloir de
   // l'anneau », l'auteur, 26/10 ; image 0661) : un mur de mousse bleue de 10 m sur 4,5 m, au nom de
@@ -550,25 +545,38 @@ export function construireSalle(ctx: ContexteSalle) {
   // (le chene, teinte du rouge orange des gradins de la salle)
   const matBois = new THREE.MeshStandardMaterial({ map: photo('bois-chene.jpg', 1.2, true, 0, bois), color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.62, 0.42, THREE.SRGBColorSpace),
     normalMap: exporter ? null : photo('bois-chene-relief.jpg', 1.2, false), roughness: 0.55 });
-  const H_VITRE = 3.0;
+  // (0463 : un socle blanc de 0,70 m, les panneaux cyan jusqu'a 1,60 m, le bois jusqu'a la coursive)
+  const H_SOCLE = 0.7, H_VITRE = 1.6;
   // (le passage derriere le muret est bleu comme la piste : la photo Wikimedia)
   const passage = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.24, 0.42, 0.66, THREE.SRGBColorSpace), roughness: 0.85 });
+  // (le virage d'apres l'arrivee, cote tribune : des locaux aux murs blancs, sans bois — 0661, 0529)
+  const locaux = (p: PointTour) => p.x > 0 && p.y > -RS, horsLocaux = (p: PointTour) => !locaux(p);
   for (const k of [1, 2, 3]) {
     ajouter(bandeAnneau(R_G, R_BOIS, 0, k, 0, EV, () => 0.005), passage, true, 'sol');                                   // le passage
-    ajouter(murAnneau(R_BOIS, () => H_VITRE, () => H_COURSIVE, k, EV), double(matBois), true, 'coque');                  // le bandeau de bois
+    ajouter(murAnneau(R_BOIS, () => H_VITRE, () => H_COURSIVE, k, EV, horsLocaux), double(matBois), true, 'coque');      // le bandeau de bois
     if (k !== 2) ajouter(murAnneau(R_BOIS, () => 0, () => H_VITRE, k, EV), double(blanc), true, 'coque');               // les murs blancs des virages
+  }
+  ajouter(murAnneau(R_BOIS, () => H_VITRE, () => H_COURSIVE, 1, EV, locaux), double(blanc), true, 'coque');
+  // leurs portes grises
+  {
+    const porte = new THREE.MeshStandardMaterial({ color: 0x7a7f85, roughness: 0.6 });
+    for (const phi of [0.25, 0.55]) {
+      const q = SALLE.virage(phi, R_BOIS - RS + EV * lisse(0, ENTREE, phi) - 0.04), m = ajouter(new THREE.BoxGeometry(1.0, 0.06, 2.2), porte, false);
+      m.position.set(q[0], -RS + q[1], 1.1); m.rotation.z = -phi;
+    }
   }
   // LA SALLE D'ECHAUFFEMENT, derriere les vitres vertes de toute la ligne opposee : ses montants, et au
   // fond son mur turquoise
   {
     // (des panneaux translucides cyan pale, pas des vitres sombres : la visite de 2025)
     const vert = new THREE.MeshStandardMaterial({ color: 0xbfe6e3, transparent: true, opacity: 0.78, roughness: 0.3, metalness: 0, depthWrite: false });
-    ajouter(murAnneau(R_BOIS, () => 0, () => H_VITRE, 2, 0), vert, false);
+    ajouter(murAnneau(R_BOIS, () => 0, () => H_SOCLE, 2, 0), double(blanc), true, 'coque');
+    ajouter(murAnneau(R_BOIS, () => H_SOCLE, () => H_VITRE, 2, 0), vert, false);
     const fond = new THREE.MeshStandardMaterial({ color: 0x4fb7c4, roughness: 0.8, side: THREE.DoubleSide });
     ajouter(murAnneau(R_BOIS + 4, () => 0, () => H_COURSIVE, 2, 0), fond, false);
     const montantVitre = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
     const y = -RS - R_BOIS;
-    for (let x = -S; x <= 1e-6; x += 1.5) { const m = ajouter(new THREE.BoxGeometry(0.07, 0.09, H_VITRE), montantVitre, false); m.position.set(x, y, H_VITRE / 2); }
+    for (let x = -S; x <= 1e-6; x += 1.5) { const m = ajouter(new THREE.BoxGeometry(0.07, 0.09, H_VITRE - H_SOCLE), montantVitre, false); m.position.set(x, y, (H_SOCLE + H_VITRE) / 2); }
     const traverse = ajouter(new THREE.BoxGeometry(S, 0.09, 0.1), montantVitre, false); traverse.position.set(-S / 2, y, H_VITRE);
   }
   // la coursive : un plancher de l'ovale aux murs de la halle, et sa lisse vitree
@@ -776,34 +784,35 @@ export function construireSalle(ctx: ContexteSalle) {
     // (retournee des deux sens : vue de la piste, sous le miroir du monde, le texte se lit droit)
     m.position.set(X0 + a * L, Y0 + 0.9, 7.6); m.rotation.x = -Math.PI / 2; m.scale.y = -1;
   }
-  // le plafond de bois clair, en lames dans la longueur
-  const plafondBois = lamesDeBois([196, 126, 70], false, 29); plafondBois.repeat.set(L / 3, LY / 3);
-  // (le plafond : le meme chene, plus clair, ses lames dans la longueur ; UV de 0 a 1 sur L x LY)
-  const plafondPhoto = exporter ? plafondBois : photo('bois-chene.jpg', 1);
-  if (!exporter) plafondPhoto.repeat.set(L / 1.2, LY / 1.2);
+  // LE PLAFOND (0067, 0463, photo Wikimedia) : un bac d'acier gris clair, porte par des poutres de
+  // bois lamelle-colle orange en travers et des pannes de bois dans la longueur, sous lesquelles
+  // courent les treillis d'acier gris
   // (une face, vers le bas : vu d'au-dessus, on voit a travers)
   const toit = new THREE.Group(); g.add(toit);
-  const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, LY), new THREE.MeshStandardMaterial({ map: plafondPhoto, color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.8, 0.6, THREE.SRGBColorSpace), roughness: 0.7 }));
+  const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, LY), new THREE.MeshStandardMaterial({ color: 0xd3d4d0, roughness: 0.8 }));
   plafond.position.set(-S / 2, YC, H_TOIT); plafond.rotation.x = Math.PI; toit.add(plafond); plafond.userData.lumiere = 'coque';
   // les fermes d'acier, en travers, tous les 7,5 m : membrures haute et basse, montants en zigzag
   const acier = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 0.45, metalness: 0.6 });   // (les fermes : acier gris clair)
   const geoBarre = new THREE.BoxGeometry(1, 1, 1);
   const barres = new THREE.InstancedMesh(geoBarre, acier, 4000);
-  let nb = 0;
-  const barre = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, e: number) => {
+  const lamelle = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.78, 0.45, 0.22, THREE.SRGBColorSpace), roughness: 0.6 });
+  const poutres = new THREE.InstancedMesh(geoBarre, lamelle, 200);
+  let nb = 0, np2 = 0;
+  const barre = (ax: number, ay: number, az: number, bx: number, by: number, bz: number, e: number, h = e, lot = barres) => {
     const d = new THREE.Vector3(bx - ax, by - ay, bz - az), l = d.length();
     const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), d.clone().normalize());
-    M.compose(new THREE.Vector3((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), q, new THREE.Vector3(e, e, l));
-    barres.setMatrixAt(nb++, M);
+    M.compose(new THREE.Vector3((ax + bx) / 2, (ay + by) / 2, (az + bz) / 2), q, new THREE.Vector3(e, h, l));
+    lot.setMatrixAt(lot === barres ? nb++ : np2++, M);
   };
   for (let x = X0 + 3.75; x < X1; x += 7.5) {
-    barre(x, Y0, H_TOIT - 0.15, x, Y1, H_TOIT - 0.15, 0.28);
+    // (la poutre de bois lamelle : 0,30 m sur 0,90 m, sous le bac)
+    barre(x, Y0, H_TOIT - 0.45, x, Y1, H_TOIT - 0.45, 0.3, 0.9, poutres);
     barre(x, Y0 + 1, H_TOIT - 2.1, x, Y1 - 1, H_TOIT - 2.1, 0.22);
     for (let y = Y0 + 1, i = 0; y < Y1 - 1; y += 2.4, i++) barre(x, y, i % 2 ? H_TOIT - 0.15 : H_TOIT - 2.1, x, y + 2.4, i % 2 ? H_TOIT - 2.1 : H_TOIT - 0.15, 0.1);
   }
   // les pannes, dans la longueur
-  for (let y = Y0 + 4; y < Y1; y += 6) barre(X0, y, H_TOIT - 0.35, X1, y, H_TOIT - 0.35, 0.16);
-  barres.count = nb; toit.add(barres);
+  for (let y = Y0 + 4; y < Y1; y += 6) barre(X0, y, H_TOIT - 0.2, X1, y, H_TOIT - 0.2, 0.2, 0.4, poutres);
+  barres.count = nb; poutres.count = np2; toit.add(barres, poutres);
   // les plafonniers : des disques qui brillent sous les fermes
   const lampe = new THREE.MeshBasicMaterial({ color: 0xfffbf0 }); lampe.name = 'plafonnier';
   const lampes = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.35, 0.35, 0.12, 16), lampe, 200);
