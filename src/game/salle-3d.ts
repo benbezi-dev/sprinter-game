@@ -358,13 +358,13 @@ export function construireSalle(ctx: ContexteSalle) {
   for (const m of [bleu, anthracite, plateau]) { m.map!.repeat.set(1 / 1.6, 1 / 1.6); m.normalMap!.repeat.set(1 / 1.6, 1 / 1.6); }
   // LE TARTAN, sur l'anneau et la ligne droite du 60 m seulement (« texture tartan », « uniquement sur la
   // piste anneau et 60 metres », l'auteur, 26/10) : le caoutchouc granule de ambientCG Rubber004 (CC0),
-  // ses niveaux de gris (moyenne 0,82) sous la couleur du couloir, son relief et sa rugosite ; une tuile
+  // ses niveaux de gris (moyenne 0,82, ecart type 0,12 : « augmente la texture tartan », 26/10) sous la couleur du couloir, son relief et sa rugosite ; une tuile
   // pour 0,80 m. Le plateau et les couloirs d'elan des sauts gardent leur surface.
   const tartan = (rgb: number[], base: THREE.MeshStandardMaterial) => {
     if (exporter) return base;
     const m = new THREE.MeshStandardMaterial({
       color: new THREE.Color().setRGB(rgb[0] / 255 / 0.82, rgb[1] / 255 / 0.82, rgb[2] / 255 / 0.82, THREE.SRGBColorSpace),
-      map: photo('tartan.jpg', 0.8, false), normalMap: photo('tartan-relief.jpg', 0.8, false), normalScale: new THREE.Vector2(0.7, 0.7),
+      map: photo('tartan.jpg', 0.8, false), normalMap: photo('tartan-relief.jpg', 0.8, false), normalScale: new THREE.Vector2(1.2, 1.2),
       roughnessMap: photo('tartan-rugosite.jpg', 0.8, false), roughness: 1, metalness: 0,
     });
     m.polygonOffset = base.polygonOffset; m.polygonOffsetFactor = base.polygonOffsetFactor; m.polygonOffsetUnits = base.polygonOffsetUnits;
