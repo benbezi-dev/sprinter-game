@@ -103,26 +103,84 @@ class Reseau {
   private cles = new Map<string, number>();
   private seaux = new Map<string, number[]>();
 
+  /** Les traces auxquels appartient chaque noeud (pour raccorder un bout a une AUTRE rue). */
+  private traces: number[][] = [];
   constructor(lignes: P2[][]) {
-    for (const l of lignes) {
-      let avant = this.noeud(l[0][0], l[0][1]);
+    lignes.forEach((l, li) => {
+      let avant = this.noeud(l[0][0], l[0][1], li);
       for (let i = 1; i < l.length; i++) {
         const [ax, az] = l[i - 1], [bx, bz] = l[i];
         const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / 8));
         for (let k = 1; k <= n; k++) {
-          const j = this.noeud(ax + (bx - ax) * k / n, az + (bz - az) * k / n);
+          const j = this.noeud(ax + (bx - ax) * k / n, az + (bz - az) * k / n, li);
           if (j !== avant) { this.adj[avant].push(j); this.adj[j].push(avant); }
           avant = j;
         }
       }
+    });
+  }
+
+  /**
+   * Raccorder les bouts de tracés (un noeud qui n'a qu'un voisin) aux noeuds les plus proches
+   * d'un autre tracé, a moins de `rayon` metres : les trottoirs se rejoignent aux carrefours.
+   */
+  relier(rayon: number) {
+    const bouts = this.adj.map((a, i) => (a.length <= 1 ? i : -1)).filter(i => i >= 0);
+    for (const i of bouts) {
+      const voisins: [number, number][] = [];
+      const cx = Math.floor(this.xs[i] / 20), cz = Math.floor(this.zs[i] / 20);
+      for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+        for (const j of this.seaux.get(`${cx + dx},${cz + dz}`) || []) {
+          if (j === i || this.adj[i].includes(j) || this.traces[j].some(t => this.traces[i].includes(t))) continue;
+          const d = Math.hypot(this.xs[j] - this.xs[i], this.zs[j] - this.zs[i]);
+          if (d < rayon) voisins.push([d, j]);
+        }
+      }
+      voisins.sort((a, b) => a[0] - b[0]);
+      for (const [, j] of voisins.slice(0, 3)) { this.adj[i].push(j); this.adj[j].push(i); }
     }
   }
 
-  private noeud(x: number, z: number): number {
+  /**
+   * Souder les morceaux isoles : la carte (OpenStreetMap) a des chemins qui ne se touchent pas — le
+   * lycee et la gare etaient injoignables a pied. Chaque morceau est relie, par son noeud le plus
+   * proche, au noeud d'un autre morceau a moins de `max` metres ; on recommence tant que ca soude.
+   */
+  souder(max: number) {
+    for (let passe = 0; passe < 6; passe++) {
+      const comp = new Int32Array(this.xs.length).fill(-1); const tailles: number[] = [];
+      for (let i = 0; i < this.xs.length; i++) {
+        if (comp[i] >= 0) continue;
+        const c = tailles.length; let n = 0; const pile = [i]; comp[i] = c;
+        while (pile.length) { const a = pile.pop()!; n++; for (const b of this.adj[a]) if (comp[b] < 0) { comp[b] = c; pile.push(b); } }
+        tailles.push(n);
+      }
+      if (tailles.length <= 1) return;
+      const r = Math.ceil(max / 20);
+      const meilleur = new Map<number, [number, number, number]>();
+      for (let i = 0; i < this.xs.length; i++) {
+        // le grand morceau (plus de la moitie des noeuds) ne cherche pas : ce sont les autres qu'on y soude
+        const ci = comp[i]; if (tailles[ci] >= this.xs.length / 2) continue;
+        const cx = Math.floor(this.xs[i] / 20), cz = Math.floor(this.zs[i] / 20);
+        for (let dx = -r; dx <= r; dx++) for (let dz = -r; dz <= r; dz++) {
+          for (const j of this.seaux.get(`${cx + dx},${cz + dz}`) || []) {
+            if (comp[j] === ci) continue;
+            const d = Math.hypot(this.xs[j] - this.xs[i], this.zs[j] - this.zs[i]);
+            const m = meilleur.get(ci);
+            if (d < max && (!m || d < m[0])) meilleur.set(ci, [d, i, j]);
+          }
+        }
+      }
+      if (!meilleur.size) return;
+      for (const [, [, i, j]] of meilleur) { this.adj[i].push(j); this.adj[j].push(i); }
+    }
+  }
+
+  private noeud(x: number, z: number, trace = -1): number {
     const c = Math.round(x * 2) + ',' + Math.round(z * 2);
     let i = this.cles.get(c);
-    if (i !== undefined) return i;
-    i = this.xs.length; this.xs.push(x); this.zs.push(z); this.adj.push([]);
+    if (i !== undefined) { if (!this.traces[i].includes(trace)) this.traces[i].push(trace); return i; }
+    i = this.xs.length; this.xs.push(x); this.zs.push(z); this.adj.push([]); this.traces.push([trace]);
     this.cles.set(c, i);
     const s = Math.floor(x / 20) + ',' + Math.floor(z / 20);
     (this.seaux.get(s) || this.seaux.set(s, []).get(s)!).push(i);
@@ -271,6 +329,16 @@ function enTuiles(t: Tampon): Tampon[] {
   return [...parTuile.values()];
 }
 
+/** Une ligne decalee de `d` metres sur sa gauche (negatif : sa droite), joints en onglet bornes. */
+function decaler(l: P2[], d: number): P2[] {
+  return l.map((p, i) => {
+    const a = l[Math.max(0, i - 1)], b = l[Math.min(l.length - 1, i + 1)];
+    let nx = -(b[1] - a[1]), nz = b[0] - a[0];
+    const n = Math.hypot(nx, nz) || 1; nx /= n; nz /= n;
+    return [p[0] + nx * d, p[1] + nz * d] as P2;
+  });
+}
+
 /** Un polygone plat a la hauteur y. */
 function aplat(t: Tampon, p: P2[], y: number, echelleUV = 0, couleur?: THREE.Color) {
   if (p.length < 3) return;
@@ -357,7 +425,7 @@ function chargerLeCorps() {
 }
 const gabaritDe = (look: any) => gabarits[look && look.build === 'f' ? 'f' : 'm'];
 const SANS_CHEVEUX = new Set(['ras', 'shaved']);
-function corps3D(look: any): { m: Modele; mats: Record<string, THREE.MeshStandardMaterial> } | null {
+function corps3D(look: any): { m: Modele; mats: Record<string, THREE.MeshStandardMaterial>; hauteur: number } | null {
   const gabarit = gabaritDe(look);
   if (!gabarit) return null;
   const copie = clonerSquelette(gabarit);
@@ -389,7 +457,8 @@ function corps3D(look: any): { m: Modele; mats: Record<string, THREE.MeshStandar
   }
   const bassin = os.get('pelvis')!;
   const bassinParent = new THREE.Matrix4().multiplyMatrices(inv, bassin.parent!.matrixWorld);
-  return { m: { racine, os, ordre, repos, reposLocal, bassinParent } as unknown as Modele, mats };
+  const boite = new THREE.Box3().setFromObject(copie);
+  return { m: { racine, os, ordre, repos, reposLocal, bassinParent } as unknown as Modele, mats, hauteur: boite.max.y - boite.min.y };
 }
 function teindre(mats: Record<string, THREE.MeshStandardMaterial>, L: any) {
   if (!L) return;
@@ -437,7 +506,7 @@ class Personne {
     this.tex.colorSpace = THREE.SRGBColorSpace;
     this.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.tex, transparent: true, alphaTest: 0.08 }));
     this.sprite.center.set(0.5, 0.06);
-    const h = ((look && look.h) || 1.8) * 1.25 * GRANDI;
+    const h = ((look && look.h) || 1.75) * 1.25 * GRANDI;
     this.sprite.scale.set(h, h, 1);
     this.corps = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0 };
     this.pos.set(x, 0, z);
@@ -462,7 +531,8 @@ class Personne {
     this.sprite.position.set(this.pos.x, SOL, this.pos.z); this.ombre.position.set(this.pos.x, SOL + 0.02, this.pos.z);
     if (!this.m3) return;
     // tourne vers ou il va : +x du corps sur la direction de marche
-    const k = GRANDI * 1.08;
+    // a sa taille choisie : le corps est construit a 1,68 m (femme) ou 1,78 m (homme)
+    const k = GRANDI * (((this.corps.look && this.corps.look.h) || 0) / this.m3.hauteur || 1);
     this.m3.m.racine.matrix.multiplyMatrices(_T.makeTranslation(this.pos.x, SOL, this.pos.z), _R.makeRotationY(Math.atan2(-this.dir.z, this.dir.x)))
       .multiply(_S.makeScale(k, k, k));
     this.m3.m.racine.matrixWorldNeedsUpdate = true;
@@ -554,13 +624,15 @@ function dansPoly(poly: P2[], x: number, z: number) {
 
 /* ------------------------------------------------------------ la scene */
 
-/** Les gens sont grandis de moitie : on lit le personnage d'abord, comme dans les Sims. */
-const GRANDI = 1.55;
+/** Les gens a leur taille reelle (« les proportions joueurs / decors ne sont pas bonnes », l'auteur, 25/10 :
+ *  ils etaient grandis de 1,55 et mesuraient pres de 3 m a cote des voitures). La camera s'approche a la place. */
+const GRANDI = 1;
 /** Le niveau des trottoirs et dalles, sur lequel on marche. */
 const SOL = 0.12;
 // « les deplacements sont trop lents, c'est plus rapide dans les Sims » (l'auteur, 25/10) : on presse le pas ;
 // et « le personnage peut aussi courir pour aller plus vite » : la course double la vitesse
-const VITESSE = 6, VITESSE_COURSE = 13;
+// (a taille reelle et camera rapprochee : la meme vitesse a l'ecran qu'avant, en metres d'un vrai pas)
+const VITESSE = 4, VITESSE_COURSE = 8.5;
 const COULEURS_AUTO = ['#C0392B', '#2E86C1', '#F4F6F7', '#1C2833', '#F1C40F', '#7D8C8E', '#27AE60', '#8E44AD', '#D35400'];
 const VOITURES = new Set(['primary', 'secondary', 'tertiary', 'residential', 'unclassified', 'living_street', 'service', 'primary_link', 'secondary_link', 'tertiary_link']);
 
@@ -651,7 +723,7 @@ export class Ville {
     this.soleil.shadow.bias = -0.0004; this.soleil.shadow.normalBias = 0.04;
     this.scene.add(this.soleil, this.soleil.target, this.monde);
 
-    this.marque = new THREE.Mesh(new THREE.RingGeometry(0.7, 0.95, 32),
+    this.marque = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 32),
       new THREE.MeshBasicMaterial({ color: '#3DDC84', transparent: true, opacity: 0.9, depthWrite: false }));
     this.marque.rotation.x = -Math.PI / 2; this.marque.visible = false;
     this.scene.add(this.marque);
@@ -966,7 +1038,23 @@ export class Ville {
     garees.slice(0, 260).forEach((c, i) => { const v = voiture(COULEURS_AUTO[i % COULEURS_AUTO.length]); v.position.set(c.x, SOL - 0.02, c.z); v.rotation.y = c.a; g.add(v); });
 
     // les reseaux : a pied partout, en voiture sur les rues
-    this.pietons = new Reseau(d.routes.map(r => r.l));
+    // LES PIETONS SUR LES TROTTOIRS (« le personnage est sur la route au lieu du trottoir », l'auteur,
+    // 25/10) : le long d'une rue, deux traces au milieu de chaque trottoir (la bande de 1,6 m dessinee
+    // plus haut), des passages pour traverser tous les ~50 m et aux bouts ; les allees gardent leur axe.
+    const lignesPietons: P2[][] = [];
+    for (const r of d.routes) {
+      if (!VOITURES.has(r.t) || r.l.length < 2) { lignesPietons.push(r.l); continue; }
+      const ecart = r.w / 2 + 0.8, g = decaler(r.l, ecart), dr = decaler(r.l, -ecart);
+      lignesPietons.push(g, dr);
+      let parcouru = 0;
+      for (let i = 0; i < r.l.length; i++) {
+        if (i > 0) parcouru += Math.hypot(r.l[i][0] - r.l[i - 1][0], r.l[i][1] - r.l[i - 1][1]);
+        if (i === 0 || i === r.l.length - 1 || parcouru > 50) { lignesPietons.push([g[i], dr[i]]); parcouru = 0; }
+      }
+    }
+    this.pietons = new Reseau(lignesPietons);
+    this.pietons.relier(9);
+    this.pietons.souder(40);
     this.chaussee = new Reseau(d.routes.filter(r => VOITURES.has(r.t) && r.t !== 'service').map(r => r.l));
 
     // les lieux du jeu : leur porte (le point du reseau le plus proche), une enseigne
@@ -1053,7 +1141,8 @@ export class Ville {
     this.rendu.setPixelRatio(this.pixels);
     this.rendu.setSize(l, h, false);
     // la LARGEUR vue, en metres : un telephone en portrait voit une rue et ses deux trottoirs
-    const vue = (l < h ? 34 : 60) / this.zoom, asp = l / h;
+    // a taille reelle, un athlete se lit sur une rue et demie de large en portrait
+    const vue = (l < h ? 22 : 40) / this.zoom, asp = l / h;
     this.camera.left = -vue / 2; this.camera.right = vue / 2;
     this.camera.top = vue / asp / 2; this.camera.bottom = -vue / asp / 2;
     this.camera.updateProjectionMatrix();
@@ -1215,10 +1304,10 @@ export class Ville {
         let d = vise - this.capDos; d = Math.atan2(Math.sin(d), Math.cos(d));
         this.capDos += d * (1 - Math.exp(-3 * dt));
       }
-      const recul = 7.5, haut = 3.6, cx = Math.cos(this.capDos), cz = Math.sin(this.capDos);
+      const recul = 4.4, haut = 2.3, cx = Math.cos(this.capDos), cz = Math.sin(this.capDos);
       const vx = moi.pos.x - cx * recul, vz = moi.pos.z - cz * recul;
       this.dos.position.lerp(_vDos.set(vx, SOL + haut, vz), 1 - Math.exp(-10 * dt));
-      this.dos.lookAt(moi.pos.x + cx * 4, SOL + 1.5, moi.pos.z + cz * 4);
+      this.dos.lookAt(moi.pos.x + cx * 3, SOL + 1.25, moi.pos.z + cz * 3);
       this.cible.copy(moi.pos);
     }
     this.soleil.position.set(this.cible.x - 60, 110, this.cible.z + 40);
@@ -1250,7 +1339,7 @@ export class Ville {
   private lesEtiquettes() {
     const l = this.hote.clientWidth, h = this.hote.clientHeight;
     for (const [, g] of this.habitants) {
-      const q = g.p.pos.clone(); q.y = 4.4; q.project(this.cam);
+      const q = g.p.pos.clone(); q.y = 2.5; q.project(this.cam);
       const x = (q.x + 1) / 2 * l, y = (1 - q.y) / 2 * h;
       const dehors = q.z > 1 || x < -60 || x > l + 60 || y < -20 || y > h + 40;
       g.el.style.display = dehors ? 'none' : '';
