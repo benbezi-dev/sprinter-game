@@ -294,6 +294,20 @@ export type ContexteSalle = { stade: THREE.Group; renderer: THREE.WebGLRenderer 
  */
 export function construireSalle(ctx: ContexteSalle) {
   sieges3.length = 0;
+  const parametres = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+  const exporter = parametres.has('exporterSalle');
+  // LES TEXTURES PHOTO (« apporte des textures pour augmenter le realisme », l'auteur, 26/10) :
+  // Poly Haven, CC0, en 1k et recompressees (216 Ko a elles toutes) — le chene verni des gradins et
+  // du plafond, le bardage d'acier nervure des facades (passe au gris). Les UV sont en metres.
+  // (pour l'export vers Blender, les toiles dessinees : ces images ne sont pas encore chargees)
+  const photo = (nom: string, metres: number, srgb = true, rot = 0, repli?: THREE.Texture) => {
+    if (exporter && repli) return repli;
+    const t = new THREE.TextureLoader().load(ctx.base + 'modeles/salle/textures/' + nom);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / metres, 1 / metres); t.rotation = rot;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 16;
+    return t;
+  };
   // tout l'interieur dans un groupe : on le cache quand la camera survole le batiment, dehors
   const g = new THREE.Group(); ctx.stade.add(g);
   // `lumiere` : la surface recoit la lumiere cuite dans Blender — 'sol' (vue de dessus) ou 'coque' (l'atlas)
@@ -465,7 +479,9 @@ export function construireSalle(ctx: ContexteSalle) {
   // LES GRADINS DE BOIS (la visite filmee de 2025) : des planches HORIZONTALES d'un bois chaud,
   // quatre marches qui montent du muret jusque sous la coursive, tout autour de l'anneau
   const bois = lamesDeBois([176, 98, 52], false, 17); bois.repeat.set(1 / 3, 1 / 1.6);
-  const matBois = new THREE.MeshStandardMaterial({ map: bois, roughness: 0.75 });
+  // (le chene, teinte du rouge orange des gradins de la salle)
+  const matBois = new THREE.MeshStandardMaterial({ map: photo('bois-chene.jpg', 1.2, true, 0, bois), color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.62, 0.42, THREE.SRGBColorSpace),
+    normalMap: exporter ? null : photo('bois-chene-relief.jpg', 1.2, false), roughness: 0.55 });
   const zMarche = (i: number) => (p: PointTour) => { const b = hautMur(p); return b + (H_COURSIVE - b) * i / (N_G + 1); };
   for (let i = 0; i < N_G; i++) {
     const r = R_G + i * P_G;
@@ -600,7 +616,9 @@ export function construireSalle(ctx: ContexteSalle) {
     }
   });
   bardage.repeat.set(1 / 4, 1 / 4);
-  const matBardage = new THREE.MeshStandardMaterial({ map: bardage, roughness: 0.6, metalness: 0.2 });
+  // (le bardage photo : 2 m de cote, ses nervures tournees a l'horizontale)
+  const matBardage = new THREE.MeshStandardMaterial({ map: photo('bardage.jpg', 2, true, Math.PI / 2, bardage), color: exporter ? 0xffffff : 0xd4d8de,
+    normalMap: exporter ? null : photo('bardage-relief.jpg', 2, false, Math.PI / 2), roughness: 0.5, metalness: 0.25 });
   const poteauBlanc = new THREE.MeshStandardMaterial({ color: 0xf1f2f4, roughness: 0.5 });
   const sepia = (graine: number) => toile(512, 384, (c, w, hh) => {
     // une fresque de sport en sepia : des silhouettes d'athletes, sans personne de reel
@@ -621,7 +639,13 @@ export function construireSalle(ctx: ContexteSalle) {
                   vitrages: [number, number, number, number, number][]) => {
     const debut = axe === 'y' ? X0 : Y0, d = n === 'y+' || n === 'x+' ? 1 : -1;
     // le bardage
-    paroi(axe === 'y' ? -S / 2 : pos, axe === 'y' ? pos : -RS, H_COURSIVE, H_TOIT, long, n, matBardage);
+    const bd = paroi(axe === 'y' ? -S / 2 : pos, axe === 'y' ? pos : -RS, H_COURSIVE, H_TOIT, long, n, matBardage);
+    if (!exporter) {
+      // (ses UV en metres, pour la texture photo ; la carte de lumiere le sait : uvMetres)
+      const uv = bd.geometry.getAttribute('uv') as THREE.BufferAttribute;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * long, uv.getY(i) * (H_TOIT - H_COURSIVE));
+      bd.geometry.userData.uvMetres = true;
+    }
     for (const [a, b, z0, z1, pas] of vitrages) {
       const c = debut + (a + b) / 2 * long, l = (b - a) * long;
       const v = paroi(axe === 'y' ? c : pos, axe === 'y' ? pos : c, z0, z1, l, n, ciel);
@@ -655,9 +679,12 @@ export function construireSalle(ctx: ContexteSalle) {
   }
   // le plafond de bois clair, en lames dans la longueur
   const plafondBois = lamesDeBois([196, 126, 70], false, 29); plafondBois.repeat.set(L / 3, 2 * LARGE / 3);
+  // (le plafond : le meme chene, plus clair, ses lames dans la longueur ; UV de 0 a 1 sur L x 2 LARGE)
+  const plafondPhoto = exporter ? plafondBois : photo('bois-chene.jpg', 1);
+  if (!exporter) plafondPhoto.repeat.set(L / 1.2, 2 * LARGE / 1.2);
   // (une face, vers le bas : vu d'au-dessus, on voit a travers)
   const toit = new THREE.Group(); g.add(toit);
-  const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, 2 * LARGE), new THREE.MeshStandardMaterial({ map: plafondBois, roughness: 0.8 }));
+  const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, 2 * LARGE), new THREE.MeshStandardMaterial({ map: plafondPhoto, color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.8, 0.6, THREE.SRGBColorSpace), roughness: 0.7 }));
   plafond.position.set(-S / 2, -RS, H_TOIT); plafond.rotation.x = Math.PI; toit.add(plafond); plafond.userData.lumiere = 'coque';
   // les fermes d'acier, en travers, tous les 7,5 m : membrures haute et basse, montants en zigzag
   const acier = new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.45, metalness: 0.7 });
@@ -695,7 +722,7 @@ export function construireSalle(ctx: ContexteSalle) {
   const matBand = new THREE.MeshStandardMaterial({ map: banderole, roughness: 0.7, side: THREE.DoubleSide });
   for (const x of [-S + 6, -S / 2, -6]) for (const y of [-RS - R_BOIS - 0.08]) {
     const m = ajouter(new THREE.PlaneGeometry(5, 1.25), matBand, false);
-    m.position.set(x, y, H_COURSIVE - 0.75); m.rotation.x = -Math.PI / 2; m.scale.x = -1;
+    m.position.set(x, y, H_COURSIVE - 0.75); m.rotation.x = -Math.PI / 2; m.scale.y = -1;   // (retournee : vue de la piste, sous le miroir du monde, elle se lit droit)
   }
   // un grand drapeau bleu ciel sous le toit, comme sur place
   { const m = ajouter(new THREE.PlaneGeometry(2.2, 3.4), matBand, false); m.position.set(-S / 2, Y1 - 0.6, H_TOIT - 4); m.rotation.x = Math.PI / 2; m.scale.x = -1; }
@@ -706,8 +733,7 @@ export function construireSalle(ctx: ContexteSalle) {
   // cette lumiere. Les cartes ci-dessous sont DETERMINISTES : l'export pour Blender (?exporterSalle=1)
   // et le jeu les recalculent a l'identique.
   // (?lumiere=0 : la salle eclairee par le jeu seul, sans la lumiere cuite)
-  const parametres = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
-  const exporter = parametres.has('exporterSalle'), sansCuisson = !exporter && parametres.get('lumiere') === '0';
+  const sansCuisson = !exporter && parametres.get('lumiere') === '0';
   const cuites = sansCuisson ? { coque: [], sol: [] } : cartesDeLumiere(g, { X0, Y0, L, LY: 2 * LARGE });
   if (exporter) exporterPourBlender(g.clone());
   const charge = new THREE.TextureLoader();
@@ -841,7 +867,7 @@ function cartesDeLumiere(g: THREE.Group, h: { X0: number; Y0: number; L: number;
   // la coque : les UV de chaque surface en metres, sa boite, puis le rangement
   const brut = coque.map(m => {
     const geo = m.geometry as any, uv = geo.getAttribute('uv'), sx = geo.parameters?.width ?? 1, sy = geo.parameters?.height ?? 1;
-    const plan = geo.type === 'PlaneGeometry';
+    const plan = geo.type === 'PlaneGeometry' && !geo.userData.uvMetres;
     const u = new Float32Array(uv.count * 2);
     let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity;
     for (let i = 0; i < uv.count; i++) {
