@@ -651,6 +651,10 @@ const DROITE0_100 = -12, DROITE1 = 100;       // la ligne droite, de la sortie d
 let sx = 1, x0 = 0, y0 = 0;
 // LE STADE COUVERT DE VAL-DE-REUIL (salle-3d.ts) : son anneau releve et sa ligne droite centrale
 let salleActive = false;
+// LES BLOCS DE L'ANNEAU S'ENLEVENT (« les starting-blocks doivent disparaitre du depart du 200 m une fois
+// la course lancee, pour le 200 m et le 400 m », l'auteur, 27/10) : comme le font les officiels, des que
+// tout le monde a quitte les blocs ; on les y revoit au depart suivant. Le 60 m garde les siens.
+const blocsSalle: THREE.Object3D[] = [];
 let cameraSalle: ((x: number, y: number, z: number, survol: boolean, cam?: THREE.Camera, vise?: THREE.Vector3) => void) | null = null;
 function caler(T: any) {
   salleActive = estEnSalle(T, (globalThis as any).SprinterApp?.G?.race);
@@ -880,13 +884,16 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }
     // LES BLOCS DE DEPART (« il n'y a de starting-block sur aucune epreuve », l'auteur, 26/10) : les
     // memes que dehors, au milieu de chaque couloir, la ou le coureur part — a la hauteur du releve
+    blocsSalle.length = 0;
     if (blocLots) for (const { geo, mat } of blocLots) {
       const l = new Lot(geo, mat, true);
       for (let k = 0; k < (T.lanes || nCouloirs); k++) {
         const p = ici(T.posDemi(0, k, milieu(T, k))), a = capIci(T.heading(0, k));
         l.poser(new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(0, 0, 1), a).setPosition(p[0], p[1], zSol(p[0], p[1])));
       }
+      const n0 = salle.interieur.children.length;
       l.finir(salle.interieur);
+      blocsSalle.push(...salle.interieur.children.slice(n0));
     }
     return;
   }
@@ -2516,6 +2523,10 @@ export function rendre(App: any, dt: number) {
     camera.position.copy(camPos);
     // (y retourne : voir monde) — l'exterieur ne se montre qu'au survol, camera dehors
     if (salleActive && cameraSalle) cameraSalle(camera.position.x, -camera.position.y, camera.position.z, survol, camera, camVise);
+    if (salleActive && blocsSalle.length) {
+      const partis = !!T.salle && G.state !== 'count' && G.state !== 'cut' && (G.runners || []).every((r: any) => (r.d || 0) > 3);
+      for (const b of blocsSalle) b.visible = !partis;
+    }
     // LA CAMERA VIT (l'auteur, 22/10 : « cinematique et dynamique ») : au coup de
     // pistolet elle tremble un instant, et son champ s'ouvre avec la vitesse.
     if (G.state === 'race' && etatVu !== 'race') secousse = 0.28;
