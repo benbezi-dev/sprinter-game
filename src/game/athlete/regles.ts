@@ -279,21 +279,21 @@ export type Competition = {
 
 /** La moyenne des quatre qualites. */
 export const moyenneDes = (a: Athlete) => STATS.reduce((s, k) => s + a.stats[k], 0) / STATS.length;
-/** La moyenne qu'il faut pour monter d'un niveau : le plafond du sien, a deux points pres (on l'a « fini »). */
-export const exigePourMonter = (niveau: number) => COMPETITIONS[niveau].plafond - 2;
+/** La moyenne qu'il faut pour monter d'un niveau : 85 % du plafond du sien (l'endurance, seance du samedi, monte moins vite). */
+export const exigePourMonter = (niveau: number) => Math.round(COMPETITIONS[niveau].plafond * 0.85);
 /** Les stats sont-elles pretes pour le niveau suivant ? (le podium fait le reste) */
 export const pretPourLaSuite = (a: Athlete) => moyenneDes(a) >= exigePourMonter(a.niveau);
 
 export const COMPETITIONS: Competition[] = [
-  { cle: 'scolaire', plateau: 0, deplacement: 0, prime: 0, reputation: 5, ecart: 2, plafond: 36 },
+  { cle: 'scolaire', plateau: 0, deplacement: 0, prime: 0, reputation: 5, ecart: 2, plafond: 30 },
   // Entre le scolaire (12,50-15,00) et les regionaux (11,20-12,50) : aucun
   // plateau du moteur n'y tombe, la marche se donne ses chronos.
-  { cle: 'departementaux', plateau: 0, deplacement: 15, prime: 0, reputation: 8, ecart: 2, plafond: 40,
+  { cle: 'departementaux', plateau: 0, deplacement: 15, prime: 0, reputation: 8, ecart: 2, plafond: 45,
     chronos: { '100': [11.80, 13.40], '200': [23.60, 27.00], '400': [51.00, 57.00] } },
-  { cle: 'regionaux', plateau: 1, deplacement: 40, prime: 0, reputation: 12, ecart: 2, plafond: 45 },
-  { cle: 'france', plateau: 2, deplacement: 150, prime: 400, reputation: 30, ecart: 4, plafond: 50 },
-  { cle: 'europe', plateau: 3, deplacement: 600, prime: 1500, reputation: 70, ecart: 4, plafond: 55 },
-  { cle: 'monde', plateau: 4, deplacement: 1500, prime: 5000, reputation: 160, ecart: 4, plafond: 60 },
+  { cle: 'regionaux', plateau: 1, deplacement: 40, prime: 0, reputation: 12, ecart: 2, plafond: 60 },
+  { cle: 'france', plateau: 2, deplacement: 150, prime: 400, reputation: 30, ecart: 4, plafond: 75 },
+  { cle: 'europe', plateau: 3, deplacement: 600, prime: 1500, reputation: 70, ecart: 4, plafond: 90 },
+  { cle: 'monde', plateau: 4, deplacement: 1500, prime: 5000, reputation: 160, ecart: 4, plafond: 100 },
 ];
 
 /** Le niveau vise par chaque objectif du programme. */
@@ -389,8 +389,8 @@ export function noter(a: Athlete, fr: string, en: string) {
 export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, specialite: Epreuve | null,
                              apparence: Apparence = APPARENCE, age = 14): Athlete {
   const aisee = origine === 'aisee';
-  // un adulte a deja un corps forme, un peu d'argent de cote, et ne passe plus par le scolaire
-  const adulte = age >= 18, plus = adulte ? 6 : age >= 15 ? 3 : 0;
+  // un adulte a un peu d'argent de cote, et ne passe plus par le scolaire
+  const adulte = age >= 18;
   const a: Athlete = {
     v: 2,
     nom: nom || 'TOI',
@@ -398,7 +398,8 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
     voie,
     specialite: voie === 'specialiste' ? (specialite || '100') : null,
     apparence: { ...apparence },
-    stats: { vitesse: 28 + plus, force: 24 + plus, technique: 22 + plus, endurance: 26 + plus },
+    // LES STATS PARTENT DE ZERO, a tout age (l'auteur, 26/10 : « stats de base trop elevees »)
+    stats: { vitesse: 0, force: 0, technique: 0, endurance: 0 },
     argent: adulte ? (aisee ? 900 : 150) : aisee ? 600 : 20,
     fatigue: 0,
     moral: 70,
@@ -464,7 +465,8 @@ export function gainDeSeance(a: Athlete, j: Jour, score: number, bonus = 0): Par
   const forme = 1 - Math.max(0, a.fatigue - 50) / 100;
   const outil = a.materiel.some(id => piece(id)?.seance === j) ? 1.15 : 1;
   const moral = 0.85 + 0.3 * (a.moral / 100);
-  const base = 3.2 * q * encadrement * forme * outil * moral * formeDuJour(a) * (1 + bonus);
+  // 7 : sur l'echelle de 0 a 100 (26/10), on sort du scolaire en 7 a 8 semaines d'entrainement suivi
+  const base = 7 * q * encadrement * forme * outil * moral * formeDuJour(a) * (1 + bonus);
   const cles = a.specialite ? CLES_EPREUVE[a.specialite] : [];
   const spe = (st: Stat) => (a.voie === 'specialiste' && cles.includes(st) ? 1.2 : 1);
   // Le polyvalent gagne moins vite sur l'essentiel mais plus sur le reste.
@@ -563,39 +565,28 @@ export function picDeForme(a: Athlete, niveau: number): boolean {
 }
 
 /**
- * Ce que vaut une qualite au-dessus de 50, rapporte a ce qu'elle coute en
- * dessous. L'auteur, 25/10 : l'athlete au sommet ne doit jamais gagner plus
- * d'un dixieme sur un joueur qui ne joue pas a ce mode. 50 partout, c'est le
- * coureur de tout le monde ; en dessous on perd franchement (c'est ce que
- * l'entrainement rattrape), au-dessus on gagne a peine. Verifie par
- * tools/athlete-test.mjs, au pire cas (110 partout, pic de forme), sur les
- * trois epreuves et toutes les cadences.
+ * LA VITESSE SUIT LES STATS (l'auteur, 26/10 : « stats a zero, le personnage court en 12"50 ;
+ * 100 % des stats = la vitesse max du jeu par rapport au nombre de frappes, comme dans le jeu
+ * principal »). Carriere seulement : ces reglages ne servent qu'a ses courses
+ * (carriere.ts, G.reglagesJoueur), dont les chronos ne vont jamais au classement du jeu.
+ * A 0, chaque qualite bride son reglage (A_ZERO, mesure dans le moteur : 12"42 au 100 m a
+ * 10 appuis/s, 12"90 a 8/s, 24"90 au 200, 51"12 au 400) ; a 100, tous valent 1 — le coureur
+ * du jeu principal, que seule la frequence des appuis fait aller plus vite.
  */
-export const HAUT = 0.009;
-/**
- * LES STATS PESENT FRANCHEMENT EN CARRIERE (l'auteur, 26/10 : « les stats doivent avoir de
- * l'importance dans ce mode de jeu », « ca ne s'applique que dans le mode carriere »). Ces
- * reglages ne servent qu'aux courses de la carriere (carriere.ts, G.reglagesJoueur), dont les
- * chronos ne vont jamais au classement du jeu : sous 50 on perd, au-dessus on gagne vraiment,
- * des deux cotes avec la meme pente. HAUT ne reste que pour la mesure du test « hors carriere ».
- */
-export const POIDS_STATS = 1.6;
+export const A_ZERO = { vitesse: 0.72, boost: 0.9, drag: 1.1, chute: 1.2 };
 
-/**
- * Les coefficients poses sur le coureur du joueur (G.reglagesJoueur, lu par
- * buildLevel). 50 partout et sans materiel : 1 partout.
- */
+/** Les coefficients poses sur le coureur du joueur (G.reglagesJoueur, lu par buildLevel). */
 export function reglages(a: Athlete, niveau: number): Reglages {
   const m = bonusMateriel(a);
-  const pic = picDeForme(a, niveau) ? 0.1 : 0;
-  // L'ecart a 50, de -0,5 a +0,6 ; le pic de forme compte comme 10 points de vitesse.
-  const d = (k: Stat, plus = 0) => POIDS_STATS * (borne(a.stats[k] + m[k], 0, 110) / 100 - 0.5 + plus);
+  // le pic de forme compte comme 10 points de vitesse ; rien ne depasse 100 %
+  const pic = picDeForme(a, niveau) ? 10 : 0;
+  const vers = (zero: number, k: Stat, plus = 0) => zero + (1 - zero) * borne(a.stats[k] + m[k] + plus, 0, 100) / 100;
   const forme = a.fatigue > 60 ? -0.03 * (a.fatigue - 60) / 40 : 0;
   return {
-    vitesse: rond5(1 + 0.05 * d('vitesse', pic) + forme),
-    boost: rond5(1 + 0.15 * d('force')),
-    drag: rond5(1 - 0.15 * d('endurance')),
-    chute: rond5(Math.max(0.2, 1 - 0.6 * d('technique'))),
+    vitesse: rond5(vers(A_ZERO.vitesse, 'vitesse', pic) + forme),
+    boost: rond5(vers(A_ZERO.boost, 'force')),
+    drag: rond5(vers(A_ZERO.drag, 'endurance')),
+    chute: rond5(vers(A_ZERO.chute, 'technique')),
   };
 }
 function rond5(v: number) { return Math.round(v * 1e5) / 1e5; }

@@ -2,8 +2,8 @@
 //
 // Ce qui compte et qui pourrait casser sans qu'on le voie :
 //   1. une seance rend selon sa qualite, et moins quand la qualite est haute ;
-//   2. les reglages de course restent pres de 1 (la frequence des appuis
-//      doit garder la main) ;
+//   2. la vitesse suit les stats : 12"50 a zero, le jeu principal a 100 % (la
+//      frequence des appuis garde la main) ;
 //   3. la famille modeste paie ses deplacements, l'aisee non ;
 //   4. le podium ET les stats qualifient, le reste retente le meme niveau ;
 //   5. l'histoire ne boucle pas (refuser les coachs ne les rappelle qu'apres
@@ -46,7 +46,7 @@ titre('les seances');
   const haut = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); haut.stats.vitesse = 90;
   ok('plus la qualite est haute, moins on y gagne', R.gainDeSeance(haut, 'lundi', 1).vitesse < bon);
   const r = R.faireLaSeance(a, 'lundi', 1, toujours(0.99));
-  ok('la seance s\'applique', r && a.stats.vitesse > 28 && a.faites.includes('lundi'));
+  ok('la seance s\'applique', r && a.stats.vitesse > 0 && a.faites.includes('lundi'));
   ok('pas deux fois la meme seance', R.faireLaSeance(a, 'lundi', 1, toujours(0.99)) === null);
   a.fatigue = 96;
   const b = R.faireLaSeance(a, 'mercredi', 1, toujours(0));
@@ -55,7 +55,7 @@ titre('les seances');
   R.finirLaSemaine(a); R.finirLaSemaine(a);
   ok('deux semaines plus tard, gueri', a.blessure === 0 && a.blessureType === null);
   const s = R.nouvelAthlete('T', 'aisee', 'specialiste', '100');
-  const p = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); p.evenement = null; p.stats.vitesse = 35.5;
+  const p = R.nouvelAthlete('T', 'aisee', 'polyvalent', null); p.evenement = null; p.stats.vitesse = R.COMPETITIONS[0].plafond - 0.5;
   R.faireLaSeance(p, 'lundi', 1, toujours(0.99));
   ok('pas au-dela du plafond du niveau', p.stats.vitesse === R.COMPETITIONS[0].plafond);
   p.niveau = 1; p.faites = [];
@@ -74,7 +74,7 @@ titre('la course');
   for (const k of R.STATS) a.stats[k] = 100;
   a.materiel = ['pointes3', 'tenue', 'starting'];
   const haut = R.reglages(a, 0);
-  ok('vitesse entre 0,94 et 1,07', bas.vitesse >= 0.94 && haut.vitesse <= 1.07, `${bas.vitesse} → ${haut.vitesse}`);
+  ok('vitesse de A_ZERO a 1 (le jeu principal)', bas.vitesse === R.A_ZERO.vitesse && haut.vitesse === 1, `${bas.vitesse} → ${haut.vitesse}`);
   ok('la poussee monte avec la force', haut.boost > bas.boost);
   ok('l\'endurance freine moins', haut.drag < bas.drag);
   ok('la technique fait moins tomber', haut.chute < bas.chute);
@@ -369,10 +369,10 @@ titre('le calage sur le direct, a partir de la France');
   ok('un vrai championnat ne se court qu\'une fois', R.jourCale(a, rdv, 2_000_000).date === null);
 }
 
-titre('les stats pesent en carriere');
+titre('la vitesse suit les stats (carriere)');
 {
-  // L'auteur, 26/10 : en carriere, les stats pesent franchement sur le chrono (ces courses ne
-  // vont jamais au classement du jeu). La frequence des appuis doit pourtant garder la main.
+  // L'auteur, 26/10 : stats a zero, l'athlete court en 12"50 ; 100 % des stats, c'est le
+  // coureur du jeu principal, que seule la frequence des appuis fait aller plus vite.
   await import('../src/game/sprinter-core.js');
   const { RACES, Track, Runner } = globalThis.SprinterCore;
   const chrono = (cle, f, rj) => {
@@ -387,14 +387,19 @@ titre('les stats pesent en carriere');
     return p.finishTime ?? t;
   };
   const a = R.nouvelAthlete('T', 'modeste', 'specialiste', '100');
-  const ecartA = (v, f = 9) => { for (const k of R.STATS) a.stats[k] = v; return chrono('100', f, R.reglages(a, 0)) - chrono('100', f, null); };
-  const t = Object.fromEntries([25, 36, 45, 50, 60].map(v => [v, ecartA(v)]));
-  console.log('      100 m a 9 appuis/s, ecart au coureur neutre :', Object.entries(t).map(([v, e]) => `${v} → ${e >= 0 ? '+' : ''}${e.toFixed(2)} s`).join(' · '));
-  ok('le debutant (25) perd franchement', t[25] > 0.5, t[25].toFixed(2));
-  ok('le sprinteur au plafond mondial (60) gagne vraiment', t[60] < -0.12, t[60].toFixed(2));
-  ok('chaque point de stat compte (25 < 36 < 45 < 50 < 60)', t[25] > t[36] && t[36] > t[45] && t[45] > t[50] && t[50] > t[60]);
-  // les appuis gardent la main : un debutant qui tape vite bat un athlete au plafond qui tape lentement
-  ok('la cadence garde la main', ecartA(25, 12) + chrono('100', 12, null) < ecartA(60, 7) + chrono('100', 7, null));
+  ok('les stats partent de zero', R.STATS.every(k => a.stats[k] === 0));
+  const a100 = v => { for (const k of R.STATS) a.stats[k] = v; return R.reglages(a, 0); };
+  const t = Object.fromEntries([0, 30, 60, 100].map(v => [v, chrono('100', 10, a100(v))]));
+  console.log('      100 m a 10 appuis/s :', Object.entries(t).map(([v, c]) => `${v} % → ${c.toFixed(2)}`).join(' · '), `· jeu principal ${chrono('100', 10, null).toFixed(2)}`);
+  ok('a zero : 12"50 sans forcer (100 m, 10 appuis/s)', Math.abs(t[0] - 12.5) < 0.2, t[0].toFixed(2));
+  const r = a100(100);
+  ok('a 100 % : exactement le coureur du jeu principal', r.vitesse === 1 && r.boost === 1 && r.drag === 1 && r.chute === 1);
+  ok('chaque stat fait gagner du temps', t[0] > t[30] && t[30] > t[60] && t[60] > t[100]);
+  a.materiel = ['pointes3', 'tenue', 'starting']; a.objectif = 'monde'; a.assiduite = { proposees: 12, faites: 12 };
+  const m = R.reglages(a, R.NIVEAU_OBJECTIF.monde);
+  ok('ni le materiel ni le pic de forme ne depassent le jeu principal', m.vitesse <= 1 && m.boost <= 1 && m.drag >= 1 && m.chute >= 1);
+  a.materiel = []; a.objectif = null;
+  ok('la frequence des appuis garde la main', chrono('100', 14, a100(0)) < chrono('100', 8, a100(0)));
 }
 
 titre('les tours : series, demies, finale (format du direct)');
