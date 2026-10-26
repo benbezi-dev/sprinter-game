@@ -18,6 +18,8 @@
 // z en haut. Les virages tournent autour de (0, -RS) et (-S, -RS).
 
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { SALLE, DROITE } from './piste-salle.js';
 
 export const RS = SALLE.rayon;                       // la corde (17,20 m)
@@ -63,8 +65,8 @@ export function calageSalle(T: any): { sx: number; x0: number; y0: number } {
   return { sx: 1, x0: -55, y0: -RS - (NC_DROITE / 2) * CW_DROITE };
 }
 export const estEnSalle = (T: any, race: any) => !!(T && (T.salle || (race && race.salleDroite)));
-/** Le survol de presentation : sous le toit, autour du plateau. */
-export const SURVOL_SALLE = { cx: -S / 2, cy: -RS, rx: 34, ry: 18, z: 9 };
+/** Le survol de presentation : dehors, autour du batiment (l'exterieur Tripo), puis la plongee vers le depart. */
+export const SURVOL_SALLE = { cx: -S / 2, cy: -RS, rx: 105, ry: 78, z: 40 };
 
 /* ------------------------------------------------------------------ les matieres */
 
@@ -195,14 +197,18 @@ function murAnneau(r: number, z0: (f: number) => number, z1: (f: number) => numb
   return g;
 }
 
-export type ContexteSalle = { stade: THREE.Group; renderer: THREE.WebGLRenderer | null };
+/** Les sieges de la coursive, pour y asseoir le public (placesDuPublic). */
+const sieges3: { x: number; y: number; z: number; face: number }[] = [];
+export type ContexteSalle = { stade: THREE.Group; renderer: THREE.WebGLRenderer | null; base: string };
 
 /**
  * Construire la salle dans `stade`. Rend l'animation de la salle (rien a animer pour
  * l'instant) ; course-3d.ts regle lui-meme le ciel, la brume et les lumieres d'apres SALLE_LUMIERE.
  */
 export function construireSalle(ctx: ContexteSalle) {
-  const g = ctx.stade;
+  sieges3.length = 0;
+  // tout l'interieur dans un groupe : on le cache quand la camera survole le batiment, dehors
+  const g = new THREE.Group(); ctx.stade.add(g);
   const ajouter = (geo: THREE.BufferGeometry, mat: THREE.Material, ombre = true) => {
     const m = new THREE.Mesh(geo, mat); m.receiveShadow = ombre; g.add(m); return m;
   };
@@ -284,6 +290,51 @@ export function construireSalle(ctx: ContexteSalle) {
   ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE, () => H_COURSIVE + 1.05), verre, false);
   const lisseRail = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.4, metalness: 0.7 });
   ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE + 1.02, () => H_COURSIVE + 1.1), lisseRail, false);
+  // LES GRADINS DU HAUT (« les gradins du dessus manquent cruellement de details », l'auteur, 26/10) :
+  // sur place, la coursive porte deux rangs de sieges bleus derriere sa balustrade de verre a
+  // poteaux d'acier ; le second rang monte d'une marche. Tout est instancie.
+  {
+    const Mx = new THREE.Matrix4(), q = new THREE.Quaternion(), un = new THREE.Vector3(1, 1, 1), Z = new THREE.Vector3(0, 0, 1);
+    const poser = (lot: THREE.InstancedMesh, i: number, x: number, y: number, z: number, cap: number, sx = 1, sy = 1, sz = 1) => {
+      q.setFromAxisAngle(Z, cap); Mx.compose(new THREE.Vector3(x, y, z), q, un.set(sx, sy, sz)); lot.setMatrixAt(i, Mx);
+    };
+    const a = tour(R_BOIS + 0.05);
+    // les poteaux de la balustrade, tous les 1,5 m
+    const poteaux = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.06, 1.1), lisseRail, 400);
+    let np = 0, reste = 0;
+    for (let i = 1; i < a.length && np < 400; i++) {
+      reste += Math.hypot(a[i].x - a[i - 1].x, a[i].y - a[i - 1].y);
+      if (reste < 1.5) continue;
+      reste = 0; poser(poteaux, np++, a[i].x, a[i].y, H_COURSIVE + 0.55, 0);
+    }
+    poteaux.count = np; g.add(poteaux);
+    // la marche du second rang, en bois clair comme le reste de la coursive
+    const marcheHaute = lamesDeBois([150, 120, 96], false, 41); marcheHaute.repeat.set(1 / 1.2, 1);
+    ajouter(bandeAnneau(R_BOIS + 1.45, R_BOIS + 2.3, H_COURSIVE + 0.32), new THREE.MeshStandardMaterial({ map: marcheHaute, roughness: 0.8 }));
+    ajouter(murAnneau(R_BOIS + 1.45, () => H_COURSIVE, () => H_COURSIVE + 0.32), new THREE.MeshStandardMaterial({ color: 0x8a8d92, roughness: 0.9, side: THREE.DoubleSide }));
+    // les sieges : une coque bleue (assise + dossier), deux rangs, tous les 0,5 m
+    const assise = new THREE.BoxGeometry(0.44, 0.42, 0.06), dossier = new THREE.BoxGeometry(0.44, 0.06, 0.4);
+    const bleu = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.10, 0.36, 0.78, THREE.SRGBColorSpace), roughness: 0.5 });
+    const lotA = new THREE.InstancedMesh(assise, bleu, 1400), lotD = new THREE.InstancedMesh(dossier, bleu, 1400);
+    let ns = 0;
+    for (const [r, z] of [[R_BOIS + 0.95, H_COURSIVE + 0.45], [R_BOIS + 1.85, H_COURSIVE + 0.77]] as const) {
+      const b = tour(r);
+      let l = 0;
+      for (let i = 1; i < b.length && ns < 1400; i++) {
+        const dx = b[i].x - b[i - 1].x, dy = b[i].y - b[i - 1].y;
+        l += Math.hypot(dx, dy);
+        if (l < 0.5) continue;
+        l = 0;
+        const cap = Math.atan2(dy, dx);                       // le long du tour ; la piste a droite
+        const ox = Math.sin(cap) * 0.2, oy = -Math.cos(cap) * 0.2;   // le dossier, cote exterieur
+        poser(lotA, ns, b[i].x, b[i].y, z, cap);
+        poser(lotD, ns, b[i].x - ox, b[i].y - oy, z + 0.2, cap);
+        sieges3.push({ x: b[i].x, y: b[i].y, z: z - 0.4, face: cap - Math.PI / 2 });
+        ns++;
+      }
+    }
+    lotA.count = ns; lotD.count = ns; g.add(lotA, lotD);
+  }
 
   // LA TRIBUNE BLEUE, le long de la ligne d'arrivee : des gradins entre le muret et la coursive
   const marche = new THREE.MeshStandardMaterial({ color: 0xb9bcc2, roughness: 0.85 });
@@ -381,11 +432,69 @@ export function construireSalle(ctx: ContexteSalle) {
   // un grand drapeau bleu ciel sous le toit, comme sur place
   { const m = ajouter(new THREE.PlaneGeometry(2.2, 3.4), matBand, false); m.position.set(-S / 2, Y1 - 0.6, H_TOIT - 4); m.rotation.x = Math.PI / 2; }
 
+  // L'EXTERIEUR (Tripo, d'apres la vue aerienne du ministere des Sports ; tools/blender/salle/exterieur_tripo.py) :
+  // le batiment vu de dehors, au seul survol d'avant-course — il cacherait la piste a tout autre plan
+  const dehors = new THREE.Group(); dehors.visible = false; dehors.position.set(-S / 2, -RS, 0); ctx.stade.add(dehors);
+  // autour du batiment : la pelouse du parc des sports et le parvis
+  { const p = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.36, 0.52, 0.27, THREE.SRGBColorSpace), roughness: 1 }));
+    p.position.z = -0.05; dehors.add(p);
+    const v = new THREE.Mesh(new THREE.PlaneGeometry(L + 16, 2 * LARGE + 16), new THREE.MeshStandardMaterial({ color: 0xb8b4ac, roughness: 0.95 }));
+    v.position.z = -0.02; dehors.add(v); }
+  const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+  chargeur.load(ctx.base + 'modeles/salle/exterieur.glb', gl => {
+    // le bardage est d'aluminium argent : la texture Tripo, prise sur une photo au soleil couchant, tire au beige
+    gl.scene.traverse((o: any) => { if (o.isMesh) { o.receiveShadow = false; o.castShadow = false; if (o.material?.color) o.material.color.setRGB(0.86, 0.9, 0.96); } });
+    dehors.add(gl.scene);
+  }, undefined, () => { /* sans exterieur : le survol montre l'interieur */ });
   return {
+    /** L'interieur (la foule s'y range aussi : cachee avec lui quand on survole dehors). */
+    interieur: g,
     animer: (_t: number) => { /* rien ne bouge encore */ },
-    /** La charpente et les plafonniers se cachent quand la camera passe au-dessus du toit (le plan venu du 2D). */
-    camera: (z: number) => { toit.visible = z < H_TOIT - 0.3; },
+    /**
+     * Ou est la camera (repere du stade) : la charpente se cache au-dessus du toit (le plan venu
+     * du 2D) ; l'exterieur ne se montre qu'au survol, la camera hors de la halle.
+     */
+    camera: (x: number, y: number, z: number, survol: boolean) => {
+      toit.visible = z < H_TOIT - 0.3;
+      const dedans = x > X0 - 0.5 && x < X1 + 0.5 && y > Y0 - 0.5 && y < Y1 + 0.5 && z < H_TOIT + 1.5;
+      dehors.visible = survol && !dedans;
+      g.visible = !dehors.visible;
+    },
   };
+}
+
+/**
+ * LE PUBLIC DE LA SALLE : assis dans la tribune bleue (face a la piste), debout le long de la
+ * lisse vitree de la coursive (tourne vers l'anneau). Comme au stade, il se remplit par le bas
+ * et selon l'affluence (fouleDe) ; la coursive, elle, se garnit par endroits.
+ */
+export function placesDuPublic(affluence: number, hasard: () => number): { x: number; y: number; z: number; face: number; debout: boolean }[] {
+  const places: { x: number; y: number; z: number; face: number; debout: boolean }[] = [];
+  const RANGS = 6, PROF = (R_BOIS - R_MUR - 0.2) / RANGS, MONTE = (H_COURSIVE - 0.9) / RANGS;
+  for (let i = 0; i < RANGS; i++) {
+    const y = -RS + R_MUR + 0.2 + (i + 0.5) * PROF, z = 0.9 + (i + 1) * MONTE;
+    const occupe = 0.95 * Math.min(1, Math.max(0.05, affluence * 1.6 - (i / RANGS) * 1.6 * (1 - affluence)));
+    for (let x = -S + 3; x < -3; x += 0.5) if (hasard() < occupe) places.push({ x, y: y + 0.1, z, face: -Math.PI / 2, debout: false });
+  }
+  // les sieges de la coursive (construireSalle les a poses) : assis, la piste en face
+  for (const p of sieges3) if (hasard() < 0.08 + 0.55 * affluence) places.push({ x: p.x, y: p.y, z: p.z, face: p.face, debout: false });
+  // la coursive : tous les 0,7 m le long de la lisse, plus ou moins garnie
+  const a = tour(R_BOIS + 0.55);
+  let reste = 0;
+  for (let i = 1; i < a.length; i++) {
+    const dx = a[i].x - a[i - 1].x, dy = a[i].y - a[i - 1].y, l = Math.hypot(dx, dy);
+    reste += l;
+    if (reste < 0.7) continue;
+    reste = 0;
+    // pas au-dessus de la tribune (elle a deja son monde), et un peu plus dans les virages
+    const p = a[i];
+    if (p.y > -RS && p.x > -S && p.x < 0) continue;
+    if (hasard() > 0.05 + 0.2 * affluence) continue;
+    // tourne vers l'interieur : la normale au tour (sens horaire : l'interieur a droite)
+    const face = Math.atan2(-dx, dy);
+    places.push({ x: p.x + (hasard() - 0.5) * 0.3, y: p.y, z: H_COURSIVE, face, debout: true });
+  }
+  return places;
 }
 
 /** Les lumieres de la salle : un jour d'hiver par les vitres, les plafonniers, aucune ombre dure. */

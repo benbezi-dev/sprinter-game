@@ -39,7 +39,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
-import { construireSalle, zSol, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE } from './salle-3d';
+import { construireSalle, zSol, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -651,7 +651,7 @@ const DROITE0_100 = -12, DROITE1 = 100;       // la ligne droite, de la sortie d
 let sx = 1, x0 = 0, y0 = 0;
 // LE STADE COUVERT DE VAL-DE-REUIL (salle-3d.ts) : son anneau releve et sa ligne droite centrale
 let salleActive = false;
-let cameraSalle: ((z: number) => void) | null = null;
+let cameraSalle: ((x: number, y: number, z: number, survol: boolean) => void) | null = null;
 function caler(T: any) {
   salleActive = estEnSalle(T, (globalThis as any).SprinterApp?.G?.race);
   if (salleActive) { ({ sx, x0, y0 } = calageSalle(T)); return; }
@@ -708,6 +708,26 @@ const _bx = new THREE.Matrix4(), _tr = new THREE.Matrix4(), _sc = new THREE.Matr
 /** Une boite du repere local `M` : centre (x, y, z), cotes (lx, ly, lz). */
 function boite(lot: Lot, M: THREE.Matrix4, x: number, y: number, z: number, lx: number, ly: number, lz: number, c: THREE.Color | null = null) {
   lot.poser(_bx.copy(M).multiply(_tr.makeTranslation(x, y, z)).multiply(_sc.makeScale(lx, ly, lz)), c);
+}
+
+/** Les couleurs du public : peaux, maillots, cheveux, pantalons (le stade et la salle). */
+function paletteDuPublic(th: any, luxe: boolean, cyber: boolean) {
+  const couleur = (v: number[]) => new THREE.Color().setRGB(v[0] / 255, v[1] / 255, v[2] / 255, THREE.SRGBColorSpace);
+  const lo = th.crowdLo || [43, 38, 56], hi = th.crowdHi || [252, 242, 230];
+  // au luxe, le public est en tenue de soiree : surtout du noir, un peu de creme, d'or, de bordeaux
+  const maillots: number[][] = cyber
+    ? [[10, 10, 16], [18, 16, 26], [26, 20, 40], [10, 40, 50], [40, 10, 36], [10, 10, 16], [0, 200, 230], [230, 40, 190]]
+    : luxe
+    ? [[14, 13, 15], [20, 19, 22], [28, 25, 24], [38, 32, 28], [14, 13, 15], [201, 164, 92], [217, 207, 189], [74, 20, 24]]
+    : [...(th.panels || [[231, 60, 45], [28, 106, 202], [255, 203, 55], [50, 162, 121]]), lo, hi, [240, 240, 240]];
+  // HUIT TEINTES DE PEAU, LA MOITIE NOIRES ET BRUNES (« il n'y a pas de personnes noires ? »,
+  // l'auteur, 22/10) : a deux sur cinq, sur des visages de quelques pixels, elles ne se voyaient pas
+  const peaux = [[44, 28, 20], [66, 42, 30], [92, 58, 38], [120, 76, 50], [160, 108, 70], [196, 142, 98],
+    [224, 186, 142], [246, 220, 190]].map(couleur);
+  const coulMaillots = maillots.map(couleur);
+  const coulCheveux = [[28, 20, 16], [58, 38, 24], [104, 70, 40], [196, 160, 98], [140, 136, 132]].map(couleur);
+  const coulPantalons = [[30, 38, 68], [24, 24, 28], [58, 84, 128], [196, 178, 142], [96, 98, 104]].map(couleur);
+  return { peaux, coulMaillots, coulCheveux, coulPantalons };
 }
 
 function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle: string | null, etape: number, affluence = 1) {
@@ -842,8 +862,20 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     soleil.color.set(SALLE_LUMIERE.soleilCouleur); soleil.intensity = SALLE_LUMIERE.soleil;
     soleilDecal.set(-6, 10, 40);
     uFoule.uLum.value = 1; uLisere.value = 0;
-    const salle = construireSalle({ stade, renderer });
+    const base = (import.meta as any).env?.BASE_URL || '/';
+    const salle = construireSalle({ stade, renderer, base });
     pubAnim.push(salle.animer); cameraSalle = salle.camera;
+    // le public de la salle : les memes cartes que le stade (LE PUBLIC, EN CARTES)
+    if (Q.get('foule') !== '0') {
+      const pal = paletteDuPublic(th, false, false), cartes: number[] = [];
+      const choix = (t: THREE.Color[]) => t[(hasard() * t.length) | 0];
+      for (const p of placesDuPublic(affluence, hasard)) {
+        const u = hasard(), geste = p.debout ? 3 : u < 0.6 ? 0 : u < 0.85 ? 1 : 2;
+        cartes.push(p.x, p.y, p.z, p.face, ((hasard() * P_SIL) | 0) * P_GESTES + geste, hasard());
+        for (const c of [choix(pal.peaux), choix(pal.coulMaillots), choix(pal.coulCheveux), choix(pal.coulPantalons)]) cartes.push(c.r, c.g, c.b);
+      }
+      if (cartes.length) { const f = laFoule(cartes); f.userData.sansReflet = true; salle.interieur.add(f); }
+    }
     return;
   }
   if (espace) espaceAutour(th, hasard);
@@ -1149,20 +1181,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const lBloc = new Lot(cube, new THREE.MeshLambertMaterial({ color: 0x8b9099 }));
   const lTronc = new Lot(new THREE.CylinderGeometry(0.22, 0.3, 1, 7), new THREE.MeshLambertMaterial({ color: 0x5b4030 }));
   const lFeuille = new Lot(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({ color: c3(th.feuillage, [38, 111, 31]) }), true);
-  const lo = th.crowdLo || [43, 38, 56], hi = th.crowdHi || [252, 242, 230];
-  // au luxe, le public est en tenue de soiree : surtout du noir, un peu de creme, d'or, de bordeaux
-  const maillots: number[][] = cyber
-    ? [[10, 10, 16], [18, 16, 26], [26, 20, 40], [10, 40, 50], [40, 10, 36], [10, 10, 16], [0, 200, 230], [230, 40, 190]]
-    : luxe
-    ? [[14, 13, 15], [20, 19, 22], [28, 25, 24], [38, 32, 28], [14, 13, 15], [201, 164, 92], [217, 207, 189], [74, 20, 24]]
-    : [...(th.panels || [[231, 60, 45], [28, 106, 202], [255, 203, 55], [50, 162, 121]]), lo, hi, [240, 240, 240]];
-  // HUIT TEINTES DE PEAU, LA MOITIE NOIRES ET BRUNES (« il n'y a pas de personnes noires ? »,
-  // l'auteur, 22/10) : a deux sur cinq, sur des visages de quelques pixels, elles ne se voyaient pas
-  const peaux = [[44, 28, 20], [66, 42, 30], [92, 58, 38], [120, 76, 50], [160, 108, 70], [196, 142, 98],
-    [224, 186, 142], [246, 220, 190]].map(couleur);
-  const coulMaillots = maillots.map(couleur);
-  const coulCheveux = [[28, 20, 16], [58, 38, 24], [104, 70, 40], [196, 160, 98], [140, 136, 132]].map(couleur);
-  const coulPantalons = [[30, 38, 68], [24, 24, 28], [58, 84, 128], [196, 178, 142], [96, 98, 104]].map(couleur);
+  const { peaux, coulMaillots, coulCheveux, coulPantalons } = paletteDuPublic(th, luxe, cyber);
   const cartes: number[] = [];
   const _p = new THREE.Vector3(), _f = new THREE.Vector3();
   const choix = (t: THREE.Color[]) => t[(hasard() * t.length) | 0];
@@ -1426,7 +1445,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // au Champ-de-Mars, de grands pavillons tricolores hisses tous les seize metres
     ? [flotter(new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, map: texteCanvas((c, w, h) => {
         [BLEU, BLANC, ROUGE].forEach((v, i) => { c.fillStyle = css(v); c.fillRect(i * w / 3, 0, w / 3, h); }); }, 96, 64) }), 0.3)]
-    : maillots.slice(0, 4).map(v => flotter(new THREE.MeshLambertMaterial({ color: couleur(v), side: THREE.DoubleSide })));
+    : coulMaillots.slice(0, 4).map(c => flotter(new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide })));
   for (let i = 0, x = 4; !plage && !palais && x < LS; x += cdm ? 16 : 9, i++) {
     boite(lMetal, Mp, x, yFond + 0.1, z2 + 5.4, 0.08, 0.08, 4);
     // une toile qui flotte (drapeau-3d.ts), le mat a gauche
@@ -2479,7 +2498,8 @@ export function rendre(App: any, dt: number) {
       camPret = true;
     }
     camera.position.copy(camPos);
-    if (salleActive && cameraSalle) cameraSalle(camera.position.z);
+    // (y retourne : voir monde) — l'exterieur ne se montre qu'au survol, camera dehors
+    if (salleActive && cameraSalle) cameraSalle(camera.position.x, -camera.position.y, camera.position.z, survol);
     // LA CAMERA VIT (l'auteur, 22/10 : « cinematique et dynamique ») : au coup de
     // pistolet elle tremble un instant, et son champ s'ouvre avec la vitesse.
     if (G.state === 'race' && etatVu !== 'race') secousse = 0.28;
