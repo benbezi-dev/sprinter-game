@@ -1,11 +1,14 @@
 // La piste couverte : l'anneau du moteur boucle, chaque couloir court sa distance.
 import '../src/game/sprinter-core.js';
-import { COURSES_EN_SALLE, DROITE } from '../src/game/piste-salle.js';
+import { COURSES_EN_SALLE, DROITE, SALLE } from '../src/game/piste-salle.js';
 const { Track } = globalThis.SprinterCore;
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
 
-ok('ligne droite de 45,34 m', Math.abs(DROITE - 45.34) < 0.01, DROITE);
+ok('ligne droite de 35 m', Math.abs(DROITE - 35) < 1e-9, DROITE);
+// (les virages allonges : 65 m au couloir 1, a sa ligne de mesure ; l'auteur, 26/10)
+ok('virage de 65 m au couloir 1', Math.abs(SALLE.longueurVirage(SALLE.mes1) - 65) < 0.01, SALLE.longueurVirage(SALLE.mes1));
+ok('60 m sur 8 couloirs', COURSES_EN_SALLE['60'].couloirs === 8 && new Track(COURSES_EN_SALLE['60']).lanes === 8);
 for (const cle of ['200s', '400s']) {
   const T = new Track(COURSES_EN_SALLE[cle]);
   ok(`${cle} : total ${T.total} m`, T.total === (cle === '200s' ? 200 : 400));
