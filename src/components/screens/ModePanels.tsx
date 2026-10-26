@@ -12,7 +12,7 @@ import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
 import { Repliable } from './Repliable';
-import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, EPREUVES_EN_SALLE } from '@/game/jeux';
 import { stadeDebloque, VEDETTES, defiPossible } from '@/game/vedettes';
 import { mot } from '@/game/vedettes-mots';
 
@@ -23,10 +23,12 @@ export function OneShotPanel() {
   const { N, LEVELS } = SprinterApp;
   // Les epreuves du jeu courant : le one shot de Hurdlers enchaine des haies.
   const jeu = useJeu();
-  const RACE_KEYS = epreuvesDuJeu(jeu);
-  const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
-  useEffect(() => { setPicked([epreuvesDuJeu(jeu)[0]]); }, [jeu]);
   const [level, setLevel] = useState(4);
+  // AU STADE COUVERT (la salle de Val-de-Reuil), ses epreuves seulement : 60 m, 200 m et 400 m en salle
+  const enSalle = !!(LEVELS[level] as any)?.salle;
+  const RACE_KEYS = (enSalle ? EPREUVES_EN_SALLE : epreuvesDuJeu(jeu)) as readonly RaceKey[];
+  const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
+  useEffect(() => { setPicked([RACE_KEYS[0]]); }, [jeu, enSalle]);
 
   const toggle = (k: RaceKey) => {
     setPicked(p => (p.includes(k) ? p.filter(x => x !== k) : [...p, k]));

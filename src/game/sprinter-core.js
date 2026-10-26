@@ -774,6 +774,22 @@
       names: ['Louis Beaumont', 'Adele Versant', 'Victor Lisle', 'Margaux Ormel',
               'Gaspard Roy', 'Clemence Doré', 'Hugo Fontaine'] },
 
+    // LE STADE COUVERT JESSE OWENS, VAL-DE-REUIL (26/10). La piste couverte (piste-salle.js,
+    // salle-3d.ts) : on n'y court que ses epreuves, 60 m, 200 m et 400 m en salle — le menu ne
+    // propose qu'elles quand ce stade est choisi (ModePanels). « Le stade n'apparait pas, la
+    // distance 60 m non plus » (l'auteur, 26/10) : il manquait ici. Le plateau est celui de
+    // l'avant-derniere etape (les France U18-U20 s'y courent).
+    { cle: 'salle', name: 'Stade couvert Jesse Owens', theme: 'salle',
+      pool: 'sprint',
+      horsSerie: true,
+      brancheTest: true,
+      salle: true,
+      noms: ['Stade couvert Jesse Owens', 'Jesse Owens Indoor Stadium'],
+      foule: 0.8,
+      plateau: { '60': [6.50, 6.65], '200s': [19.54, 20.09], '400s': [43.83, 44.15] },
+      names: ['Hugo Lemaire', 'Yanis Bertin', 'Lucas Ferrand', 'Noam Diallo',
+              'Theo Marchal', 'Ilan Rousseau', 'Sacha Morel'] },
+
   ];
 
   // ---------------------------------------------------------------------
