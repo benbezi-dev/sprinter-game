@@ -27,7 +27,10 @@ const S = DROITE;                                     // la ligne droite de l'an
 const NC = SALLE.couloirs, CW = SALLE.couloir;        // six couloirs de 0,90 m
 const W = NC * CW;
 const PENTE = Math.tan(SALLE.inclinaison);            // le relevement des virages (15°)
-const TRANS = 10;                                     // le relevement s'installe sur dix metres de ligne droite
+// LE RELEVEMENT S'INSTALLE EN DOUCEUR (« la montee dans le virage manque de douceur, c'est trop
+// sec », l'auteur, 26/10) : il commence 20 m avant le virage, y arrive a 55 %, et ne devient plein
+// qu'au premier quart du virage ; la meme chose en sortie. Courbes a derivee nulle aux deux bouts.
+const TRANS = 20, PART_DROITE = 0.55, ENTREE = Math.PI / 4;
 const R_MUR = RS + W + 0.35;                          // le muret blanc au bord de l'anneau
 const R_BOIS = R_MUR + 2.2;                           // le bandeau de bois, sous la coursive
 const H_COURSIVE = 3.4;
@@ -35,12 +38,17 @@ const LONG = 29, LARGE = 29;                          // la halle : 29 m au-dela
 const H_TOIT = 12.5;
 const CW_DROITE = 1.22, NC_DROITE = 8;                // la ligne droite centrale
 
-const lisse = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+const lisse = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * t * (t * (t * 6 - 15) + 10); };
 
-/** Le relevement (0 a 1) en un point de l'axe x : plein dans les virages, nul au milieu des lignes droites. */
-function releve(x: number) {
-  if (x >= 0 || x <= -S) return 1;
-  return Math.max(1 - lisse(0, TRANS, -x), 1 - lisse(0, TRANS, x + S));
+/** Le relevement (0 a 1) en un point du stade : nul au milieu des lignes droites, plein au coeur des virages. */
+function releve(x: number, y: number) {
+  if (x > 0 || x < -S) {
+    // l'angle tourne depuis l'entree du virage (0 a pi), et la distance a son bout le plus proche
+    const c = x > 0 ? 0 : -S, phi = Math.atan2(Math.abs(x - c), y + RS), e = Math.min(phi, Math.PI - phi);
+    return PART_DROITE + (1 - PART_DROITE) * lisse(0, ENTREE, e);
+  }
+  const d = Math.min(-x, x + S);           // la distance au virage le plus proche, sur la ligne droite
+  return PART_DROITE * (1 - lisse(0, TRANS, d));
 }
 /** La distance au centre de virage le plus proche (dans un virage), ou a l'axe (en ligne droite). */
 function rayonEn(x: number, y: number) {
@@ -52,7 +60,7 @@ function rayonEn(x: number, y: number) {
 export function zSol(x: number, y: number) {
   const r = rayonEn(x, y);
   if (r <= RS) return 0;
-  return Math.min(r, R_MUR) - RS > 0 ? (Math.min(r, R_MUR) - RS) * PENTE * releve(x) : 0;
+  return Math.min(r, R_MUR) - RS > 0 ? (Math.min(r, R_MUR) - RS) * PENTE * releve(x, y) : 0;
 }
 
 /**
@@ -151,10 +159,11 @@ function mur(rgb: number[], graine: number) {
 function tour(r: number): { x: number; y: number; f: number }[] {
   const pts: { x: number; y: number; f: number }[] = [];
   const pas = 0.5, seg = 128;
-  for (let x = -S; x < 0; x += pas) pts.push({ x, y: -RS + r, f: releve(x) });          // la ligne d'arrivee, vers +x
-  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; pts.push({ x: r * Math.sin(a), y: -RS + r * Math.cos(a), f: 1 }); }
-  for (let x = 0; x > -S; x -= pas) pts.push({ x, y: -RS - r, f: releve(x) });          // la ligne opposee, vers -x
-  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; pts.push({ x: -S - r * Math.sin(a), y: -RS - r * Math.cos(a), f: 1 }); }
+  const p = (x: number, y: number) => pts.push({ x, y, f: releve(x, y) });
+  for (let x = -S; x < 0; x += pas) p(x, -RS + r);                                          // la ligne d'arrivee, vers +x
+  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; p(r * Math.sin(a), -RS + r * Math.cos(a)); }
+  for (let x = 0; x > -S; x -= pas) p(x, -RS - r);                                          // la ligne opposee, vers -x
+  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; p(-S - r * Math.sin(a), -RS - r * Math.cos(a)); }
   pts.push(pts[0]);
   return pts;
 }
