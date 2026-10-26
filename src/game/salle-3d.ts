@@ -87,6 +87,13 @@ function rayonEn(x: number, y: number) {
   if (x > 0 || x < -S) { const [X, Y] = versVirage(x, y); return RS + SALLE.surVirage(X, Y).d; }
   return Math.abs(y + RS);
 }
+// LA ZONE DE FREINAGE DU 60 M (« le tapis commence en bas de la zone grise ; cette zone permet de
+// freiner, sinon les sprinters se prennent le mur », l'auteur, 26/10) : dans l'axe de la ligne droite
+// centrale, au bout du virage qui suit l'arrivee, pas de muret ; la piste se prolonge, a plat, en
+// gris, jusqu'au tapis.
+const DEMI_FREIN = 5.6;
+const dansFreinage = (p: { x: number; y: number }) => p.x > 0 && Math.abs(p.y + RS) <= DEMI_FREIN;
+const horsFreinage = (p: { x: number; y: number }) => !dansFreinage(p);
 /** Ce point du tour longe-t-il la tribune (la ligne d'arrivee, hors virages) ? */
 const surTribune = (p: { x: number; y: number }) => p.y > -RS && p.x >= -S - 1e-6 && p.x <= 1e-6;
 /**
@@ -249,7 +256,7 @@ const zEn = (p: PointTour) => profil(Math.min(p.r, R_MUR) - RS) * p.f;
  * Une bande de l'anneau entre deux rayons (evases de ev0 et ev1), relevee, a dz au-dessus du
  * revetement — ou a la hauteur zf, si on la donne. Les UV en metres.
  */
-function bandeAnneau(r0: number, r1: number, dz: number, partie = -1, ev0 = 0, ev1 = 0, zf?: (p: PointTour) => number) {
+function bandeAnneau(r0: number, r1: number, dz: number, partie = -1, ev0 = 0, ev1 = 0, zf?: (p: PointTour) => number, garder = (_p: PointTour) => true) {
   const a = tour(r0, partie, ev0), b = tour(r1, partie, ev1);
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   let s = 0;
@@ -258,7 +265,7 @@ function bandeAnneau(r0: number, r1: number, dz: number, partie = -1, ev0 = 0, e
     pos.push(a[i].x, a[i].y, zf ? zf(a[i]) : zEn(a[i]) + dz, b[i].x, b[i].y, zf ? zf(b[i]) : zEn(b[i]) + dz);
     uv.push(s, 0, s, r1 - r0);
     // (le tour tourne dans le sens horaire vu de dessus, l'interieur a droite : cet ordre met les faces vers le haut)
-    if (i) { const k = i * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
+    if (i && garder(a[i - 1]) && garder(a[i])) { const k = i * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -267,7 +274,7 @@ function bandeAnneau(r0: number, r1: number, dz: number, partie = -1, ev0 = 0, e
   return g;
 }
 /** Un mur qui suit l'anneau au rayon r (evase de ev), de z0 a z1. */
-function murAnneau(r: number, z0: (p: PointTour) => number, z1: (p: PointTour) => number, partie = -1, ev = 0) {
+function murAnneau(r: number, z0: (p: PointTour) => number, z1: (p: PointTour) => number, partie = -1, ev = 0, garder = (_p: PointTour) => true) {
   const a = tour(r, partie, ev);
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   let s = 0;
@@ -276,7 +283,7 @@ function murAnneau(r: number, z0: (p: PointTour) => number, z1: (p: PointTour) =
     const b = z0(a[i]), h = z1(a[i]);
     pos.push(a[i].x, a[i].y, b, a[i].x, a[i].y, h);
     uv.push(s, b, s, h);
-    if (i) { const k = i * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
+    if (i && garder(a[i - 1]) && garder(a[i])) { const k = i * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
@@ -500,9 +507,10 @@ export function construireSalle(ctx: ContexteSalle) {
       const phi = Math.PI * i / 180, g1 = lisse(0, ENTREE, Math.min(phi, Math.PI - phi)), q = SALLE.virage(phi, R_BOIS - RS + EV * g1);
       if (Math.abs(q[1]) <= 5) xMur = Math.min(xMur, q[0]);
     }
-    const xf = xMur - 0.6, hT = 4.5;
+    // (pose sur la zone de freinage, a sa hauteur, jusque sous la coursive)
+    const xf = xMur - 0.6, base = profil(R_MUR - RS), hT = H_COURSIVE - 0.1 - base;
     const marine = new THREE.MeshStandardMaterial({ color: 0x1c2a52, roughness: 0.85 });
-    const corps = ajouter(new THREE.BoxGeometry(0.55, 10, hT), marine); corps.position.set(xf + 0.275, -RS, hT / 2); corps.castShadow = true;
+    const corps = ajouter(new THREE.BoxGeometry(0.55, 10, hT), marine); corps.position.set(xf + 0.275, -RS, base + hT / 2); corps.castShadow = true;
     const toileTapis = new THREE.MeshStandardMaterial({ roughness: 0.85, map: toile(1024, 460, (c, w, h) => {
       c.fillStyle = '#1d5bb0'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#ffffff'; c.textAlign = 'center';
@@ -515,22 +523,26 @@ export function construireSalle(ctx: ContexteSalle) {
     }) });
     const face = ajouter(new THREE.PlaneGeometry(10, hT), toileTapis, false);
     // (face a la piste, vers -x ; retournee comme les fresques du pignon : le monde est en miroir)
-    face.position.set(xf - 0.01, -RS, hT / 2); face.scale.x = -1;
+    face.position.set(xf - 0.01, -RS, base + hT / 2); face.scale.x = -1;
     face.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)));
     // le matelas vertical gris-bleu, a sa gauche
     const m2 = ajouter(new THREE.BoxGeometry(0.6, 1.6, hT * 0.95), new THREE.MeshStandardMaterial({ color: 0x3a4660, roughness: 0.85 }));
-    m2.position.set(xf + 0.2, -RS + 5.9, hT * 0.475); m2.castShadow = true;
+    m2.position.set(xf + 0.2, -RS + 5.9, base + hT * 0.475); m2.castShadow = true;
   }
 
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
   const blanc = new THREE.MeshStandardMaterial({ map: mur(BLANC, 5), roughness: 0.9 });
   // (le haut du muret : le releve au muret plus 0,90 m — les gradins partent de la)
   const hautMur = (p: PointTour) => profil(R_MUR - RS) * p.f + 0.9;
-  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k), double(blanc), 'coque');
-  enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, 0, 0, hautMur), blanc, 'coque');
+  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k, 0, horsFreinage), double(blanc), 'coque');
+  enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, 0, 0, hautMur, horsFreinage), blanc, 'coque');
+  // la zone de freinage : la piste prolongee a plat, en gris, du sixieme couloir jusqu'au tapis
+  const zoneGrise = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.55, 0.56, 0.58, THREE.SRGBColorSpace), roughness: 0.85 });
+  const zFrein = (p: PointTour) => profil(R_MUR - RS) * p.f;
+  ajouter(bandeAnneau(RS + W, R_BOIS, 0.006, 1, 0, EV, p => zFrein(p) + 0.006, dansFreinage), zoneGrise, true, 'sol');
   // (sur le muret des virages, une rambarde d'acier a deux lisses : la photo Wikimedia)
   const acierRambarde = new THREE.MeshStandardMaterial({ color: 0x7a828a, roughness: 0.4, metalness: 0.6 });
-  for (const k of [1, 3]) for (const dz of [0.5, 1.0]) ajouter(murAnneau(R_MUR + 0.08, p => hautMur(p) + dz - 0.04, p => hautMur(p) + dz, k), acierRambarde, false);
+  for (const k of [1, 3]) for (const dz of [0.5, 1.0]) ajouter(murAnneau(R_MUR + 0.08, p => hautMur(p) + dz - 0.04, p => hautMur(p) + dz, k, 0, horsFreinage), acierRambarde, false);
   // SOUS LA COURSIVE, HORS DE LA TRIBUNE (la visite filmee de 2025, images 0199, 0353, 0485, 0661 :
   // « analyse bien la ligne droite opposee », l'auteur, 26/10) : derriere le muret, un passage au
   // sol ; au bord de la coursive, un mur — en bas, les grandes vitres vertes de la salle
