@@ -106,6 +106,8 @@ export type Athlete = {
   retard?: boolean;
   /** Les actions faites aujourd'hui (guide.ts) : remis a zero au reveil. */
   faitAujourdhui?: string[];
+  /** Les nuits dormies en ville cette semaine : le tableau ne les repare pas une seconde fois. */
+  nuits?: number;
   /** La garde-robe (garde-robe.ts) : les tenues possedees, et celle de chaque moment. */
   garde?: import('./garde-robe').GardeRobe;
   /** La semaine du dernier meeting couru : un par dimanche. */
@@ -274,6 +276,13 @@ export type Competition = {
   /** Les chronos du plateau, par epreuve, quand aucun plateau du moteur ne convient. */
   chronos?: Record<string, [number, number]>;
 };
+
+/** La moyenne des quatre qualites. */
+export const moyenneDes = (a: Athlete) => STATS.reduce((s, k) => s + a.stats[k], 0) / STATS.length;
+/** La moyenne qu'il faut pour monter d'un niveau : le plafond du sien, a deux points pres (on l'a « fini »). */
+export const exigePourMonter = (niveau: number) => COMPETITIONS[niveau].plafond - 2;
+/** Les stats sont-elles pretes pour le niveau suivant ? (le podium fait le reste) */
+export const pretPourLaSuite = (a: Athlete) => moyenneDes(a) >= exigePourMonter(a.niveau);
 
 export const COMPETITIONS: Competition[] = [
   { cle: 'scolaire', plateau: 0, deplacement: 0, prime: 0, reputation: 5, ecart: 2, plafond: 36 },
@@ -563,6 +572,14 @@ export function picDeForme(a: Athlete, niveau: number): boolean {
  * trois epreuves et toutes les cadences.
  */
 export const HAUT = 0.009;
+/**
+ * LES STATS PESENT FRANCHEMENT EN CARRIERE (l'auteur, 26/10 : « les stats doivent avoir de
+ * l'importance dans ce mode de jeu », « ca ne s'applique que dans le mode carriere »). Ces
+ * reglages ne servent qu'aux courses de la carriere (carriere.ts, G.reglagesJoueur), dont les
+ * chronos ne vont jamais au classement du jeu : sous 50 on perd, au-dessus on gagne vraiment,
+ * des deux cotes avec la meme pente. HAUT ne reste que pour la mesure du test « hors carriere ».
+ */
+export const POIDS_STATS = 1.6;
 
 /**
  * Les coefficients poses sur le coureur du joueur (G.reglagesJoueur, lu par
@@ -572,16 +589,13 @@ export function reglages(a: Athlete, niveau: number): Reglages {
   const m = bonusMateriel(a);
   const pic = picDeForme(a, niveau) ? 0.1 : 0;
   // L'ecart a 50, de -0,5 a +0,6 ; le pic de forme compte comme 10 points de vitesse.
-  const d = (k: Stat, plus = 0) => {
-    const v = borne(a.stats[k] + m[k], 0, 110) / 100 - 0.5 + plus;
-    return v < 0 ? v : v * HAUT;
-  };
+  const d = (k: Stat, plus = 0) => POIDS_STATS * (borne(a.stats[k] + m[k], 0, 110) / 100 - 0.5 + plus);
   const forme = a.fatigue > 60 ? -0.03 * (a.fatigue - 60) / 40 : 0;
   return {
     vitesse: rond5(1 + 0.05 * d('vitesse', pic) + forme),
     boost: rond5(1 + 0.15 * d('force')),
     drag: rond5(1 - 0.15 * d('endurance')),
-    chute: rond5(1 - 0.6 * d('technique')),
+    chute: rond5(Math.max(0.2, 1 - 0.6 * d('technique'))),
   };
 }
 function rond5(v: number) { return Math.round(v * 1e5) / 1e5; }
@@ -605,6 +619,8 @@ export type Resultat = {
   tour?: Tour;
   suivant?: Tour;
   auTemps?: boolean;
+  /** Sur le podium, mais les stats n'ont pas encore la moyenne du niveau suivant (pretPourLaSuite). */
+  pasPret?: boolean;
   /** Un meeting de club (ne qualifie pour rien) : son nom. */
   meeting?: [string, string];
   /** Blesse pendant la course ? */
@@ -650,11 +666,14 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   const record = chrono !== null && homologue && (rec[epreuve] === undefined || chrono < rec[epreuve]!);
   if (record) rec[epreuve] = Math.round(chrono! * 100) / 100;
   const sommet = niveau === COMPETITIONS.length - 1 && place === 1 && chrono !== null;
-  if (podium && niveau < COMPETITIONS.length - 1) a.niveau += 1;
+  // LE PODIUM ET LES STATS (l'auteur, 26/10 : « au depart les stats sont bridees sur le niveau
+  // scolaire et les stats liberent les niveaux ») : on ne monte que les deux reunis.
+  const enHaut = niveau >= COMPETITIONS.length - 1, pret = pretPourLaSuite(a);
+  if (podium && pret && !enHaut) a.niveau += 1;
   a.prochaine = a.semaine + ecart(a.niveau);
   // Un nouveau cycle commence : l'assiduite se recompte jusqu'a la prochaine.
   a.assiduite = { proposees: 0, faites: 0 };
-  return { niveau, epreuve, place, chrono, qualifie: podium && niveau < COMPETITIONS.length - 1, prime, reputation: rep, sommet, record, vent, homologue };
+  return { niveau, epreuve, place, chrono, qualifie: podium && pret && !enHaut, pasPret: podium && !pret && !enHaut, prime, reputation: rep, sommet, record, vent, homologue };
 }
 
 /**
@@ -745,6 +764,7 @@ export const ARGENT_DE_POCHE = 30;
  * semaine (recit.ts s'en charge, il connait les histoires).
  */
 export function finirLaSemaine(a: Athlete) {
+  a.nuits = 0;
   const recup = a.materiel.reduce((s, id) => s + (piece(id)?.recup || 0), 0);
   a.fatigue = borne(a.fatigue - 45 - recup, 0, 100);
   if (a.origine === 'aisee' && etape(a) !== 'adulte') payer(a, ARGENT_DE_POCHE, 'Argent de poche', 'Pocket money');
@@ -921,6 +941,7 @@ export function dormir(a: Athlete) {
   if (duree < 7 * 60) a.moral = borne(a.moral - 4, 0, 100);
   if (h > REVEIL) { a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
   a.faitAujourdhui = [];
+  a.nuits = (a.nuits || 0) + 1;
   a.heure = REVEIL;
   // le dimanche soir, la semaine tourne ; une competition manquee est un forfait
   if (dimanche) {

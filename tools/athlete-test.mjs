@@ -5,7 +5,7 @@
 //   2. les reglages de course restent pres de 1 (la frequence des appuis
 //      doit garder la main) ;
 //   3. la famille modeste paie ses deplacements, l'aisee non ;
-//   4. le podium qualifie, le reste retente le meme niveau ;
+//   4. le podium ET les stats qualifient, le reste retente le meme niveau ;
 //   5. l'histoire ne boucle pas (refuser les coachs ne les rappelle qu'apres
 //      la course suivante).
 //
@@ -103,8 +103,15 @@ titre('les competitions');
   const a = R.nouvelAthlete('T', 'aisee', 'polyvalent', null);
   a.semaine = 4;
   ok('semaine 4 : jour de competition', R.jourDeCompetition(a));
+  // le podium sans les stats : « qualifie, pas encore pret » (l'auteur, 26/10 : les stats liberent les niveaux)
+  const r0 = R.conclureLaCompetition(a, '100', 1, 12.1);
+  ok('podium sans les stats : on reste', !r0.qualifie && r0.pasPret && a.niveau === 0);
+  a.semaine = 4;
+  for (const k of R.STATS) a.stats[k] = R.exigePourMonter(0);
+  ok('les stats au seuil du niveau', R.pretPourLaSuite(a));
   const r = R.conclureLaCompetition(a, '100', 2, 12.3);
-  ok('le podium qualifie', r.qualifie && a.niveau === 1);
+  ok('le podium et les stats qualifient', r.qualifie && a.niveau === 1);
+  for (const k of R.STATS) a.stats[k] = 99;
   ok('aux departementaux, la suivante dans 2 semaines', a.prochaine === 6);
   const dep = R.COMPETITIONS[1].chronos['100'], reg = [11.2, 12.5];
   ok('les departementaux entre scolaire et regionaux', dep[0] > reg[0] && dep[1] < 15 && dep[1] > reg[1]);
@@ -362,11 +369,10 @@ titre('le calage sur le direct, a partir de la France');
   ok('un vrai championnat ne se court qu\'une fois', R.jourCale(a, rdv, 2_000_000).date === null);
 }
 
-titre('le plafond : un dixieme au plus');
+titre('les stats pesent en carriere');
 {
-  // L'auteur, 25/10 : jamais plus d'un dixieme sur qui ne joue pas a ce mode.
-  // Le pire cas — 110 partout, materiel complet, pic de forme — contre le
-  // coureur neutre, a la cadence de chacun, sur les trois epreuves.
+  // L'auteur, 26/10 : en carriere, les stats pesent franchement sur le chrono (ces courses ne
+  // vont jamais au classement du jeu). La frequence des appuis doit pourtant garder la main.
   await import('../src/game/sprinter-core.js');
   const { RACES, Track, Runner } = globalThis.SprinterCore;
   const chrono = (cle, f, rj) => {
@@ -380,21 +386,15 @@ titre('le plafond : un dixieme au plus');
     }
     return p.finishTime ?? t;
   };
-  const a = R.nouvelAthlete('T', 'aisee', 'specialiste', '100');
-  for (const k of R.STATS) a.stats[k] = 110;
-  a.materiel = ['pointes3', 'tenue', 'starting'];
-  a.objectif = 'monde'; a.assiduite = { proposees: 12, faites: 12 };
-  const rj = R.reglages(a, R.NIVEAU_OBJECTIF.monde);
-  let pire = 0, ou = '';
-  for (const cle of ['100', '200', '400']) for (let f = 5; f <= 16; f += 0.5) {
-    const g = chrono(cle, f, null) - chrono(cle, f, rj);
-    if (g > pire) { pire = g; ou = `${cle} m a ${f}/s`; }
-  }
-  ok('le meilleur athlete gagne au plus 0,10 s', pire <= 0.1, `${pire.toFixed(3)} s (${ou})`);
-  console.log(`      (pire cas : ${pire.toFixed(3)} s, ${ou})`);
-  for (const k of R.STATS) a.stats[k] = 25;
-  a.materiel = []; a.objectif = null;
-  ok('le debutant perd franchement', chrono('100', 8, null) - chrono('100', 8, R.reglages(a, 0)) < -0.3);
+  const a = R.nouvelAthlete('T', 'modeste', 'specialiste', '100');
+  const ecartA = (v, f = 9) => { for (const k of R.STATS) a.stats[k] = v; return chrono('100', f, R.reglages(a, 0)) - chrono('100', f, null); };
+  const t = Object.fromEntries([25, 36, 45, 50, 60].map(v => [v, ecartA(v)]));
+  console.log('      100 m a 9 appuis/s, ecart au coureur neutre :', Object.entries(t).map(([v, e]) => `${v} → ${e >= 0 ? '+' : ''}${e.toFixed(2)} s`).join(' · '));
+  ok('le debutant (25) perd franchement', t[25] > 0.5, t[25].toFixed(2));
+  ok('le sprinteur au plafond mondial (60) gagne vraiment', t[60] < -0.12, t[60].toFixed(2));
+  ok('chaque point de stat compte (25 < 36 < 45 < 50 < 60)', t[25] > t[36] && t[36] > t[45] && t[45] > t[50] && t[50] > t[60]);
+  // les appuis gardent la main : un debutant qui tape vite bat un athlete au plafond qui tape lentement
+  ok('la cadence garde la main', ecartA(25, 12) + chrono('100', 12, null) < ecartA(60, 7) + chrono('100', 7, null));
 }
 
 titre('les tours : series, demies, finale (format du direct)');

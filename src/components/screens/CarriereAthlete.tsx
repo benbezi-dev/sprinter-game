@@ -16,13 +16,13 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
   type Athlete, type Jour, type Stat, type Epreuve, type Origine, type Voie,
-  STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
+  moyenneDes, exigePourMonter, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
   bonusMateriel, coutDuDeplacement, picDeForme,
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
-  soulager, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
+  soulager, REVEIL, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
   meetingPossible, meetingDe, DEPLACEMENT_MEETING,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
@@ -664,12 +664,18 @@ const lieuDuClub = (a: Athlete): Lieu | null => (a.club === 'horizon' ? 'club_ho
  * d'aujourd'hui (tours, departementaux, calendrier, meetings, sante) et avec les mini-jeux
  * illustres (SeancesAthlete.tsx). La ville de Val-de-Reuil reste, derriere ?ville=1.
  */
+// LE MARIAGE DES DEUX (l'auteur, 26/10 : « fais en sorte que ca se marie avec le mode 3D ») : le
+// tableau est l'accueil ; « EN VILLE » ouvre Val-de-Reuil sur la meme sauvegarde, et la croix de
+// la ville ramene au tableau. ?ville=1 ouvre directement la ville.
 const VILLE = typeof location !== 'undefined' && new URLSearchParams(location.search).has('ville');
 function TableauDeBord(p: { a: Athlete; onFermer: () => void; onEffacer: () => void }) {
-  return VILLE ? <VieEnVille {...p} /> : <Semaine {...p} />;
+  const [enVille, setEnVille] = useState(VILLE);
+  return enVille
+    ? <VieEnVille {...p} onFermer={() => { sauver(p.a); setEnVille(false); }} />
+    : <Semaine {...p} onVille={() => { sauver(p.a); setEnVille(true); }} />;
 }
 
-function Semaine({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void; onEffacer: () => void }) {
+function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: () => void; onEffacer: () => void; onVille: () => void }) {
   const [, maj] = useReducer((x: number) => x + 1, 0);
   const [seance, setSeance] = useState<Jour | null>(null);
   const [boutique, setBoutique] = useState(false);
@@ -684,7 +690,7 @@ function Semaine({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void;
   const dim = { ...a, jour: DIMANCHE } as Athlete;
   const leJour = jourDeLAthlete(dim).jour;
   const auDimanche = () => { a.jour = DIMANCHE; };
-  // les sept nuits de la semaine reparent le corps comme le coucher de la ville (dormir : 6 points par nuit de 8 h)
+  // les nuits de la semaine que la ville n'a pas dormies (a.nuits) reparent le corps comme son coucher : 6 points par nuit de 8 h
   const cout = coutDuDeplacement(a, a.niveau), payable = a.argent >= cout;
   const sansCertificat = leJour && certificatRequis(a);
   const ev = evenement(a.evenement);
@@ -725,6 +731,15 @@ function Semaine({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void;
         </div>
       </div>
 
+      {/* l'athlete en 3D, et sa vie a Val-de-Reuil, sur la meme sauvegarde */}
+      <div className="rounded-2xl border border-white/10 bg-gradient-to-b from-[#BFE0F5]/15 to-[#8DBF77]/15 p-2 flex items-center gap-2">
+        <div className="shrink-0 rounded-xl bg-gradient-to-b from-[#BFE0F5] to-[#8DBF77]"><Apercu ap={apparenceDe(a)} haut={150} /></div>
+        <div className="flex-1 min-w-0 flex flex-col gap-2">
+          <p className="text-xs text-white/75">{dans(['Vis ta semaine à Val-de-Reuil : le collège, le club, la maison, les potes. Tes séances et ta course t’y suivent.', 'Live your week in Val-de-Reuil: school, club, home, friends. Your sessions and your race come with you.'])}</p>
+          <Bouton plein className="py-3" disabled={!!ev} onClick={onVille}><span className="inline-flex items-center gap-1.5"><MapPin size={14} /> {dans(['EN VILLE', 'TO TOWN'])}</span></Bouton>
+        </div>
+      </div>
+
       <Carte><Barres a={a} /></Carte>
 
       {/* la competition : le championnat du niveau, ou un meeting de club les autres dimanches */}
@@ -741,6 +756,16 @@ function Semaine({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void;
             {picDeForme(a, a.niveau) && <span className="ml-1 font-black" style={{ color: VERT }}>· {mot('pic')}</span>}
           </p>
         )}
+        {/* les stats liberent les niveaux : la moyenne a atteindre, en plus du podium */}
+        {a.niveau < COMPETITIONS.length - 1 && (() => {
+          const m = moyenneDes(a), exige = exigePourMonter(a.niveau), pret = m >= exige;
+          return (
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-white/70">{dans([`Pour monter : le podium + ${exige} de moyenne`, `To move up: a podium + a ${exige} average`])} · <span className="font-black tabular-nums" style={{ color: pret ? VERT : '#F5A623' }}>{m.toFixed(1)}</span></span>
+              <Jauge v={Math.min(m, exige)} max={exige} couleur={pret ? VERT : '#F5A623'} />
+            </div>
+          );
+        })()}
         {leJour ? <>
           {sansCertificat && <p className="text-[11px] text-amber-300/90">{dans(['Pas de certificat médical pour cette saison : passe d’abord par l’espace santé.', 'No medical certificate this season: go through the health space first.'])}</p>}
           <p className="text-[11px] text-white/60">
@@ -790,7 +815,7 @@ function Semaine({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => void;
           <span className="w-1 self-stretch rounded-full bg-white/20" />
           <span className="flex-1 text-[10px] font-black tracking-widest text-white/70">{mot('dimanche')} · {leJour ? mot('competition') : mot('repos').toUpperCase()}</span>
         </div>
-        <Bouton className="py-3 mt-1" disabled={leJour || !!ev} onClick={() => changer(() => { soulager(a, 7 * 6); semaineSuivante(a); a.jour = 0; })}>{mot('fin_semaine')}</Bouton>
+        <Bouton className="py-3 mt-1" disabled={leJour || !!ev} onClick={() => changer(() => { soulager(a, Math.max(0, 7 - (a.nuits || 0)) * 6); semaineSuivante(a); a.jour = 0; a.heure = REVEIL; })}>{mot('fin_semaine')}</Bouton>
       </Carte>
 
       {/* le corps : l'usure, les soins, le certificat (sante.ts) */}
@@ -1671,7 +1696,9 @@ export function FinDeCourseAthlete() {
             {r.blessure && <span className="text-sm font-bold text-red-400">{dans(BLESSURES[r.blessure].nom)} · {dans(['va voir le médecin du sport', 'see the sports doctor'])}</span>}
             {!r.suivant && !r.meeting && (
               <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
-                {suivant ? mot('qualifie', { c: mot(suivant.cle) }) : !r.sommet ? mot('pas_qualifie', { n: ecart(r.niveau) }) : null}
+                {suivant ? mot('qualifie', { c: mot(suivant.cle) })
+                  : r.pasPret ? dans([`Sur le podium, mais pas encore prêt·e pour la suite : il faut ${exigePourMonter(r.niveau)} de moyenne dans tes stats. Entraîne-toi, et retente dans ${ecart(r.niveau)} semaines.`, `On the podium, but not ready for the next level yet: you need a ${exigePourMonter(r.niveau)} stat average. Train, and try again in ${ecart(r.niveau)} weeks.`])
+                  : !r.sommet ? mot('pas_qualifie', { n: ecart(r.niveau) }) : null}
               </span>
             )}
             <span className="text-xs text-white/60">
