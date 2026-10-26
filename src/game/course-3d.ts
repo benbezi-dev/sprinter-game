@@ -39,7 +39,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
-import { construireSalle, zSol, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, placesDuPublic } from './salle-3d';
+import { construireSalle, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -2455,7 +2455,11 @@ export function rendre(App: any, dt: number) {
       }
     }
     // dans la salle, la camera monte avec le relevement du virage (vise et voulu : _b et _a, y retourne)
-    if (salleActive) { const zs = zSol(_b.x, -_b.y); _a.z += zs; _b.z += zs; }
+    if (salleActive) {
+      // (la camera de course ne passe pas le muret : derriere, les gradins et la coursive)
+      if (!(G.state === 'cut' && G.cut && G.cut.kind === 'intro')) { const q = auBordDeLaPiste(_a.x, -_a.y); _a.x = q[0]; _a.y = -q[1]; }
+      const zs = zSol(_b.x, -_b.y); _a.z += zs; _b.z += zs;
+    }
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
     // pas de survol pour la nuit du molosse (« pas de vue aerienne de presentation », l'auteur, 23/10)

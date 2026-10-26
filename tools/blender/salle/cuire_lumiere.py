@@ -19,8 +19,9 @@ import numpy as np
 
 src, dossier = sys.argv[sys.argv.index('--') + 1:][:2]
 # les cotes de salle-3d.ts (piste-salle.js)
-RS, S = 17.2, (200 - 2 * math.pi * 17.4) / 2
-LONG = LARGE = 29.0
+# (les virages allonges, 26/10 : 35 m de ligne droite ; demi-longueur des virages 23,534 m, piste-salle.js)
+RS, S = 17.2, 35.0
+LONG, LARGE = 23.534 + 8.75, 29.0
 H_TOIT = 12.5
 X0, X1, Y0, Y1 = -S - LONG, LONG, -RS - LARGE, -RS + LARGE
 L, LY = X1 - X0, Y1 - Y0

@@ -4386,7 +4386,11 @@
     const T = G.track;
     if (!T.curved) { out[0] = sm[1]; out[1] = r; return out; }
     if (sm[2] === 1) {
-      if (sm[0]) {
+      if (sm[0] && T.salle) {
+        // l'anneau couvert : ses virages sont allonges (piste-salle.js)
+        const q = T.salle.virage(sm[1], r - T.salle.rayon);
+        out[0] = T.straight + q[0]; out[1] = -q[1];
+      } else if (sm[0]) {
         out[0] = T.straight + r * Math.sin(sm[1]);
         out[1] = -r * Math.cos(sm[1]);
       } else { out[0] = T.straight - sm[1]; out[1] = -r; }
@@ -4423,6 +4427,7 @@
       // Second demi-tour (voir Track.posLap2) : meme rotation de 180
       // degres + translation, mais a partir d'un angle phi deja calcule
       // (comme pour le premier virage) plutot que d'une distance s.
+      if (sm[0] && T.salle) { const q = T.salle.virage(sm[1], r - T.salle.rayon); return [T.straight + q[0], -q[1]]; }
       if (sm[0]) return [T.straight + r * Math.sin(sm[1]), -r * Math.cos(sm[1])];
       return [T.straight - sm[1], -r];
     }

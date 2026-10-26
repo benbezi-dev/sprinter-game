@@ -7,9 +7,10 @@
 // 2024 : couloirs alternes bleu roi et anthracite, plateau gris clair) et les replays des
 // France U18-U20 de fevrier 2026 :
 //  - l'anneau de 200 m, virages releves a 15°, six couloirs (piste-salle.js, les memes cotes
-//    que le moteur) ; la ligne droite centrale a huit couloirs, dans le plateau ;
-//  - autour de l'anneau, un muret blanc puis le grand bandeau de bois rouge qui porte la
-//    coursive vitree ; une tribune bleue le long de la ligne d'arrivee ;
+//    que le moteur) ; la ligne droite centrale a six couloirs, d'un bord de l'anneau a l'autre ;
+//  - autour de l'anneau, un muret blanc puis des gradins de bois sous la coursive vitree,
+//    des sieges bleus le long de la ligne d'arrivee ; muret et coursive s'ecartent dans les virages ;
+//  - au milieu, les aires du plan (img-010) : perche, longueur et triple, hauteur, poids ;
 //  - des murs blancs aux longs bandeaux vitres, des fermes d'acier sous un plafond de bois.
 // Aucune marque (ni piste, ni federation, ni sponsor) : les banderoles portent le nom de la ville.
 //
@@ -22,55 +23,101 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { SALLE, DROITE } from './piste-salle.js';
 
-export const RS = SALLE.rayon;                       // la corde (17,20 m)
-const S = DROITE;                                     // la ligne droite de l'anneau (45,34 m)
+export const RS = SALLE.rayon;                       // la demi-largeur interieure (17,20 m)
+const S = DROITE;                                     // la ligne droite de l'anneau (35 m)
+const A = SALLE.demiLong;                             // la demi-longueur des virages allonges (23,53 m)
+/** Du repere du stade au repere neutre d'un virage (piste-salle.js) : il bombe vers +X. */
+const versVirage = (x: number, y: number) => (x > 0 ? [x, y + RS] : [-S - x, -(y + RS)]);
 const NC = SALLE.couloirs, CW = SALLE.couloir;        // six couloirs de 0,90 m
 const W = NC * CW;
-const PENTE = Math.tan(SALLE.inclinaison);            // le relevement des virages (15°)
+// LA PENTE SE RAIDIT VERS L'EXTERIEUR (« les couloirs du dessus ont un pourcentage de montee et
+// descente de plus en plus fort », l'auteur, 26/10) : 10° au bord interieur, 18° au bord du
+// sixieme couloir (15° en moyenne sur les couloirs exterieurs), puis 18° jusqu'au muret. Les
+// couloirs du dessus montent donc plus haut, et plus raide, sur les memes rampes d'entree.
+// shortcut: angles a caler sur les cotes reelles quand on les aura (la recherche est en cours).
+const ALPHA0 = 10 * Math.PI / 180, ALPHA1 = 18 * Math.PI / 180;
+/** La hauteur du revetement plein-releve a d metres du bord interieur (la pente tourne de ALPHA0 a ALPHA1). */
+function profil(d: number) {
+  if (d <= 0) return 0;
+  const k = (ALPHA1 - ALPHA0) / W, dd = Math.min(d, W);
+  return (Math.log(Math.cos(ALPHA0)) - Math.log(Math.cos(ALPHA0 + k * dd))) / k + Math.max(0, d - W) * Math.tan(ALPHA1);
+}
 // LE RELEVEMENT S'INSTALLE EN DOUCEUR (« la montee dans le virage manque de douceur, c'est trop
 // sec », l'auteur, 26/10) : il commence 20 m avant le virage, y arrive a 55 %, et ne devient plein
 // qu'au premier quart du virage ; la meme chose en sortie. Courbes a derivee nulle aux deux bouts.
 const TRANS = 20, PART_DROITE = 0.55, ENTREE = Math.PI / 4;
-const R_MUR = RS + W + 0.35;                          // le muret blanc au bord de l'anneau
-const R_BOIS = R_MUR + 2.2;                           // le bandeau de bois, sous la coursive
-const H_COURSIVE = 3.4;
-const LONG = 29, LARGE = 29;                          // la halle : 29 m au-dela des centres des virages, de chaque cote
+// LE BORD DE L'ANNEAU, RELEVE SUR LE PLAN (img-010, 11,66 px/m) : le muret a 0,70 m du sixieme
+// couloir, le bord de la coursive a 1,90 m ; au coeur des virages, l'un et l'autre 1,15 m plus loin.
+const R_MUR = RS + W + 0.7;                           // le muret blanc
+const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
+const EV = 1.15;                                      // l'evasement des virages
+const H_COURSIVE = 4.0;
+// les gradins de bois, sous la coursive (la visite filmee de 2025) : quatre marches de 0,80 m
+const N_G = 4, P_G = 0.8, R_G = R_MUR + 0.15;
+// la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; ses longs
+// cotes a 29 m de l'axe
+const LONG = A + 8.75, LARGE = 29;
 const H_TOIT = 12.5;
-const CW_DROITE = 1.22, NC_DROITE = 8;                // la ligne droite centrale
+const CW_DROITE = 1.22, NC_DROITE = SALLE.couloirsDroite; // la ligne droite centrale
+const W60 = NC_DROITE * CW_DROITE;
+// les lignes peintes a 8 cm, comme dans tout le jeu en 3D (plus fines, elles se crenelaient au loin ; l auteur, 24/10)
+const LIGNE = 0.08;
 
 const lisse = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * t * (t * (t * 6 - 15) + 10); };
 
 /** Le relevement (0 a 1) en un point du stade : nul au milieu des lignes droites, plein au coeur des virages. */
 function releve(x: number, y: number) {
   if (x > 0 || x < -S) {
-    // l'angle tourne depuis l'entree du virage (0 a pi), et la distance a son bout le plus proche
-    const c = x > 0 ? 0 : -S, phi = Math.atan2(Math.abs(x - c), y + RS), e = Math.min(phi, Math.PI - phi);
+    // l'angle du virage (0 a pi), et sa distance au bout le plus proche
+    const [X, Y] = versVirage(x, y), phi = SALLE.surVirage(X, Y).phi, e = Math.min(phi, Math.PI - phi);
     return PART_DROITE + (1 - PART_DROITE) * lisse(0, ENTREE, e);
   }
   const d = Math.min(-x, x + S);           // la distance au virage le plus proche, sur la ligne droite
   return PART_DROITE * (1 - lisse(0, TRANS, d));
 }
-/** La distance au centre de virage le plus proche (dans un virage), ou a l'axe (en ligne droite). */
+/** RS + l'ecart au bord interieur (dans un virage), ou la distance a l'axe (en ligne droite). */
 function rayonEn(x: number, y: number) {
-  if (x > 0) return Math.hypot(x, y + RS);
-  if (x < -S) return Math.hypot(x + S, y + RS);
+  if (x > 0 || x < -S) { const [X, Y] = versVirage(x, y); return RS + SALLE.surVirage(X, Y).d; }
   return Math.abs(y + RS);
+}
+/** La hauteur de la marche i (0 : le haut du muret) des gradins, en (x, y), hors evasement. */
+function hautMarche(i: number, x: number, y: number) {
+  const b = profil(R_MUR - RS) * releve(x, y) + 0.9;
+  return b + (H_COURSIVE - b) * i / (N_G + 1);
+}
+/**
+ * LA CAMERA RESTE AU BORD DE LA PISTE : au-dela du muret, elle tomberait dans les gradins et
+ * les sieges de la coursive. Ramene (x, y) a moins de `marge` metres du muret, vers l'axe.
+ */
+export function auBordDeLaPiste(x: number, y: number, marge = 0.3): [number, number] {
+  const lim = R_MUR - RS - marge;
+  if (x > 0 || x < -S) {
+    const [X, Y] = versVirage(x, y), v = SALLE.surVirage(X, Y);
+    if (v.d <= lim) return [x, y];
+    const q = SALLE.virage(v.phi, lim);
+    return x > 0 ? [q[0], q[1] - RS] : [-S - q[0], -RS - q[1]];
+  }
+  const e = y + RS;
+  return Math.abs(e) <= RS + lim ? [x, y] : [x, -RS + Math.sign(e) * (RS + lim)];
 }
 /** La hauteur du sol en un point du stade : l'anneau relevé, le plateau a zero. */
 export function zSol(x: number, y: number) {
   const r = rayonEn(x, y);
   if (r <= RS) return 0;
-  return Math.min(r, R_MUR) - RS > 0 ? (Math.min(r, R_MUR) - RS) * PENTE * releve(x, y) : 0;
+  return profil(Math.min(r, R_MUR) - RS) * releve(x, y);
 }
 
+// LE 60 M, D'APRES LE PLAN : le depart en face de l'arrivee de l'anneau, l'arrivee a 2,5 m du
+// bord de l'autre virage ; on y court vers -x (le monde est en miroir : sur place, vers l'est).
+const DEPART_60 = 5.07, ARRIVEE_60 = DEPART_60 - 60;
 /**
  * Du repere du jeu a celui de la salle (voir caler, course-3d.ts). L'anneau : le jeu met
  * son premier virage autour de l'origine et finit sur y = -r en allant vers -x ; on le
- * retourne. Le 60 m : la ligne droite centrale, son depart a 55 m de l'arrivee (x = 5).
+ * retourne. Le 60 m : la ligne droite centrale, retournee aussi.
  */
 export function calageSalle(T: any): { sx: number; x0: number; y0: number } {
   if (T.salle) return { sx: -1, x0: 0, y0: -RS };
-  return { sx: 1, x0: -55, y0: -RS - (NC_DROITE / 2) * CW_DROITE };
+  return { sx: -1, x0: DEPART_60, y0: -RS + (NC_DROITE / 2) * CW_DROITE };
 }
 export const estEnSalle = (T: any, race: any) => !!(T && (T.salle || (race && race.salleDroite)));
 /** Le survol de presentation : dehors, autour du batiment (l'exterieur Tripo), puis la plongee vers le depart. */
@@ -153,6 +200,19 @@ function mur(rgb: number[], graine: number) {
   });
 }
 
+/** Le sable des bacs : grains clairs et sombres, quelques traces de rateau. */
+function grainDeSable() {
+  const h = tirage(41);
+  const t = toile(256, 256, (c, w, hh) => {
+    c.fillStyle = '#c9b38a'; c.fillRect(0, 0, w, hh);
+    for (let i = 0; i < 9000; i++) { const k = h(); c.fillStyle = k < 0.5 ? `rgba(120,95,60,${0.25 * h()})` : `rgba(245,232,205,${0.3 * h()})`; c.fillRect(h() * w, h() * hh, 1 + h() * 2, 1 + h() * 2); }
+    c.strokeStyle = 'rgba(110,88,55,0.18)'; c.lineWidth = 2;
+    for (let y = 8; y < hh; y += 14) { c.beginPath(); c.moveTo(0, y); for (let x = 0; x <= w; x += 16) c.lineTo(x, y + Math.sin(x / 30 + y) * 2); c.stroke(); }
+  });
+  t.repeat.set(2, 1);
+  return t;
+}
+
 /* ------------------------------------------------------------------ la geometrie */
 
 /**
@@ -160,29 +220,37 @@ function mur(rgb: number[], graine: number) {
  * l'arrivee. `partie` (0 a 3 : ligne d'arrivee, virage, ligne opposee, virage) n'en rend qu'un
  * quart, avec le premier point du suivant (la lumiere cuite range chaque quart a part).
  */
-function tour(r: number, partie = -1): { x: number; y: number; f: number }[] {
-  const parts: { x: number; y: number; f: number }[][] = [[], [], [], []];
+type PointTour = { x: number; y: number; f: number; r: number; g: number };
+function tour(r: number, partie = -1, ev = 0): PointTour[] {
+  const parts: PointTour[][] = [[], [], [], []];
   const pas = 0.5, seg = 128;
-  const p = (k: number, x: number, y: number) => parts[k].push({ x, y, f: releve(x, y) });
+  // g : l'evasement (0 en ligne droite, 1 des le premier quart du virage) ; le rayon s'ecarte de ev * g
+  const p = (k: number, x: number, y: number, rr = r, g = 0) => parts[k].push({ x, y, f: releve(x, y), r: rr, g });
+  const evase = (a: number) => lisse(0, ENTREE, Math.min(a, Math.PI - a));
   for (let x = -S; x < 0; x += pas) p(0, x, -RS + r);                                          // la ligne d'arrivee, vers +x
-  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; p(1, r * Math.sin(a), -RS + r * Math.cos(a)); }
+  // (les virages allonges : la parallele au bord interieur a r - RS metres, evasee)
+  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI, g = evase(a), rr = r + ev * g, q = SALLE.virage(a, rr - RS); p(1, q[0], -RS + q[1], rr, g); }
   for (let x = 0; x > -S; x -= pas) p(2, x, -RS - r);                                          // la ligne opposee, vers -x
-  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; p(3, -S - r * Math.sin(a), -RS - r * Math.cos(a)); }
+  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI, g = evase(a), rr = r + ev * g, q = SALLE.virage(a, rr - RS); p(3, -S - q[0], -RS - q[1], rr, g); }
   if (partie >= 0) return [...parts[partie], parts[(partie + 1) % 4][0]];
   const pts = parts.flat();
   pts.push(pts[0]);
   return pts;
 }
-const zEn = (r: number, f: number) => Math.max(0, Math.min(r, R_MUR) - RS) * PENTE * f;
+/** La hauteur du revetement releve en un point du tour (le releve va jusqu'au muret, evase avec lui). */
+const zEn = (p: PointTour) => profil(Math.min(p.r, R_MUR + EV * p.g) - RS) * p.f;
 
-/** Une bande de l'anneau entre deux rayons, relevee, a dz au-dessus du revetement. Les UV en metres. */
-function bandeAnneau(r0: number, r1: number, dz: number, partie = -1) {
-  const a = tour(r0, partie), b = tour(r1, partie);
+/**
+ * Une bande de l'anneau entre deux rayons (evases de ev0 et ev1), relevee, a dz au-dessus du
+ * revetement — ou a la hauteur zf, si on la donne. Les UV en metres.
+ */
+function bandeAnneau(r0: number, r1: number, dz: number, partie = -1, ev0 = 0, ev1 = 0, zf?: (p: PointTour) => number) {
+  const a = tour(r0, partie, ev0), b = tour(r1, partie, ev1);
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   let s = 0;
   for (let i = 0; i < a.length; i++) {
     if (i) s += Math.hypot(a[i].x - a[i - 1].x, a[i].y - a[i - 1].y);
-    pos.push(a[i].x, a[i].y, zEn(r0, a[i].f) + dz, b[i].x, b[i].y, zEn(r1, b[i].f) + dz);
+    pos.push(a[i].x, a[i].y, zf ? zf(a[i]) : zEn(a[i]) + dz, b[i].x, b[i].y, zf ? zf(b[i]) : zEn(b[i]) + dz);
     uv.push(s, 0, s, r1 - r0);
     // (le tour tourne dans le sens horaire vu de dessus, l'interieur a droite : cet ordre met les faces vers le haut)
     if (i) { const k = i * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
@@ -193,14 +261,14 @@ function bandeAnneau(r0: number, r1: number, dz: number, partie = -1) {
   g.setIndex(idx); g.computeVertexNormals();
   return g;
 }
-/** Un mur qui suit l'anneau au rayon r, de z0 a z1 (z1 < 0 : jusqu'au haut du relevement + |z1|). */
-function murAnneau(r: number, z0: (f: number) => number, z1: (f: number) => number, partie = -1) {
-  const a = tour(r, partie);
+/** Un mur qui suit l'anneau au rayon r (evase de ev), de z0 a z1. */
+function murAnneau(r: number, z0: (p: PointTour) => number, z1: (p: PointTour) => number, partie = -1, ev = 0) {
+  const a = tour(r, partie, ev);
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   let s = 0;
   for (let i = 0; i < a.length; i++) {
     if (i) s += Math.hypot(a[i].x - a[i - 1].x, a[i].y - a[i - 1].y);
-    const b = z0(a[i].f), h = z1(a[i].f);
+    const b = z0(a[i]), h = z1(a[i]);
     pos.push(a[i].x, a[i].y, b, a[i].x, a[i].y, h);
     uv.push(s, b, s, h);
     if (i) { const k = i * 2; idx.push(k - 2, k, k - 1, k - 1, k, k + 1); }
@@ -254,54 +322,170 @@ export function construireSalle(ctx: ContexteSalle) {
 
   // L'ANNEAU : six couloirs alternes, et une bande d'anthracite derriere le sixieme jusqu'au muret
   for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? anthracite : bleu, true, 'sol');
-  ajouter(bandeAnneau(RS + W, R_MUR, 0.004), anthracite, true, 'sol');
-  for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - 0.025, RS + k * CW + 0.025, 0.008), ligne, false, 'sol');
+  ajouter(bandeAnneau(RS + W, R_MUR, 0.004, -1, 0, EV), anthracite, true, 'sol');
+  for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - LIGNE / 2, RS + k * CW + LIGNE / 2, 0.008), ligne, false, 'sol');
   // la corde : une lisse blanche en saillie au bord interieur
   ajouter(murAnneau(RS - 0.06, () => 0, () => 0.05), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.5 }), false);
 
-  // LA LIGNE DROITE CENTRALE : huit couloirs alternes, du depart du 60 m a la fin de la decelleration
-  const yD = -RS - (NC_DROITE / 2) * CW_DROITE, x0D = -59, x1D = 15;
-  for (let k = 0; k < NC_DROITE; k++) {
-    const p = new THREE.PlaneGeometry(x1D - x0D, CW_DROITE);
-    const uvp = p.getAttribute('uv') as THREE.BufferAttribute;
-    for (let i = 0; i < uvp.count; i++) uvp.setXY(i, uvp.getX(i) * (x1D - x0D), uvp.getY(i) * CW_DROITE);
-    const m = ajouter(p, k % 2 ? anthracite : bleu, true, 'sol');
-    m.position.set((x0D + x1D) / 2, yD + (k + 0.5) * CW_DROITE, 0.004);
-  }
-  for (let k = 0; k <= NC_DROITE; k++) {
-    const m = ajouter(new THREE.PlaneGeometry(x1D - x0D, 0.05), ligne, false, 'sol');
-    m.position.set((x0D + x1D) / 2, yD + k * CW_DROITE, 0.008);
-  }
-  // le depart et l'arrivee du 60 m (x = -55 et 5) : deux lignes blanches en travers
-  for (const x of [-55, 5]) { const m = ajouter(new THREE.PlaneGeometry(0.05, NC_DROITE * CW_DROITE), ligne, false); m.position.set(x, yD + NC_DROITE * CW_DROITE / 2, 0.009); }
-  // l'arrivee de l'anneau, en travers des six couloirs (x = 0)
-  { const m = ajouter(new THREE.PlaneGeometry(0.05, W), ligne, false); m.position.set(0, -RS + W / 2, 0.012); }
+  // LA LIGNE DROITE CENTRALE (le plan) : six couloirs, d'un bord de l'anneau a l'autre — ses
+  // bouts suivent le bord interieur des virages (« la ligne droite du 60 m va jusqu'a la ligne
+  // du premier couloir du 200 m », l'auteur, 26/10)
+  const xD = (y: number) => A * Math.sqrt(Math.max(0, 1 - ((y + RS) / RS) ** 2));    // le bord de l'anneau, cote x > 0
+  const yD = -RS - (NC_DROITE / 2) * CW_DROITE;
+  /** Une bande du plateau entre y0 et y1, d'un bord de l'anneau a l'autre (les UV en metres : ShapeGeometry). */
+  const entreLesVirages = (y0: number, y1: number, z: number, mat: THREE.Material, lumiere: '' | 'sol' = 'sol') => {
+    const f = new THREE.Shape(), n = 12;
+    f.moveTo(-S - xD(y0), y0); f.lineTo(xD(y0), y0);
+    for (let i = 1; i <= n; i++) { const y = y0 + (y1 - y0) * i / n; f.lineTo(xD(y), y); }
+    for (let i = 0; i <= n; i++) { const y = y1 - (y1 - y0) * i / n; f.lineTo(-S - xD(y), y); }
+    const m = ajouter(new THREE.ShapeGeometry(f), mat, lumiere !== '', lumiere); m.position.z = z;
+    return m;
+  };
+  for (let k = 0; k < NC_DROITE; k++) entreLesVirages(yD + k * CW_DROITE, yD + (k + 1) * CW_DROITE, 0.004, k % 2 ? anthracite : bleu);
+  for (let k = 0; k <= NC_DROITE; k++) { const y = yD + k * CW_DROITE; entreLesVirages(y - LIGNE / 2, y + LIGNE / 2, 0.008, ligne, ''); }
+  /** Un trait blanc en travers du plateau, a plat. */
+  const traitPlat = (x: number, y: number, lx: number, ly: number, mat: THREE.Material = ligne, z = 0.009) => {
+    const m = ajouter(new THREE.PlaneGeometry(lx, ly), mat, false); m.position.set(x, y, z); return m;
+  };
+  // le depart du 60 m, la ligne des 50 m (les haies), l'arrivee — plus large
+  traitPlat(DEPART_60, yD + W60 / 2, LIGNE, W60);
+  traitPlat(DEPART_60 - 10, yD + W60 / 2, LIGNE, W60);
+  traitPlat(ARRIVEE_60, yD + W60 / 2, 0.1, W60);
 
-  // LE SAUTOIR DE LONGUEUR ET LES TAPIS (le plateau, cote ligne opposee) — rouge et bleu, comme sur place
-  const sable = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.78, 0.66, 0.46, THREE.SRGBColorSpace), roughness: 1 });
-  { const m = ajouter(new THREE.BoxGeometry(9, 3, 0.06), sable); m.position.set(-34, -RS - 9.5, 0.03); }
-  const tapisR = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.72, 0.12, 0.14, THREE.SRGBColorSpace), roughness: 0.7 });
-  const tapisB = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.12, 0.28, 0.62, THREE.SRGBColorSpace), roughness: 0.7 });
-  for (const [x, y, lx, ly, lz] of [[8, -RS - 11, 6, 5, 0.7], [-50, -RS + 9, 5, 4, 0.55]] as number[][]) {
-    const b = ajouter(new THREE.BoxGeometry(lx, ly, lz * 0.3), tapisR); b.position.set(x, y, lz * 0.15); b.castShadow = true;
-    const t = ajouter(new THREE.BoxGeometry(lx - 0.2, ly - 0.2, lz * 0.7), tapisB); t.position.set(x, y, lz * 0.3 + lz * 0.35); t.castShadow = true;
+  // L'ARRIVEE ET LES DEPARTS DE L'ANNEAU, peints sur le revetement releve (« la ligne d'arrivee n'est
+  // pas materialisee, les traits de depart non plus », l'auteur, 26/10). Chaque couloir court
+  // `total` sur sa ligne de mesure (0,20 m du bord) : son depart est a (-total) modulo son tour,
+  // compte depuis l'arrivee dans le sens de la course — le meme decalage que le moteur.
+  /** Ou est-on, u metres apres l'arrivee sur la ligne de mesure de rayon rm, au rayon rho ; et le cap. */
+  const surAnneau = (u: number, rm: number, rho: number) => {
+    const arc = SALLE.longueurVirage(rm - RS), tourL = 2 * S + 2 * arc;
+    u = ((u % tourL) + tourL) % tourL;
+    if (u < arc) {
+      const a = SALLE.phiVirage(u, rm - RS), q = SALLE.virage(a, rho - RS);
+      return { x: q[0], y: -RS + q[1], cap: -SALLE.capVirage(a) };
+    }
+    if ((u -= arc) < S) return { x: -u, y: -RS - rho, cap: Math.PI };
+    if ((u -= S) < arc) {
+      const a = SALLE.phiVirage(u, rm - RS), q = SALLE.virage(a, rho - RS);
+      return { x: -S - q[0], y: -RS - q[1], cap: Math.PI - SALLE.capVirage(a) };
+    }
+    u -= arc; return { x: -S + u, y: -RS + rho, cap: 0 };
+  };
+  /** Un trait en travers des couloirs, de rho0 a rho1, a u metres de l'arrivee : il epouse le relevement. */
+  const traitAnneau = (u: number, rm: number, rho0: number, rho1: number, larg: number) => {
+    const pos: number[] = [], idx: number[] = [], n = Math.max(2, Math.ceil((rho1 - rho0) / 0.15));
+    for (let i = 0; i <= n; i++) {
+      const p = surAnneau(u, rm, rho0 + (rho1 - rho0) * i / n), tx = Math.cos(p.cap) * larg / 2, ty = Math.sin(p.cap) * larg / 2;
+      const z = zSol(p.x, p.y) + 0.012;
+      pos.push(p.x - tx, p.y - ty, z, p.x + tx, p.y + ty, z);
+      if (i) { const k = i * 2; idx.push(k - 2, k - 1, k, k - 1, k + 1, k); }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setIndex(idx); geo.computeVertexNormals();
+    const m = ajouter(geo, ligneDouble, false);
+    return m;
+  };
+  const ligneDouble = ligne.clone(); ligneDouble.side = THREE.DoubleSide;
+  traitAnneau(0, RS + SALLE.mes1, RS, RS + W, 0.1);                    // l'arrivee
+  for (const total of [200, 400]) for (let k = 1; k < NC; k++) {
+    const rm = RS + k * CW + SALLE.mesN;
+    traitAnneau(-total, rm, RS + k * CW, RS + (k + 1) * CW, LIGNE);
+  }
+
+  // LES AIRES DE CONCOURS, au plateau, d'apres le plan, cotes relevees depuis le milieu de la salle
+  // (« tapis de perche et couloir d'elan, bac de saut en longueur et triple, les tapis de saut en
+  // hauteur et l'aire de lancer de poids », l'auteur, 26/10)
+  const sable = new THREE.MeshStandardMaterial({ map: grainDeSable(), roughness: 1 });
+  const bordure = new THREE.MeshStandardMaterial({ color: 0xd9d9d6, roughness: 0.8 });
+  const tapisR = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.80, 0.14, 0.16, THREE.SRGBColorSpace), roughness: 0.7 });
+  const tapisB = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.13, 0.33, 0.70, THREE.SRGBColorSpace), roughness: 0.75 });
+  const tapisG = new THREE.MeshStandardMaterial({ color: 0x9aa3ad, roughness: 0.8 });
+  const acierBlanc = new THREE.MeshStandardMaterial({ color: 0xeef0f2, roughness: 0.35, metalness: 0.5 });
+  const boite = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, mat: THREE.Material, ombre = true) => {
+    const b = ajouter(new THREE.BoxGeometry(Math.abs(x1 - x0), Math.abs(y1 - y0), z1 - z0), mat);
+    b.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2); b.castShadow = ombre; return b;
+  };
+  /** Un couloir d'elan bleu, de x0 a x1, centre en y, borde de blanc. */
+  const couloirElan = (x0: number, x1: number, y: number) => {
+    const lx = Math.abs(x1 - x0), p = new THREE.PlaneGeometry(lx, 1.22), uv = p.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * lx, uv.getY(i) * 1.22);
+    const m = ajouter(p, bleu, true, 'sol'); m.position.set((x0 + x1) / 2, y, 0.004);
+    for (const d of [-0.61, 0.61]) traitPlat((x0 + x1) / 2, y + d, lx, LIGNE);
+  };
+  /** Un bac a sable affleurant, son cadre blanc. */
+  const bac = (x0: number, x1: number, y0: number, y1: number) => {
+    boite(x0 - 0.25, x1 + 0.25, y0 - 0.25, y1 + 0.25, -0.02, 0.012, bordure, false);
+    const m = traitPlat((x0 + x1) / 2, (y0 + y1) / 2, Math.abs(x1 - x0), Math.abs(y1 - y0), sable, 0.016);
+    m.receiveShadow = true;
+  };
+  // la longueur et le triple : deux couloirs d'elan cote a cote, un bac a chaque bout, leurs planches
+  couloirElan(-54.8, 7.6, -8.5);
+  couloirElan(-40.9, 7.6, -11.3);
+  bac(7.8, 17.0, -7.3, -12.6);
+  bac(-41.1, -49.9, -9.9, -12.7);
+  for (const [x, y] of [[6.5, -8.5], [-5.5, -8.5], [-29.7, -11.3], [-31.7, -11.3], [-33.8, -11.3], [-39.5, -11.3]]) traitPlat(x, y, 0.2, 1.22, acierBlanc, 0.012);
+  // la perche : son couloir, le butoir, le grand tapis rouge et bleu, ses deux montants et la barre
+  couloirElan(14.5, -35.0, -3.95);
+  boite(-35.0, -35.6, -3.65, -4.25, -0.2, 0.01, tapisG, false);                       // le butoir
+  boite(-35.6, -41.4, -0.9, -7.0, 0, 0.32, tapisR);                                     // le socle
+  boite(-35.75, -41.25, -1.05, -6.85, 0.32, 0.86, tapisB);                              // le tapis
+  boite(-33.2, -35.6, -1.2, -3.5, 0, 0.42, tapisB); boite(-33.2, -35.6, -4.4, -6.7, 0, 0.42, tapisB); // les avancees
+  for (const y of [-0.75, -7.15]) { boite(-35.4, -35.8, y - 0.2, y + 0.2, 0, 0.12, acierBlanc); boite(-35.55, -35.65, y - 0.05, y + 0.05, 0.12, 5.2, acierBlanc); }
+  { const b = ajouter(new THREE.CylinderGeometry(0.025, 0.025, 6.4, 6), new THREE.MeshStandardMaterial({ color: 0xf0c020, roughness: 0.5 })); b.position.set(-35.6, -3.95, 4.6); }
+  // la hauteur : le tapis (6,4 x 4 m), les deux poteaux et la barre, du cote de l'elan
+  boite(0.5, -3.5, -24.4, -30.8, 0, 0.3, tapisR);
+  boite(0.35, -3.35, -24.55, -30.65, 0.3, 0.75, tapisB);
+  for (const y of [-24.3, -30.9]) { boite(-3.55, -3.95, y - 0.2, y + 0.2, 0, 0.1, acierBlanc); boite(-3.7, -3.8, y - 0.04, y + 0.04, 0.1, 2.6, acierBlanc); }
+  { const b = ajouter(new THREE.CylinderGeometry(0.015, 0.015, 6.6, 6), new THREE.MeshStandardMaterial({ color: 0xe03a2a, roughness: 0.5 })); b.position.set(-3.75, -27.6, 1.85); }
+  // le poids : le cercle (2,135 m), son butoir, le secteur de 34,92° et l'aire de chute
+  {
+    const cx = -47.6, cy = -27.66;
+    boite(-25.4, -46.4, -22.9, -32.5, -0.01, 0.006, new THREE.MeshStandardMaterial({ color: 0x6f6a62, roughness: 1 }), false);
+    const cercle = ajouter(new THREE.CircleGeometry(1.0675, 40), new THREE.MeshStandardMaterial({ color: 0x8c8c88, roughness: 0.95 }), false);
+    cercle.position.set(cx, cy, 0.014);
+    const anneau = ajouter(new THREE.RingGeometry(1.0675, 1.1175, 48), ligne, false); anneau.position.set(cx, cy, 0.016);
+    const butoir = ajouter(new THREE.CylinderGeometry(1.17, 1.17, 0.1, 24, 1, true, -Math.PI / 6 + Math.PI / 2, Math.PI / 3), acierBlanc, false);
+    butoir.rotation.x = Math.PI / 2; butoir.position.set(cx, cy, 0.05);
+    for (const s of [-1, 1]) {
+      const a = s * 34.92 / 2 * Math.PI / 180, l = 15;
+      const m = traitPlat(cx + Math.cos(a) * (1.12 + l / 2), cy + Math.sin(a) * (1.12 + l / 2), l, LIGNE, ligne, 0.018);
+      m.rotation.z = a;
+    }
   }
 
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
   const blanc = new THREE.MeshStandardMaterial({ map: mur(BLANC, 5), roughness: 0.9 });
-  const hautMur = (f: number) => zEn(R_MUR, f) + 0.9;
-  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k), double(blanc), 'coque');
-  const passage = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.55, 0.56, 0.58, THREE.SRGBColorSpace), roughness: 0.9 });
-  ajouter(bandeAnneau(R_MUR, R_BOIS, 0), passage, true, 'sol');
-  // (des planches HORIZONTALES, d'un bois chaud : la visite filmee de 2025)
+  // (le haut du muret : le releve au muret, evase, plus 0,90 m — les gradins partent de la)
+  const hautMur = (p: PointTour) => profil(R_MUR + EV * p.g - RS) * p.f + 0.9;
+  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k, EV), double(blanc), 'coque');
+  enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, EV, EV, hautMur), blanc, 'coque');
+  // LES GRADINS DE BOIS (la visite filmee de 2025) : des planches HORIZONTALES d'un bois chaud,
+  // quatre marches qui montent du muret jusque sous la coursive, tout autour de l'anneau
   const bois = lamesDeBois([176, 98, 52], false, 17); bois.repeat.set(1 / 3, 1 / 1.6);
   const matBois = new THREE.MeshStandardMaterial({ map: bois, roughness: 0.75 });
-  enQuarts(k => murAnneau(R_BOIS, () => 0, () => H_COURSIVE, k), double(matBois), 'coque');
+  const zMarche = (i: number) => (p: PointTour) => { const b = hautMur(p); return b + (H_COURSIVE - b) * i / (N_G + 1); };
+  for (let i = 0; i < N_G; i++) {
+    const r = R_G + i * P_G;
+    enQuarts(k => murAnneau(r, zMarche(i), zMarche(i + 1), k, EV), double(matBois), 'coque');            // la contremarche
+    enQuarts(k => bandeAnneau(r, r + P_G, 0, k, EV, EV, zMarche(i + 1)), matBois, 'coque');              // la marche
+  }
+  enQuarts(k => murAnneau(R_G + N_G * P_G, zMarche(N_G), () => H_COURSIVE, k, EV), double(matBois), 'coque');
+  // LA SALLE D'ECHAUFFEMENT, derriere une grande paroi vitree verte, sur la ligne opposee
+  {
+    const vert = new THREE.MeshStandardMaterial({ color: 0x5fae86, transparent: true, opacity: 0.62, roughness: 0.08, metalness: 0.1, depthWrite: false });
+    const x0 = -20, x1 = -2, y = -RS - R_G + 0.06;
+    const v = ajouter(new THREE.PlaneGeometry(x1 - x0, H_COURSIVE - 1.1), vert, false); v.position.set((x0 + x1) / 2, y, 0.9 + (H_COURSIVE - 1.1) / 2); v.rotation.x = Math.PI / 2;
+    // (derriere, la salle : son sol bleu et son mur turquoise)
+    const fond = new THREE.MeshStandardMaterial({ color: 0x4fb7c4, roughness: 0.8, side: THREE.DoubleSide });
+    const f = ajouter(new THREE.PlaneGeometry(x1 - x0, H_COURSIVE), fond, false); f.position.set((x0 + x1) / 2, y - 3.2, H_COURSIVE / 2); f.rotation.x = Math.PI / 2;
+    const montantVitre = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
+    for (let x = x0; x <= x1 + 1e-6; x += 1.5) { const m = ajouter(new THREE.BoxGeometry(0.06, 0.08, H_COURSIVE - 0.9), montantVitre, false); m.position.set(x, y, 0.9 + (H_COURSIVE - 0.9) / 2); }
+  }
   // la coursive : un plancher de l'ovale aux murs de la halle, et sa lisse vitree
   {
     const forme = new THREE.Shape();
     forme.moveTo(-S - LONG, -RS - LARGE); forme.lineTo(LONG, -RS - LARGE); forme.lineTo(LONG, -RS + LARGE); forme.lineTo(-S - LONG, -RS + LARGE); forme.closePath();
-    const trou = new THREE.Path(), a = tour(R_BOIS);
+    const trou = new THREE.Path(), a = tour(R_BOIS, -1, EV);
     a.slice(0, -1).forEach((p, i) => (i ? trou.lineTo(p.x, p.y) : trou.moveTo(p.x, p.y)));
     forme.holes.push(trou);
     const plancher = ajouter(new THREE.ShapeGeometry(forme, 4), new THREE.MeshStandardMaterial({ color: 0xc8c9cc, roughness: 0.9 }), true, 'coque');
@@ -314,9 +498,9 @@ export function construireSalle(ctx: ContexteSalle) {
     dessous.position.z = H_COURSIVE - 0.25;
   }
   const verre = new THREE.MeshStandardMaterial({ color: 0xcfe6f0, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false });
-  ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE, () => H_COURSIVE + 1.05), verre, false);
+  ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE, () => H_COURSIVE + 1.05, -1, EV), verre, false);
   const lisseRail = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.4, metalness: 0.7 });
-  ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE + 1.02, () => H_COURSIVE + 1.1), lisseRail, false);
+  ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE + 1.02, () => H_COURSIVE + 1.1, -1, EV), lisseRail, false);
   // LES GRADINS DU HAUT (« les gradins du dessus manquent cruellement de details », l'auteur, 26/10) :
   // sur place, la coursive porte un rang de sieges bleus derriere sa balustrade de verre a
   // poteaux d'acier. Tout est instancie.
@@ -325,7 +509,7 @@ export function construireSalle(ctx: ContexteSalle) {
     const poser = (lot: THREE.InstancedMesh, i: number, x: number, y: number, z: number, cap: number, sx = 1, sy = 1, sz = 1) => {
       q.setFromAxisAngle(Z, cap); Mx.compose(new THREE.Vector3(x, y, z), q, un.set(sx, sy, sz)); lot.setMatrixAt(i, Mx);
     };
-    const a = tour(R_BOIS + 0.05);
+    const a = tour(R_BOIS + 0.05, -1, EV);
     // les poteaux de la balustrade, tous les 1,5 m
     const poteaux = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.06, 1.1), lisseRail, 400);
     let np = 0, reste = 0;
@@ -342,13 +526,14 @@ export function construireSalle(ctx: ContexteSalle) {
     let ns = 0;
     // UN SEUL RANG (« une seule ligne de chaises bleues, pas deux », l'auteur, 26/10), juste derriere la balustrade
     for (const [r, z] of [[R_BOIS + 0.95, H_COURSIVE + 0.45]] as const) {
-      const b = tour(r);
+      const b = tour(r, -1, EV);
       let l = 0;
       for (let i = 1; i < b.length && ns < 1400; i++) {
         const dx = b[i].x - b[i - 1].x, dy = b[i].y - b[i - 1].y;
         l += Math.hypot(dx, dy);
         if (l < 0.5) continue;
         l = 0;
+        if (b[i].x > LONG - 0.5 || b[i].x < -S - LONG + 0.5) continue;   // contre les pignons, plus de place
         const cap = Math.atan2(dy, dx);                       // le long du tour ; la piste a droite
         const ox = Math.sin(cap) * 0.2, oy = -Math.cos(cap) * 0.2;   // le dossier, cote exterieur
         poser(lotA, ns, b[i].x, b[i].y, z, cap);
@@ -360,21 +545,15 @@ export function construireSalle(ctx: ContexteSalle) {
     lotA.count = ns; lotD.count = ns; g.add(lotA, lotD);
   }
 
-  // LA TRIBUNE BLEUE, le long de la ligne d'arrivee : des gradins entre le muret et la coursive
-  const marche = new THREE.MeshStandardMaterial({ color: 0xb9bcc2, roughness: 0.85 });
+  // LA TRIBUNE, le long de la ligne d'arrivee : des sieges bleus sur les gradins de bois, en deux
+  // blocs separes par un escalier (le plan)
   const siege = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.10, 0.36, 0.78, THREE.SRGBColorSpace), roughness: 0.55 });
-  const RANGS = 6, PROF = (R_BOIS - R_MUR - 0.2) / RANGS, MONTE = (H_COURSIVE - 0.9) / RANGS;
-  const nSieges = Math.floor((S - 6) / 0.5);
   const geoSiege = new THREE.BoxGeometry(0.42, 0.4, 0.38);
-  const sieges = new THREE.InstancedMesh(geoSiege, siege, RANGS * nSieges);
+  const places = siegesTribune();
+  const sieges = new THREE.InstancedMesh(geoSiege, siege, places.length);
   const M = new THREE.Matrix4();
-  let n = 0;
-  for (let i = 0; i < RANGS; i++) {
-    const y = -RS + R_MUR + 0.2 + (i + 0.5) * PROF, z = 0.9 + (i + 1) * MONTE;
-    const gr = ajouter(new THREE.BoxGeometry(S - 4, PROF, z), marche); gr.position.set(-S / 2, y, z / 2);
-    for (let j = 0; j < nSieges; j++) { M.makeTranslation(-S + 3 + j * 0.5, y + 0.05, z + 0.2); sieges.setMatrixAt(n++, M); }
-  }
-  sieges.count = n; sieges.castShadow = false; sieges.receiveShadow = true; g.add(sieges);
+  places.forEach((p, i) => { M.makeTranslation(p.x, p.y, p.z + 0.2); sieges.setMatrixAt(i, M); });
+  sieges.castShadow = false; sieges.receiveShadow = true; g.add(sieges);
 
   /** Une banderole bleu ciel au nom de la ville (le meme dessin partout ; aucune marque). */
   const matBandeVille = () => new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide, map: toile(512, 640, (c, w, h) => {
@@ -468,7 +647,8 @@ export function construireSalle(ctx: ContexteSalle) {
   // les grandes banderoles bleu ciel suspendues devant le grand vitrage
   for (const a of [0.36, 0.62]) {
     const m = ajouter(new THREE.PlaneGeometry(5, 5.5), matBandeVille(), false);
-    m.position.set(X0 + a * L, Y0 + 0.9, 7.6); m.rotation.x = -Math.PI / 2; m.scale.x = -1;
+    // (retournee des deux sens : vue de la piste, sous le miroir du monde, le texte se lit droit)
+    m.position.set(X0 + a * L, Y0 + 0.9, 7.6); m.rotation.x = -Math.PI / 2; m.scale.y = -1;
   }
   // le plafond de bois clair, en lames dans la longueur
   const plafondBois = lamesDeBois([196, 126, 70], false, 29); plafondBois.repeat.set(L / 3, 2 * LARGE / 3);
@@ -557,6 +737,8 @@ export function construireSalle(ctx: ContexteSalle) {
   chargeur.load(ctx.base + 'modeles/salle/exterieur.glb', gl => {
     // le bardage est d'aluminium argent : la texture Tripo, prise sur une photo au soleil couchant, tire au beige
     gl.scene.traverse((o: any) => { if (o.isMesh) { o.receiveShadow = false; o.castShadow = false; if (o.material?.color) o.material.color.setRGB(0.86, 0.9, 0.96); } });
+    // (le modele est a 103,34 m de long : la halle du plan est un peu plus courte)
+    gl.scene.scale.x *= L / 103.34;
     dehors.add(gl.scene);
   }, undefined, () => { /* sans exterieur : le survol montre l'interieur */ });
   return {
@@ -577,22 +759,39 @@ export function construireSalle(ctx: ContexteSalle) {
 }
 
 /**
- * LE PUBLIC DE LA SALLE : assis dans la tribune bleue (face a la piste), debout le long de la
- * lisse vitree de la coursive (tourne vers l'anneau). Comme au stade, il se remplit par le bas
- * et selon l'affluence (fouleDe) ; la coursive, elle, se garnit par endroits.
+ * Les places des gradins de bois, sur les deux lignes droites : rang i (0 en bas), tous les 0,5 m.
+ * Cote arrivee, deux blocs de sieges bleus de part et d'autre d'un escalier (le plan) ; en face,
+ * on s'assoit sur le bois, sauf devant la paroi vitree de la salle d'echauffement.
+ */
+function placesGradins(arrivee: boolean) {
+  const out: { x: number; y: number; z: number; rang: number }[] = [];
+  for (let i = 0; i < N_G; i++) {
+    const r = R_G + i * P_G + P_G * 0.55, y = arrivee ? -RS + r : -RS - r;
+    for (let x = -S + 1.5; x < -1.5; x += 0.5) {
+      if (arrivee && Math.abs(x + S / 2) < 2) continue;              // l'escalier
+      if (!arrivee && x > -20.5 && x < -1.5) continue;                // la paroi vitree
+      out.push({ x, y, z: hautMarche(i + 1, x, y), rang: i });
+    }
+  }
+  return out;
+}
+const siegesTribune = () => placesGradins(true);
+
+/**
+ * LE PUBLIC DE LA SALLE : assis dans la tribune (face a la piste) et sur les gradins de bois d'en
+ * face, debout le long de la lisse vitree de la coursive (tourne vers l'anneau). Comme au stade,
+ * il se remplit par le bas et selon l'affluence (fouleDe) ; la coursive se garnit par endroits.
  */
 export function placesDuPublic(affluence: number, hasard: () => number): { x: number; y: number; z: number; face: number; debout: boolean }[] {
   const places: { x: number; y: number; z: number; face: number; debout: boolean }[] = [];
-  const RANGS = 6, PROF = (R_BOIS - R_MUR - 0.2) / RANGS, MONTE = (H_COURSIVE - 0.9) / RANGS;
-  for (let i = 0; i < RANGS; i++) {
-    const y = -RS + R_MUR + 0.2 + (i + 0.5) * PROF, z = 0.9 + (i + 1) * MONTE;
-    const occupe = 0.95 * Math.min(1, Math.max(0.05, affluence * 1.6 - (i / RANGS) * 1.6 * (1 - affluence)));
-    for (let x = -S + 3; x < -3; x += 0.5) if (hasard() < occupe) places.push({ x, y: y + 0.1, z, face: -Math.PI / 2, debout: false });
+  for (const arrivee of [true, false]) for (const p of placesGradins(arrivee)) {
+    const occupe = (arrivee ? 0.95 : 0.6) * Math.min(1, Math.max(0.05, affluence * 1.6 - (p.rang / N_G) * 1.6 * (1 - affluence)));
+    if (hasard() < occupe) places.push({ x: p.x, y: p.y + (arrivee ? 0.1 : -0.1), z: p.z, face: arrivee ? -Math.PI / 2 : Math.PI / 2, debout: false });
   }
   // les sieges de la coursive (construireSalle les a poses) : assis, la piste en face
   for (const p of sieges3) if (hasard() < 0.08 + 0.55 * affluence) places.push({ x: p.x, y: p.y, z: p.z, face: p.face, debout: false });
   // la coursive : tous les 0,7 m le long de la lisse, plus ou moins garnie
-  const a = tour(R_BOIS + 0.55);
+  const a = tour(R_BOIS + 0.55, -1, EV);
   let reste = 0;
   for (let i = 1; i < a.length; i++) {
     const dx = a[i].x - a[i - 1].x, dy = a[i].y - a[i - 1].y, l = Math.hypot(dx, dy);
@@ -602,6 +801,7 @@ export function placesDuPublic(affluence: number, hasard: () => number): { x: nu
     // pas au-dessus de la tribune (elle a deja son monde), et un peu plus dans les virages
     const p = a[i];
     if (p.y > -RS && p.x > -S && p.x < 0) continue;
+    if (p.x > LONG - 0.5 || p.x < -S - LONG + 0.5) continue;
     if (hasard() > 0.05 + 0.2 * affluence) continue;
     // tourne vers l'interieur : la normale au tour (sens horaire : l'interieur a droite)
     const face = Math.atan2(-dx, dy);

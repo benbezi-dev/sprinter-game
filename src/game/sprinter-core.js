@@ -1685,8 +1685,9 @@
     // fois, avec sa propre geometrie (rayon, couloirs, virages releves).
     this.salle = race.salle || null;
     if (this.salle) { this.total = race.total; this.fullLap = true; this.curved = true; }
-    // le nombre de couloirs : six sur l'anneau couvert, huit partout ailleurs
-    this.lanes = this.salle ? this.salle.couloirs : C.LANE_COUNT;
+    // le nombre de couloirs : six sur l'anneau couvert et sur sa ligne droite centrale (le plan
+    // de Val-de-Reuil), huit partout ailleurs
+    this.lanes = this.salle ? this.salle.couloirs : race.salleDroite ? race.couloirs : C.LANE_COUNT;
   }
   // L'anneau couvert, couloir de rayon r : ou en est-on, `s` metres apres le
   // depart ? On compte depuis l'arrivee (u, metres apres la ligne) : le depart en
@@ -1696,23 +1697,27 @@
   // `theta` = angle tourne depuis la ligne (le cap vaut pi - theta), `bend` =
   // 1 ou 2 dans un virage, 0 en ligne droite, `v` = angle dans le virage ou
   // abscisse sur la droite.
+  // LES VIRAGES SONT ALLONGES (piste-salle.js : 35 m de ligne droite, 65 m de virage au
+  // couloir 1) : `r` reste la distance a l'axe en ligne droite ; dans un virage, on suit
+  // la parallele au bord interieur a r - rayon metres, `v` est son angle (0 a pi) et
+  // `theta` le cap tourne.
   Track.prototype.boucle = function (s, r) {
-    const S = this.straight, B = Math.PI * r, L = 2 * S + 2 * B;
+    const P = this.salle, d = r - P.rayon;
+    const S = this.straight, B = P.longueurVirage(d), L = 2 * S + 2 * B;
     const brut = s - this.total, n = Math.floor(brut / L);
     let u = brut - n * L;
     const tours = 2 * Math.PI * (n + (this.salle.tours || 1));
-    if (u < B) return { bend: 1, v: u / r, theta: u / r, tours, rem: B - u };
+    if (u < B) { const v = P.phiVirage(u, d); return { bend: 1, v, theta: P.capVirage(v), tours, rem: B - u }; }
     u -= B;
     if (u < S) return { bend: 0, v: u, theta: Math.PI, tours, moitie: 0 };
     u -= S;
-    if (u < B) return { bend: 2, v: u / r, theta: Math.PI + u / r, tours, rem: B - u };
+    if (u < B) { const v = P.phiVirage(u, d); return { bend: 2, v, theta: Math.PI + P.capVirage(v), tours, rem: B - u }; }
     return { bend: 0, v: u - B, theta: 2 * Math.PI, tours, moitie: 1 };
   };
   // Le point de la boucle `b` au rayon `r` (r peut differer du couloir : relais, bords peints).
   Track.prototype.pointDeBoucle = function (b, r) {
     const S = this.straight;
-    if (b.bend === 1) return [-r * Math.sin(b.v), -r * Math.cos(b.v)];
-    if (b.bend === 2) return [S + r * Math.sin(b.v), r * Math.cos(b.v)];
+    if (b.bend) { const q = this.salle.virage(b.v, r - this.salle.rayon); return b.bend === 1 ? [-q[0], -q[1]] : [S + q[0], q[1]]; }
     return b.moitie === 0 ? [b.v, r] : [S - b.v, -r];
   };
   // Rayon de la ligne de mesure du couloir (lane compte a partir de zero) :
@@ -1745,6 +1750,7 @@
     return this.fullLap ? this.total - 2 * this.straight - Math.PI * r : this.arc;
   };
   Track.prototype.posR = function (v, r, onBend) {
+    if (this.salle && onBend) { const q = this.salle.virage(v, r - this.salle.rayon); return [-q[0], q[1]]; }
     if (this.curved && onBend) return [-r * Math.sin(v), r * Math.cos(v)];
     return [v, this.curved ? r : r];
   };
