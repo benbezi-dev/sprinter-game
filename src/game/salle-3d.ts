@@ -155,23 +155,29 @@ function mur(rgb: number[], graine: number) {
 
 /* ------------------------------------------------------------------ la geometrie */
 
-/** Le tour de l'anneau au rayon r : la suite des points (x, y) et du relevement, de l'arrivee a l'arrivee. */
-function tour(r: number): { x: number; y: number; f: number }[] {
-  const pts: { x: number; y: number; f: number }[] = [];
+/**
+ * Le tour de l'anneau au rayon r : la suite des points (x, y) et du relevement, de l'arrivee a
+ * l'arrivee. `partie` (0 a 3 : ligne d'arrivee, virage, ligne opposee, virage) n'en rend qu'un
+ * quart, avec le premier point du suivant (la lumiere cuite range chaque quart a part).
+ */
+function tour(r: number, partie = -1): { x: number; y: number; f: number }[] {
+  const parts: { x: number; y: number; f: number }[][] = [[], [], [], []];
   const pas = 0.5, seg = 128;
-  const p = (x: number, y: number) => pts.push({ x, y, f: releve(x, y) });
-  for (let x = -S; x < 0; x += pas) p(x, -RS + r);                                          // la ligne d'arrivee, vers +x
-  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; p(r * Math.sin(a), -RS + r * Math.cos(a)); }
-  for (let x = 0; x > -S; x -= pas) p(x, -RS - r);                                          // la ligne opposee, vers -x
-  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; p(-S - r * Math.sin(a), -RS - r * Math.cos(a)); }
+  const p = (k: number, x: number, y: number) => parts[k].push({ x, y, f: releve(x, y) });
+  for (let x = -S; x < 0; x += pas) p(0, x, -RS + r);                                          // la ligne d'arrivee, vers +x
+  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; p(1, r * Math.sin(a), -RS + r * Math.cos(a)); }
+  for (let x = 0; x > -S; x -= pas) p(2, x, -RS - r);                                          // la ligne opposee, vers -x
+  for (let i = 0; i < seg; i++) { const a = (i / seg) * Math.PI; p(3, -S - r * Math.sin(a), -RS - r * Math.cos(a)); }
+  if (partie >= 0) return [...parts[partie], parts[(partie + 1) % 4][0]];
+  const pts = parts.flat();
   pts.push(pts[0]);
   return pts;
 }
 const zEn = (r: number, f: number) => Math.max(0, Math.min(r, R_MUR) - RS) * PENTE * f;
 
 /** Une bande de l'anneau entre deux rayons, relevee, a dz au-dessus du revetement. Les UV en metres. */
-function bandeAnneau(r0: number, r1: number, dz: number) {
-  const a = tour(r0), b = tour(r1);
+function bandeAnneau(r0: number, r1: number, dz: number, partie = -1) {
+  const a = tour(r0, partie), b = tour(r1, partie);
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   let s = 0;
   for (let i = 0; i < a.length; i++) {
@@ -188,8 +194,8 @@ function bandeAnneau(r0: number, r1: number, dz: number) {
   return g;
 }
 /** Un mur qui suit l'anneau au rayon r, de z0 a z1 (z1 < 0 : jusqu'au haut du relevement + |z1|). */
-function murAnneau(r: number, z0: (f: number) => number, z1: (f: number) => number) {
-  const a = tour(r);
+function murAnneau(r: number, z0: (f: number) => number, z1: (f: number) => number, partie = -1) {
+  const a = tour(r, partie);
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   let s = 0;
   for (let i = 0; i < a.length; i++) {
@@ -218,11 +224,18 @@ export function construireSalle(ctx: ContexteSalle) {
   sieges3.length = 0;
   // tout l'interieur dans un groupe : on le cache quand la camera survole le batiment, dehors
   const g = new THREE.Group(); ctx.stade.add(g);
-  const ajouter = (geo: THREE.BufferGeometry, mat: THREE.Material, ombre = true) => {
-    const m = new THREE.Mesh(geo, mat); m.receiveShadow = ombre; g.add(m); return m;
+  // `lumiere` : la surface recoit la lumiere cuite dans Blender — 'sol' (vue de dessus) ou 'coque' (l'atlas)
+  const ajouter = (geo: THREE.BufferGeometry, mat: THREE.Material, ombre = true, lumiere: '' | 'sol' | 'coque' = '') => {
+    const m = new THREE.Mesh(geo, mat); m.receiveShadow = ombre; g.add(m);
+    if (lumiere) m.userData.lumiere = lumiere;
+    return m;
+  };
+  /** Une bande ou un mur de l'ovale, en quatre quarts (chacun sa place dans l'atlas de lumiere). */
+  const enQuarts = (fab: (k: number) => THREE.BufferGeometry, mat: THREE.Material, lumiere: 'sol' | 'coque') => {
+    for (let k = 0; k < 4; k++) ajouter(fab(k), mat, true, lumiere);
   };
   // les murs qui suivent l'anneau se voient des deux cotes (la piste et la coursive)
-  const murDouble = (geo: THREE.BufferGeometry, mat: THREE.Material) => { const m2 = (mat as THREE.MeshStandardMaterial).clone(); m2.side = THREE.DoubleSide; return ajouter(geo, m2); };
+  const double = (mat: THREE.Material) => { const m2 = (mat as THREE.MeshStandardMaterial).clone(); m2.side = THREE.DoubleSide; return m2; };
   const BLEU = [30, 92, 178], ANTHRACITE = [78, 80, 88], PLATEAU = [176, 176, 170], BLANC = [244, 245, 246];
   const bleu = matRevetement(BLEU, 11, 1), anthracite = matRevetement(ANTHRACITE, 23, 1);
   const plateau = matRevetement(PLATEAU, 37, 1);
@@ -234,15 +247,15 @@ export function construireSalle(ctx: ContexteSalle) {
 
   // LE PLATEAU : tout le sol de la halle, gris clair
   const sol = new THREE.PlaneGeometry(S + 2 * LONG, 2 * LARGE);
-  const ps = ajouter(sol, plateau);
+  const ps = ajouter(sol, plateau, true, 'sol');
   ps.position.set(-S / 2, -RS, -0.01);
   const uvSol = sol.getAttribute('uv') as THREE.BufferAttribute;
   for (let i = 0; i < uvSol.count; i++) uvSol.setXY(i, uvSol.getX(i) * (S + 2 * LONG), uvSol.getY(i) * 2 * LARGE);
 
   // L'ANNEAU : six couloirs alternes, et une bande d'anthracite derriere le sixieme jusqu'au muret
-  for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? anthracite : bleu);
-  ajouter(bandeAnneau(RS + W, R_MUR, 0.004), anthracite);
-  for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - 0.025, RS + k * CW + 0.025, 0.008), ligne, false);
+  for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? anthracite : bleu, true, 'sol');
+  ajouter(bandeAnneau(RS + W, R_MUR, 0.004), anthracite, true, 'sol');
+  for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - 0.025, RS + k * CW + 0.025, 0.008), ligne, false, 'sol');
   // la corde : une lisse blanche en saillie au bord interieur
   ajouter(murAnneau(RS - 0.06, () => 0, () => 0.05), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.5 }), false);
 
@@ -252,11 +265,11 @@ export function construireSalle(ctx: ContexteSalle) {
     const p = new THREE.PlaneGeometry(x1D - x0D, CW_DROITE);
     const uvp = p.getAttribute('uv') as THREE.BufferAttribute;
     for (let i = 0; i < uvp.count; i++) uvp.setXY(i, uvp.getX(i) * (x1D - x0D), uvp.getY(i) * CW_DROITE);
-    const m = ajouter(p, k % 2 ? anthracite : bleu);
+    const m = ajouter(p, k % 2 ? anthracite : bleu, true, 'sol');
     m.position.set((x0D + x1D) / 2, yD + (k + 0.5) * CW_DROITE, 0.004);
   }
   for (let k = 0; k <= NC_DROITE; k++) {
-    const m = ajouter(new THREE.PlaneGeometry(x1D - x0D, 0.05), ligne, false);
+    const m = ajouter(new THREE.PlaneGeometry(x1D - x0D, 0.05), ligne, false, 'sol');
     m.position.set((x0D + x1D) / 2, yD + k * CW_DROITE, 0.008);
   }
   // le depart et l'arrivee du 60 m (x = -55 et 5) : deux lignes blanches en travers
@@ -277,12 +290,12 @@ export function construireSalle(ctx: ContexteSalle) {
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
   const blanc = new THREE.MeshStandardMaterial({ map: mur(BLANC, 5), roughness: 0.9 });
   const hautMur = (f: number) => zEn(R_MUR, f) + 0.9;
-  murDouble(murAnneau(R_MUR, () => 0, hautMur), blanc);
+  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k), double(blanc), 'coque');
   const passage = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.55, 0.56, 0.58, THREE.SRGBColorSpace), roughness: 0.9 });
-  ajouter(bandeAnneau(R_MUR, R_BOIS, 0), passage);
+  ajouter(bandeAnneau(R_MUR, R_BOIS, 0), passage, true, 'sol');
   const bois = lamesDeBois([168, 82, 46], true, 17); bois.repeat.set(1 / 1.5, 1 / 1.5);
   const matBois = new THREE.MeshStandardMaterial({ map: bois, roughness: 0.75 });
-  murDouble(murAnneau(R_BOIS, () => 0, () => H_COURSIVE), matBois);
+  enQuarts(k => murAnneau(R_BOIS, () => 0, () => H_COURSIVE, k), double(matBois), 'coque');
   // la coursive : un plancher de l'ovale aux murs de la halle, et sa lisse vitree
   {
     const forme = new THREE.Shape();
@@ -290,9 +303,13 @@ export function construireSalle(ctx: ContexteSalle) {
     const trou = new THREE.Path(), a = tour(R_BOIS);
     a.slice(0, -1).forEach((p, i) => (i ? trou.lineTo(p.x, p.y) : trou.moveTo(p.x, p.y)));
     forme.holes.push(trou);
-    const plancher = ajouter(new THREE.ShapeGeometry(forme, 4), new THREE.MeshStandardMaterial({ color: 0xc8c9cc, roughness: 0.9 }));
+    const plancher = ajouter(new THREE.ShapeGeometry(forme, 4), new THREE.MeshStandardMaterial({ color: 0xc8c9cc, roughness: 0.9 }), true, 'coque');
     plancher.position.z = H_COURSIVE;
-    const dessous = ajouter(new THREE.ShapeGeometry(forme, 4), new THREE.MeshStandardMaterial({ color: 0x9a9ca0, roughness: 0.9, side: THREE.BackSide }), false);
+    // le dessous, retourne pour de bon (pas une face arriere) : la cuisson le voit regarder vers le bas
+    const geoDessous = new THREE.ShapeGeometry(forme, 4), id = geoDessous.getIndex()!;
+    for (let i = 0; i < id.count; i += 3) { const t = id.getX(i + 1); id.setX(i + 1, id.getX(i + 2)); id.setX(i + 2, t); }
+    geoDessous.computeVertexNormals();
+    const dessous = ajouter(geoDessous, new THREE.MeshStandardMaterial({ color: 0x9a9ca0, roughness: 0.9 }), false, 'coque');
     dessous.position.z = H_COURSIVE - 0.25;
   }
   const verre = new THREE.MeshStandardMaterial({ color: 0xcfe6f0, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false });
@@ -319,8 +336,8 @@ export function construireSalle(ctx: ContexteSalle) {
     poteaux.count = np; g.add(poteaux);
     // la marche du second rang, en bois clair comme le reste de la coursive
     const marcheHaute = lamesDeBois([150, 120, 96], false, 41); marcheHaute.repeat.set(1 / 1.2, 1);
-    ajouter(bandeAnneau(R_BOIS + 1.45, R_BOIS + 2.3, H_COURSIVE + 0.32), new THREE.MeshStandardMaterial({ map: marcheHaute, roughness: 0.8 }));
-    ajouter(murAnneau(R_BOIS + 1.45, () => H_COURSIVE, () => H_COURSIVE + 0.32), new THREE.MeshStandardMaterial({ color: 0x8a8d92, roughness: 0.9, side: THREE.DoubleSide }));
+    enQuarts(k => bandeAnneau(R_BOIS + 1.45, R_BOIS + 2.3, H_COURSIVE + 0.32, k), new THREE.MeshStandardMaterial({ map: marcheHaute, roughness: 0.8 }), 'coque');
+    enQuarts(k => murAnneau(R_BOIS + 1.45, () => H_COURSIVE, () => H_COURSIVE + 0.32, k), new THREE.MeshStandardMaterial({ color: 0x8a8d92, roughness: 0.9, side: THREE.DoubleSide }), 'coque');
     // les sieges : une coque bleue (assise + dossier), deux rangs, tous les 0,5 m
     const assise = new THREE.BoxGeometry(0.44, 0.42, 0.06), dossier = new THREE.BoxGeometry(0.44, 0.06, 0.4);
     const bleu = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.10, 0.36, 0.78, THREE.SRGBColorSpace), roughness: 0.5 });
@@ -365,6 +382,7 @@ export function construireSalle(ctx: ContexteSalle) {
   const L = S + 2 * LONG, X0 = -S - LONG, X1 = LONG, Y0 = -RS - LARGE, Y1 = -RS + LARGE;
   const blancHaut = new THREE.MeshStandardMaterial({ map: mur([236, 238, 240], 9), roughness: 0.95 });
   const ciel = new THREE.MeshStandardMaterial({ color: 0xe8f4ff, emissive: 0xcfe6ff, emissiveIntensity: 0.9, roughness: 0.1 });
+  ciel.name = 'vitrage';
   const montant = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
   const pan = (lx: number, ly: number, x: number, y: number, z0: number, z1: number, mat: THREE.Material) => {
     const b = ajouter(new THREE.BoxGeometry(lx, ly, z1 - z0), mat); b.position.set(x, y, (z0 + z1) / 2); return b;
@@ -372,7 +390,7 @@ export function construireSalle(ctx: ContexteSalle) {
   // LES PAROIS N'ONT QU'UNE FACE, TOURNEE VERS L'INTERIEUR (comme au Palais) : le plan de
   // camera venu du 2D filme de loin et de haut, depuis dehors, et doit voir a travers.
   const paroi = (x: number, y: number, z0: number, z1: number, long: number, normale: 'x+' | 'x-' | 'y+' | 'y-', mat: THREE.Material) => {
-    const m = ajouter(new THREE.PlaneGeometry(normale[0] === 'y' ? long : z1 - z0, normale[0] === 'y' ? z1 - z0 : long), mat, false);
+    const m = ajouter(new THREE.PlaneGeometry(normale[0] === 'y' ? long : z1 - z0, normale[0] === 'y' ? z1 - z0 : long), mat, false, mat === ciel ? '' : 'coque');
     m.position.set(x, y, (z0 + z1) / 2);
     if (normale === 'y-') m.rotation.x = Math.PI / 2; else if (normale === 'y+') m.rotation.x = -Math.PI / 2;
     else if (normale === 'x-') m.rotation.y = -Math.PI / 2; else m.rotation.y = Math.PI / 2;
@@ -399,7 +417,7 @@ export function construireSalle(ctx: ContexteSalle) {
   // (une face, vers le bas : vu d'au-dessus, on voit a travers)
   const toit = new THREE.Group(); g.add(toit);
   const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, 2 * LARGE), new THREE.MeshStandardMaterial({ map: plafondBois, roughness: 0.8 }));
-  plafond.position.set(-S / 2, -RS, H_TOIT); plafond.rotation.x = Math.PI; toit.add(plafond);
+  plafond.position.set(-S / 2, -RS, H_TOIT); plafond.rotation.x = Math.PI; toit.add(plafond); plafond.userData.lumiere = 'coque';
   // les fermes d'acier, en travers, tous les 7,5 m : membrures haute et basse, montants en zigzag
   const acier = new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.45, metalness: 0.7 });
   const geoBarre = new THREE.BoxGeometry(1, 1, 1);
@@ -420,7 +438,7 @@ export function construireSalle(ctx: ContexteSalle) {
   for (let y = Y0 + 4; y < Y1; y += 6) barre(X0, y, H_TOIT - 0.35, X1, y, H_TOIT - 0.35, 0.16);
   barres.count = nb; toit.add(barres);
   // les plafonniers : des disques qui brillent sous les fermes
-  const lampe = new THREE.MeshBasicMaterial({ color: 0xfffbf0 });
+  const lampe = new THREE.MeshBasicMaterial({ color: 0xfffbf0 }); lampe.name = 'plafonnier';
   const lampes = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.35, 0.35, 0.12, 16), lampe, 200);
   let nl = 0;
   for (let x = X0 + 7.5; x < X1; x += 7.5) for (let y = Y0 + 6; y < Y1 - 3; y += 8) { M.makeRotationX(Math.PI / 2).setPosition(x, y, H_TOIT - 2.3); lampes.setMatrixAt(nl++, M); }
@@ -440,6 +458,34 @@ export function construireSalle(ctx: ContexteSalle) {
   }
   // un grand drapeau bleu ciel sous le toit, comme sur place
   { const m = ajouter(new THREE.PlaneGeometry(2.2, 3.4), matBand, false); m.position.set(-S / 2, Y1 - 0.6, H_TOIT - 4); m.rotation.x = Math.PI / 2; }
+
+  // LA LUMIERE CUITE DANS BLENDER (tools/blender/salle/cuire_lumiere.py) : les plafonniers, les
+  // grands vitrages, les rebonds et les ombres douces, cuits une fois pour toutes dans deux images.
+  // Le jeu garde ses matieres de detail (le grain de la piste, le bois) et les multiplie par
+  // cette lumiere. Les cartes ci-dessous sont DETERMINISTES : l'export pour Blender (?exporterSalle=1)
+  // et le jeu les recalculent a l'identique.
+  const cuites = cartesDeLumiere(g, { X0, Y0, L, LY: 2 * LARGE });
+  if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('exporterSalle')) exporterPourBlender(g.clone());
+  const charge = new THREE.TextureLoader();
+  const appliquer = (fichier: string, liste: THREE.Mesh[], coque: boolean) => charge.load(ctx.base + 'modeles/salle/' + fichier, t => {
+    // (flipY a faux, comme les textures glTF : a l'import, Blender retourne v ; notre v = 0 tombe en haut de l'image cuite)
+    t.channel = 1; t.colorSpace = THREE.SRGBColorSpace; t.flipY = false;
+    const deja = new Map<THREE.Material, THREE.Material>();
+    for (const m of liste) {
+      const ancien = m.material as THREE.MeshStandardMaterial;
+      let neuf = deja.get(ancien);
+      if (!neuf) {
+        // la coque n'a plus besoin des lumieres du jeu : sa lumiere est cuite (MeshBasic : albedo x lumiere / pi)
+        neuf = coque
+          ? new THREE.MeshBasicMaterial({ map: ancien.map, color: ancien.color, side: ancien.side, lightMap: t, lightMapIntensity: LUMIERE_COQUE })
+          : Object.assign(ancien.clone(), { lightMap: t, lightMapIntensity: LUMIERE_SOL });
+        deja.set(ancien, neuf);
+      }
+      m.material = neuf;
+    }
+  }, undefined, () => { /* sans lumiere cuite : la salle eclairee par le jeu */ });
+  appliquer('lumiere-coque.jpg', cuites.coque, true);
+  appliquer('lumiere-sol.jpg', cuites.sol, false);
 
   // L'EXTERIEUR (Tripo, d'apres la vue aerienne du ministere des Sports ; tools/blender/salle/exterieur_tripo.py) :
   // le batiment vu de dehors, au seul survol d'avant-course — il cacherait la piste a tout autre plan
@@ -504,6 +550,73 @@ export function placesDuPublic(affluence: number, hasard: () => number): { x: nu
     places.push({ x: p.x + (hasard() - 0.5) * 0.3, y: p.y, z: H_COURSIVE, face, debout: true });
   }
   return places;
+}
+
+/** Les intensites des lumieres cuites (les images sont gardees en dessous de 1 : voir cuire_lumiere.py, EXPO). */
+const LUMIERE_COQUE = Math.PI * 1.05, LUMIERE_SOL = 0.85;
+export const ATLAS = 2048;
+
+/**
+ * Les cartes de lumiere (uv1) : le sol et la piste vus de dessus, dans le rectangle de la halle ;
+ * la coque rangee dans un atlas de ATLAS px (chaque surface a sa place, a la meme densite,
+ * rangees en etageres par hauteur decroissante, la plus forte densite qui tienne).
+ */
+function cartesDeLumiere(g: THREE.Group, h: { X0: number; Y0: number; L: number; LY: number }) {
+  g.traverse(o => o.updateMatrix());
+  const versG = (o: THREE.Object3D) => { const m = new THREE.Matrix4(); for (let p: THREE.Object3D | null = o; p && p !== g; p = p.parent) m.premultiply(p.matrix); return m; };
+  const sol: THREE.Mesh[] = [], coque: THREE.Mesh[] = [];
+  g.traverse((o: any) => { if (o.isMesh && o.userData.lumiere === 'sol') sol.push(o); else if (o.isMesh && o.userData.lumiere === 'coque') coque.push(o); });
+  const v = new THREE.Vector3();
+  for (const m of sol) {
+    const pos = m.geometry.getAttribute('position'), M = versG(m), uv1 = new Float32Array(pos.count * 2);
+    for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(M); uv1[i * 2] = (v.x - h.X0) / h.L; uv1[i * 2 + 1] = (v.y - h.Y0) / h.LY; }
+    m.geometry.setAttribute('uv1', new THREE.BufferAttribute(uv1, 2));
+  }
+  // la coque : les UV de chaque surface en metres, sa boite, puis le rangement
+  const brut = coque.map(m => {
+    const geo = m.geometry as any, uv = geo.getAttribute('uv'), sx = geo.parameters?.width ?? 1, sy = geo.parameters?.height ?? 1;
+    const plan = geo.type === 'PlaneGeometry';
+    const u = new Float32Array(uv.count * 2);
+    let u0 = Infinity, v0 = Infinity, u1 = -Infinity, v1 = -Infinity;
+    for (let i = 0; i < uv.count; i++) {
+      const a = uv.getX(i) * (plan ? sx : 1), b = uv.getY(i) * (plan ? sy : 1);
+      u[i * 2] = a; u[i * 2 + 1] = b;
+      u0 = Math.min(u0, a); u1 = Math.max(u1, a); v0 = Math.min(v0, b); v1 = Math.max(v1, b);
+    }
+    return { m, u, u0, v0, w: u1 - u0, h: v1 - v0 };
+  });
+  const ordre = brut.map((_, i) => i).sort((a, b) => brut[b].h - brut[a].h || a - b);
+  const MARGE = 6;
+  const ranger = (k: number) => {
+    const places: { x: number; y: number }[] = [];
+    let x = MARGE, y = MARGE, haut = 0;
+    for (const i of ordre) {
+      const w = Math.ceil(brut[i].w * k), hh = Math.ceil(brut[i].h * k);
+      if (w + 2 * MARGE > ATLAS) return null;
+      if (x + w + MARGE > ATLAS) { x = MARGE; y += haut + MARGE; haut = 0; }
+      places[i] = { x, y }; x += w + MARGE; haut = Math.max(haut, hh);
+    }
+    return y + haut + MARGE <= ATLAS ? places : null;
+  };
+  let k = 40, places = ranger(k);
+  while (!places && k > 1) { k *= 0.96; places = ranger(k); }
+  brut.forEach((b, i) => {
+    const uv1 = new Float32Array(b.u.length), P = places![i];
+    for (let j = 0; j < b.u.length; j += 2) { uv1[j] = (P.x + (b.u[j] - b.u0) * k) / ATLAS; uv1[j + 1] = (P.y + (b.u[j + 1] - b.v0) * k) / ATLAS; }
+    b.m.geometry.setAttribute('uv1', new THREE.BufferAttribute(uv1, 2));
+  });
+  return { sol, coque, densite: k };
+}
+
+/** L'export pour Blender (?exporterSalle=1) : la salle telle que le jeu la construit, ses cartes de lumiere comprises. */
+function exporterPourBlender(g: THREE.Object3D) {
+  import('three/examples/jsm/exporters/GLTFExporter.js').then(({ GLTFExporter }) => {
+    new GLTFExporter().parse(g, (glb: any) => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([glb], { type: 'model/gltf-binary' }));
+      a.download = 'salle-source.glb'; a.click();
+    }, (e: any) => console.error('export salle', e), { binary: true, onlyVisible: false });
+  });
 }
 
 /** Les lumieres de la salle : un jour d'hiver par les vitres, les plafonniers, aucune ombre dure. */
