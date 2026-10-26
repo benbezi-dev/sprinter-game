@@ -884,7 +884,21 @@ export function construireSalle(ctx: ContexteSalle) {
   const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
   chargeur.load(ctx.base + 'modeles/salle/exterieur.glb', gl => {
     // le bardage est d'aluminium argent : la texture Tripo, prise sur une photo au soleil couchant, tire au beige
-    gl.scene.traverse((o: any) => { if (o.isMesh) { o.receiveShadow = false; o.castShadow = false; if (o.material?.color) o.material.color.setRGB(0.86, 0.9, 0.96); } });
+    // (le bardage reel est un gris neutre, rgb(117, 121, 116) a l'ombre, image cBlE 0011 : on retire la
+    // teinte de la texture, on garde sa luminosite — les vitres restent sombres)
+    gl.scene.traverse((o: any) => {
+      if (!o.isMesh) return;
+      o.receiveShadow = false; o.castShadow = false;
+      const m = o.material;
+      if (!m) return;
+      m.color?.setRGB(1, 1, 1);
+      m.onBeforeCompile = (sh: any) => {
+        sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>',
+          '#include <map_fragment>\ndiffuseColor.rgb = vec3(dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114))) * vec3(0.98, 1.0, 0.98);');
+      };
+      m.customProgramCacheKey = () => 'salle-argent';
+      m.needsUpdate = true;
+    });
     // (le modele est a 103,34 m de long : la halle du plan est un peu plus courte)
     gl.scene.scale.x *= L / 103.34; gl.scene.scale.y *= LY / 58;
     dehors.add(gl.scene);
