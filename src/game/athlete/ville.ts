@@ -480,7 +480,7 @@ const _T = new THREE.Matrix4(), _R = new THREE.Matrix4(), _S = new THREE.Matrix4
 /** La foulee de course en ville, en metres (le moteur avance sa phase d'un demi-tour par appui). */
 const FOULEE = 2.1;
 
-class Personne {
+export class Personne {
   sprite: THREE.Sprite;
   ombre: THREE.Mesh;
   private cv = document.createElement('canvas');
@@ -625,7 +625,7 @@ function dansPoly(poly: P2[], x: number, z: number) {
  *  ils etaient grandis de 1,55 et mesuraient pres de 3 m a cote des voitures). La camera s'approche a la place. */
 const GRANDI = 1;
 /** Le niveau des trottoirs et dalles, sur lequel on marche. */
-const SOL = 0.12;
+export const SOL = 0.12;
 // « les deplacements sont trop lents, c'est plus rapide dans les Sims » (l'auteur, 25/10) : on presse le pas ;
 // et « le personnage peut aussi courir pour aller plus vite » : la course double la vitesse
 // (a taille reelle et camera rapprochee : la meme vitesse a l'ecran qu'avant, en metres d'un vrai pas)
