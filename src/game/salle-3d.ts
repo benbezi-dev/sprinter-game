@@ -508,9 +508,10 @@ export function construireSalle(ctx: ContexteSalle) {
       if (Math.abs(q[1]) <= 5) xMur = Math.min(xMur, q[0]);
     }
     // (pose sur la zone de freinage, a sa hauteur, jusque sous la coursive)
-    const xf = xMur - 0.6, base = profil(R_MUR - RS), hT = H_COURSIVE - 0.1 - base;
-    const marine = new THREE.MeshStandardMaterial({ color: 0x1c2a52, roughness: 0.85 });
-    const corps = ajouter(new THREE.BoxGeometry(0.55, 10, hT), marine); corps.position.set(xf + 0.275, -RS, base + hT / 2); corps.castShadow = true;
+    // (un seul tapis d'amortissement, 0,30 m d'epaisseur, plaque contre le mur : rien ne deborde sur la piste)
+    const EP = 0.3, xf = xMur - EP, base = profil(R_MUR - RS), hT = H_COURSIVE - 0.1 - base;
+    const mousse = new THREE.MeshStandardMaterial({ color: 0x1d5bb0, roughness: 0.9 });
+    const corps = ajouter(new THREE.BoxGeometry(EP, 10, hT), mousse); corps.position.set(xf + EP / 2, -RS, base + hT / 2);
     const toileTapis = new THREE.MeshStandardMaterial({ roughness: 0.85, map: toile(1024, 460, (c, w, h) => {
       c.fillStyle = '#1d5bb0'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#ffffff'; c.textAlign = 'center';
@@ -525,9 +526,6 @@ export function construireSalle(ctx: ContexteSalle) {
     // (face a la piste, vers -x ; retournee comme les fresques du pignon : le monde est en miroir)
     face.position.set(xf - 0.01, -RS, base + hT / 2); face.scale.x = -1;
     face.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)));
-    // le matelas vertical gris-bleu, a sa gauche vu de la piste (image 0661 ; le monde est en miroir : y < -RS)
-    const m2 = ajouter(new THREE.BoxGeometry(0.6, 1.6, hT * 0.95), new THREE.MeshStandardMaterial({ color: 0x3a4660, roughness: 0.85 }));
-    m2.position.set(xf + 0.2, -RS - 5.9, base + hT * 0.475); m2.castShadow = true;
   }
 
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
@@ -627,6 +625,9 @@ export function construireSalle(ctx: ContexteSalle) {
         if (l < 0.5) continue;
         l = 0;
         if (b[i].x > LONG - 0.5 || b[i].x < -S - LONG + 0.5) continue;   // contre les pignons, plus de place
+        // (pas de sieges sur la coursive du virage d'apres l'arrivee, cote tribune : la table de
+        // chronometrage et des gens debout, image 0661)
+        if (b[i].x > 0 && b[i].y > -RS) continue;
         const cap = Math.atan2(dy, dx);                       // le long du tour ; la piste a droite
         const ox = Math.sin(cap) * 0.2, oy = -Math.cos(cap) * 0.2;   // le dossier, cote exterieur
         poser(lotA, ns, b[i].x, b[i].y, z, cap);
