@@ -35,12 +35,15 @@ const W = NC * CW;
 // sixieme couloir (15° en moyenne sur les couloirs exterieurs), puis 18° jusqu'au muret. Les
 // couloirs du dessus montent donc plus haut, et plus raide, sur les memes rampes d'entree.
 // shortcut: angles a caler sur les cotes reelles quand on les aura (la recherche est en cours).
-const ALPHA0 = 10 * Math.PI / 180, ALPHA1 = 18 * Math.PI / 180;
+// (le gabarit World Athletics, ?anneau=wa : 10° constants)
+const ALPHA0 = 10 * Math.PI / 180, ALPHA1 = (SALLE.wa ? 10 : 18) * Math.PI / 180;
 /** La hauteur du revetement plein-releve a d metres du bord interieur (la pente tourne de ALPHA0 a ALPHA1). */
 function profil(d: number) {
   if (d <= 0) return 0;
   const k = (ALPHA1 - ALPHA0) / W, dd = Math.min(d, W);
-  return (Math.log(Math.cos(ALPHA0)) - Math.log(Math.cos(ALPHA0 + k * dd))) / k + Math.max(0, d - W) * Math.tan(ALPHA1);
+  // (pente constante : k nul, la formule se reduit a d x tan)
+  const plein = Math.abs(k) < 1e-9 ? dd * Math.tan(ALPHA0) : (Math.log(Math.cos(ALPHA0)) - Math.log(Math.cos(ALPHA0 + k * dd))) / k;
+  return plein + Math.max(0, d - W) * Math.tan(ALPHA1);
 }
 // LE RELEVEMENT S'INSTALLE EN DOUCEUR (« la montee dans le virage manque de douceur, c'est trop
 // sec », l'auteur, 26/10) : il commence 20 m avant le virage, y arrive a 55 %, et ne devient plein
@@ -57,7 +60,8 @@ const H_COURSIVE = 4.0;
 const N_G = 4, P_G = 0.8, R_G = R_MUR + 0.15;
 // la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; ses longs
 // cotes a 29 m de l'axe
-const LONG = A + 8.75, LARGE = 29;
+// (au moins 0,3 m de coursive au bout des virages : sinon son plancher deborde du pignon)
+const LONG = A + Math.max(8.75, W + 1.9 + 1.15 + 0.3), LARGE = 29;
 const H_TOIT = 12.5;
 const CW_DROITE = 1.22, NC_DROITE = SALLE.couloirsDroite; // la ligne droite centrale
 const W60 = NC_DROITE * CW_DROITE;
@@ -702,8 +706,11 @@ export function construireSalle(ctx: ContexteSalle) {
   // Le jeu garde ses matieres de detail (le grain de la piste, le bois) et les multiplie par
   // cette lumiere. Les cartes ci-dessous sont DETERMINISTES : l'export pour Blender (?exporterSalle=1)
   // et le jeu les recalculent a l'identique.
-  const cuites = cartesDeLumiere(g, { X0, Y0, L, LY: 2 * LARGE });
-  if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('exporterSalle')) exporterPourBlender(g.clone());
+  // (?lumiere=0, ou l'anneau du gabarit WA, cuit pour l'autre forme : la salle eclairee par le jeu)
+  const parametres = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
+  const exporter = parametres.has('exporterSalle'), sansCuisson = !exporter && (SALLE.wa || parametres.get('lumiere') === '0');
+  const cuites = sansCuisson ? { coque: [], sol: [] } : cartesDeLumiere(g, { X0, Y0, L, LY: 2 * LARGE });
+  if (exporter) exporterPourBlender(g.clone());
   const charge = new THREE.TextureLoader();
   const appliquer = (fichier: string, liste: THREE.Mesh[], coque: boolean) => charge.load(ctx.base + 'modeles/salle/' + fichier, t => {
     // (flipY a faux, comme les textures glTF : a l'import, Blender retourne v ; notre v = 0 tombe en haut de l'image cuite)
@@ -722,8 +729,10 @@ export function construireSalle(ctx: ContexteSalle) {
       m.material = neuf;
     }
   }, undefined, () => { /* sans lumiere cuite : la salle eclairee par le jeu */ });
-  appliquer('lumiere-coque.jpg', cuites.coque, true);
-  appliquer('lumiere-sol.jpg', cuites.sol, false);
+  if (!sansCuisson) {
+    appliquer('lumiere-coque.jpg', cuites.coque, true);
+    appliquer('lumiere-sol.jpg', cuites.sol, false);
+  }
 
   // L'EXTERIEUR (Tripo, d'apres la vue aerienne du ministere des Sports ; tools/blender/salle/exterieur_tripo.py) :
   // le batiment vu de dehors, au seul survol d'avant-course — il cacherait la piste a tout autre plan
