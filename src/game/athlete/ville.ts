@@ -43,7 +43,8 @@ export type Lieu =
 type P2 = [number, number];
 export type Donnees = {
   origine: [number, number];
-  batiments: { p: P2[]; h: number; t: string; n?: string; a?: string }[];
+  /** h : hauteur ; IGN BD TOPO (tools/ville/ign-batiments.mjs) : e etages, u usage, mm/mt materiaux des murs / du toit, an annee. */
+  batiments: { p: P2[]; h: number; t: string; n?: string; a?: string; e?: number; u?: string; mm?: string; mt?: string; an?: number }[];
   routes: { l: P2[]; w: number; t: string; n?: string }[];
   rails: { l: P2[]; t: string }[];
   eau: P2[][];
@@ -382,6 +383,8 @@ const aire = (p: P2[]) => { let a = 0; for (let i = 0; i < p.length; i++) { cons
  * montent de 3 a 5 etages, les pavillons d'un, les garages a peine.
  */
 function hauteurDe(b: Donnees['batiments'][number], i: number): number {
+  // mesuree par l'IGN : c'est la vraie
+  if (b.u || b.e || b.mm || b.t === 'ign') return Math.max(2.5, b.h);
   if (b.t !== 'yes' || b.h !== 6) return b.h;
   const s = Math.abs(aire(b.p)), v = ((i * 2654435761) >>> 0) % 100 / 100;
   if (s < 40) return 3;
@@ -393,6 +396,26 @@ function hauteurDe(b: Donnees['batiments'][number], i: number): number {
 
 // Les facades de la ville nouvelle : enduits clairs et couleurs franches.
 const ENDUITS = ['#F1E2C6', '#F2D3AE', '#E7C29C', '#F6EDDB', '#DCE5E9', '#EEC4AC', '#CFE0CF', '#F0DC9A', '#F5F3EE', '#E2CDB2', '#F0B79B', '#CADCEB'];
+// LES MATERIAUX DE L'IGN (BD TOPO : premier chiffre du code) : les murs et le toit de chaque batiment.
+// murs : 1 pierre, 2 meuliere, 3 beton, 4 brique, 5 agglomere, 6 bois, 7 verre, 8 metal ;
+// toit : 1 tuiles, 2 ardoises, 3 zinc/aluminium, 4 beton, 5 verre, 6 bois, 7 metal.
+const MURS: Record<string, string[]> = {
+  '1': ['#E6D8BC', '#DDCCAA', '#EADFC8'], '2': ['#C9A27A', '#BF9670'], '4': ['#B5573E', '#A84E36', '#C0644A'],
+  '6': ['#9B7350', '#A87E58'], '7': ['#9FC3D6', '#8DB4CA'], '8': ['#B9C0C8', '#A9B3BE', '#8FA3B6'],
+};
+const TOITS: Record<string, string> = { '1': '#B6553A', '2': '#4A4F58', '3': '#8E959C', '4': '#8D9096', '5': '#9FC3D6', '6': '#7A5A3E', '7': '#7E8790' };
+/** Les couleurs d'un batiment : ses murs, son toit, et s'il se lit comme une maison (toit de tuiles). */
+function habillageDe(b: Donnees['batiments'][number], i: number, h: number): { mur: string; toit: string; maison: boolean } {
+  const osmMaison = b.t === 'house' || b.t === 'detached' || b.t === 'semidetached_house' || b.t === 'terrace';
+  const maison = osmMaison || (b.u === 'Résidentiel' && h < 8 && Math.abs(aire(b.p)) < 220);
+  const m = (b.mm || '')[0], t = (b.mt || '')[0];
+  // le beton, l'agglomere ou l'inconnu : l'enduit colore de la ville nouvelle ; les autres, leur matiere
+  const mur = MURS[m] ? MURS[m][i % MURS[m].length]
+    : b.u === 'Industriel' || b.u === 'Commercial et services' ? ['#C3CAD2', '#B0BAC4', '#D7DCE0'][i % 3]
+    : maison ? ['#F1E7D3', '#EADCC4', '#E4D2B8'][i % 3] : ENDUITS[(i * 7) % ENDUITS.length];
+  const toit = TOITS[t] || (maison ? '#B6553A' : ['#8D9096', '#7E8188', '#9A9CA2'][i % 3]);
+  return { mur, toit, maison };
+}
 
 /* ------------------------------------------------------------- les gens */
 
@@ -729,7 +752,7 @@ export class Ville {
     this.scene.add(this.marque);
 
     const credit = document.createElement('div');
-    credit.textContent = '© contributeurs OpenStreetMap';
+    credit.textContent = '© contributeurs OpenStreetMap · IGN BD TOPO';
     credit.style.cssText = 'position:absolute;right:6px;bottom:4px;font:10px system-ui;color:rgba(0,0,0,.55);pointer-events:none;z-index:2';
     hote.appendChild(credit);
 
@@ -971,8 +994,8 @@ export class Ville {
     d.batiments.forEach((b, i) => {
       const p = b.p; if (p.length < 3) return;
       const h = hauteurDe(b, i);
-      const maison = b.t === 'house' || b.t === 'detached' || b.t === 'semidetached_house' || b.t === 'terrace';
-      couleur.set(maison ? ['#F1E7D3', '#EADCC4', '#E4D2B8'][i % 3] : ENDUITS[(i * 7) % ENDUITS.length]);
+      const hab = habillageDe(b, i, h), maison = hab.maison;
+      couleur.set(hab.mur);
       const t = h < 4 ? mursPetits : murs;
       // la normale vers l'exterieur : le sens du contour decide de quel cote
       const sens = aire(p) > 0 ? 1 : -1;
@@ -986,7 +1009,7 @@ export class Ville {
         if (sens > 0) { t.tri(A, Bh, B, n, [u0, 0], [u1, v1], [u1, 0], couleur); t.tri(A, Ah, Bh, n, [u0, 0], [u0, v1], [u1, v1], couleur); }
         else { t.tri(A, B, Bh, n, [u0, 0], [u1, 0], [u1, v1], couleur); t.tri(A, Bh, Ah, n, [u0, 0], [u1, v1], [u0, v1], couleur); }
       }
-      gris.set(maison ? '#B6553A' : ['#8D9096', '#7E8188', '#9A9CA2'][i % 3]);
+      gris.set(hab.toit);
       aplat(maison ? tuiles : toits, p, h, 0, gris);
       // l'acrotere : un liseré net qui dessine le haut des murs
       if (!maison && h >= 4) ruban(acroteres, [...p, p[0]], 0.45, h + 0.03);
