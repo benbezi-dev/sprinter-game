@@ -111,17 +111,18 @@ export function zSol(x: number, y: number) {
   return profil(Math.min(r, R_MUR) - RS) * releve(x, y);
 }
 
-// LE 60 M, D'APRES LE PLAN : le depart en face de l'arrivee de l'anneau, l'arrivee a 2,5 m du
-// bord de l'autre virage ; on y court vers -x (le monde est en miroir : sur place, vers l'est).
-const DEPART_60 = 5.07, ARRIVEE_60 = DEPART_60 - 60;
+// LE 60 M (la visite de 2025, image 0661) : il court vers le virage qui suit l'arrivee de l'anneau,
+// celui de la perche, du sautoir et des fresques, ou un grand tapis l'attend derriere le dernier
+// couloir ; son arrivee a 3,6 m du bord de l'anneau. On y court vers +x, comme sur l'anneau.
+const DEPART_60 = -S - 5.07, ARRIVEE_60 = DEPART_60 + 60;
 /**
  * Du repere du jeu a celui de la salle (voir caler, course-3d.ts). L'anneau : le jeu met
  * son premier virage autour de l'origine et finit sur y = -r en allant vers -x ; on le
- * retourne. Le 60 m : la ligne droite centrale, retournee aussi.
+ * retourne. Le 60 m : la ligne droite centrale, dans le sens du jeu.
  */
 export function calageSalle(T: any): { sx: number; x0: number; y0: number } {
   if (T.salle) return { sx: -1, x0: 0, y0: -RS };
-  return { sx: -1, x0: DEPART_60, y0: -RS + (NC_DROITE / 2) * CW_DROITE };
+  return { sx: 1, x0: DEPART_60, y0: -RS - (NC_DROITE / 2) * CW_DROITE };
 }
 export const estEnSalle = (T: any, race: any) => !!(T && (T.salle || (race && race.salleDroite)));
 /** Le survol de presentation : dehors, autour du batiment (l'exterieur Tripo), puis la plongee vers le depart. */
@@ -311,8 +312,10 @@ export function construireSalle(ctx: ContexteSalle) {
   // tout l'interieur dans un groupe : on le cache quand la camera survole le batiment, dehors
   const g = new THREE.Group(); ctx.stade.add(g);
   // `lumiere` : la surface recoit la lumiere cuite dans Blender — 'sol' (vue de dessus) ou 'coque' (l'atlas)
+  // (les aires de concours vont dans `terrain`, retourne d'un bout a l'autre : voir plus bas)
+  let cible: THREE.Group = g;
   const ajouter = (geo: THREE.BufferGeometry, mat: THREE.Material, ombre = true, lumiere: '' | 'sol' | 'coque' = '') => {
-    const m = new THREE.Mesh(geo, mat); m.receiveShadow = ombre; g.add(m);
+    const m = new THREE.Mesh(geo, mat); m.receiveShadow = ombre; cible.add(m);
     if (lumiere) m.userData.lumiere = lumiere;
     return m;
   };
@@ -367,7 +370,7 @@ export function construireSalle(ctx: ContexteSalle) {
   };
   // le depart du 60 m, la ligne des 50 m (les haies), l'arrivee — plus large
   traitPlat(DEPART_60, yD + W60 / 2, LIGNE, W60);
-  traitPlat(DEPART_60 - 10, yD + W60 / 2, LIGNE, W60);
+  traitPlat(DEPART_60 + 10, yD + W60 / 2, LIGNE, W60);
   traitPlat(ARRIVEE_60, yD + W60 / 2, 0.1, W60);
 
   // L'ARRIVEE ET LES DEPARTS DE L'ANNEAU, peints sur le revetement releve (« la ligne d'arrivee n'est
@@ -412,7 +415,11 @@ export function construireSalle(ctx: ContexteSalle) {
 
   // LES AIRES DE CONCOURS, au plateau, d'apres le plan, cotes relevees depuis le milieu de la salle
   // (« tapis de perche et couloir d'elan, bac de saut en longueur et triple, les tapis de saut en
-  // hauteur et l'aire de lancer de poids », l'auteur, 26/10)
+  // hauteur et l'aire de lancer de poids », l'auteur, 26/10). Le plan est dessine de l'autre cote :
+  // la visite de 2025 (image 0661) met la perche et le sautoir pres du virage qui suit l'arrivee.
+  // Les cotes du plan restent, le groupe est retourne d'un bout a l'autre de la salle.
+  const terrain = new THREE.Group(); terrain.scale.x = -1; terrain.position.x = -S; g.add(terrain);
+  cible = terrain;
   const sable = new THREE.MeshStandardMaterial({ map: grainDeSable(), roughness: 1 });
   const bordure = new THREE.MeshStandardMaterial({ color: 0xd9d9d6, roughness: 0.8 });
   const tapisR = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.80, 0.14, 0.16, THREE.SRGBColorSpace), roughness: 0.7 });
@@ -480,6 +487,39 @@ export function construireSalle(ctx: ContexteSalle) {
       f.position.set((x0 + x1) / 2, (y0 + y1) / 2, hc / 2); f.rotation.set(Math.PI / 2, 0, Math.atan2(y1 - y0, x1 - x0), 'ZXY');
       for (let t = 0; t <= l + 1e-6; t += l / Math.ceil(l / 3)) { const b = boite(x0 + (x1 - x0) * t / l - 0.06, x0 + (x1 - x0) * t / l + 0.06, y0 + (y1 - y0) * t / l - 0.06, y0 + (y1 - y0) * t / l + 0.06, 0, hc, poteau); b.castShadow = false; }
     }
+  }
+
+  cible = g;
+
+  // LE TAPIS D'ARRET DU 60 M (« un gros tapis apres l'arrivee, derriere le dernier couloir de
+  // l'anneau », l'auteur, 26/10 ; image 0661) : un mur de mousse bleue de 10 m sur 4,5 m, au nom de
+  // la ville, dans l'axe de la ligne droite, contre le bord de la coursive du virage
+  {
+    let xMur = Infinity;
+    for (let i = 0; i <= 180; i++) {
+      const phi = Math.PI * i / 180, g1 = lisse(0, ENTREE, Math.min(phi, Math.PI - phi)), q = SALLE.virage(phi, R_BOIS - RS + EV * g1);
+      if (Math.abs(q[1]) <= 5) xMur = Math.min(xMur, q[0]);
+    }
+    const xf = xMur - 0.6, hT = 4.5;
+    const marine = new THREE.MeshStandardMaterial({ color: 0x1c2a52, roughness: 0.85 });
+    const corps = ajouter(new THREE.BoxGeometry(0.55, 10, hT), marine); corps.position.set(xf + 0.275, -RS, hT / 2); corps.castShadow = true;
+    const toileTapis = new THREE.MeshStandardMaterial({ roughness: 0.85, map: toile(1024, 460, (c, w, h) => {
+      c.fillStyle = '#1d5bb0'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#ffffff'; c.textAlign = 'center';
+      for (let k = 0; k < 3; k++) {
+        const x = w * (k + 0.5) / 3;
+        c.font = '700 22px system-ui, sans-serif'; c.fillText('NATURELLEMENT', x, 74);
+        c.font = '900 40px system-ui, sans-serif'; c.fillText('VAL DE REUIL', x, 124);
+        c.beginPath(); c.moveTo(x - 46, 160); c.lineTo(x + 46, 160); c.lineTo(x, 236); c.closePath(); c.fill();
+      }
+    }) });
+    const face = ajouter(new THREE.PlaneGeometry(10, hT), toileTapis, false);
+    // (face a la piste, vers -x ; retournee comme les fresques du pignon : le monde est en miroir)
+    face.position.set(xf - 0.01, -RS, hT / 2); face.scale.x = -1;
+    face.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)));
+    // le matelas vertical gris-bleu, a sa gauche
+    const m2 = ajouter(new THREE.BoxGeometry(0.6, 1.6, hT * 0.95), new THREE.MeshStandardMaterial({ color: 0x3a4660, roughness: 0.85 }));
+    m2.position.set(xf + 0.2, -RS + 5.9, hT * 0.475); m2.castShadow = true;
   }
 
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
