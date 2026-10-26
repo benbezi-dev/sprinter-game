@@ -17,42 +17,19 @@
 // Repere neutre d'un virage : il bombe vers +X, X = 0 aux deux raccords ; phi est le cap
 // tourne depuis le raccord cote Y > 0 (0 a pi).
 //
-// DEUX FORMES, pour comparer (l'auteur, 26/10 : « montre-moi les deux ») :
-//  - l'actuelle : le bord interieur en demi-ellipse (largeur du plan), 35 m + 65 m ;
-//  - ?anneau=wa : le gabarit « Standard Short Track » de World Athletics (plan de marquage S,
-//    2026) — 35,368 m de ligne droite, un arc de raccord puis l'arc constant de 17,205 m
-//    (11,939 m par quart au bord), couloirs de 1,00 m, ligne de course a 0,30 m, 10° constants.
-//    Le rayon du raccord est resolu pour que la ligne de course fasse 200 m.
+// (Compare le 26/10 au gabarit « Standard Short Track » de World Athletics — 35,368 m, raccord
+// puis arc de 17,205 m, couloirs de 1,00 m, 10° constants : l'auteur a garde celui-ci.)
 //
 // shortcut: le 400 m reste en couloirs sur ses deux tours (depart en quinconce sur
 // quatre virages) au lieu de se rabattre apres le premier tour : le moteur n'a pas
 // d'evitement entre coureurs.
 
-const WA = (() => { try { return new URLSearchParams(location.search).get('anneau') === 'wa'; } catch { return false; } })();
-const DROITE_SALLE = WA ? 35.368 : 35, MES = WA ? 0.3 : 0.2, COULOIR = WA ? 1.0 : 0.9;
-// la forme du bord interieur, au cap tourne psi : son point et son rayon de courbure
+const DROITE_SALLE = 35, MES = 0.2, COULOIR = 0.9;
 let H = 17.2, A = H;                                  // la demi-largeur et la demi-longueur interieures
-let base, courbure;
-if (WA) {
-  const R = 17.205, TC = 11.939 / R, TT = Math.PI / 2 - TC;     // l'arc constant, le cap pris par le raccord
-  // la ligne de course (0,30 m) fait 200 m : 2 droites + 4 x (raccord + quart constant) + 2 pi x 0,30
-  const R1 = ((200 - 2 * DROITE_SALLE - 2 * Math.PI * MES) / 4 - R * TC) / TT;
-  H = R1 - (R1 - R) * Math.cos(TT);
-  const c2x = (R1 - R) * Math.sin(TT);
-  A = c2x + R;
-  base = (psi) => {
-    const s = Math.sin(psi), c = Math.cos(psi);
-    if (psi <= TT) return [R1 * s, H - R1 + R1 * c];
-    if (psi >= Math.PI - TT) return [R1 * s, -(H - R1) + R1 * c];
-    return [c2x + R * s, R * c];
-  };
-  courbure = (psi) => (psi <= TT || psi >= Math.PI - TT ? R1 : R);
-} else {
-  // l'ellipse (demi-axes A, H), parametree par son cap tourne
-  const t = (psi) => Math.atan2(A * Math.sin(psi), H * Math.cos(psi));
-  base = (psi) => { const u = t(psi); return [A * Math.sin(u), H * Math.cos(u)]; };
-  courbure = (psi) => { const u = t(psi), c = Math.cos(u), s = Math.sin(u); return Math.pow(A * A * c * c + H * H * s * s, 1.5) / (A * H); };
-}
+// le bord interieur : l'ellipse (demi-axes A, H), parametree par son cap tourne psi
+const tEll = (psi) => Math.atan2(A * Math.sin(psi), H * Math.cos(psi));
+const base = (psi) => { const u = tEll(psi); return [A * Math.sin(u), H * Math.cos(u)]; };
+const courbure = (psi) => { const u = tEll(psi), c = Math.cos(u), s = Math.sin(u); return Math.pow(A * A * c * c + H * H * s * s, 1.5) / (A * H); };
 
 /** Le point du virage au cap tourne phi, a d metres du bord interieur (repere neutre). */
 function virage(phi, d) {
@@ -98,8 +75,8 @@ function surVirage(X, Y) {
   const b = base(phi);
   return { phi, d: (X - b[0]) * Math.sin(phi) + (Y - b[1]) * Math.cos(phi) };
 }
-// l'actuelle : la demi-longueur qui donne 65 m au couloir 1
-if (!WA) {
+// la demi-longueur qui donne 65 m au couloir 1
+{
   let lo = H * 0.8, hi = H * 2;
   for (let i = 0; i < 50; i++) { A = (lo + hi) / 2; tables.clear(); if (longueurVirage(MES) < 65) lo = A; else hi = A; }
   tables.clear();
@@ -109,7 +86,7 @@ export const SALLE = {
   rayon: H, couloir: COULOIR, mes1: MES, mesN: MES,
   couloirs: 6, couloirsDroite: 6,
   inclinaison: 15 * Math.PI / 180,   // en moyenne : la pente se raidit vers l'exterieur (salle-3d.ts, profil)
-  demiLong: A, wa: WA,
+  demiLong: A,
   virage, capVirage, longueurVirage, phiVirage, surVirage,
 };
 /** La ligne droite de l'anneau. */

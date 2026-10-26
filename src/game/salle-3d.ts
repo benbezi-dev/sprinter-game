@@ -35,8 +35,7 @@ const W = NC * CW;
 // sixieme couloir (15° en moyenne sur les couloirs exterieurs), puis 18° jusqu'au muret. Les
 // couloirs du dessus montent donc plus haut, et plus raide, sur les memes rampes d'entree.
 // shortcut: angles a caler sur les cotes reelles quand on les aura (la recherche est en cours).
-// (le gabarit World Athletics, ?anneau=wa : 10° constants)
-const ALPHA0 = 10 * Math.PI / 180, ALPHA1 = (SALLE.wa ? 10 : 18) * Math.PI / 180;
+const ALPHA0 = 10 * Math.PI / 180, ALPHA1 = 18 * Math.PI / 180;
 /** La hauteur du revetement plein-releve a d metres du bord interieur (la pente tourne de ALPHA0 a ALPHA1). */
 function profil(d: number) {
   if (d <= 0) return 0;
@@ -706,9 +705,9 @@ export function construireSalle(ctx: ContexteSalle) {
   // Le jeu garde ses matieres de detail (le grain de la piste, le bois) et les multiplie par
   // cette lumiere. Les cartes ci-dessous sont DETERMINISTES : l'export pour Blender (?exporterSalle=1)
   // et le jeu les recalculent a l'identique.
-  // (?lumiere=0, ou l'anneau du gabarit WA, cuit pour l'autre forme : la salle eclairee par le jeu)
+  // (?lumiere=0 : la salle eclairee par le jeu seul, sans la lumiere cuite)
   const parametres = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
-  const exporter = parametres.has('exporterSalle'), sansCuisson = !exporter && (SALLE.wa || parametres.get('lumiere') === '0');
+  const exporter = parametres.has('exporterSalle'), sansCuisson = !exporter && parametres.get('lumiere') === '0';
   const cuites = sansCuisson ? { coque: [], sol: [] } : cartesDeLumiere(g, { X0, Y0, L, LY: 2 * LARGE });
   if (exporter) exporterPourBlender(g.clone());
   const charge = new THREE.TextureLoader();
