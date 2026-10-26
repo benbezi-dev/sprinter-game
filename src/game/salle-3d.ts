@@ -505,10 +505,11 @@ export function construireSalle(ctx: ContexteSalle) {
     // (pose sur la zone de freinage, a sa hauteur, jusque sous la coursive)
     // (un seul tapis d'amortissement, 0,30 m d'epaisseur, plaque contre le mur : rien ne deborde sur la piste)
     const EP = 0.3, xf = xMur - EP, base = profil(R_MUR - RS), hT = H_COURSIVE - 0.1 - base;
-    const mousse = new THREE.MeshStandardMaterial({ color: 0x1d5bb0, roughness: 0.9 });
+    // (le bleu mesure sur la photo 0661 : rgb(61, 141, 185))
+    const mousse = new THREE.MeshStandardMaterial({ color: 0x3d8db9, roughness: 0.9 });
     const corps = ajouter(new THREE.BoxGeometry(EP, 10, hT), mousse); corps.position.set(xf + EP / 2, -RS, base + hT / 2);
     const toileTapis = new THREE.MeshStandardMaterial({ roughness: 0.85, map: toile(1024, 460, (c, w, h) => {
-      c.fillStyle = '#1d5bb0'; c.fillRect(0, 0, w, h);
+      c.fillStyle = '#3d8db9'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#ffffff'; c.textAlign = 'center';
       for (let k = 0; k < 3; k++) {
         const x = w * (k + 0.5) / 3;
@@ -670,7 +671,9 @@ export function construireSalle(ctx: ContexteSalle) {
       m.position.set(-S / 2, yT(R_T + 0.3 + (j + 0.5) * P_T / 2), (Z_T + (j + 1) * M_T / 2) / 2 + 0.005);
     }
   }
-  const siege = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.36, 0.68, 0.92, THREE.SRGBColorSpace), roughness: 0.5 });
+  // (le bleu turquoise mesure sur la photo 0639 : rgb(67, 150, 172) ; une lueur pour qu'il ne s'eteigne pas sous la foule)
+  const bleuSiege = new THREE.Color().setRGB(67 / 255, 150 / 255, 172 / 255, THREE.SRGBColorSpace);
+  const siege = new THREE.MeshStandardMaterial({ color: bleuSiege, emissive: bleuSiege, emissiveIntensity: 0.25, roughness: 0.5 });
   const places = siegesTribune();
   const assiseT = new THREE.InstancedMesh(new THREE.BoxGeometry(0.44, 0.4, 0.07), siege, places.length);
   const dossierT = new THREE.InstancedMesh(new THREE.BoxGeometry(0.44, 0.06, 0.42), siege, places.length);
@@ -758,7 +761,7 @@ export function construireSalle(ctx: ContexteSalle) {
       const v = paroi(axe === 'y' ? c : pos, axe === 'y' ? pos : c, z0, z1, l, n, ciel);
       v.position[axe === 'y' ? 'y' : 'x'] += d * 0.04;
       // les meneaux (ou les poteaux blancs du grand vitrage) et les traverses
-      const blanc = pas > 4;
+      const blanc = pas > 5;
       for (let t = debut + a * long; t <= debut + b * long + 1e-6; t += pas) {
         if (axe === 'y') pan(blanc ? 0.4 : 0.14, 0.2, t, pos + d * 0.12, z0, z1, blanc ? poteauBlanc : montant);
         else pan(0.2, blanc ? 0.4 : 0.14, pos + d * 0.12, t, z0, z1, blanc ? poteauBlanc : montant);
@@ -771,8 +774,11 @@ export function construireSalle(ctx: ContexteSalle) {
   };
   facade('y', Y0, 'y+', L, [[0.22, 0.78, 4.6, 10.8, 5.2]]);                 // face a la tribune : le grand vitrage
   facade('y', Y1, 'y-', L, [[0.12, 0.38, 7, 9.8, 3], [0.6, 0.86, 7, 9.8, 3]]); // au-dessus de la tribune
-  facade('x', X0, 'x+', LY, [[0.08, 0.5, 7.2, 9.4, 4.2]]);           // un pignon : cinq fenetres
-  facade('x', X1, 'x-', LY, [[0.1, 0.3, 6.5, 9.6, 2.9]]);            // l'autre : un groupe de fenetres...
+  // le pignon de la perche (0067) : une bande de six grandes fenetres, cote tribune, au-dessus de la coursive
+  facade('x', X0, 'x+', LY, [[0.53, 0.95, 5.6, 8.6, 0.42 * LY / 6]]);
+  // l'autre pignon (0661) : un groupe de fenetres a gauche du tapis, et au niveau de la coursive, sous les
+  // fresques, les vitres de la piece des officiels...
+  facade('x', X1, 'x-', LY, [[0.1, 0.3, 6.5, 9.6, 2.9], [0.62, 0.97, H_COURSIVE + 0.6, H_COURSIVE + 1.9, 1.8]]);
   for (const [a, b, gr] of [[0.4, 0.62, 3], [0.67, 0.89, 7]] as const) {    // ... et deux fresques sepia
     const f = paroi(X1, Y0 + (a + b) / 2 * LY, 6.5, 9.7, (b - a) * LY, 'x-', new THREE.MeshStandardMaterial({ map: sepia(gr), roughness: 0.9 }));
     // (scale.x = -1 : le monde de la course est en miroir, voir les panneaux de course-3d.ts)
