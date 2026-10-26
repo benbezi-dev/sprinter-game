@@ -21,9 +21,9 @@ src, dossier = sys.argv[sys.argv.index('--') + 1:][:2]
 # les cotes de salle-3d.ts (piste-salle.js)
 # (les virages allonges, 26/10 : 35 m de ligne droite ; demi-longueur des virages 23,534 m, piste-salle.js)
 RS, S = 17.2, 35.0
-LONG, LARGE = 23.534 + 8.75, 29.0
+LONG, LARGE, LARGE_T = 23.534 + 8.75, 29.0, 35.0
 H_TOIT = 12.5
-X0, X1, Y0, Y1 = -S - LONG, LONG, -RS - LARGE, -RS + LARGE
+X0, X1, Y0, Y1 = -S - LONG, LONG, -RS - LARGE, -RS + LARGE_T
 L, LY = X1 - X0, Y1 - Y0
 ATLAS = 2048
 SOL_L, SOL_H = 2048, int(2048 * LY / L)

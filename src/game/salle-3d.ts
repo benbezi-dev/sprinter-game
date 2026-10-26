@@ -44,10 +44,10 @@ function profil(d: number) {
   const plein = Math.abs(k) < 1e-9 ? dd * Math.tan(ALPHA0) : (Math.log(Math.cos(ALPHA0)) - Math.log(Math.cos(ALPHA0 + k * dd))) / k;
   return plein + Math.max(0, d - W) * Math.tan(ALPHA1);
 }
-// LE RELEVEMENT S'INSTALLE EN DOUCEUR (« la montee dans le virage manque de douceur, c'est trop
-// sec », l'auteur, 26/10) : il commence 20 m avant le virage, y arrive a 55 %, et ne devient plein
-// qu'au premier quart du virage ; la meme chose en sortie. Courbes a derivee nulle aux deux bouts.
-const TRANS = 20, PART_DROITE = 0.55, ENTREE = Math.PI / 4;
+// LE RELEVEMENT EST DANS LE VIRAGE SEUL (« le muret blanc et la piste ne sont pas deformes mais
+// droits », l'auteur, 26/10) : les lignes droites sont plates ; il monte en douceur sur le premier
+// tiers du virage (« trop sec », 26/10 : courbe a derivee nulle aux deux bouts), redescend sur le dernier.
+const RAMPE = Math.PI / 3, ENTREE = Math.PI / 4;   // (ENTREE : l'evasement de la coursive)
 // LE BORD DE L'ANNEAU : le muret blanc contre le sixieme couloir (« il n'y a pas de bande grise
 // apres le couloir 6 dans la salle », l'auteur, 26/10) ; le bord de la coursive a 1,90 m (le plan),
 // 1,15 m plus loin au coeur des virages.
@@ -55,12 +55,16 @@ const R_MUR = RS + W + 0.05;                          // le muret blanc
 const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
 const EV = 1.15;                                      // l'evasement de la coursive dans les virages
 const H_COURSIVE = 4.0;
-// les gradins de bois, sous la coursive (la visite filmee de 2025) : quatre marches de 0,80 m
-const N_G = 4, P_G = 0.8, R_G = R_MUR + 0.15;
-// la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; ses longs
-// cotes a 29 m de l'axe
+const R_G = R_MUR + 0.15;                             // le passage derriere le muret commence la
+// la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; le long cote
+// oppose a 29 m de l'axe, celui de la tribune a 35 m (le plan : ses gradins vont jusque-la)
 // (au moins 0,3 m de coursive au bout des virages : sinon son plancher deborde du pignon)
-const LONG = A + Math.max(8.75, W + 1.9 + 1.15 + 0.3), LARGE = 29;
+const LONG = A + Math.max(8.75, W + 1.9 + 1.15 + 0.3), LARGE = 29, LARGE_T = 35;
+const LY = LARGE + LARGE_T, YC = -RS + (LARGE_T - LARGE) / 2;     // la largeur de la halle, son milieu
+// LA TRIBUNE, cote ligne d'arrivee (les France 2026, la photo Wikimedia ; « les gradins cote ligne
+// droite d'arrivee », l'auteur, 26/10) : derriere le muret, un passage, un podium a 1,10 m et sa
+// rambarde vitree, puis dix rangs de beton gris de 0,80 m sur 0,40 m, aux sieges bleu ciel.
+const R_T = R_MUR + 1.2, N_T = 10, P_T = 0.8, Z_T = 1.1, M_T = 0.4;
 const H_TOIT = 12.5;
 const CW_DROITE = 1.22, NC_DROITE = SALLE.couloirsDroite; // la ligne droite centrale
 const W60 = NC_DROITE * CW_DROITE;
@@ -69,26 +73,22 @@ const LIGNE = 0.08;
 
 const lisse = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * t * (t * (t * 6 - 15) + 10); };
 
-/** Le relevement (0 a 1) en un point du stade : nul au milieu des lignes droites, plein au coeur des virages. */
+/** Le relevement (0 a 1) en un point du stade : nul en ligne droite, plein au coeur des virages. */
 function releve(x: number, y: number) {
   if (x > 0 || x < -S) {
     // l'angle du virage (0 a pi), et sa distance au bout le plus proche
     const [X, Y] = versVirage(x, y), phi = SALLE.surVirage(X, Y).phi, e = Math.min(phi, Math.PI - phi);
-    return PART_DROITE + (1 - PART_DROITE) * lisse(0, ENTREE, e);
+    return lisse(0, RAMPE, e);
   }
-  const d = Math.min(-x, x + S);           // la distance au virage le plus proche, sur la ligne droite
-  return PART_DROITE * (1 - lisse(0, TRANS, d));
+  return 0;
 }
 /** RS + l'ecart au bord interieur (dans un virage), ou la distance a l'axe (en ligne droite). */
 function rayonEn(x: number, y: number) {
   if (x > 0 || x < -S) { const [X, Y] = versVirage(x, y); return RS + SALLE.surVirage(X, Y).d; }
   return Math.abs(y + RS);
 }
-/** La hauteur de la marche i (0 : le haut du muret) des gradins, en (x, y), hors evasement. */
-function hautMarche(i: number, x: number, y: number) {
-  const b = profil(R_MUR - RS) * releve(x, y) + 0.9;
-  return b + (H_COURSIVE - b) * i / (N_G + 1);
-}
+/** Ce point du tour longe-t-il la tribune (la ligne d'arrivee, hors virages) ? */
+const surTribune = (p: { x: number; y: number }) => p.y > -RS && p.x >= -S - 1e-6 && p.x <= 1e-6;
 /**
  * LA CAMERA RESTE AU BORD DE LA PISTE : au-dela du muret, elle tomberait dans les gradins et
  * les sieges de la coursive. Ramene (x, y) a moins de `marge` metres du muret, vers l'axe.
@@ -332,11 +332,11 @@ export function construireSalle(ctx: ContexteSalle) {
   for (const m of [bleu, anthracite, plateau]) { m.map!.repeat.set(1 / 1.6, 1 / 1.6); m.normalMap!.repeat.set(1 / 1.6, 1 / 1.6); }
 
   // LE PLATEAU : tout le sol de la halle, gris clair
-  const sol = new THREE.PlaneGeometry(S + 2 * LONG, 2 * LARGE);
+  const sol = new THREE.PlaneGeometry(S + 2 * LONG, LY);
   const ps = ajouter(sol, plateau, true, 'sol');
-  ps.position.set(-S / 2, -RS, -0.01);
+  ps.position.set(-S / 2, YC, -0.01);
   const uvSol = sol.getAttribute('uv') as THREE.BufferAttribute;
-  for (let i = 0; i < uvSol.count; i++) uvSol.setXY(i, uvSol.getX(i) * (S + 2 * LONG), uvSol.getY(i) * 2 * LARGE);
+  for (let i = 0; i < uvSol.count; i++) uvSol.setXY(i, uvSol.getX(i) * (S + 2 * LONG), uvSol.getY(i) * LY);
 
   // L'ANNEAU : six couloirs alternes, et une bande d'anthracite derriere le sixieme jusqu'au muret
   for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? anthracite : bleu, true, 'sol');
@@ -476,35 +476,40 @@ export function construireSalle(ctx: ContexteSalle) {
   const hautMur = (p: PointTour) => profil(R_MUR - RS) * p.f + 0.9;
   enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k), double(blanc), 'coque');
   enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, 0, 0, hautMur), blanc, 'coque');
-  // LES GRADINS DE BOIS (la visite filmee de 2025) : des planches HORIZONTALES d'un bois chaud,
-  // quatre marches qui montent du muret jusque sous la coursive, tout autour de l'anneau
+  // SOUS LA COURSIVE, HORS DE LA TRIBUNE (la visite filmee de 2025, images 0199, 0353, 0485, 0661 :
+  // « analyse bien la ligne droite opposee », l'auteur, 26/10) : derriere le muret, un passage au
+  // sol ; au bord de la coursive, un mur — en bas, les grandes vitres vertes de la salle
+  // d'echauffement le long de la ligne opposee, des murs blancs dans les virages ; au-dessus, jusqu'au
+  // plancher de la coursive, un bandeau de planches de bois HORIZONTALES (pas des gradins).
   const bois = lamesDeBois([176, 98, 52], false, 17); bois.repeat.set(1 / 3, 1 / 1.6);
   // (le chene, teinte du rouge orange des gradins de la salle)
   const matBois = new THREE.MeshStandardMaterial({ map: photo('bois-chene.jpg', 1.2, true, 0, bois), color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.62, 0.42, THREE.SRGBColorSpace),
     normalMap: exporter ? null : photo('bois-chene-relief.jpg', 1.2, false), roughness: 0.55 });
-  const zMarche = (i: number) => (p: PointTour) => { const b = hautMur(p); return b + (H_COURSIVE - b) * i / (N_G + 1); };
-  for (let i = 0; i < N_G; i++) {
-    const r = R_G + i * P_G;
-    enQuarts(k => murAnneau(r, zMarche(i), zMarche(i + 1), k), double(matBois), 'coque');            // la contremarche
-    enQuarts(k => bandeAnneau(r, r + P_G, 0, k, 0, 0, zMarche(i + 1)), matBois, 'coque');              // la marche
+  const H_VITRE = 2.6;
+  const passage = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.58, 0.59, 0.61, THREE.SRGBColorSpace), roughness: 0.9 });
+  for (const k of [1, 2, 3]) {
+    ajouter(bandeAnneau(R_G, R_BOIS, 0, k, 0, EV, () => 0.005), passage, true, 'sol');                                   // le passage
+    ajouter(murAnneau(R_BOIS, () => H_VITRE, () => H_COURSIVE, k, EV), double(matBois), true, 'coque');                  // le bandeau de bois
+    if (k !== 2) ajouter(murAnneau(R_BOIS, () => 0, () => H_VITRE, k, EV), double(blanc), true, 'coque');               // les murs blancs des virages
   }
-  enQuarts(k => murAnneau(R_G + N_G * P_G, zMarche(N_G), () => H_COURSIVE, k), double(matBois), 'coque');
-  // LA SALLE D'ECHAUFFEMENT, derriere une grande paroi vitree verte, sur la ligne opposee
+  // LA SALLE D'ECHAUFFEMENT, derriere les vitres vertes de toute la ligne opposee : ses montants, et au
+  // fond son mur turquoise
   {
-    const vert = new THREE.MeshStandardMaterial({ color: 0x5fae86, transparent: true, opacity: 0.62, roughness: 0.08, metalness: 0.1, depthWrite: false });
-    const x0 = -20, x1 = -2, y = -RS - R_G + 0.06;
-    const v = ajouter(new THREE.PlaneGeometry(x1 - x0, H_COURSIVE - 1.1), vert, false); v.position.set((x0 + x1) / 2, y, 0.9 + (H_COURSIVE - 1.1) / 2); v.rotation.x = Math.PI / 2;
-    // (derriere, la salle : son sol bleu et son mur turquoise)
+    const vert = new THREE.MeshStandardMaterial({ color: 0x6fb894, transparent: true, opacity: 0.55, roughness: 0.08, metalness: 0.1, depthWrite: false });
+    ajouter(murAnneau(R_BOIS, () => 0, () => H_VITRE, 2, 0), vert, false);
     const fond = new THREE.MeshStandardMaterial({ color: 0x4fb7c4, roughness: 0.8, side: THREE.DoubleSide });
-    const f = ajouter(new THREE.PlaneGeometry(x1 - x0, H_COURSIVE), fond, false); f.position.set((x0 + x1) / 2, y - 3.2, H_COURSIVE / 2); f.rotation.x = Math.PI / 2;
+    ajouter(murAnneau(R_BOIS + 4, () => 0, () => H_COURSIVE, 2, 0), fond, false);
     const montantVitre = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
-    for (let x = x0; x <= x1 + 1e-6; x += 1.5) { const m = ajouter(new THREE.BoxGeometry(0.06, 0.08, H_COURSIVE - 0.9), montantVitre, false); m.position.set(x, y, 0.9 + (H_COURSIVE - 0.9) / 2); }
+    const y = -RS - R_BOIS;
+    for (let x = -S; x <= 1e-6; x += 1.5) { const m = ajouter(new THREE.BoxGeometry(0.07, 0.09, H_VITRE), montantVitre, false); m.position.set(x, y, H_VITRE / 2); }
+    const traverse = ajouter(new THREE.BoxGeometry(S, 0.09, 0.1), montantVitre, false); traverse.position.set(-S / 2, y, H_VITRE);
   }
   // la coursive : un plancher de l'ovale aux murs de la halle, et sa lisse vitree
   {
     const forme = new THREE.Shape();
-    forme.moveTo(-S - LONG, -RS - LARGE); forme.lineTo(LONG, -RS - LARGE); forme.lineTo(LONG, -RS + LARGE); forme.lineTo(-S - LONG, -RS + LARGE); forme.closePath();
-    const trou = new THREE.Path(), a = tour(R_BOIS, -1, EV);
+    forme.moveTo(-S - LONG, -RS - LARGE); forme.lineTo(LONG, -RS - LARGE); forme.lineTo(LONG, -RS + LARGE_T); forme.lineTo(-S - LONG, -RS + LARGE_T); forme.closePath();
+    // (pas de coursive au-dessus de la tribune : le trou va jusqu'au mur, le long de la ligne d'arrivee)
+    const trou = new THREE.Path(), a = tour(R_BOIS, -1, EV).map(p => (surTribune(p) ? { ...p, y: -RS + LARGE_T - 0.3 } : p));
     a.slice(0, -1).forEach((p, i) => (i ? trou.lineTo(p.x, p.y) : trou.moveTo(p.x, p.y)));
     forme.holes.push(trou);
     const plancher = ajouter(new THREE.ShapeGeometry(forme, 4), new THREE.MeshStandardMaterial({ color: 0xc8c9cc, roughness: 0.9 }), true, 'coque');
@@ -517,9 +522,9 @@ export function construireSalle(ctx: ContexteSalle) {
     dessous.position.z = H_COURSIVE - 0.25;
   }
   const verre = new THREE.MeshStandardMaterial({ color: 0xcfe6f0, transparent: true, opacity: 0.22, roughness: 0.05, metalness: 0.1, depthWrite: false });
-  ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE, () => H_COURSIVE + 1.05, -1, EV), verre, false);
+  for (const k of [1, 2, 3]) ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE, () => H_COURSIVE + 1.05, k, EV), verre, false);
   const lisseRail = new THREE.MeshStandardMaterial({ color: 0x2a2d33, roughness: 0.4, metalness: 0.7 });
-  ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE + 1.02, () => H_COURSIVE + 1.1, -1, EV), lisseRail, false);
+  for (const k of [1, 2, 3]) ajouter(murAnneau(R_BOIS + 0.05, () => H_COURSIVE + 1.02, () => H_COURSIVE + 1.1, k, EV), lisseRail, false);
   // LES GRADINS DU HAUT (« les gradins du dessus manquent cruellement de details », l'auteur, 26/10) :
   // sur place, la coursive porte un rang de sieges bleus derriere sa balustrade de verre a
   // poteaux d'acier. Tout est instancie.
@@ -528,7 +533,7 @@ export function construireSalle(ctx: ContexteSalle) {
     const poser = (lot: THREE.InstancedMesh, i: number, x: number, y: number, z: number, cap: number, sx = 1, sy = 1, sz = 1) => {
       q.setFromAxisAngle(Z, cap); Mx.compose(new THREE.Vector3(x, y, z), q, un.set(sx, sy, sz)); lot.setMatrixAt(i, Mx);
     };
-    const a = tour(R_BOIS + 0.05, -1, EV);
+    const a = tour(R_BOIS + 0.05, -1, EV).filter(p => !surTribune(p));
     // les poteaux de la balustrade, tous les 1,5 m
     const poteaux = new THREE.InstancedMesh(new THREE.BoxGeometry(0.06, 0.06, 1.1), lisseRail, 400);
     let np = 0, reste = 0;
@@ -545,7 +550,7 @@ export function construireSalle(ctx: ContexteSalle) {
     let ns = 0;
     // UN SEUL RANG (« une seule ligne de chaises bleues, pas deux », l'auteur, 26/10), juste derriere la balustrade
     for (const [r, z] of [[R_BOIS + 0.95, H_COURSIVE + 0.45]] as const) {
-      const b = tour(r, -1, EV);
+      const b = tour(r, -1, EV).filter(p => !surTribune(p));
       let l = 0;
       for (let i = 1; i < b.length && ns < 1400; i++) {
         const dx = b[i].x - b[i - 1].x, dy = b[i].y - b[i - 1].y;
@@ -564,15 +569,39 @@ export function construireSalle(ctx: ContexteSalle) {
     lotA.count = ns; lotD.count = ns; g.add(lotA, lotD);
   }
 
-  // LA TRIBUNE, le long de la ligne d'arrivee : des sieges bleus sur les gradins de bois, en deux
-  // blocs separes par un escalier (le plan)
-  const siege = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.10, 0.36, 0.78, THREE.SRGBColorSpace), roughness: 0.55 });
-  const geoSiege = new THREE.BoxGeometry(0.42, 0.4, 0.38);
+  // LA TRIBUNE (voir R_T) : le podium et sa rambarde vitree, dix rangs de beton, deux flancs, un
+  // passage en haut ; un escalier au milieu ; les sieges bleu ciel, assise et dossier
+  {
+    const beton = new THREE.MeshStandardMaterial({ color: 0xb3b6bb, roughness: 0.9 });
+    const yT = (r: number) => -RS + r, xa = -S, xb = 0;
+    const bloc = (r0: number, r1: number, z: number, mat: THREE.Material = beton) => {
+      const b = ajouter(new THREE.BoxGeometry(xb - xa, r1 - r0, z), mat); b.position.set((xa + xb) / 2, yT((r0 + r1) / 2), z / 2); return b;
+    };
+    bloc(R_T, R_T + 0.3, Z_T);                                                       // le podium
+    for (let i = 0; i < N_T; i++) bloc(R_T + 0.3 + i * P_T, R_T + 0.3 + (i + 1) * P_T, Z_T + (i + 1) * M_T);
+    const fond = R_T + 0.3 + N_T * P_T, haut = Z_T + N_T * M_T;
+    bloc(fond, LARGE_T - 0.05, haut + 0.1);                                           // le passage du haut
+    for (const x of [xa, xb]) { const f = ajouter(new THREE.BoxGeometry(0.3, LARGE_T - R_T, haut + 1.1), beton); f.position.set(x, yT((R_T + LARGE_T) / 2), (haut + 1.1) / 2); }
+    // la rambarde vitree du podium
+    const vitre = ajouter(new THREE.BoxGeometry(xb - xa, 0.03, 1), verre, false); vitre.position.set((xa + xb) / 2, yT(R_T + 0.05), Z_T + 0.5);
+    const main = ajouter(new THREE.BoxGeometry(xb - xa, 0.06, 0.06), lisseRail, false); main.position.set((xa + xb) / 2, yT(R_T + 0.05), Z_T + 1.02);
+    // l'escalier du milieu : des marches plus basses, du beton plus clair
+    const marche = new THREE.MeshStandardMaterial({ color: 0xc9ccd0, roughness: 0.85 });
+    for (let j = 0; j < 2 * N_T; j++) {
+      const m = ajouter(new THREE.BoxGeometry(1.2, P_T / 2, Z_T + (j + 1) * M_T / 2), marche);
+      m.position.set(-S / 2, yT(R_T + 0.3 + (j + 0.5) * P_T / 2), (Z_T + (j + 1) * M_T / 2) / 2 + 0.005);
+    }
+  }
+  const siege = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.36, 0.68, 0.92, THREE.SRGBColorSpace), roughness: 0.5 });
   const places = siegesTribune();
-  const sieges = new THREE.InstancedMesh(geoSiege, siege, places.length);
+  const assiseT = new THREE.InstancedMesh(new THREE.BoxGeometry(0.44, 0.4, 0.07), siege, places.length);
+  const dossierT = new THREE.InstancedMesh(new THREE.BoxGeometry(0.44, 0.06, 0.42), siege, places.length);
   const M = new THREE.Matrix4();
-  places.forEach((p, i) => { M.makeTranslation(p.x, p.y, p.z + 0.2); sieges.setMatrixAt(i, M); });
-  sieges.castShadow = false; sieges.receiveShadow = true; g.add(sieges);
+  places.forEach((p, i) => {
+    M.makeTranslation(p.x, p.y, p.z + 0.42); assiseT.setMatrixAt(i, M);
+    M.makeTranslation(p.x, p.y + 0.22, p.z + 0.62); dossierT.setMatrixAt(i, M);
+  });
+  for (const lot of [assiseT, dossierT]) { lot.castShadow = false; lot.receiveShadow = true; g.add(lot); }
 
   /** Une banderole bleu ciel au nom de la ville (le meme dessin partout ; aucune marque). */
   const matBandeVille = () => new THREE.MeshStandardMaterial({ roughness: 0.7, side: THREE.DoubleSide, map: toile(512, 640, (c, w, h) => {
@@ -583,7 +612,7 @@ export function construireSalle(ctx: ContexteSalle) {
     c.beginPath(); c.moveTo(w / 2 - 60, h * 0.66); c.lineTo(w / 2 + 60, h * 0.66); c.lineTo(w / 2, h * 0.8); c.closePath(); c.fill();
   }) });
   // LES MURS DE LA HALLE, ses facades, et le plafond de bois sur des fermes d'acier
-  const L = S + 2 * LONG, X0 = -S - LONG, X1 = LONG, Y0 = -RS - LARGE, Y1 = -RS + LARGE;
+  const L = S + 2 * LONG, X0 = -S - LONG, X1 = LONG, Y0 = -RS - LARGE, Y1 = -RS + LARGE_T;
   const ciel = new THREE.MeshStandardMaterial({ color: 0xe8f4ff, emissive: 0xcfe6ff, emissiveIntensity: 0.9, roughness: 0.1 });
   ciel.name = 'vitrage';
   const montant = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
@@ -639,7 +668,7 @@ export function construireSalle(ctx: ContexteSalle) {
                   vitrages: [number, number, number, number, number][]) => {
     const debut = axe === 'y' ? X0 : Y0, d = n === 'y+' || n === 'x+' ? 1 : -1;
     // le bardage
-    const bd = paroi(axe === 'y' ? -S / 2 : pos, axe === 'y' ? pos : -RS, H_COURSIVE, H_TOIT, long, n, matBardage);
+    const bd = paroi(axe === 'y' ? -S / 2 : pos, axe === 'y' ? pos : YC, H_COURSIVE, H_TOIT, long, n, matBardage);
     if (!exporter) {
       // (ses UV en metres, pour la texture photo ; la carte de lumiere le sait : uvMetres)
       const uv = bd.geometry.getAttribute('uv') as THREE.BufferAttribute;
@@ -664,10 +693,10 @@ export function construireSalle(ctx: ContexteSalle) {
   };
   facade('y', Y0, 'y+', L, [[0.22, 0.78, 4.6, 10.8, 5.2]]);                 // face a la tribune : le grand vitrage
   facade('y', Y1, 'y-', L, [[0.12, 0.38, 7, 9.8, 3], [0.6, 0.86, 7, 9.8, 3]]); // au-dessus de la tribune
-  facade('x', X0, 'x+', 2 * LARGE, [[0.08, 0.5, 7.2, 9.4, 4.2]]);           // un pignon : cinq fenetres
-  facade('x', X1, 'x-', 2 * LARGE, [[0.1, 0.3, 6.5, 9.6, 2.9]]);            // l'autre : un groupe de fenetres...
+  facade('x', X0, 'x+', LY, [[0.08, 0.5, 7.2, 9.4, 4.2]]);           // un pignon : cinq fenetres
+  facade('x', X1, 'x-', LY, [[0.1, 0.3, 6.5, 9.6, 2.9]]);            // l'autre : un groupe de fenetres...
   for (const [a, b, gr] of [[0.4, 0.62, 3], [0.67, 0.89, 7]] as const) {    // ... et deux fresques sepia
-    const f = paroi(X1, Y0 + (a + b) / 2 * 2 * LARGE, 6.5, 9.7, (b - a) * 2 * LARGE, 'x-', new THREE.MeshStandardMaterial({ map: sepia(gr), roughness: 0.9 }));
+    const f = paroi(X1, Y0 + (a + b) / 2 * LY, 6.5, 9.7, (b - a) * LY, 'x-', new THREE.MeshStandardMaterial({ map: sepia(gr), roughness: 0.9 }));
     // (scale.x = -1 : le monde de la course est en miroir, voir les panneaux de course-3d.ts)
     f.position.x -= 0.05; f.scale.x = -1; delete f.userData.lumiere;
   }
@@ -678,14 +707,14 @@ export function construireSalle(ctx: ContexteSalle) {
     m.position.set(X0 + a * L, Y0 + 0.9, 7.6); m.rotation.x = -Math.PI / 2; m.scale.y = -1;
   }
   // le plafond de bois clair, en lames dans la longueur
-  const plafondBois = lamesDeBois([196, 126, 70], false, 29); plafondBois.repeat.set(L / 3, 2 * LARGE / 3);
-  // (le plafond : le meme chene, plus clair, ses lames dans la longueur ; UV de 0 a 1 sur L x 2 LARGE)
+  const plafondBois = lamesDeBois([196, 126, 70], false, 29); plafondBois.repeat.set(L / 3, LY / 3);
+  // (le plafond : le meme chene, plus clair, ses lames dans la longueur ; UV de 0 a 1 sur L x LY)
   const plafondPhoto = exporter ? plafondBois : photo('bois-chene.jpg', 1);
-  if (!exporter) plafondPhoto.repeat.set(L / 1.2, 2 * LARGE / 1.2);
+  if (!exporter) plafondPhoto.repeat.set(L / 1.2, LY / 1.2);
   // (une face, vers le bas : vu d'au-dessus, on voit a travers)
   const toit = new THREE.Group(); g.add(toit);
-  const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, 2 * LARGE), new THREE.MeshStandardMaterial({ map: plafondPhoto, color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.8, 0.6, THREE.SRGBColorSpace), roughness: 0.7 }));
-  plafond.position.set(-S / 2, -RS, H_TOIT); plafond.rotation.x = Math.PI; toit.add(plafond); plafond.userData.lumiere = 'coque';
+  const plafond = new THREE.Mesh(new THREE.PlaneGeometry(L, LY), new THREE.MeshStandardMaterial({ map: plafondPhoto, color: exporter ? 0xffffff : new THREE.Color().setRGB(1, 0.8, 0.6, THREE.SRGBColorSpace), roughness: 0.7 }));
+  plafond.position.set(-S / 2, YC, H_TOIT); plafond.rotation.x = Math.PI; toit.add(plafond); plafond.userData.lumiere = 'coque';
   // les fermes d'acier, en travers, tous les 7,5 m : membrures haute et basse, montants en zigzag
   const acier = new THREE.MeshStandardMaterial({ color: 0x5a6068, roughness: 0.45, metalness: 0.7 });
   const geoBarre = new THREE.BoxGeometry(1, 1, 1);
@@ -734,7 +763,7 @@ export function construireSalle(ctx: ContexteSalle) {
   // et le jeu les recalculent a l'identique.
   // (?lumiere=0 : la salle eclairee par le jeu seul, sans la lumiere cuite)
   const sansCuisson = !exporter && parametres.get('lumiere') === '0';
-  const cuites = sansCuisson ? { coque: [], sol: [] } : cartesDeLumiere(g, { X0, Y0, L, LY: 2 * LARGE });
+  const cuites = sansCuisson ? { coque: [], sol: [] } : cartesDeLumiere(g, { X0, Y0, L, LY });
   if (exporter) exporterPourBlender(g.clone());
   const charge = new THREE.TextureLoader();
   const appliquer = (fichier: string, liste: THREE.Mesh[], coque: boolean) => charge.load(ctx.base + 'modeles/salle/' + fichier, t => {
@@ -761,18 +790,18 @@ export function construireSalle(ctx: ContexteSalle) {
 
   // L'EXTERIEUR (Tripo, d'apres la vue aerienne du ministere des Sports ; tools/blender/salle/exterieur_tripo.py) :
   // le batiment vu de dehors, au seul survol d'avant-course — il cacherait la piste a tout autre plan
-  const dehors = new THREE.Group(); dehors.visible = false; dehors.position.set(-S / 2, -RS, 0); ctx.stade.add(dehors);
+  const dehors = new THREE.Group(); dehors.visible = false; dehors.position.set(-S / 2, YC, 0); ctx.stade.add(dehors);
   // autour du batiment : la pelouse du parc des sports et le parvis
   { const p = new THREE.Mesh(new THREE.PlaneGeometry(700, 700), new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.36, 0.52, 0.27, THREE.SRGBColorSpace), roughness: 1 }));
     p.position.z = -0.05; dehors.add(p);
-    const v = new THREE.Mesh(new THREE.PlaneGeometry(L + 16, 2 * LARGE + 16), new THREE.MeshStandardMaterial({ color: 0xb8b4ac, roughness: 0.95 }));
+    const v = new THREE.Mesh(new THREE.PlaneGeometry(L + 16, LY + 16), new THREE.MeshStandardMaterial({ color: 0xb8b4ac, roughness: 0.95 }));
     v.position.z = -0.02; dehors.add(v); }
   const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
   chargeur.load(ctx.base + 'modeles/salle/exterieur.glb', gl => {
     // le bardage est d'aluminium argent : la texture Tripo, prise sur une photo au soleil couchant, tire au beige
     gl.scene.traverse((o: any) => { if (o.isMesh) { o.receiveShadow = false; o.castShadow = false; if (o.material?.color) o.material.color.setRGB(0.86, 0.9, 0.96); } });
     // (le modele est a 103,34 m de long : la halle du plan est un peu plus courte)
-    gl.scene.scale.x *= L / 103.34;
+    gl.scene.scale.x *= L / 103.34; gl.scene.scale.y *= LY / 58;
     dehors.add(gl.scene);
   }, undefined, () => { /* sans exterieur : le survol montre l'interieur */ });
   return {
@@ -799,14 +828,16 @@ export function construireSalle(ctx: ContexteSalle) {
  */
 function placesGradins(arrivee: boolean) {
   const out: { x: number; y: number; z: number; rang: number }[] = [];
-  for (let i = 0; i < N_G; i++) {
-    const r = R_G + i * P_G + P_G * 0.55, y = arrivee ? -RS + r : -RS - r;
-    for (let x = -S + 1.5; x < -1.5; x += 0.5) {
-      if (arrivee && Math.abs(x + S / 2) < 2) continue;              // l'escalier
-      if (!arrivee && x > -20.5 && x < -1.5) continue;                // la paroi vitree
-      out.push({ x, y, z: hautMarche(i + 1, x, y), rang: i });
+  if (arrivee) {
+    // la tribune : dix rangs, une place tous les 0,5 m, l'escalier du milieu laisse libre
+    for (let i = 0; i < N_T; i++) {
+      const y = -RS + R_T + 0.3 + i * P_T + P_T * 0.45, z = Z_T + (i + 1) * M_T;
+      for (let x = -S + 0.6; x < -0.5; x += 0.5) if (Math.abs(x + S / 2) > 0.9) out.push({ x, y, z, rang: i });
     }
+    return out;
   }
+  // la ligne opposee : debout dans le passage, devant les vitres
+  for (let x = -S + 1; x < -1; x += 0.8) out.push({ x, y: -RS - (R_G + R_BOIS) / 2, z: 0, rang: 0 });
   return out;
 }
 const siegesTribune = () => placesGradins(true);
@@ -819,8 +850,8 @@ const siegesTribune = () => placesGradins(true);
 export function placesDuPublic(affluence: number, hasard: () => number): { x: number; y: number; z: number; face: number; debout: boolean }[] {
   const places: { x: number; y: number; z: number; face: number; debout: boolean }[] = [];
   for (const arrivee of [true, false]) for (const p of placesGradins(arrivee)) {
-    const occupe = (arrivee ? 0.95 : 0.6) * Math.min(1, Math.max(0.05, affluence * 1.6 - (p.rang / N_G) * 1.6 * (1 - affluence)));
-    if (hasard() < occupe) places.push({ x: p.x, y: p.y + (arrivee ? 0.1 : -0.1), z: p.z, face: arrivee ? -Math.PI / 2 : Math.PI / 2, debout: false });
+    const occupe = arrivee ? 0.95 * Math.min(1, Math.max(0.05, affluence * 1.6 - (p.rang / N_T) * 1.6 * (1 - affluence))) : 0.08 + 0.2 * affluence;
+    if (hasard() < occupe) places.push({ x: p.x + (arrivee ? 0 : (hasard() - 0.5) * 0.4), y: p.y + (arrivee ? 0.05 : 0), z: arrivee ? p.z + 0.05 : 0, face: arrivee ? -Math.PI / 2 : Math.PI / 2, debout: !arrivee });
   }
   // les sieges de la coursive (construireSalle les a poses) : assis, la piste en face
   for (const p of sieges3) if (hasard() < 0.08 + 0.55 * affluence) places.push({ x: p.x, y: p.y, z: p.z, face: p.face, debout: false });
