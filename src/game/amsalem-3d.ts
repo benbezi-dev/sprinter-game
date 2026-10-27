@@ -42,8 +42,10 @@ export type ContexteAmsalem = {
 
 /** La demi-ligne droite d'une piste de 400 m a corde de 36,50 m (la piste reelle). */
 const DEMI = 84.39 / 2;
-/** La tribune (OSM) : de a = -12,5 a 12,8, de n = 63 a 72,9. */
-export const TRIBUNE_AMSALEM = { a0: -12.5, long: 25.3, n0: 63, prof: 9.9, haut: 9.5 };
+/** La tribune : sa longueur et sa place le long de la ligne droite viennent d'OSM (a = -12,5 a 12,8) ; sa distance a
+ *  la piste vient des photos (img-3, img-5 : le pied de la tribune a trois metres environ de la bande lie-de-vin) —
+ *  le contour OSM la mettait 12 m plus loin (« les gradins sont trop eloignes de la piste », l'auteur, 27/10). */
+export const TRIBUNE_AMSALEM = { a0: -12.5, long: 25.3, n0: 53.7, prof: 9.9, haut: 9.5 };
 /** Les rangs du modele Tripo, dans son repere (x le long depuis son bord, y vers le fond depuis son centre,
  *  z en haut) : releves sur le modele exporte (tools/blender/amsalem/tribune_tripo.py). Les blocs de sieges, de
  *  part et d'autre de l'escalier central et des deux escaliers lateraux. */
@@ -65,18 +67,63 @@ function toileSol(dessin: (c: CanvasRenderingContext2D, w: number, h: number) =>
 }
 const BEIGE = c3(229, 201, 160), ROUGE = c3(195, 70, 70), LIE = c3(118, 40, 44), SABLE = c3(217, 192, 138), BLEU = c3(85, 195, 239);
 
-export function construireAmsalem(o: ContexteAmsalem) {
+/**
+ * LE TARTAN DE LA PISTE (« la qualite du stade est moyenne », l'auteur, 27/10) : les granules de caoutchouc de la
+ * salle (tools/blender/salle/tartan_granules.py, d'apres la coupe Polytan img-2 ; une tuile de 1024 px pour 0,32 m)
+ * sous le rouge releve sur les vues aeriennes. Les aplats de la piste de course-3d.ts ont des UV de 0 a 1 par
+ * morceau : on les remet en metres (x, y du stade) pour que le grain garde sa taille partout.
+ */
+export function habillerLeTartan(stade: THREE.Group, mats: THREE.Material[], base: string) {
+  const charger = (nom: string, srgb: boolean) => {
+    const t = new THREE.TextureLoader().load(base + 'modeles/salle/textures/' + nom);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / 0.32, 1 / 0.32); t.anisotropy = 16;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  };
+  const map = charger('tartan.jpg', true), normalMap = charger('tartan-relief.jpg', false), roughnessMap = charger('tartan-rugosite.jpg', false);
+  const neufs = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+  for (const m of mats) {
+    const c = ((m as any).color as THREE.Color).clone().multiplyScalar(1 / 0.82);   // (la texture assombrit de 0,82 en moyenne)
+    const n = new THREE.MeshStandardMaterial({ color: c, map, normalMap, roughnessMap, roughness: 1, metalness: 0 });
+    n.polygonOffset = m.polygonOffset; n.polygonOffsetFactor = m.polygonOffsetFactor; n.polygonOffsetUnits = m.polygonOffsetUnits;
+    neufs.set(m, n);
+  }
+  stade.traverse((o: any) => {
+    if (!o.isMesh || !neufs.has(o.material)) return;
+    const g = (o.geometry as THREE.BufferGeometry).clone(), pos = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) + o.position.x, pos.getY(i) + o.position.y);
+    uv.needsUpdate = true; o.geometry = g; o.material = neufs.get(o.material);
+  });
+}
+
+export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   const { stade, W, R, D0, D1, hasard } = o;
   const X = (a: number) => D1 - DEMI + a, Y = (n: number) => n - R;
   const lambert = (c: THREE.Color | number, double = false) => new THREE.MeshLambertMaterial({ color: c, side: double ? THREE.DoubleSide : THREE.FrontSide });
   // au sol : chaque couche un peu au-dessus de la precedente, tiree en avant comme les marques de la piste
+  const rouges: THREE.Material[] = [];   // le tartan hors de la piste (demi-lune, elans, prolongement) : habillerLeTartan
   const solMat = (c: THREE.Color, k: number) => {
-    const m = lambert(c, true); m.polygonOffset = true; m.polygonOffsetFactor = -k; m.polygonOffsetUnits = -2 * k; return m;
+    const m = lambert(c, true); m.polygonOffset = true; m.polygonOffsetFactor = -k; m.polygonOffsetUnits = -2 * k;
+    if (c === ROUGE) rouges.push(m);
+    return m;
   };
   const poser = (geos: THREE.BufferGeometry[], mat: THREE.Material, ombre = false) => {
     if (!geos.length) return;
     const m = new THREE.Mesh(mergeGeometries(geos), mat);
     m.receiveShadow = true; m.castShadow = ombre; stade.add(m);
+  };
+  /**
+   * UNE PIECE TRIPO (tools/blender/amsalem/piece_tripo.py : a l'echelle, centree au sol) posee a chaque place
+   * [x, y, cap, echelle] ; les clones partagent geometrie et matiere. Sans le fichier : `repli` (la forme simple).
+   */
+  const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+  const piece = (nom: string, places: [number, number, number, number][], repli: () => void, forme = [1, 1, 1]) => {
+    chargeur.load(o.base + 'modeles/amsalem/' + nom, gl => {
+      gl.scene.traverse((m: any) => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = true; } });
+      for (const [x, y, cap, k] of places) {
+        const c = gl.scene.clone(); c.position.set(x, y, 0); c.rotation.z = cap; c.scale.set(k * forme[0], k * forme[1], k * forme[2]); stade.add(c);
+      }
+    }, undefined, repli);
   };
   /** Un aplat rectangulaire au sol, de (x0, y0) a (x1, y1). */
   const rect = (x0: number, y0: number, x1: number, y1: number, z: number) =>
@@ -160,36 +207,50 @@ export function construireAmsalem(o: ContexteAmsalem) {
     });
   }
 
-  // --- LES MATS D'ECLAIRAGE (img-3 : quatre, aux bouts des lignes droites, juste hors de la piste) ---
+  // --- LES MATS D'ECLAIRAGE (img-3 : quatre, aux bouts des lignes droites, juste hors de la piste ; Tripo, 24 m),
+  // leurs projecteurs tournes vers le milieu du terrain ---
   {
-    const geos: THREE.BufferGeometry[] = [], tetes: THREE.BufferGeometry[] = [];
-    for (const a of [-DEMI + 4, DEMI - 4]) for (const y of [W + 3.6, yO - 2.4]) {
-      geos.push(new THREE.CylinderGeometry(0.16, 0.3, 24, 8).rotateX(Math.PI / 2).translate(X(a), y, 12));
-      tetes.push(new THREE.BoxGeometry(2.2, 0.5, 1.4).translate(X(a), y, 24.3));
-    }
-    poser(geos, lambert(c3(170, 174, 180)));
-    poser(tetes, lambert(c3(60, 64, 72)));
+    const places: [number, number, number, number][] = [];
+    for (const a of [-DEMI + 4, DEMI - 4]) for (const y of [W + 3.6, yO - 2.4])
+      places.push([X(a), y, Math.atan2(-R - y, X(0) - X(a)) - Math.PI / 2, 1]);
+    piece('mat.glb', places, () => {
+      const geos: THREE.BufferGeometry[] = [], tetes: THREE.BufferGeometry[] = [];
+      for (const [x, y] of places) {
+        geos.push(new THREE.CylinderGeometry(0.16, 0.3, 24, 8).rotateX(Math.PI / 2).translate(x, y, 12));
+        tetes.push(new THREE.BoxGeometry(2.2, 0.5, 1.4).translate(x, y, 24.3));
+      }
+      poser(geos, lambert(c3(170, 174, 180))); poser(tetes, lambert(c3(60, 64, 72)));
+    });
   }
 
   // --- LES ARBRES (img-3 : un rideau d'arbres derriere la tribune, entre elle et le terrain synthetique ;
   // il s'arrete au skatepark, cote halle) ---
   {
-    const troncs: THREE.BufferGeometry[] = [], cimes: THREE.BufferGeometry[] = [];
-    for (let a = -6; a <= 60; a += 6 + hasard() * 2) {
-      const x = X(a), y = Y(90 + hasard() * 4), h = 9 + hasard() * 4;
-      troncs.push(new THREE.CylinderGeometry(0.22, 0.32, h * 0.5, 6).rotateX(Math.PI / 2).translate(x, y, h * 0.25));
-      cimes.push(new THREE.IcosahedronGeometry(1, 1).scale(2.6, 2.6, h * 0.36).translate(x, y, h * 0.62));
-    }
-    poser(troncs, lambert(0x5b4030));
-    poser(cimes, lambert(c3(46, 86, 40)), true);
+    // un tilleul Tripo (12 m), tourne et mis a l'echelle au hasard pour qu'aucun ne ressemble a son voisin
+    const places: [number, number, number, number][] = [];
+    for (let a = -6; a <= 60; a += 6 + hasard() * 2) places.push([X(a), Y(76 + hasard() * 4), hasard() * Math.PI * 2, 0.8 + hasard() * 0.3]);
+    piece('arbre.glb', places, () => {
+      const troncs: THREE.BufferGeometry[] = [], cimes: THREE.BufferGeometry[] = [];
+      for (const [x, y, , k] of places) {
+        const h = 12 * k;
+        troncs.push(new THREE.CylinderGeometry(0.22, 0.32, h * 0.5, 6).rotateX(Math.PI / 2).translate(x, y, h * 0.25));
+        cimes.push(new THREE.IcosahedronGeometry(1, 1).scale(2.6, 2.6, h * 0.36).translate(x, y, h * 0.62));
+      }
+      poser(troncs, lambert(0x5b4030)); poser(cimes, lambert(c3(46, 86, 40)), true);
+    });
   }
 
   // --- LA HAIE ET LES CHAMPS (img-4, img-6 : une haie ferme le cote des sauts et le bout de la demi-lune,
   // des champs de ble moissonne au-dela) ---
   {
     const yH = yO - 30, xH = X(DEMI) + R + 34;   // la haie : a une dizaine de metres de l'aire, et du virage
-    poser([new THREE.BoxGeometry(xH - X(-DEMI - 60), 1.6, 2.4).translate((xH + X(-DEMI - 60)) / 2, yH, 1.2),
-      new THREE.BoxGeometry(1.6, Y(70) - yH, 2.4).translate(xH, (Y(70) + yH) / 2, 1.2)], lambert(c3(40, 82, 36)));
+    // des troncons de haie Tripo de 10 m, bout a bout (et une boite verte si le fichier manque)
+    const places: [number, number, number, number][] = [];
+    for (let x = X(-DEMI - 60) + 5; x < xH; x += 10) places.push([x, yH, 0, 1]);
+    for (let y = yH + 5; y < Y(70); y += 10) places.push([xH, y, Math.PI / 2, 1]);
+    piece('haie.glb', places, () => poser([new THREE.BoxGeometry(xH - X(-DEMI - 60), 1.6, 2.4).translate((xH + X(-DEMI - 60)) / 2, yH, 1.2),
+      new THREE.BoxGeometry(1.6, Y(70) - yH, 2.4).translate(xH, (Y(70) + yH) / 2, 1.2)], lambert(c3(40, 82, 36))),
+      [1, 1.5 / 3.75, 2 / 6.9]);   // (le troncon Tripo sort a 3,75 x 6,9 m : ramene a 1,5 m d'epaisseur et 2 m de haut, img-4)
     // (au ras de la pelouse de course-3d.ts, a -0,1 m : tire en avant, sinon elle repasse devant au loin)
     const ble = solMat(c3(206, 176, 118), 4);
     const champ = (x0: number, y0: number, x1: number, y1: number) => rect(x0, y0, x1, y1, -0.03);
@@ -264,7 +325,8 @@ export function construireAmsalem(o: ContexteAmsalem) {
     // la cage du virage de la halle : a 27 m du centre du virage, vers la tribune ; ouverte vers le centre du terrain
     const cx = X(-DEMI - 19), cy = Y(17), versTerrain = Math.atan2(Y(0) - cy, X(0) - cx);
     // (CylinderGeometry couchee : l'angle t regarde la direction t - 90 degres ; l'ouverture vers le terrain)
-    cage(cx, cy, versTerrain + Math.PI / 2, 3.6, 7.5);
+    // la cage Tripo (7,5 m) ; sa face ouverte regarde -y dans son repere : on la tourne vers le terrain
+    piece('cage.glb', [[cx, cy, versTerrain + Math.PI / 2, 1]], () => cage(cx, cy, versTerrain + Math.PI / 2, 3.6, 7.5));
     cercle(cx, cy, 1.25, versTerrain);
     // le coin de la demi-lune : deux cercles, le premier dans sa petite cage
     const p1x = X(55), p1y = Y(-22), p2x = X(62), p2y = Y(-18), versD = Math.atan2(Y(-6) - p1y, X(48) - p1x);
@@ -341,4 +403,5 @@ export function construireAmsalem(o: ContexteAmsalem) {
     poser(mats, lambert(0xe8e8e6));
     for (const [g, c] of tissus) poser([g], lambert(c, true));
   }
+  return rouges;
 }
