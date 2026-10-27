@@ -279,6 +279,44 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     });
   }
 
+  // --- LES BUTTES DE LA TRIBUNE (« il y a une dune de chaque cote du gradin, elle donne acces au gradin du dessus », l'auteur,
+  // 27/10 ; ses vues aeriennes : de part et d'autre de la tribune, un talus d'herbe monte du sol au niveau des rangs du
+  // haut, un chemin de beton sur sa crete mene a la coursive arriere) : 3,2 m de haut contre la tribune, elles retombent
+  // a rien sur 20 m vers l'exterieur et sur l'avant ; derriere, elles se fondent au talus.
+  {
+    const t = TRIBUNE_AMSALEM, xg = X(t.a0), xd = X(t.a0) + t.long, yf = Y(t.n0), yb = Y(t.n0) + t.prof;
+    const H = 3.2, L = 20, NX = 24, NY = 14;
+    const herbe = toileSol((c, w, h) => {
+      c.fillStyle = 'rgb(70,138,48)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 50, 15, 60, ['rgba(52,116,36,0.4)', 'rgba(100,164,62,0.35)']);
+      for (let i = 0; i < 14000; i++) { const x = hasard() * w, y = hasard() * h; c.strokeStyle = hasard() < 0.5 ? 'rgba(42,98,30,0.55)' : 'rgba(112,174,68,0.5)'; c.beginPath(); c.moveTo(x, y); c.lineTo(x + (hasard() - 0.5) * 2, y - 2 - hasard() * 4); c.stroke(); }
+    }, 512);
+    const mh = new THREE.MeshLambertMaterial({ map: herbe });
+    const lisse = (k: number) => { k = Math.min(1, Math.max(0, k)); return k * k * (3 - 2 * k); };
+    const geos: THREE.BufferGeometry[] = [], chemins: THREE.BufferGeometry[] = [];
+    // la hauteur de la butte : pleine contre la tribune et vers l'arriere, a rien vers l'exterieur et vers la piste
+    const zButte = (x: number, y: number, x0: number) => H * (1 - lisse(Math.abs(x - x0) / L)) * lisse(((y - yf) / t.prof + 0.3) / 0.9) - 0.05;
+    for (const sens of [-1, 1]) {
+      const x0 = sens < 0 ? xg : xd, y0 = yf - 3, y1 = yb + 6;
+      const g = new THREE.PlaneGeometry(L, y1 - y0, NX, NY).translate(x0 + sens * L / 2, (y0 + y1) / 2, 0);
+      const p = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
+      for (let i = 0; i < p.count; i++) {
+        const x = p.getX(i), y = p.getY(i);
+        p.setZ(i, Math.max(-0.05, zButte(x, y, x0))); uv.setXY(i, x / 8, y / 8);
+      }
+      g.computeVertexNormals();
+      geos.push(g);
+      // le chemin de beton sur la crete, de l'arriere de la tribune vers l'exterieur, en descendant : 2,2 m de large
+      const yc = yb - 1.5, cg = new THREE.PlaneGeometry(L * 0.9, 2.2, 18, 2).translate(x0 + sens * L * 0.45, yc, 0);
+      const pc = cg.attributes.position;
+      for (let i = 0; i < pc.count; i++) pc.setZ(i, Math.max(0, zButte(pc.getX(i), pc.getY(i), x0)) + 0.03);
+      cg.computeVertexNormals(); chemins.push(cg);
+    }
+    poser(geos, mh);
+    const mc = lambert(c3(196, 194, 188)); mc.polygonOffset = true; mc.polygonOffsetFactor = -2; mc.polygonOffsetUnits = -4;
+    poser(chemins, mc);
+  }
+
   // --- LES MATS D'ECLAIRAGE (img-3 : quatre, aux bouts des lignes droites, juste hors de la piste ; Tripo, 24 m),
   // leurs projecteurs tournes vers le milieu du terrain ---
   {
