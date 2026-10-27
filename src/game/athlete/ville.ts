@@ -962,6 +962,66 @@ export class Ville {
       this.poser(bord, mat('#F5F5F0'), false, true, 0.14);
     }
 
+    // LA PISTE DU STADE BERNARD AMSALEM (« piste exterieure Bernard Amsalem : ses couleurs », l'auteur,
+    // 26/10). OpenStreetMap n'en a que le terrain d'honneur (105 x 68 m) : la piste est posee autour, d'apres
+    // la vue aerienne de Polytan apres la renovation (assets-sources/stade-bernard-amsalem-polytan, img-4).
+    // Huit couloirs de 1,22 m (« 87654321 » a l'arrivee), corde de 36,50 m, lignes droites de 84,39 m ; un
+    // tartan rouge rgb(195, 70, 70) ; une bordure beige rgb(229, 201, 160) tout autour, et la grande aire
+    // beige des sauts le long de la ligne droite qui ne longe pas la tribune ; au bout oppose a la halle,
+    // la demi-lune rouge, son coin droit en gazon (les lancers). La tribune et la halle sont du meme cote.
+    {
+      const ici = xz(LIEUX.stade.ll!);
+      const t = d.vert.find(v => v.k === 'terrain' && dansPoly(v.p, ici[0], ici[1]));
+      const hall = d.batiments.find(b => (b as any).n === 'Stade couvert Jesse Owens');
+      if (t && t.p.length >= 4) {
+        // le terrain : son centre et son grand axe
+        const q = t.p.slice(0, 4);
+        const cx = q.reduce((s, p) => s + p[0], 0) / 4, cz = q.reduce((s, p) => s + p[1], 0) / 4;
+        let ax = 1, az = 0, lg = 0;
+        for (let i = 0; i < 4; i++) { const [x0, z0] = q[i], [x1, z1] = q[(i + 1) % 4], l = Math.hypot(x1 - x0, z1 - z0); if (l > lg) { lg = l; ax = (x1 - x0) / l; az = (z1 - z0) / l; } }
+        let nx = -az, nz = ax;
+        // le cote de la tribune (+n) est celui de la halle ; la demi-lune est au bout oppose a la halle (+a)
+        let sa = 1;
+        if (hall) {
+          const hx = hall.p.reduce((s, p) => s + p[0], 0) / hall.p.length - cx, hz = hall.p.reduce((s, p) => s + p[1], 0) / hall.p.length - cz;
+          if (hx * nx + hz * nz < 0) { nx = -nx; nz = -nz; }
+          if (hx * ax + hz * az > 0) sa = -1;
+        }
+        const P = (a: number, n: number): P2 => [cx + (ax * a * sa) + nx * n, cz + (az * a * sa) + nz * n];
+        const DEMI = 84.39 / 2, R0 = 36.5, CW = 1.22, NC = 8, R1 = R0 + NC * CW;
+        /** L'ovale au rayon r, en points (sens trigonometrique). */
+        const ovale = (r: number) => {
+          const pts: P2[] = [];
+          for (let i = 0; i <= 24; i++) { const u = Math.PI / 2 - (i / 24) * Math.PI; pts.push(P(DEMI + r * Math.cos(u), r * Math.sin(u))); }
+          for (let i = 0; i <= 24; i++) { const u = 1.5 * Math.PI - (i / 24) * Math.PI; pts.push(P(-DEMI + r * Math.cos(u), r * Math.sin(u))); }
+          pts.push(pts[0]);   // (refermee : la ligne droite de la tribune)
+          return pts;
+        };
+        const beigeT = new Tampon(), rouge = new Tampon(), lignes = new Tampon(), sable = new Tampon(), bleu = new Tampon();
+        ruban(beigeT, ovale(R1 + 0.6), 1.2, 0);                    // la bordure exterieure
+        // l'aire des sauts : 15 m de large, cote oppose a la tribune
+        aplat(beigeT, [P(-DEMI - 6, -R1), P(DEMI + 6, -R1), P(DEMI + 6, -R1 - 15), P(-DEMI - 6, -R1 - 15)], 0);
+        const mil = ovale(R0 + NC * CW / 2);
+        ruban(rouge, mil, NC * CW, 0);
+        for (let k = 0; k <= NC; k++) ruban(lignes, ovale(R0 + k * CW), 0.08, 0);
+        // la demi-lune au bout oppose a la halle, au-dela du terrain (52,5 m), son coin des lancers en gazon
+        const dl: P2[] = [];
+        for (let i = 0; i <= 24; i++) { const u = Math.PI / 2 - (i / 24) * Math.PI, a = DEMI + R0 * Math.cos(u), n = R0 * Math.sin(u); if (a >= 53.5 && n > -14) dl.push(P(a, n)); }
+        dl.push(P(53.5, -14));
+        dl.unshift(P(53.5, Math.sqrt(Math.max(0, R0 * R0 - (53.5 - DEMI) ** 2))));
+        aplat(rouge, dl, 0);
+        // les deux couloirs d'elan rouges de l'aire des sauts, leurs bacs, les deux tapis bleus
+        for (const n of [-R1 - 4.5, -R1 - 9]) aplat(rouge, [P(-DEMI, n - 0.61), P(DEMI - 4, n - 0.61), P(DEMI - 4, n + 0.61), P(-DEMI, n + 0.61)], 0);
+        for (const [a, n] of [[-DEMI + 6, -R1 - 4.5], [DEMI - 18, -R1 - 9]] as const) aplat(sable, [P(a - 4.5, n - 1.4), P(a + 4.5, n - 1.4), P(a + 4.5, n + 1.4), P(a - 4.5, n + 1.4)], 0);
+        for (const [a, n] of [[DEMI - 6, -R1 - 12.5], [-DEMI + 22, -R1 - 12.5], [DEMI + 14, 4]] as const) aplat(bleu, [P(a - 3, n - 2.5), P(a + 3, n - 2.5), P(a + 3, n + 2.5), P(a - 3, n + 2.5)], 0);
+        this.poser(beigeT, mat('#E5C9A0', { roughness: 0.9 }), false, true, 0.12);
+        this.poser(rouge, mat('#C34646', { roughness: 0.8 }), false, true, 0.13);
+        this.poser(lignes, mat('#F5F5F0'), false, true, 0.14);
+        this.poser(sable, mat('#D9C08A', { roughness: 1 }), false, true, 0.145);
+        this.poser(bleu, mat('#55C3EF', { roughness: 0.7 }), false, true, 0.16);
+      }
+    }
+
     // les batiments : murs a fenetres teintes, toits plats ou de tuiles
     const murs = new Tampon(), mursPetits = new Tampon(), toits = new Tampon(), tuiles = new Tampon(), acroteres = new Tampon();
     const couleur = new THREE.Color(), gris = new THREE.Color();
