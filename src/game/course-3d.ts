@@ -2021,7 +2021,9 @@ function corpsDe(r: any): Corps | null {
     const liste = Array.isArray(o.material) ? o.material : [o.material];
     const neufs = liste.map((m: any) => {
       const zone = String(m.name || '').replace('Coureur_', '');
-      const n = new THREE.MeshStandardMaterial({ roughness: zone === 'peau' ? 0.55 : 0.7, metalness: 0 });
+      // LE LOGO DES POINTES BENBEZI (tools/blender/chaussures_coureur.py) : sa texture, le logo du jeu, est gardee
+      const n = new THREE.MeshStandardMaterial({ roughness: zone === 'peau' ? 0.55 : zone === 'semelle' || zone === 'plaque' ? 0.45 : 0.7, metalness: 0,
+        ...(zone === 'logo' ? { map: m.map, transparent: true, alphaTest: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } : {}) });
       lisere(n);
       mats[zone] = n;
       return n;
@@ -2032,7 +2034,14 @@ function corpsDe(r: any): Corps | null {
   mats.peau?.color.copy(rgb(L.skin));
   mats.maillot?.color.copy(rgb(L.jersey || [200, 40, 50]));
   mats.short?.color.copy(rgb(L.shorts));
-  mats.pointes?.color.copy(rgb(L.shoe));
+  // LES POINTES BENBEZI (« les assets du jeu sont pieds nus : cree-leur des chaussures avec la marque Benbezi, reprends le
+  // logo du jeu », l'auteur, 27/10 ; tools/blender/chaussures_coureur.py) : la tige a la couleur de chaussure du look, la
+  // semelle blanche, la plaque a pointes noire, le logo argent. L'ancienne zone « pointes » n'etait que le pied teint :
+  // elle reste dans la chaussure, et au-dessus du col c'est la cheville — couleur de peau.
+  mats.pointes?.color.copy(mats.chaussure ? rgb(L.skin) : rgb(L.shoe));
+  mats.chaussure?.color.copy(rgb(L.shoe));
+  mats.semelle?.color.setRGB(0.93, 0.93, 0.91, THREE.SRGBColorSpace);
+  mats.plaque?.color.setRGB(0.06, 0.06, 0.07, THREE.SRGBColorSpace);
   mats.cheveux?.color.copy(SANS_CHEVEUX.has(L.hair) ? rgb(L.skin, 0.8) : rgb(L.hairCol || [20, 16, 14]));
   c = { m: modeleDe(copie), mats };
   monde.add(c.m.racine);
