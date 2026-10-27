@@ -103,17 +103,31 @@ export const lisse = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / 
 export const RAMPE = Math.PI / 3;
 /** La hauteur du revetement au cap phi d'un virage, a d metres du bord interieur. */
 const hauteur = (phi, d) => profil(d) * lisse(0, RAMPE, Math.min(phi, Math.PI - phi));
+/** Le devers en travers (sa tangente) au cap phi, a d metres du bord : 10° au bord, 18° au couloir 6. */
+const devers = (phi, d) => {
+  const k = (ALPHA1 - ALPHA0) / LARGE;
+  return Math.tan(d >= LARGE ? ALPHA1 : ALPHA0 + k * Math.max(0, d)) * lisse(0, RAMPE, Math.min(phi, Math.PI - phi));
+};
+/** Le rayon de courbure du virage au cap phi, a d metres du bord interieur (la parallele de l'ellipse). */
+const rayonVirage = (phi, d) => courbure(phi) + d;
 // LA PENTE DANS LE CHRONO (« le chrono du 200 m est plus ou moins bon par rapport a l'effort fourni, la
 // montee et la descente des virages » ; « les chronos indoor sur 200 et 400 sont plus difficiles, dus aux
 // virages et a la gestion du rythme dans les montees et descentes », l'auteur, 27/10). Mesure avant : le
 // moteur ignorait le releve, le joueur courait le 200 m en salle 0,15 s seulement au-dessus du plein air a
-// dix appuis par seconde. La montee freine (g x pente x MONTE), la descente rend moins (DESCEND), et le
-// RYTHME compte (Runner.stepPlayer) : une cadence tenue dans la montee y perd moins, la descente ne rend que
-// ce qu'on y tient. Calees sur le 200 m : le joueur a dix appuis y perd 3,5 % (l'ecart des records du monde,
-// salle contre plein air : 19,92 / 19,19), 5 % a huit appuis, 2 % a treize. Au 400 m, la meme pente ne
-// coute que 1,8 % (44,52 / 43,03 en donnerait 3,5) : la doubler pour lui rendrait le 200 m trop lent
-// (tools/piste-salle-test.mjs mesure les deux).
-const PENTE = { monte: 7, descend: 3.5 };
+// dix appuis par seconde. La montee freine (g x pente x MONTE), la descente relance (DESCEND), et le RYTHME
+// compte (Runner.stepPlayer ; « la montee des virages demande plus d'appuis et la descente peut apporter plus
+// de vitesse s'il y a plus d'appuis », l'auteur, 27/10) : la perte fond avec la cadence, le gain grandit avec
+// elle et ouvre la vitesse de pointe. Le couloir 6 monte et descend le plus (1,13 m), le couloir 1 a le
+// virage le plus serre (VIRAGE). Mesure (tools/piste-salle-test.mjs), 200 m en salle contre plein air :
+// a dix appuis par seconde +5,1 % au couloir 1, +4,4 % au 4, +2,7 % au 6 (records du monde : +3,8 %) ;
+// a huit appuis +7 a +11 % ; a treize +1,5 % au couloir 1, et le couloir 6 bat le plein air (13 m/s en descente).
+const PENTE = { monte: 5, descend: 5 };
+// LE VIRAGE SERRE (l'auteur, 27/10 : « mets le couloir 1 a un angle plus serre et une ligne droite moins
+// marquee que le couloir 6, joue sur ca ; on apporte une vraie experience de course en salle ») : ce que le
+// devers ne porte pas de la force centrifuge (v²/rayon - g x devers), le coureur le paie en vitesse, VIRAGE
+// fois. Au couloir 1, rayon de 12,8 m au plus serre et 10° de devers : il paie le double du couloir 6
+// (17,3 m, 17°) — le couloir 6, lui, monte et descend plus haut (1,13 m contre 4 cm).
+const VIRAGE = 0.4;
 // LE PELOTON DU 400 M : passe la ligne, tout le monde rejoint la corde — chacun a son ecart vers l'exterieur
 // (0 a 1,25 m), pris pendant la diagonale. Et les ACCROCHAGES (« sur le 400 m les accrochages sont possibles
 // au 2e tour, il peut y avoir du contact », l'auteur, 27/10) : a moins de LONG metres l'un de l'autre et de
@@ -142,7 +156,7 @@ export const SALLE = {
   couloirs: NC, couloirsDroite: 8,   // (la ligne droite centrale : 8 couloirs aux France 2026 ; 6 sur le plan de 2009)
   inclinaison: 15 * Math.PI / 180,   // en moyenne : la pente se raidit vers l'exterieur (salle-3d.ts, profil)
   demiLong: A,
-  virage, capVirage, longueurVirage, phiVirage, surVirage, hauteur, rabattement, pente: PENTE,
+  virage, capVirage, longueurVirage, phiVirage, surVirage, hauteur, devers, rayonVirage, rabattement, pente: PENTE, serre: VIRAGE,
   peloton: PELOTON, contact: CONTACT,
 };
 /** La ligne droite de l'anneau. */

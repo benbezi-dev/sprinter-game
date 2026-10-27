@@ -2371,14 +2371,17 @@
     const cibles = (lvl.cibles && lvl.cibles[R.key]) || null;
     G.track = new Track(R);
     G.runners = [];
-    const pl = new Runner('TOI', 3, { isPlayer: true, maxSpeed: R.maxSpeed,
+    // LE COULOIR TIRE AU SORT SUR L'ANNEAU COUVERT (« le couloir 6 a plus de montee, le couloir 1 un angle
+    // plus serre », l'auteur, 27/10) : chaque couloir s'y court autrement — le joueur n'est plus toujours au 4
+    const monCouloir = G.track.salle ? Math.floor(K.alea() * G.track.lanes) : 3;
+    const pl = new Runner('TOI', monCouloir, { isPlayer: true, maxSpeed: R.maxSpeed,
       best: R.best, total: G.track.total });
     // la piste couverte : la montee et la descente des virages releves (Track.accelPente)
-    if (G.track.salle) { const T = G.track; pl.pente = (s) => T.accelPente(s, pl.lane); pl.bouscule = bousculade; }
+    if (G.track.salle) { const T = G.track; pl.pente = (s, v) => T.accelPente(s, pl.lane, v); pl.bouscule = bousculade; }
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
     const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
-    // l'anneau couvert n'a que six couloirs : cinq adversaires autour du joueur (couloir 4)
+    // l'anneau couvert n'a que six couloirs : cinq adversaires autour du joueur (couloir 4, tire au sort en salle)
     (G.track.lanes < C.LANE_COUNT ? names.slice(0, G.track.lanes - 1) : names).forEach((n, i) => {
       // Seme pendant un defi : c'est CE tirage qui decide du plateau — qui
       // court a cote de toi, et en combien. Le laisser au hasard rendrait deux
@@ -2387,7 +2390,7 @@
       // suite, et les autres couloirs d'un defi seme changeraient de temps.
       const tire = lo + K.alea() * (hi - lo);
       const t = cibles && cibles[n] ? cibles[n] : tire;
-      const lane = i < 3 ? i : i + 1;
+      const lane = i < monCouloir ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
         total: G.track.total, pool: lvl.pool });
       if (t < best) { best = t; G.champion = n; G.championTime = t; }
@@ -4177,7 +4180,7 @@
                                      best: R.best, total: G.track.total })
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
                                      pool: LEVELS[G.levelIdx].pool });
-    if (neuf.isPlayer && G.track.salle) { const T = G.track; neuf.pente = (s) => T.accelPente(s, neuf.lane); neuf.bouscule = bousculade; }
+    if (neuf.isPlayer && G.track.salle) { const T = G.track; neuf.pente = (s, v) => T.accelPente(s, neuf.lane, v); neuf.bouscule = bousculade; }
     const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,
                     isGhost: r.isGhost, isLive: r.isLive, repere: r.repere,
                     fictif: r.fictif, cibleFictive: r.cibleFictive };

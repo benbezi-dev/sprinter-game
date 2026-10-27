@@ -2390,7 +2390,7 @@ export function rendre(App: any, dt: number) {
       // vers la camera : (-1, -1) dans le repere tourne du 2D, ramene au monde, puis en 3D
       const rot = T.curved ? -14 * Math.PI / 180 : 0, wc = Math.cos(rot), ws = Math.sin(rot);
       const dx = sx * (-wc - ws) / Math.SQRT2, dy = sx * (ws - wc) / Math.SQRT2;
-      const c = ici(T.pos(pl.d, 3));
+      const c = ici(T.pos(pl.d, pl.lane));
       voulu.set(c[0] + dx * D * Math.cos(elev), -(c[1] + dy * D * Math.cos(elev)), D * Math.sin(elev));
       vise.set(c[0], -c[1], 0);
     }

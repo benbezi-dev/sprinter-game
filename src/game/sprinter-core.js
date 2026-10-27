@@ -1770,15 +1770,23 @@
     if (b.bend) { const q = this.salle.virage(b.v, r - this.salle.rayon); return b.bend === 1 ? [-q[0], -q[1]] : [S + q[0], q[1]]; }
     return b.moitie === 0 ? [b.v, r] : [S - b.v, -r];
   };
-  // LA PENTE DU RELEVEMENT sous le coureur (piste-salle.js) : l'acceleration qu'elle lui donne, en m/s²
-  // — negative a la montee d'un virage, positive (et moindre) a la descente.
-  Track.prototype.accelPente = function (s, lane) {
+  // LA PISTE COUVERTE SOUS LE COUREUR (piste-salle.js), a la vitesse v : ce qu'elle lui prend (`perte`,
+  // m/s² negatifs — la montee d'un virage, la force centrifuge que le devers ne porte pas) et ce qu'elle lui
+  // rend (`gain`, la descente). Runner.stepPlayer y applique le rythme du joueur.
+  Track.prototype.accelPente = function (s, lane, v) {
     const P = this.salle;
-    if (!P || !P.pente) return 0;
+    if (!P || !P.pente) return { perte: 0, gain: 0 };
     const r = this.radius(lane);
     const z = (q) => { const b = this.boucle(q, r); return b.bend ? P.hauteur(b.v, r + (b.decal || 0) - P.rayon) : 0; };
     const g = (z(s + 0.5) - z(s - 0.5));
-    return -9.81 * g * (g > 0 ? P.pente.monte : P.pente.descend);
+    let perte = g > 0 ? -9.81 * g * P.pente.monte : 0;
+    const gain = g < 0 ? -9.81 * g * P.pente.descend : 0;
+    const b = this.boucle(s, r);
+    if (b.bend && v) {
+      const d = r + (b.decal || 0) - P.rayon;
+      perte -= P.serre * Math.max(0, v * v / P.rayonVirage(b.v, d) - 9.81 * P.devers(b.v, d));
+    }
+    return { perte, gain };
   };
   // LE PELOTON DU 400 M EN SALLE (piste-salle.js) : la part de la diagonale de rabattement faite (0 avant
   // la ligne, 1 a la corde), et l'ecart du coureur a la ligne de mesure du couloir 1, en travers.
@@ -2353,15 +2361,18 @@
         if (this.d - this.legStart < this.driveEnd) this.stumbledInDrive = true;
         stumbled = true;
       } else {
-        this.v = Math.min(this.maxSpeed, this.v + C.BOOST * 0.3);
+        this.v = Math.min(this.plafond(), this.v + C.BOOST * 0.3);
       }
     } else {
-      this.v = Math.min(this.maxSpeed, this.v + C.BOOST);
+      this.v = Math.min(this.plafond(), this.v + C.BOOST);
     }
     this.lastKey = key;
     return stumbled;
   };
 
+  // Le plafond d'un appui : la vitesse de pointe — sauf a la piste couverte, ou la descente d'un virage
+  // l'ouvre (`elan`, voir stepPlayer) et ou l'appui ne ramene jamais en arriere une vitesse deja prise.
+  Runner.prototype.plafond = function () { return this.pente ? Math.max(this.maxSpeed + (this.elan || 0), this.v) : this.maxSpeed; };
   Runner.prototype.stepPlayer = function (dt, elapsed) {
     // L'EFFORT : dix appuis par seconde valent 1 (7,5 le neutre, 0,75) ; sans appui, il retombe
     if (elapsed !== undefined) {
@@ -2396,9 +2407,13 @@
     // la montee et la descente des virages releves (piste couverte : Track.accelPente) — et le rythme y
     // compte : la cadence tenue (effort 1 a dix appuis par seconde) limite la perte dans la montee, et la
     // descente ne rend que ce qu'on y tient
+    // LA MONTEE DEMANDE PLUS D'APPUIS, LA DESCENTE REND PLUS A QUI EN DONNE (l'auteur, 27/10) : la perte
+    // fond quand la cadence monte, le gain grandit avec elle — et peut porter au-dela de la vitesse de pointe
     if (this.pente) {
-      const a = this.pente(this.d), e = this.effort == null ? 1 : this.effort;
-      this.v = Math.max(0, this.v + a * (a < 0 ? 1.6 - 0.6 * e : Math.min(1.2, e)) * dt);
+      const a = this.pente(this.d, this.v), e = this.effort == null ? 1 : this.effort, rend = Math.max(0, 1.5 * e - 0.5);
+      this.v = Math.max(0, this.v + (a.perte * (1.6 - 0.6 * e) + a.gain * rend) * dt);
+      // la descente ouvre le plafond a qui y appuie : jusqu'a 1,2 m/s de mieux au couloir 6, presque rien au 1
+      this.elan = Math.min(1.2, a.gain * 0.3 * rend);
     }
     // les accrochages du 400 m en salle (Track.auContact)
     if (this.bouscule) this.bouscule(dt);

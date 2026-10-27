@@ -36,28 +36,33 @@ for (const cle of ['200s', '400s']) {
   ok('400s : apres la ligne droite de rabattement, tous les couloirs courent a la corde', ecart < 1e-6, ecart);
   ok('400s couloir 1 : la ligne de rabattement a la sortie du second virage (165 m)', Math.abs(SALLE.rabattement(SALLE.mes1, 400).avant - 165) < 0.01);
 }
-// LA PENTE DANS LE CHRONO (27/10) : a dix appuis par seconde, le joueur perd en salle 3,5 % au 200 m (l'ecart
-// des records du monde), 1,8 % au 400 m, a 0,1 s pres ; et le rythme compte : huit appuis y perdent plus que treize
+// LA PENTE ET LE VIRAGE SERRE DANS LE CHRONO (27/10) : plus dur qu'en plein air ; le couloir 1 (virage serre)
+// le plus lent, le couloir 6 (plus de montee et de descente) le plus rapide ; le rythme y compte
 {
   const { Runner, RACES } = globalThis.SprinterCore;
-  const chrono = (race, salle, cadence = 10) => {
-    let tot = 0;
-    for (let k = 0; k < 5; k++) {
-      const r = new Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: salle ? race.total : (race.fullLap ? 2 : 1) * (race.arc + race.straight) });
-      const T = new Track(race); if (T.salle) r.pente = (q) => T.accelPente(q, 3);
+  const chrono = (race, salle, lane = 3, cadence = 10) => {
+    let tot = 0, vmax = 0;
+    for (let k = 0; k < 4; k++) {
+      const T = new Track(race), r = new Runner('TOI', lane, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: T.total });
+      if (salle) r.pente = (q, v) => T.accelPente(q, lane, v);
       let t = 0, suivant = 0, g = 0;
-      while (!r.finished && t < 90) { if (t >= suivant) { r.press(g++ % 2 ? 'R' : 'L', t); suivant += 1 / cadence; } r.stepPlayer(1 / 60, t); t += 1 / 60; }
+      while (!r.finished && t < 90) { if (t >= suivant) { r.press(g++ % 2 ? 'R' : 'L', t); suivant += 1 / cadence; } r.stepPlayer(1 / 60, t); vmax = Math.max(vmax, r.v); t += 1 / 60; }
       tot += r.finishTime;
     }
-    return tot / 5;
+    return { t: tot / 4, vmax };
   };
-  for (const [dehors, dedans, k] of [['200', '200s', 1.035], ['400', '400s', 1.018]]) {
-    const a = chrono(RACES[dehors], false), b = chrono(COURSES_EN_SALLE[dedans], true);
-    ok(`${dedans} a dix appuis : ${b.toFixed(2)} s (plein air ${a.toFixed(2)} s x ${k} = ${(a * k).toFixed(2)})`, Math.abs(b - a * k) < 0.1);
-  }
-  const perte = (c) => chrono(COURSES_EN_SALLE['200s'], true, c) / chrono(RACES['200'], false, c);
-  const p8 = perte(8), p13 = perte(13);
-  ok(`200s : le rythme compte dans les virages (perte ${((p8 - 1) * 100).toFixed(1)} % a huit appuis, ${((p13 - 1) * 100).toFixed(1)} % a treize)`, p8 > p13 + 0.015);
+  const pct = (a, b) => ((b / a - 1) * 100).toFixed(1) + ' %';
+  const dehors = chrono(RACES['200'], false).t;
+  const [c1, c4, c6] = [0, 3, 5].map(k => chrono(COURSES_EN_SALLE['200s'], true, k).t);
+  ok(`200s a dix appuis, plus dur qu'en plein air : couloir 4 ${pct(dehors, c4)}`, c4 > dehors * 1.03 && c4 < dehors * 1.06);
+  ok(`200s : couloir 1 (${pct(dehors, c1)}) plus lent que le 4, le 6 (${pct(dehors, c6)}) plus rapide`, c1 > c4 && c6 < c4 - 0.2);
+  const d8 = chrono(RACES['200'], false, 3, 8).t, d13 = chrono(RACES['200'], false, 3, 13).t;
+  const s8 = chrono(COURSES_EN_SALLE['200s'], true, 3, 8).t, s13 = chrono(COURSES_EN_SALLE['200s'], true, 3, 13).t;
+  ok(`200s : le rythme compte (couloir 4 : ${pct(d8, s8)} a huit appuis, ${pct(d13, s13)} a treize)`, s8 / d8 > s13 / d13 + 0.04);
+  const v6 = chrono(COURSES_EN_SALLE['200s'], true, 5, 13).vmax;
+  ok(`200s : a treize appuis, la descente porte le couloir 6 au-dela de la pointe (${v6.toFixed(1)} m/s > ${COURSES_EN_SALLE['200s'].maxSpeed})`, v6 > COURSES_EN_SALLE['200s'].maxSpeed + 0.5);
+  const d400 = chrono(RACES['400'], false).t, s400 = chrono(COURSES_EN_SALLE['400s'], true).t;
+  ok(`400s a dix appuis, plus dur qu'en plein air : ${pct(d400, s400)}`, s400 > d400 * 1.015);
 }
 // LES ACCROCHAGES DU 400 M (27/10) : au second tour, deux coureurs colles se touchent ; ecartes en travers, non
 {
