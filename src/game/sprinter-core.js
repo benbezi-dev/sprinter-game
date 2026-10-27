@@ -789,7 +789,8 @@
       horsSerie: true,
       brancheTest: true,
       noms: ['Stade Bernard Amsalem', 'Bernard Amsalem Stadium'],
-      foule: 0.5,
+      // (« le gradin est place de facon vide », l'auteur, 27/10 : a moitie, la petite tribune paraissait deserte)
+      foule: 0.85,
       plateau: { '100': [10.40, 10.90], '200': [21.00, 22.20],
                  '400': [47.00, 49.50], '4x100': [40.50, 42.50] },
       names: ['Rayan Lefort', 'Mathis Carre', 'Elias Boyer', 'Nolan Petit',

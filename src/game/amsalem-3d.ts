@@ -69,6 +69,20 @@ function toileSol(dessin: (c: CanvasRenderingContext2D, w: number, h: number) =>
   return t;
 }
 /**
+ * DES TACHES RACCORDABLES (« pas de texture, le decor est pauvre et plat », l'auteur, 27/10) : n ellipses de rayon
+ * r0 a r1 px, des couleurs de la liste, recopiees de l'autre cote des bords — la tuile se raccorde sans couture.
+ */
+function taches(c: CanvasRenderingContext2D, w: number, h: number, hasard: () => number, n: number, r0: number, r1: number, couleurs: string[]) {
+  for (let i = 0; i < n; i++) {
+    const x = hasard() * w, y = hasard() * h, rx = r0 + hasard() * (r1 - r0), ry = rx * (0.5 + hasard() * 0.8), a = hasard() * Math.PI;
+    c.fillStyle = couleurs[(hasard() * couleurs.length) | 0];
+    for (const dx of [-w, 0, w]) for (const dy of [-h, 0, h]) {
+      if (x + dx + rx < 0 || x + dx - rx > w || y + dy + rx < 0 || y + dy - rx > h) continue;
+      c.beginPath(); c.ellipse(x + dx, y + dy, rx, ry, a, 0, Math.PI * 2); c.fill();
+    }
+  }
+}
+/**
  * LA PELOUSE DU TERRAIN D'HONNEUR (« la qualite du stade est moyenne », 27/10) : les bandes de tonte du jeu, plus le
  * grain de l'herbe — des brins plus clairs, plus sombres, un peu jaunis. Remplace la tonte unie de course-3d.ts.
  */
@@ -163,7 +177,9 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   poser(anneauOvale(R1 + 1.2, R1 + 2.4, 0.003), solMat(LIE, 1));
 
   // --- L'AIRE DES SAUTS (img-3, img-4) : beige, 15 m de large, le long de la ligne droite opposee ---
-  const yO = -R - R1;   // le bord exterieur de la ligne opposee
+  const yO = -R - R1;
+  // la haie : 3,6 m au-dela du chemin (lui-meme a 20 m du bord de la piste), le long de l'aire puis en arc (photos de l'auteur)
+  const R_HAIE = R1 + 2.4 + 20 + 3.6;   // le bord exterieur de la ligne opposee
   const xa0 = X(-DEMI - 6), xa1 = X(DEMI + 6);
   poser([rect(xa0, yO - 1.2, xa1, yO - 16.2, 0.005)], solMat(BEIGE, 3));
   poser([rect(xa0 - 1, yO - 16.2, xa1 + 1, yO - 17.4, 0.004), rect(xa0 - 1, yO - 1.2, xa0, yO - 17.4, 0.004), rect(xa1, yO - 1.2, xa1 + 1, yO - 17.4, 0.004)], solMat(LIE, 2));
@@ -249,7 +265,10 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   {
     // un tilleul Tripo (12 m), tourne et mis a l'echelle au hasard pour qu'aucun ne ressemble a son voisin
     const places: [number, number, number, number][] = [];
-    for (let a = -6; a <= 60; a += 6 + hasard() * 2) places.push([X(a), Y(76 + hasard() * 4), hasard() * Math.PI * 2, 0.8 + hasard() * 0.3]);
+    // (photos de l'auteur, 27/10 : un rideau SERRE de grands arbres sur toute la longueur du terrain synthetique, deux rangs
+    // decales — dix arbres epars ne le rendaient pas)
+    for (let a = -6; a <= 140; a += 4.5 + hasard() * 1.5) places.push([X(a), Y(76 + hasard() * 3), hasard() * Math.PI * 2, 0.9 + hasard() * 0.35]);
+    for (let a = -3; a <= 140; a += 6 + hasard() * 2) places.push([X(a), Y(82 + hasard() * 3), hasard() * Math.PI * 2, 0.8 + hasard() * 0.3]);
     piece('arbre.glb', places, () => {
       const troncs: THREE.BufferGeometry[] = [], cimes: THREE.BufferGeometry[] = [];
       for (const [x, y, , k] of places) {
@@ -264,44 +283,80 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   // --- LA HAIE ET LES CHAMPS (img-4, img-6 : une haie ferme le cote des sauts et le bout de la demi-lune,
   // des champs de ble moissonne au-dela) ---
   {
-    const yH = yO - 30, xH = X(DEMI) + R + 34;   // la haie : a une dizaine de metres de l'aire, et du virage
-    // des troncons de haie Tripo de 10 m, bout a bout (et une boite verte si le fichier manque)
+    const yH = -R - R_HAIE, xH = D1 + R_HAIE + 4;
+    // des troncons de haie Tripo de 10 m, bout a bout (et une boite verte si le fichier manque) : le long de l'aire des
+    // sauts, puis EN ARC autour du virage de la demi-lune jusqu'au cote de la tribune (photos de l'auteur, 27/10 : la
+    // haie suit le chemin et le virage, elle ne fait pas d'angle)
     const places: [number, number, number, number][] = [];
     // (tous les 9 m : le feuillage du modele n'occupe pas toute sa boite, a 10 m des trous se voyaient)
-    for (let x = X(-DEMI - 60) + 5; x < xH; x += 9) places.push([x, yH, 0, 1]);
-    for (let y = yH + 5; y < Y(70); y += 9) places.push([xH, y, Math.PI / 2, 1]);
-    piece('haie.glb', places, () => poser([new THREE.BoxGeometry(xH - X(-DEMI - 60), 1.6, 2.4).translate((xH + X(-DEMI - 60)) / 2, yH, 1.2),
-      new THREE.BoxGeometry(1.6, Y(70) - yH, 2.4).translate(xH, (Y(70) + yH) / 2, 1.2)], lambert(c3(40, 82, 36))),
+    for (let x = X(-DEMI - 60) + 5; x < D1; x += 9) places.push([x, yH, 0, 1]);
+    const nArc = Math.ceil(Math.PI * R_HAIE / 8.5);
+    for (let i = 0; i <= nArc; i++) { const u = -Math.PI / 2 + (i / nArc) * Math.PI; places.push([D1 + R_HAIE * Math.cos(u), -R + R_HAIE * Math.sin(u), u + Math.PI / 2, 1]); }
+    piece('haie.glb', places, () => poser(places.map(([x, y, a]) => new THREE.BoxGeometry(9, 1.6, 2.4).rotateZ(a).translate(x, y, 1.2)), lambert(c3(40, 82, 36))),
       [1, 1.5 / 3.75, 2 / 6.9]);   // (le troncon Tripo sort a 3,75 x 6,9 m : ramene a 1,5 m d'epaisseur et 2 m de haut, img-4)
-    // (au ras de la pelouse de course-3d.ts, a -0,1 m : tire en avant, sinon elle repasse devant au loin)
-    const ble = solMat(c3(206, 176, 118), 4);
-    const champ = (x0: number, y0: number, x1: number, y1: number) => rect(x0, y0, x1, y1, -0.03);
+    // LES CHAMPS MOISSONNES (img-5, img-6 : les rangs de chaume, les traces du tracteur, des plaques plus claires) et
+    // leur RELIEF (img-5 au fond, img-6 en bas : la plaine ondule doucement) : plats pres du stade, ils se soulevent
+    // au-dela de 120 m de son centre, jusqu'a 6 m au loin. Une tuile de 1 024 px pour 48 m.
+    const chaume = toileSol((c, w, h) => {
+      c.fillStyle = 'rgb(206,176,118)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 140, 30, 120, ['rgba(226,200,146,0.14)', 'rgba(178,146,92,0.12)', 'rgba(196,170,110,0.12)']);
+      for (let y = 0; y < h; y += 3) {   // les rangs de chaume, tous les 14 cm
+        c.fillStyle = `rgba(${hasard() < 0.5 ? '150,118,70' : '232,210,160'},${0.18 + hasard() * 0.18})`; c.fillRect(0, y, w, 1);
+      }
+      for (let i = 0; i < 18000; i++) { c.fillStyle = hasard() < 0.5 ? 'rgba(120,92,56,0.45)' : 'rgba(240,222,176,0.45)'; c.fillRect(hasard() * w, hasard() * h, 1, 2); }
+      for (const y of [h * 0.22, h * 0.26, h * 0.72, h * 0.76]) { c.fillStyle = 'rgba(130,104,66,0.45)'; c.fillRect(0, y, w, 5); }   // les traces du tracteur
+    }, 1024);
+    const ble = new THREE.MeshLambertMaterial({ map: chaume, side: THREE.DoubleSide });
+    ble.polygonOffset = true; ble.polygonOffsetFactor = -4; ble.polygonOffsetUnits = -8;
+    const cx = X(0), cy = -R;
+    const relief = (x: number, y: number) => {
+      const d = Math.hypot(x - cx, (y - cy) * 1.25), k = Math.min(1, Math.max(0, (d - 120) / 260));
+      return k * k * (3 - 2 * k) * (3.2 + 1.6 * Math.sin(x * 0.011 + 1.3) + 1.2 * Math.sin(y * 0.014 - 0.4));
+    };
+    const champ = (x0: number, y0: number, x1: number, y1: number) => {
+      const lx = Math.abs(x1 - x0), ly = Math.abs(y1 - y0);
+      const g = new THREE.PlaneGeometry(lx, ly, Math.max(1, Math.ceil(lx / 12)), Math.max(1, Math.ceil(ly / 12))).translate((x0 + x1) / 2, (y0 + y1) / 2, 0);
+      const p = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
+      for (let i = 0; i < p.count; i++) { p.setZ(i, -0.03 + relief(p.getX(i), p.getY(i))); uv.setXY(i, p.getX(i) / 48, p.getY(i) / 48); }
+      g.computeVertexNormals();
+      return g;
+    };
     // ... et derriere le rideau d'arbres de la tribune et au-dela de la halle (img-3 en haut, img-6 a gauche)
     poser([champ(X(-DEMI - 260), yH - 1, xH + 300, yH - 400), champ(xH + 1, yH - 1, xH + 300, Y(400)),
       champ(X(-DEMI - 400), Y(98), xH + 1, Y(400)), champ(X(-210), yH - 1, X(-DEMI - 400), Y(98))], ble);
+    // (dessous, un fond de chaume plat a 6 m sous le sol : entre deux champs souleves, le ciel passait par la fente)
+    const fond = new THREE.MeshLambertMaterial({ map: chaume });
+    const gf = new THREE.PlaneGeometry(2400, 2400).translate(cx, cy, -6), pf = gf.attributes.position, uf = gf.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < pf.count; i++) uf.setXY(i, pf.getX(i) / 48, pf.getY(i) / 48);
+    poser([gf], fond);
   }
 
   // --- LE SOL AUTOUR DE LA PISTE (img-4, img-6 : de l'herbe seche, brun olive, jusqu'a la haie et aux champs ;
   // la pelouse verte ne reste qu'a l'interieur de l'anneau) ---
   {
-    const yH = yO - 30, xH = X(DEMI) + R + 34, rT = R1 + 2.4;
-    const forme = new THREE.Shape([new THREE.Vector2(X(-210), yH), new THREE.Vector2(xH, yH), new THREE.Vector2(xH, Y(98)), new THREE.Vector2(X(-210), Y(98))]);
+    const yH = -R - R_HAIE, xH = D1 + R_HAIE + 4, rT = R1 + 2.4;
+    // (deux metres de plus de chaque cote, sous les champs : sans recouvrement, un liseré de pelouse verte passait entre eux)
+    const forme = new THREE.Shape([new THREE.Vector2(X(-212), yH - 3), new THREE.Vector2(xH + 3, yH - 3), new THREE.Vector2(xH + 3, Y(100)), new THREE.Vector2(X(-212), Y(100))]);
     const bord: THREE.Vector2[] = [];
     for (let i = 0; i <= 48; i++) { const u = -Math.PI / 2 + (i / 48) * Math.PI; bord.push(new THREE.Vector2(D1 + rT * Math.cos(u), -R + rT * Math.sin(u))); }
     for (let i = 0; i <= 48; i++) { const u = Math.PI / 2 + (i / 48) * Math.PI; bord.push(new THREE.Vector2(D0 + rT * Math.cos(u), -R + rT * Math.sin(u))); }
     const trou = new THREE.Path(bord);   // (un Path qui commence par lineTo part de l'origine : le trou mordait la pelouse)
     forme.holes.push(trou);
+    // (img-4, img-6 : des plaques plus vertes ou plus pelees, des touffes, la terre qui perce — une tuile de 1 024 px
+    // pour 30 m : trois echelles de taches, puis les brins)
     const sec = toileSol((c, w, h) => {
-      c.fillStyle = 'rgb(146,134,92)'; c.fillRect(0, 0, w, h);
-      for (let i = 0; i < 2600; i++) {
-        const v = hasard();
-        c.fillStyle = v < 0.5 ? 'rgba(112,104,62,0.5)' : v < 0.8 ? 'rgba(172,158,112,0.45)' : 'rgba(96,110,58,0.4)';
-        c.fillRect(hasard() * w, hasard() * h, 1 + hasard() * 3, 1 + hasard() * 3);
+      c.fillStyle = 'rgb(140,130,88)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 70, 60, 180, ['rgba(110,118,62,0.35)', 'rgba(168,150,104,0.35)', 'rgba(124,108,72,0.3)']);
+      taches(c, w, h, hasard, 420, 10, 45, ['rgba(98,112,56,0.35)', 'rgba(176,160,116,0.35)', 'rgba(120,100,70,0.35)', 'rgba(150,140,90,0.3)']);
+      for (let i = 0; i < 26000; i++) {
+        const v = hasard(), x = hasard() * w, y = hasard() * h, l = 2 + hasard() * 6, a = -Math.PI / 2 + (hasard() - 0.5) * 1.2;
+        c.strokeStyle = v < 0.4 ? 'rgba(84,98,46,0.55)' : v < 0.75 ? 'rgba(186,170,120,0.5)' : v < 0.9 ? 'rgba(110,92,60,0.5)' : 'rgba(132,150,72,0.5)';
+        c.lineWidth = 1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke();
       }
-    }, 256);
+    }, 1024);
     const g = new THREE.ShapeGeometry(forme).translate(0, 0, -0.05);
     const uv = g.attributes.uv as THREE.BufferAttribute, pos = g.attributes.position;
-    for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / 12, pos.getY(i) / 12);   // une tuile tous les 12 m
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / 30, pos.getY(i) / 30);   // une tuile tous les 30 m
     const m = new THREE.MeshLambertMaterial({ map: sec, side: THREE.DoubleSide });
     m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -2;
     poser([g], m);
@@ -358,6 +413,83 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     cercle(p2x, p2y, 1.07, Math.atan2(Y(-6) - p2y, X(48) - p2x));
   }
 
+  // --- DEVANT LA TRIBUNE (photos de l'auteur du 27/10, vue depuis l'aire des sauts : entre la barriere de la piste et la
+  // tribune, une bande d'herbe ; au pied de la tribune, une allee de beton ; « le gradin est place de facon vide ») ---
+  {
+    const t = TRIBUNE_AMSALEM, x0 = X(t.a0) - 8, x1 = X(t.a0) + t.long + 8, yF = Y(t.n0) - 0.6;
+    const herbe = toileSol((c, w, h) => {
+      c.fillStyle = 'rgb(104,124,62)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 60, 20, 80, ['rgba(140,132,86,0.4)', 'rgba(78,110,46,0.35)', 'rgba(120,104,70,0.3)']);
+      for (let i = 0; i < 16000; i++) {
+        const x = hasard() * w, y = hasard() * h, l = 2 + hasard() * 5;
+        c.strokeStyle = hasard() < 0.5 ? 'rgba(66,96,36,0.55)' : 'rgba(160,160,96,0.5)';
+        c.beginPath(); c.moveTo(x, y); c.lineTo(x + (hasard() - 0.5) * 3, y - l); c.stroke();
+      }
+    }, 512);
+    const enM = (g: THREE.BufferGeometry, m: number) => {
+      const p = g.attributes.position, uv = g.attributes.uv as THREE.BufferAttribute;
+      for (let i = 0; i < p.count; i++) uv.setXY(i, p.getX(i) / m, p.getY(i) / m);
+      return g;
+    };
+    const mh = new THREE.MeshLambertMaterial({ map: herbe }); mh.polygonOffset = true; mh.polygonOffsetFactor = -3; mh.polygonOffsetUnits = -6;
+    poser([enM(rect(x0, W + 3.4, x1, yF - 2, -0.02), 10)], mh);
+    const beton = toileSol((c, w, h) => {
+      c.fillStyle = 'rgb(186,184,178)'; c.fillRect(0, 0, w, h);
+      for (let i = 0; i < 9000; i++) { c.fillStyle = hasard() < 0.5 ? 'rgba(130,128,122,0.4)' : 'rgba(226,224,220,0.4)'; c.fillRect(hasard() * w, hasard() * h, 1, 1); }
+      c.fillStyle = 'rgba(110,108,104,0.8)'; for (let k = 0; k < 4; k++) c.fillRect(k * w / 4, 0, 2, h);   // un joint tous les 2 m
+    }, 256);
+    const mb = new THREE.MeshLambertMaterial({ map: beton }); mb.polygonOffset = true; mb.polygonOffsetFactor = -3; mb.polygonOffsetUnits = -6;
+    poser([enM(rect(x0, yF - 2, x1, yF + 0.5, -0.019), 8)], mb);
+    // les deux bancs de touche noirs, au bord du terrain, face a la tribune (photos de l'auteur, vues depuis les sauts et
+    // depuis le virage) : 4 m de long, abri bas
+    const bancs: THREE.BufferGeometry[] = [];
+    for (const dx of [-5.5, 5.5]) {
+      const bx = X(t.a0) + t.long / 2 + dx, by = -2.8;
+      bancs.push(new THREE.BoxGeometry(4, 0.08, 1.5).translate(bx, by - 0.6, 0.75), new THREE.BoxGeometry(4, 1.0, 0.06).translate(bx, by, 1.5),
+        new THREE.BoxGeometry(0.06, 1.0, 1.5).translate(bx - 2, by - 0.1, 0.75), new THREE.BoxGeometry(0.06, 1.0, 1.5).translate(bx + 2, by - 0.1, 0.75),
+        new THREE.BoxGeometry(3.8, 0.4, 0.45).translate(bx, by - 0.35, 0.45));
+    }
+    poser(bancs, lambert(0x1e2024));
+    // la tour de chronometrage grise sur ses pieds, a gauche de la tribune vue depuis les sauts — entre elle et le virage de
+    // la demi-lune, du cote de l'arrivee (memes photos) : une cabine de 2 m sur 3 m de pieds
+    const tx = X(t.a0) + t.long + 14, ty = W + 6;
+    const tour: THREE.BufferGeometry[] = [new THREE.BoxGeometry(2.2, 2.2, 2.4).translate(tx, ty, 4.2), new THREE.BoxGeometry(2.6, 2.6, 0.15).translate(tx, ty, 5.5)];
+    for (const [dx, dy] of [[-0.9, -0.9], [0.9, -0.9], [-0.9, 0.9], [0.9, 0.9]]) tour.push(new THREE.BoxGeometry(0.12, 0.12, 3).translate(tx + dx, ty + dy, 1.5));
+    poser(tour, lambert(c3(120, 124, 130)));
+    poser([new THREE.BoxGeometry(2.25, 0.05, 0.9).translate(tx, ty - 1.11, 4.5)], lambert(c3(40, 48, 58)));   // sa vitre
+    // l'abri de bois, au bout de la ligne droite de la tribune, derriere la barriere (photos de l'auteur) : 4 x 2,5 m, toit plat
+    poser([new THREE.BoxGeometry(4, 2.5, 2.4).translate(D1 + 6, W + 8, 1.2)], lambert(c3(196, 120, 52)));
+    poser([new THREE.BoxGeometry(4.3, 2.8, 0.15).translate(D1 + 6, W + 8, 2.48)], lambert(c3(90, 92, 96)));
+  }
+
+  // --- LES CHEMINS (img-4 a gauche : une allee goudronnee longe la tribune et file vers la halle ; img-4 a droite, img-6 :
+  // une autre passe entre l'aire des sauts et la haie, et tourne autour du virage de la demi-lune) : 3 m d'enrobe ---
+  {
+    const enrobe = toileSol((c, w, h) => {
+      c.fillStyle = 'rgb(92,92,96)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 60, 10, 50, ['rgba(70,70,74,0.35)', 'rgba(118,116,112,0.3)']);
+      for (let i = 0; i < 30000; i++) { const v = hasard(); c.fillStyle = v < 0.5 ? 'rgba(60,60,64,0.6)' : v < 0.9 ? 'rgba(140,138,134,0.55)' : 'rgba(180,176,166,0.6)'; c.fillRect(hasard() * w, hasard() * h, 1, 1); }
+    }, 512);
+    const rP = R1 + 2.4 + 20, yA = -R - rP, yT = -R + rP;   // a vingt metres du bord de la piste
+    const pts: [number, number][] = [];
+    pts.push([X(-DEMI - 6), yA]);
+    for (let i = 0; i <= 32; i++) { const u = -Math.PI / 2 + (i / 32) * Math.PI; pts.push([D1 + rP * Math.cos(u), -R + rP * Math.sin(u)]); }
+    pts.push([X(-53), yT]);   // jusqu'au pied de la halle
+    const pos: number[] = [], uvs: number[] = [], idx: number[] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, ay] = pts[Math.max(0, i - 1)], [bx, by] = pts[Math.min(pts.length - 1, i + 1)], l = Math.hypot(bx - ax, by - ay) || 1;
+      const nx = -(by - ay) / l * 1.5, ny = (bx - ax) / l * 1.5, [x, y] = pts[i];
+      pos.push(x + nx, y + ny, -0.015, x - nx, y - ny, -0.015);
+      uvs.push((x + nx) / 6, (y + ny) / 6, (x - nx) / 6, (y - ny) / 6);
+      if (i) { const k = i * 2; idx.push(k - 2, k - 1, k, k - 1, k + 1, k); }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    g.setIndex(idx); g.computeVertexNormals();
+    const m = new THREE.MeshLambertMaterial({ map: enrobe, side: THREE.DoubleSide }); m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -4;
+    poser([g], m);
+  }
+
   // --- LES BARRIERES NOIRES (img-3, img-5 : au bord exterieur de la piste et de l'aire des sauts) ---
   {
     const rT = R1 + 2.5, H = 1.1, lisses: THREE.BufferGeometry[] = [], poteaux: THREE.BufferGeometry[] = [];
@@ -376,7 +508,12 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
       }
     };
     arc(D1, -Math.PI / 2); arc(D0, Math.PI / 2);
-    troncon(D0, W + 3.3, D1, W + 3.3);
+    // la ligne droite de la tribune ET son prolongement d'arrivee, sur toute leur longueur (« les rambardes noires de la
+    // ligne droite du 100 m ne sont pas sur toute la ligne », l'auteur, 27/10 ; img-5, img-6 : le prolongement est borde
+    // des deux cotes) ; puis le bout du prolongement. (Pas de barriere cote corde : elle couperait les couloirs du
+    // virage, qui passent sous le prolongement — vu au depart du 400 m)
+    troncon(D0, W + 3.3, D1 + 33, W + 3.3);
+    troncon(D1 + 33, W + 3.3, D1 + 33, -0.9);
     // l'aire des sauts : son bord exterieur et ses deux bouts
     troncon(xa0 - 1, yO - 17.5, xa1 + 1, yO - 17.5);
     troncon(xa0 - 1, yO - 17.5, xa0 - 1, yO - 2.4); troncon(xa1 + 1, yO - 17.5, xa1 + 1, yO - 2.4);
@@ -411,14 +548,28 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     // le skatepark : son contour OSM, beton clair
     const skate = new THREE.Shape([[-42.9, 124.5], [-41.9, 99.5], [-43.4, 87], [-35.8, 82.7], [-11.5, 82], [-12.3, 109.1], [-16.8, 116.2], [-32.5, 132.1], [-39.1, 129.7]]
       .map(([a, n]) => new THREE.Vector2(X(a), Y(n))));
-    poser([new THREE.ShapeGeometry(skate).translate(0, 0, -0.01)], solMat(c3(214, 204, 186), 5));
+    // (img-4 en haut a gauche : un beton clair creuse de cuvettes, leurs bords ombres) : une texture a l'echelle du contour
+    const xs = [-42.9, -11.5].map(X), ys = [82, 132.1].map(Y), lx = xs[1] - xs[0], ly = ys[1] - ys[0];
+    const beton = toileSol((c, w, h) => {
+      c.fillStyle = 'rgb(214,206,190)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 80, 6, 30, ['rgba(190,182,166,0.35)', 'rgba(230,224,212,0.35)']);
+      for (const [u, v, r] of [[0.35, 0.3, 0.2], [0.62, 0.62, 0.24], [0.3, 0.75, 0.14]]) {
+        const gr = c.createRadialGradient(u * w, v * h, r * w * 0.15, u * w, v * h, r * w);
+        gr.addColorStop(0, 'rgba(150,144,134,0.9)'); gr.addColorStop(0.8, 'rgba(196,190,176,0.7)'); gr.addColorStop(1, 'rgba(120,114,106,0.9)');
+        c.fillStyle = gr; c.beginPath(); c.ellipse(u * w, v * h, r * w, r * h * 1.2, 0.3, 0, Math.PI * 2); c.fill();
+      }
+    }, 512);
+    beton.wrapS = beton.wrapT = THREE.ClampToEdgeWrapping;
+    const gs = new THREE.ShapeGeometry(skate).translate(0, 0, -0.01), ps = gs.attributes.position, us = gs.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < ps.count; i++) us.setXY(i, (ps.getX(i) - xs[0]) / lx, (ps.getY(i) - ys[0]) / ly);
+    const msk = new THREE.MeshLambertMaterial({ map: beton }); msk.polygonOffset = true; msk.polygonOffsetFactor = -5; msk.polygonOffsetUnits = -10;
+    poser([gs], msk);
   }
 
   // --- LES MATS A DRAPEAUX (img-6, agrandie : quatre mats devant la haie, derriere le virage de la demi-lune, du cote
   // de la tribune ; de gauche a droite un blanc, un blanc, le drapeau francais et un bleu (l'europeen, sans doute) ;
   // sans vent, ils pendent le long du mat — le francais montre le bleu en haut et le rouge en bas) ---
   {
-    const xF = X(DEMI) + R + 31;   // trois metres devant la haie du bout de la demi-lune
     const drapeau = (dessin: (c: CanvasRenderingContext2D, w: number, h: number) => void) => {
       const t = toileSol(dessin, 64, 128); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
       return new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide });
@@ -431,7 +582,8 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     });
     const mats: THREE.BufferGeometry[] = [];
     [blanc, blanc, france, europe].forEach((m, k) => {
-      const y = Y(34 - k * 8);
+      // (devant l'arc de la haie, a trois metres : la haie tourne autour du virage)
+      const y = Y(34 - k * 8), xF = D1 + Math.sqrt(Math.max(0, (R_HAIE - 3) ** 2 - (y + R) ** 2));
       mats.push(new THREE.CylinderGeometry(0.04, 0.06, 8, 6).rotateX(Math.PI / 2).translate(xF, y, 4));
       // le tissu pend du haut du mat : 0,9 m de large, 1,8 m de long, la hampe contre le mat
       poser([new THREE.PlaneGeometry(0.9, 1.8).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(xF, y + 0.47, 7.0)], m);
