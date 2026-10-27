@@ -537,7 +537,8 @@ export function construirePalais(o: ContextePalais) {
   }, 256, 256);
   velours.wrapS = velours.wrapT = THREE.RepeatWrapping;
   {
-    const r0 = R + W + 0.5, r1 = R + W + 2.5, N = 720, pos: number[] = [], uv: number[] = [], ix: number[] = [];
+    // (au-dela du tartan, W + 0,8, et de la bordure d'or : il commencait 30 cm dessus — course-3d.ts, LE SOL EN COUCHES)
+    const r0 = R + W + 0.92, r1 = R + W + 2.5, N = 720, pos: number[] = [], uv: number[] = [], ix: number[] = [];
     const S = D1 - D0, Lr = 2 * S + Math.PI * (r0 + r1);
     for (let i = 0; i <= N; i++) {
       const t = i / N, [xa, ya] = ovale(r0, t), [xb, yb] = ovale(r1, t);

@@ -691,6 +691,13 @@ const c3 = (v: number[] | undefined, d: number[]) => {
 };
 const css = (v: number[], k = 1) => `rgb(${Math.min(255, v[0] * k) | 0},${Math.min(255, v[1] * k) | 0},${Math.min(255, v[2] * k) | 0})`;
 
+// LE SOL EN COUCHES (27/10, « le beug du dernier couloir vers la droite », sur toutes les pistes) : la nuit, la
+// bande au pied des tribunes, les nappes des projecteurs et le halo des panneaux se posaient a 4, 6 et 7 mm, en
+// debordant sur le dernier couloir et la bande exterieure. A cette distance, un GPU de telephone ne les departage
+// plus : la nappe beige ne passait que par morceaux, en dents de scie. Rien ne deborde plus sur le tartan, et ce
+// qui se pose dessus (la lumiere, en addition) monte d'un centimetre par couche — invisible a hauteur d'homme.
+const SOL_BORD = 0.01, SOL_LUMIERE = 0.02, SOL_LUEUR = 0.03;
+
 function plan(w: number, l: number, mat: THREE.Material, x: number, y: number, z = 0) {
   // CE QUI EST PEINT SUR LA PISTE PASSE DEVANT ELLE (24/10) : les couloirs alternes sont tires en avant
   // (polygonOffset, voir LES LIGNES EN POINTILLES) ; sans le meme reglage, plus fort, le damier
@@ -1090,10 +1097,10 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       for (const [demi, op] of [[0.05, 1], [0.18, 0.45], [0.42, 0.18], [0.8, 0.07]]) {
         const m = new THREE.MeshBasicMaterial({ color: c3(col as number[], [96, 226, 255]), transparent: op < 1, opacity: op,
           blending: op < 1 ? THREE.AdditiveBlending : THREE.NormalBlending, depthWrite: false });
-        for (const y0 of [0, yOppose]) plan(LD, demi * 2, m, XD, y0 + (e as number) * LANE_W, 0.004).receiveShadow = false;
+        for (const y0 of [0, yOppose]) plan(LD, demi * 2, m, XD, y0 + (e as number) * LANE_W, SOL_BORD).receiveShadow = false;
         for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
           const g = new THREE.Mesh(new THREE.RingGeometry(r - demi, r + demi, VIRAGE_SEG, 1, debut, Math.PI), m);
-          g.position.set(xc, -R_CORDE, 0.004); stade.add(g);
+          g.position.set(xc, -R_CORDE, SOL_BORD); stade.add(g);
         }
       }
     }
@@ -1547,7 +1554,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       }, 4, 128) });
     const mat = new THREE.MeshBasicMaterial({ map: nappe, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.55 });
     for (let x = DROITE0 + 8; x < DROITE1 + 10; x += 24) {
-      const m = plan(34, W + 10, mat, x, W / 2, 0.008);
+      const m = plan(34, W + 10, mat, x, W / 2, SOL_LUMIERE);
       m.receiveShadow = false;
     }
     // LES QUATRE PROJECTEURS eclairent tout le stade (« utilise la lumiere des projecteurs
@@ -1591,12 +1598,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }, 256, 256);
     const nappe = new THREE.MeshBasicMaterial({ map: tache, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.18,
       polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
-    for (let x = DROITE0 + 8; x < DROITE1; x += 16) for (const y of [W * 0.6, yOppose + W * 0.4]) plan(20, W * 1.3, nappe, x, y, 0.006).receiveShadow = false;
+    for (let x = DROITE0 + 8; x < DROITE1; x += 16) for (const y of [W * 0.6, yOppose + W * 0.4]) plan(20, W * 1.3, nappe, x, y, SOL_LUMIERE).receiveShadow = false;
     for (const [xc, a0, sens] of [[DROITE1, -Math.PI / 2, 1], [DROITE0, Math.PI / 2, 1]] as const) {
       const r = R_CORDE + W * 0.6;
       for (let i = 0; i < 7; i++) {
         const a = a0 + sens * (i + 0.5) / 7 * Math.PI;
-        const m = plan(18, W * 1.3, nappe, xc + r * Math.cos(a), -R_CORDE + r * Math.sin(a), 0.006);
+        const m = plan(18, W * 1.3, nappe, xc + r * Math.cos(a), -R_CORDE + r * Math.sin(a), SOL_LUMIERE);
         m.rotation.z = a + Math.PI / 2; m.receiveShadow = false;
       }
     }
@@ -1620,8 +1627,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // LA BANDE MAGENTA au pied des tribunes, entre la piste et les panneaux (la capture de reference
     // du 12/09) : un bandeau lumineux, le long des deux lignes droites
     const bandeMag = new THREE.MeshBasicMaterial({ color: c3(th.accent, [236, 46, 150]).multiplyScalar(0.7) });
-    plan(LS, 1.15, bandeMag, XA + LS / 2, W + 1.0, 0.004).receiveShadow = false;
-    plan(LS, 1.15, bandeMag, XA + LS / 2, yOppose - 1.0, 0.004).receiveShadow = false;
+    // (elle commencait sur le tartan, a W + 0,43 : voir LE SOL EN COUCHES)
+    plan(LS, 1.15, bandeMag, XA + LS / 2, W + 0.8 + 0.575, SOL_BORD).receiveShadow = false;
+    plan(LS, 1.15, bandeMag, XA + LS / 2, yOppose - 0.8 - 0.575, SOL_BORD).receiveShadow = false;
     // le halo des panneaux LED, sur la piste devant eux
     if (th.pubsLed) {
       const lueur = new THREE.MeshBasicMaterial({ color: c3(th.accent, [236, 46, 150]), transparent: true, opacity: 0.18,
@@ -1630,7 +1638,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
           g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,1)');
           c.fillStyle = g; c.fillRect(0, 0, w, h);
         }, 4, 64) });
-      plan(LS, 2.2, lueur, XA + LS / 2, W + 0.6, 0.007).receiveShadow = false;
+      plan(LS, 2.2, lueur, XA + LS / 2, W + 0.6, SOL_LUEUR).receiveShadow = false;
     }
   }
 
