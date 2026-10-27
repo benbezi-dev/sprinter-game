@@ -226,11 +226,13 @@ export function preparerCoureur(course, joueur) {
   joueur.stride = 0;
   joueur.lastStep = 0;
   joueur.foulee = HAIES[course.cle].foulee || 1;
+  // pas de cadence lancee aux haies : le compte des appuis entre deux haies est le jeu (C.CADENCE_LANCEE)
+  joueur.cadenceLancee = false; joueur.enHaies = true;
 }
 
 /** Rendre au coureur sa foulee de sprinteur. */
 export function libererCoureur(joueur) {
-  if (joueur) joueur.foulee = 1;
+  if (joueur) { joueur.foulee = 1; joueur.cadenceLancee = true; joueur.enHaies = false; }
 }
 
 /**

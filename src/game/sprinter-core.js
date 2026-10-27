@@ -102,6 +102,12 @@
     // est atteinte.
     DRIVE_END: 15.0,          // fin de la phase de poussee, en metres
     TRANS_END: 40.0,          // corps entierement redresse
+    // LA CADENCE LANCEE DU JOUEUR (« augmente la cadence gestuelle du joueur apres la phase de
+    // transition », l'auteur, 27/10) : passe TRANS_END, ses appuis s'accelerent de 15 % (5,2 a 6 pas
+    // par seconde a pleine vitesse) en dix metres ; la vitesse ne change pas, seule la foulee raccourcit.
+    // Le joueur des courses de sprint seulement (Runner.cadenceLancee) : aux haies, le compte des
+    // appuis entre deux haies est le jeu (haies-pas.js l'ote).
+    CADENCE_LANCEE: 1.15,
     DRIVE_PITCH: 0.62,        // inclinaison du corps a la sortie des blocs
     // LA MECANIQUE DE DEPART, et pourquoi elle ne peut pas venir de la vitesse.
     //
@@ -2220,8 +2226,11 @@
     // s'efface sur la transition (TRANS_END), ou il retrouve sa foulee.
     const qD = Math.min(1, Math.max(0, ((this.d || 0) - (this.legStart || 0)) / C.TRANS_END));
     const dep = 1 - (P.departFrequence || 0) * (1 - qD) * (1 - qD);
+    // la cadence lancee du joueur (C.CADENCE_LANCEE), de TRANS_END a dix metres plus loin
+    const qL = this.cadenceLancee ? Math.min(1, Math.max(0, ((this.d || 0) - (this.legStart || 0) - C.TRANS_END) / 10)) : 0;
+    const lance = 1 + (C.CADENCE_LANCEE - 1) * qL * qL * (3 - 2 * qL);
     return Math.max(0.85, 4 * leg * P.stride * dep * (this.foulee || 1) *
-                    Math.sin(Math.min(1.15, 0.70 * amp)));
+                    Math.sin(Math.min(1.15, 0.70 * amp)) / lance);
   };
 
   // Inclinaison du corps entier, en radians, d'apres la distance parcourue.

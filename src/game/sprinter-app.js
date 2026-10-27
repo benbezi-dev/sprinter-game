@@ -2376,6 +2376,7 @@
     const monCouloir = G.track.salle ? Math.floor(K.alea() * G.track.lanes) : 3;
     const pl = new Runner('TOI', monCouloir, { isPlayer: true, maxSpeed: R.maxSpeed,
       best: R.best, total: G.track.total });
+    pl.cadenceLancee = true;   // (C.CADENCE_LANCEE : les haies l'otent, haies-pas.js)
     // la piste couverte : la montee et la descente des virages releves (Track.accelPente)
     if (G.track.salle) { const T = G.track; pl.pente = (s, v) => T.accelPente(s, pl.lane, v); pl.bouscule = bousculade; }
     G.player = pl; G.runners.push(pl);
@@ -4180,6 +4181,7 @@
                                      best: R.best, total: G.track.total })
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
                                      pool: LEVELS[G.levelIdx].pool });
+    if (neuf.isPlayer) neuf.cadenceLancee = !r.enHaies;
     if (neuf.isPlayer && G.track.salle) { const T = G.track; neuf.pente = (s, v) => T.accelPente(s, neuf.lane, v); neuf.bouscule = bousculade; }
     const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,
                     isGhost: r.isGhost, isLive: r.isLive, repere: r.repere,
