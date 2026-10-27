@@ -38,7 +38,7 @@ import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
-import { construireAmsalem, TRIBUNE_AMSALEM } from './amsalem-3d';
+import { construireAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
 import { construireSalle, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -1273,10 +1273,10 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     boite(lBlanc, Mp, LS / 2, yFond + 0.05, z2 + 0.5, LS, 0.08, 1.0);        // la rambarde du haut
   } else if (amsalem) {
     // LA TRIBUNE DU STADE BERNARD AMSALEM (OSM : 25,3 x 9,9 m, au milieu de la ligne droite, a 17 m de
-    // la piste ; img-3 : sept rangs de sieges rouges) — sa voile et le reste du lieu : amsalem-3d.ts
-    const t = TRIBUNE_AMSALEM, Mt = repere(DROITE1 - 84.39 / 2 + t.a0, t.n0 - R_CORDE, 0);
-    boite(lBlanc, Mt, t.long / 2, -0.15, 0.6, t.long, 0.25, 1.2);
-    gradins(Mt, t.long, 7, 0.4, 1.2);
+    // la piste) : le modele Tripo (amsalem-3d.ts) ; ici, le public assis sur ses rangs (RANGS_AMSALEM)
+    const t = TRIBUNE_AMSALEM, r = RANGS_AMSALEM, Mt = repere(DROITE1 - 84.39 / 2 + t.a0, t.n0 - R_CORDE + t.prof / 2, 0);
+    for (let k = 0; atlasPublic && k < r.rangs; k++) for (const [x0, x1, dz] of r.blocs) for (let x = x0 + 0.28; x < x1; x += 0.55)
+      if (hasard() < occupe(k, r.rangs) * PUBLIC) spectateur(Mt, x, r.y0 + k * r.prof, r.z0 + dz + k * r.monte);
   } else if (basses) {
     // les tribunes du 2D pour les stades a ciel ouvert — basses et sans toit, pour laisser voir
     // la mer et le ciel (essayees le 23/10, « montre-moi le resultat si on reduit », puis
@@ -1641,7 +1641,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     dossier: base + (ULTRA ? 'decors-ultra/champdemars/' : 'decors/champdemars/') }));
   else if (palais) pubAnim.push(construirePalais({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, env: envPalais,
     spectateur: (x, y, z, geste, face) => { if (atlasPublic) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
-  else if (amsalem) construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard });
+  else if (amsalem) construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, ultra: ULTRA });
   else if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 

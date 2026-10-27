@@ -27,17 +27,29 @@
 
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 
 export type ContexteAmsalem = {
   stade: THREE.Group;
   W: number; R: number; D0: number; D1: number;
   hasard: () => number;
+  /** La racine des fichiers du jeu (import.meta.env.BASE_URL). */
+  base: string;
+  /** Le palier ULTRA : la tribune pleine. */
+  ultra?: boolean;
 };
 
 /** La demi-ligne droite d'une piste de 400 m a corde de 36,50 m (la piste reelle). */
 const DEMI = 84.39 / 2;
 /** La tribune (OSM) : de a = -12,5 a 12,8, de n = 63 a 72,9. */
 export const TRIBUNE_AMSALEM = { a0: -12.5, long: 25.3, n0: 63, prof: 9.9, haut: 9.5 };
+/** Les rangs du modele Tripo, dans son repere (x le long depuis son bord, y vers le fond depuis son centre,
+ *  z en haut) : releves sur le modele exporte (tools/blender/amsalem/tribune_tripo.py). Les blocs de sieges, de
+ *  part et d'autre de l'escalier central et des deux escaliers lateraux. */
+export const RANGS_AMSALEM = { rangs: 10, y0: -1.2, z0: 4.2, prof: 0.6, monte: 0.37,
+  // [debut, fin, hausse] : le bloc droit du modele est un peu plus haut que le gauche
+  blocs: [[3.2, 11.6, 0], [14.4, 21.8, 1.3]] as [number, number, number][] };
 /** Le contour de la halle Jesse Owens (OSM), en (a, n). */
 const HALLE: [number, number][] = [[-202.5, 118.7], [-201.7, 62.7], [-183.1, 54.7], [-118.6, 55.5], [-107.4, 59.2], [-90, 66],
   [-90.1, 75.3], [-69.7, 75.6], [-70, 100.3], [-53.4, 100.6], [-53.6, 120.5]];
@@ -100,26 +112,44 @@ export function construireAmsalem(o: ContexteAmsalem) {
     poser([new THREE.ShapeGeometry(forme).translate(0, 0, 0.004)], solMat(ROUGE, 3));
   }
 
-  // --- LA HALLE JESSE OWENS (OSM ; img-3, img-6 : murs gris argent, grand toit blanc) ---
+  // --- LA HALLE JESSE OWENS : le modele Tripo de son exterieur (salle-3d.ts, tools/blender/salle/exterieur_tripo.py :
+  // 103,3 x 58 m, sa longueur sur x), pose sur le corps principal du contour OSM (a de -202 a -90, n de 55 a 120) ---
   {
-    const forme = new THREE.Shape(HALLE.map(([a, n]) => new THREE.Vector2(X(a), Y(n))));
-    const murs = new THREE.ExtrudeGeometry(forme, { depth: 10.2, bevelEnabled: false });
-    poser([murs], lambert(c3(196, 200, 206)));
-    poser([new THREE.ShapeGeometry(forme).translate(0, 0, 10.25)], lambert(c3(240, 242, 244), true));
+    const halle = new THREE.Group(); halle.position.set(X(-146), Y(87.5), 0); stade.add(halle);
+    const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+    chargeur.load(o.base + 'modeles/salle/exterieur.glb', gl => {
+      // le bardage gris argent, comme au survol de la salle (salle-3d.ts : la texture Tripo tire au beige)
+      gl.scene.traverse((m: any) => {
+        if (!m.isMesh || !m.material) return;
+        m.castShadow = m.receiveShadow = false;
+        const mat = m.material; mat.color?.setRGB(1, 1, 1);
+        mat.onBeforeCompile = (sh: any) => {
+          sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>',
+            '#include <map_fragment>\ndiffuseColor.rgb = vec3(dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114))) * vec3(0.98, 1.0, 0.98);');
+        };
+        mat.customProgramCacheKey = () => 'salle-argent';
+        mat.needsUpdate = true;
+      });
+      halle.add(gl.scene);
+    }, undefined, () => {
+      // sans le modele : le contour OSM en volume (10,2 m)
+      const forme = new THREE.Shape(HALLE.map(([a, n]) => new THREE.Vector2(X(a), Y(n))));
+      poser([new THREE.ExtrudeGeometry(forme, { depth: 10.2, bevelEnabled: false })], lambert(c3(196, 200, 206)));
+    });
   }
 
-  // --- LA VOILE DE LA TRIBUNE (img-4, img-6 : une toile blanche en arc au-dessus des sieges) ---
-  // les gradins et le public : course-3d.ts (TRIBUNE_AMSALEM) ; ici la voile, le mur du fond et les mats
+  // --- LA TRIBUNE : le modele Tripo (tools/blender/amsalem/tribune_tripo.py, d'apres img-3 : sieges rouges, escalier
+  // central, voile blanche sur ses mats, le batiment vitre dessous), au milieu de la ligne droite. Le public s'assoit
+  // sur ses rangs (course-3d.ts, RANGS_AMSALEM) ; en ULTRA, la version pleine (400 000 faces, texture 4 096 px) ---
   {
-    const t = TRIBUNE_AMSALEM, x0 = X(t.a0), y0 = Y(t.n0);
-    const voile = new THREE.CylinderGeometry(9, 9, t.long, 32, 1, true, -0.55, 1.1);
-    voile.rotateZ(Math.PI / 2);   // l'axe du cylindre le long de x, l'arc en haut
-    voile.translate(x0 + t.long / 2, y0 + t.prof * 0.45, t.haut - 9);
-    poser([voile], lambert(0xf6f6f2, true));
-    const gris = lambert(c3(150, 154, 160));
-    poser([new THREE.BoxGeometry(t.long, 0.4, 7).translate(x0 + t.long / 2, y0 + t.prof, 3.5)], gris);
-    poser([0, 1, 2, 3].map(i => new THREE.CylinderGeometry(0.18, 0.18, t.haut, 8).rotateX(Math.PI / 2)
-      .translate(x0 + 1 + i * (t.long - 2) / 3, y0 + t.prof - 0.4, t.haut / 2)), gris);
+    const t = TRIBUNE_AMSALEM, tribune = new THREE.Group();
+    tribune.position.set(X(t.a0) + t.long / 2, Y(t.n0) + t.prof / 2, 0); stade.add(tribune);
+    tribune.rotation.z = Math.PI;   // (Tripo rend la facade vers +y : on la tourne vers la piste)
+    const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+    chargeur.load(o.base + (o.ultra ? 'modeles/amsalem/tribune-ultra.glb' : 'modeles/amsalem/tribune.glb'), gl => {
+      gl.scene.traverse((m: any) => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = true; } });
+      tribune.add(gl.scene);
+    });
   }
 
   // --- LES MATS D'ECLAIRAGE (img-3 : quatre, aux bouts des lignes droites, juste hors de la piste) ---
