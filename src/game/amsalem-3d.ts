@@ -26,6 +26,7 @@
 // demi-lune est celui de l'arrivee : x = D1 - DEMI + a, y = n - R.
 
 import * as THREE from 'three';
+import { textureStable, type NomStable } from './texture-stable';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -94,7 +95,8 @@ const BEIGE = c3(229, 201, 160), ROUGE = c3(195, 70, 70), LIE = c3(118, 40, 44),
  */
 export function habillerLeTartan(stade: THREE.Group, mats: THREE.Material[], base: string) {
   const charger = (nom: string, srgb: boolean) => {
-    const t = new THREE.TextureLoader().load(base + 'modeles/salle/textures/' + nom);
+    // (jamais noire en attendant le fichier : texture-stable.ts)
+    const t = textureStable(base, ('modeles/salle/textures/' + nom) as NomStable);
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / 0.32, 1 / 0.32); t.anisotropy = 16;
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     return t;

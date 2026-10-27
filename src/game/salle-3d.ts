@@ -22,6 +22,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { SALLE, DROITE, profil, RAMPE, lisse, rabattement } from './piste-salle.js';
+import { textureStable, type NomStable } from './texture-stable';
 
 export const RS = SALLE.rayon;                       // la demi-largeur interieure (17,20 m)
 const S = DROITE;                                     // la ligne droite de l'anneau (35 m)
@@ -319,7 +320,8 @@ export function construireSalle(ctx: ContexteSalle) {
   // (pour l'export vers Blender, les toiles dessinees : ces images ne sont pas encore chargees)
   const photo = (nom: string, metres: number, srgb = true, rot = 0, repli?: THREE.Texture) => {
     if (exporter && repli) return repli;
-    const t = new THREE.TextureLoader().load(ctx.base + 'modeles/salle/textures/' + nom);
+    // (jamais noire en attendant le fichier : texture-stable.ts)
+    const t = textureStable(ctx.base, ('modeles/salle/textures/' + nom) as NomStable);
     t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1 / metres, 1 / metres); t.rotation = rot;
     if (srgb) t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 16;
@@ -929,8 +931,11 @@ export function construireSalle(ctx: ContexteSalle) {
   const sansCuisson = !exporter && parametres.get('lumiere') === '0';
   const cuites = sansCuisson ? { coque: [], sol: [] } : cartesDeLumiere(g, { X0, Y0, L, LY });
   if (exporter) exporterPourBlender(g.clone());
-  const charge = new THREE.TextureLoader();
-  const appliquer = (fichier: string, liste: THREE.Mesh[], coque: boolean) => charge.load(ctx.base + 'modeles/salle/' + fichier, t => {
+  // LA LUMIERE CUITE DES LA PREMIERE IMAGE (texture-stable.ts : sa teinte moyenne en attendant le fichier) : la
+  // salle ne change plus de matiere en cours de course (« la piste est noire a l'ouverture avant de prendre ses
+  // couleurs », l'auteur, 27/10)
+  const appliquer = (fichier: string, liste: THREE.Mesh[], coque: boolean) => {
+    const t = textureStable(ctx.base, ('modeles/salle/' + fichier) as NomStable);
     // (flipY a faux, comme les textures glTF : a l'import, Blender retourne v ; notre v = 0 tombe en haut de l'image cuite)
     t.channel = 1; t.colorSpace = THREE.SRGBColorSpace; t.flipY = false;
     const deja = new Map<THREE.Material, THREE.Material>();
@@ -946,7 +951,7 @@ export function construireSalle(ctx: ContexteSalle) {
       }
       m.material = neuf;
     }
-  }, undefined, () => { /* sans lumiere cuite : la salle eclairee par le jeu */ });
+  };
   if (!sansCuisson) {
     appliquer('lumiere-coque.jpg', cuites.coque, true);
     appliquer('lumiere-sol.jpg', cuites.sol, false);
