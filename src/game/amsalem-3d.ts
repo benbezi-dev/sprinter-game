@@ -48,7 +48,11 @@ const DEMI = 84.39 / 2;
 /** La tribune : sa longueur et sa place le long de la ligne droite viennent d'OSM (a = -12,5 a 12,8) ; sa distance a
  *  la piste vient des photos (img-3, img-5 : le pied de la tribune a trois metres environ de la bande lie-de-vin) —
  *  le contour OSM la mettait 12 m plus loin (« les gradins sont trop eloignes de la piste », l'auteur, 27/10). */
-export const TRIBUNE_AMSALEM = { a0: -12.5, long: 25.3, n0: 53.7, prof: 9.9, haut: 9.5 };
+// LA TRIBUNE ETIREE (« le gradin est trop resserre sur lui-meme », l'auteur, 27/10) : le modele Tripo sort a 25,3 m de
+// long pour 13,8 m de haut et 12,3 m de profondeur — trapu, la ou les photos de l'auteur montrent une tribune longue et
+// basse. Il est etire de 35 % en longueur (34,2 m), ramene a 9,8 m de haut (OSM : 9,5) et 9,8 m de profondeur (OSM :
+// 9,9), autour de son milieu (a = 0,15). `echelle` : x long, y profondeur, z hauteur, dans le repere du modele.
+export const TRIBUNE_AMSALEM = { a0: 0.15 - 25.3 * 1.35 / 2, long: 25.3 * 1.35, n0: 53.7, prof: 9.9, haut: 9.5, echelle: [1.35, 0.8, 0.71] as [number, number, number] };
 /** Les rangs du modele Tripo, dans son repere (x le long depuis son bord, y vers le fond depuis son centre,
  *  z en haut) : releves sur le modele exporte (tools/blender/amsalem/tribune_tripo.py). Les blocs de sieges, de
  *  part et d'autre de l'escalier central et des deux escaliers lateraux. */
@@ -243,7 +247,24 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     tribune.rotation.z = Math.PI;   // (Tripo rend la facade vers +y : on la tourne vers la piste)
     const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
     chargeur.load(o.base + (o.ultra ? 'modeles/amsalem/tribune-ultra.glb' : 'modeles/amsalem/tribune.glb'), gl => {
-      gl.scene.traverse((m: any) => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = true; } });
+      // LE GRIS DE LA TRIBUNE EN BLANC CASSE (« la couleur grise du gradin est austere », l'auteur, 27/10 ; ses photos :
+      // un beton clair presque blanc, les sieges rouges) : dans la texture Tripo, ce qui est peu sature remonte vers un
+      // blanc chaud, les rouges et le reste gardent leur couleur
+      gl.scene.traverse((m: any) => {
+        if (!m.isMesh) return;
+        m.castShadow = false; m.receiveShadow = true;
+        const mat = m.material;
+        mat.onBeforeCompile = (sh: any) => {
+          sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#include <map_fragment>
+            { vec3 c = diffuseColor.rgb; float mx = max(c.r, max(c.g, c.b)), sat = mx > 0.0 ? (mx - min(c.r, min(c.g, c.b))) / mx : 0.0;
+              float gris = 1.0 - smoothstep(0.12, 0.3, sat);
+              vec3 blanc = vec3(0.86, 0.85, 0.82) * (0.55 + 0.45 * smoothstep(0.0, 0.6, mx));
+              diffuseColor.rgb = mix(c, blanc, gris); }`);
+        };
+        mat.customProgramCacheKey = () => 'tribune-blanche';
+        mat.needsUpdate = true;
+      });
+      gl.scene.scale.set(...t.echelle);
       tribune.add(gl.scene);
     });
   }

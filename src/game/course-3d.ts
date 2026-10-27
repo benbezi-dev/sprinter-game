@@ -1282,7 +1282,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   } else if (amsalem) {
     // LA TRIBUNE DU STADE BERNARD AMSALEM (OSM : 25,3 x 9,9 m, au milieu de la ligne droite, a 17 m de
     // la piste) : le modele Tripo (amsalem-3d.ts) ; ici, le public assis sur ses rangs (RANGS_AMSALEM)
-    const t = TRIBUNE_AMSALEM, r = RANGS_AMSALEM, Mt = repere(DROITE1 - 84.39 / 2 + t.a0, t.n0 - R_CORDE + t.prof / 2, 0);
+    // (le modele est etire autour de son milieu, TRIBUNE_AMSALEM.echelle : ses rangs le sont avec lui)
+    const t = TRIBUNE_AMSALEM, r = RANGS_AMSALEM, Mt = repere(DROITE1 - 84.39 / 2 + t.a0, t.n0 - R_CORDE + t.prof / 2, 0)
+      .multiply(new THREE.Matrix4().makeScale(...t.echelle));
     for (let k = 0; atlasPublic && k < r.rangs; k++) for (const [x0, x1, dz] of r.blocs) for (let x = x0 + 0.28; x < x1; x += 0.55)
       if (hasard() < occupe(k, r.rangs) * PUBLIC) spectateur(Mt, x, r.y0 + k * r.prof, r.z0 + dz + k * r.monte);
   } else if (basses) {
