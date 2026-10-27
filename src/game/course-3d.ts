@@ -38,7 +38,7 @@ import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
-import { construireAmsalem, habillerLeTartan, TRIBUNE_AMSALEM, RANGS_AMSALEM } from './amsalem-3d';
+import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
 import { construireSalle, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -958,6 +958,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let i = 0; i < 8; i++) { c.fillStyle = css(herbe, i % 2 ? 0.88 : 1.06); c.fillRect(i * w / 8, 0, w / 8, h); }
   }, 256, 8);
   tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(10, 1);
+  // a Amsalem, l'herbe a du grain (amsalem-3d.ts)
+  if (amsalem) { const p = pelouseAmsalem(herbe, hasard); tonte.image = p.image; tonte.wrapT = THREE.RepeatWrapping; tonte.repeat.set(10, 10); tonte.needsUpdate = true; }
   // (au Champ-de-Mars, le parc s'etend jusqu'aux facades)
   if (cdm) tonte.repeat.set(30, 1);
   // la Nuit etoilee peint sa pelouse a coups de pinceau ; la tonte « en long » suit la piste
@@ -1647,7 +1649,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     dossier: base + (ULTRA ? 'decors-ultra/champdemars/' : 'decors/champdemars/') }));
   else if (palais) pubAnim.push(construirePalais({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, env: envPalais,
     spectateur: (x, y, z, geste, face) => { if (atlasPublic) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
-  else if (amsalem) habillerLeTartan(stade, [matA, matB, ...construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, ultra: ULTRA })], base);
+  else if (amsalem) habillerLeTartan(stade, [matA, matB, ...construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, ultra: ULTRA, nuit })], base);
   else if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 

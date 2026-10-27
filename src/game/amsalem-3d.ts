@@ -38,6 +38,8 @@ export type ContexteAmsalem = {
   base: string;
   /** Le palier ULTRA : la tribune pleine. */
   ultra?: boolean;
+  /** La nuit : les mats eclairent. */
+  nuit?: boolean;
 };
 
 /** La demi-ligne droite d'une piste de 400 m a corde de 36,50 m (la piste reelle). */
@@ -64,6 +66,23 @@ function toileSol(dessin: (c: CanvasRenderingContext2D, w: number, h: number) =>
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace;
   t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 16;
   return t;
+}
+/**
+ * LA PELOUSE DU TERRAIN D'HONNEUR (« la qualite du stade est moyenne », 27/10) : les bandes de tonte du jeu, plus le
+ * grain de l'herbe — des brins plus clairs, plus sombres, un peu jaunis. Remplace la tonte unie de course-3d.ts.
+ */
+export function pelouseAmsalem(herbe: number[], hasard: () => number) {
+  return toileSol((c, w, h) => {
+    for (let i = 0; i < 8; i++) {
+      const k = i % 2 ? 0.88 : 1.06;
+      c.fillStyle = `rgb(${herbe[0] * k | 0},${herbe[1] * k | 0},${herbe[2] * k | 0})`; c.fillRect(i * w / 8, 0, w / 8, h);
+    }
+    for (let i = 0; i < 9000; i++) {
+      const v = hasard();
+      c.fillStyle = v < 0.45 ? 'rgba(20,60,14,0.35)' : v < 0.85 ? 'rgba(120,170,70,0.25)' : 'rgba(170,160,80,0.25)';
+      c.fillRect(hasard() * w, hasard() * h, 1, 1 + hasard() * 3);
+    }
+  }, 512);
 }
 const BEIGE = c3(229, 201, 160), ROUGE = c3(195, 70, 70), LIE = c3(118, 40, 44), SABLE = c3(217, 192, 138), BLEU = c3(85, 195, 239);
 
@@ -246,8 +265,9 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     const yH = yO - 30, xH = X(DEMI) + R + 34;   // la haie : a une dizaine de metres de l'aire, et du virage
     // des troncons de haie Tripo de 10 m, bout a bout (et une boite verte si le fichier manque)
     const places: [number, number, number, number][] = [];
-    for (let x = X(-DEMI - 60) + 5; x < xH; x += 10) places.push([x, yH, 0, 1]);
-    for (let y = yH + 5; y < Y(70); y += 10) places.push([xH, y, Math.PI / 2, 1]);
+    // (tous les 9 m : le feuillage du modele n'occupe pas toute sa boite, a 10 m des trous se voyaient)
+    for (let x = X(-DEMI - 60) + 5; x < xH; x += 9) places.push([x, yH, 0, 1]);
+    for (let y = yH + 5; y < Y(70); y += 9) places.push([xH, y, Math.PI / 2, 1]);
     piece('haie.glb', places, () => poser([new THREE.BoxGeometry(xH - X(-DEMI - 60), 1.6, 2.4).translate((xH + X(-DEMI - 60)) / 2, yH, 1.2),
       new THREE.BoxGeometry(1.6, Y(70) - yH, 2.4).translate(xH, (Y(70) + yH) / 2, 1.2)], lambert(c3(40, 82, 36))),
       [1, 1.5 / 3.75, 2 / 6.9]);   // (le troncon Tripo sort a 3,75 x 6,9 m : ramene a 1,5 m d'epaisseur et 2 m de haut, img-4)
@@ -330,7 +350,9 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     cercle(cx, cy, 1.25, versTerrain);
     // le coin de la demi-lune : deux cercles, le premier dans sa petite cage
     const p1x = X(55), p1y = Y(-22), p2x = X(62), p2y = Y(-18), versD = Math.atan2(Y(-6) - p1y, X(48) - p1x);
-    cercle(p1x, p1y, 1.07, versD); cage(p1x, p1y, versD + Math.PI / 2, 2.6, 3.2);
+    cercle(p1x, p1y, 1.07, versD);
+    // sa cage : la meme que celle du marteau, plus petite (img-6 : une cage noire aux longs bras, a hauteur d'homme et demi)
+    piece('cage.glb', [[p1x, p1y, versD + Math.PI / 2, 0.5]], () => cage(p1x, p1y, versD + Math.PI / 2, 2.6, 3.2));
     cercle(p2x, p2y, 1.07, Math.atan2(Y(-6) - p2y, X(48) - p2x));
   }
 
@@ -390,18 +412,44 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     poser([new THREE.ShapeGeometry(skate).translate(0, 0, -0.01)], solMat(c3(214, 204, 186), 5));
   }
 
-  // --- LES MATS A DRAPEAUX (img-6 : une rangee le long du chemin, devant la haie, au bout de la demi-lune) ---
+  // --- LES MATS A DRAPEAUX (img-6, agrandie : quatre mats devant la haie, derriere le virage de la demi-lune, du cote
+  // de la tribune ; de gauche a droite un blanc, un blanc, le drapeau francais et un bleu (l'europeen, sans doute) ;
+  // sans vent, ils pendent le long du mat — le francais montre le bleu en haut et le rouge en bas) ---
   {
-    const mats: THREE.BufferGeometry[] = [], tissus: [THREE.BufferGeometry, number][] = [];
-    const couleurs = [0xf4f4f2, 0x2a4fa0, 0xd03a3a, 0xf4f4f2, 0x2a4fa0, 0xd03a3a];
-    for (let i = 0; i < 6; i++) {
-      const u = -0.95 + i * 0.22, r = R1 + 14;
-      const x = D1 + r * Math.cos(u), y = -R + r * Math.sin(u);
-      mats.push(new THREE.CylinderGeometry(0.04, 0.05, 7, 6).rotateX(Math.PI / 2).translate(x, y, 3.5));
-      tissus.push([new THREE.PlaneGeometry(1.2, 0.8).rotateX(Math.PI / 2).translate(x + 0.62, y, 6.5), couleurs[i]]);
-    }
+    const xF = X(DEMI) + R + 31;   // trois metres devant la haie du bout de la demi-lune
+    const drapeau = (dessin: (c: CanvasRenderingContext2D, w: number, h: number) => void) => {
+      const t = toileSol(dessin, 64, 128); t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      return new THREE.MeshLambertMaterial({ map: t, side: THREE.DoubleSide });
+    };
+    const blanc = drapeau((c, w, h) => { c.fillStyle = '#f2f2ee'; c.fillRect(0, 0, w, h); });
+    const france = drapeau((c, w, h) => { ['#1f3f99', '#f4f4f2', '#d4202e'].forEach((v, k) => { c.fillStyle = v; c.fillRect(0, k * h / 3, w, h / 3 + 1); }); });
+    const europe = drapeau((c, w, h) => {
+      c.fillStyle = '#1d3f9a'; c.fillRect(0, 0, w, h); c.fillStyle = '#f7d21c';
+      for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; c.beginPath(); c.arc(w / 2 + Math.cos(a) * w * 0.3, h / 2 + Math.sin(a) * w * 0.3, 2.4, 0, Math.PI * 2); c.fill(); }
+    });
+    const mats: THREE.BufferGeometry[] = [];
+    [blanc, blanc, france, europe].forEach((m, k) => {
+      const y = Y(34 - k * 8);
+      mats.push(new THREE.CylinderGeometry(0.04, 0.06, 8, 6).rotateX(Math.PI / 2).translate(xF, y, 4));
+      // le tissu pend du haut du mat : 0,9 m de large, 1,8 m de long, la hampe contre le mat
+      poser([new THREE.PlaneGeometry(0.9, 1.8).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(xF, y + 0.47, 7.0)], m);
+    });
     poser(mats, lambert(0xe8e8e6));
-    for (const [g, c] of tissus) poser([g], lambert(c, true));
+  }
+
+  // --- LA NUIT : une lueur a la tete des quatre mats. (Des nappes de lumiere posees sur le tartan ont ete
+  // essayees le 27/10 : elles se battaient avec la piste en profondeur, des stries sur les couloirs exterieurs.) ---
+  if (o.nuit) {
+    const tache = toileSol((c, w, h) => {
+      const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+      g.addColorStop(0, 'rgba(255,244,222,0.75)'); g.addColorStop(0.5, 'rgba(255,236,205,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    }, 256);
+    tache.wrapS = tache.wrapT = THREE.ClampToEdgeWrapping;
+    const halo = new THREE.SpriteMaterial({ map: tache, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9, fog: false });
+    for (const a of [-DEMI + 4, DEMI - 4]) for (const y of [W + 3.6, yO - 2.4]) {
+      const sp = new THREE.Sprite(halo); sp.position.set(X(a), y, 24.5); sp.scale.set(9, 9, 1); stade.add(sp);
+    }
   }
   return rouges;
 }
