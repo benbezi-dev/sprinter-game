@@ -554,6 +554,16 @@
       musique: 'defi_aurel'
     },
   };
+  // LE STADE BERNARD AMSALEM, EDITION CHAMPIONNAT DE FRANCE (27/10 : « ce sera le prochain stade pour les championnats de
+  // France, fais-moi quelque chose de sensationnel » ; « tout cela, retirable en edition classique, et tout en edition
+  // championnat de France »). Le meme lieu (`amsalem`), habille (`championnat` : panneaux LED, ecran geant, arche
+  // d'arrivee, mats allumes — amsalem-3d.ts, course-3d.ts) et fige a la finale du soir : un coucher de soleil, sans
+  // `heure` (heure-du-jour.js rend tel quel un theme sans heure). Aucune marque ni federation : les couleurs du jeu.
+  THEMES.amsalemFrance = Object.assign({}, THEMES.amsalem, {
+    skyTop: [58, 84, 168], skyBot: [246, 168, 116],
+    moment: 'soir', heure: false, championnat: true,
+    accent: [247, 138, 60],
+  });
 
   // DU PEPS. Les palettes avaient ete reglees une a une, et toutes tiraient
   // vers le gris : une piste brique, une pelouse olive, des panneaux ternes —

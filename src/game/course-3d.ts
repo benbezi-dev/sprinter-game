@@ -773,6 +773,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const cdm = !!th.champDeMars;
   // LE STADE BERNARD AMSALEM (amsalem-3d.ts) : un lieu reel — sa tribune, sa halle, ses mats ; rien du stade generique
   const amsalem = !!th.amsalem;
+  // ... son EDITION CHAMPIONNAT DE FRANCE (THEMES.amsalemFrance) : panneaux LED, ecran geant, arche, mats allumes
+  const championnat = amsalem && !!th.championnat;
   profilBas = cdm;
   // LA PISTE ARC-EN-CIEL : un couloir, une couleur pure (piste-arc-en-ciel.js en 2D)
   const arc: number[][] | null = th.arcEnCiel || null;
@@ -1364,7 +1366,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   pub.colorSpace = THREE.SRGBColorSpace; pub.wrapS = THREE.RepeatWrapping; pub.repeat.set(LS / 5, 1);
   const pubHaut = pub.clone(); pubHaut.repeat.set(LS / 3.4, 1);
   const accent = css(th.accent || [255, 122, 26]);
-  const accroches = ['SPRINTER', 'DÉFIE TES AMIS', (T.fullLap ? '400' : T.curved ? '200' : '100') + ' M EN DIRECT'];   // plus le mot BENBEZI en vert (« retire ce logo », 24/10)
+  const accroches = championnat
+    ? ['CHAMPIONNAT DE FRANCE', 'SPRINTER', 'FINALE ' + (T.fullLap ? '400' : T.curved ? '200' : '100') + ' M', 'VAL-DE-REUIL']
+    : ['SPRINTER', 'DÉFIE TES AMIS', (T.fullLap ? '400' : T.curved ? '200' : '100') + ' M EN DIRECT'];   // plus le mot BENBEZI en vert (« retire ce logo », 24/10)
   let imageLed = -1;
   pubAnim.push(t => {
     const img = Math.floor(t * 20);          // 20 images/s suffisent a un panneau
@@ -1410,8 +1414,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   });
   const panneau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 1.03), new THREE.MeshBasicMaterial({ map: pub }));
   panneau.position.set(XA + LS / 2, W + 1.7, 0.55); panneau.rotation.x = Math.PI / 2; panneau.scale.x = -1;  // (monde en miroir)
-  // (pas a Amsalem : aucun panneau au bord de sa piste sur les photos)
-  if (!amsalem) {
+  // (pas a Amsalem : aucun panneau au bord de sa piste sur les photos — sauf en edition championnat, ou ils bordent la
+  // ligne droite, devant la rambarde)
+  if (!amsalem || championnat) {
   stade.add(panneau);
   boite(lBloc, repere(0, 0, 0), XA + LS / 2, W + 1.78, 0.55, LS, 0.12, 1.1);
   }
@@ -1423,7 +1428,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
 
   // L'ECRAN GEANT, au-dessus du virage d'arrivee, tourne vers la ligne droite (pas a la plage)
-  if (!plage && !palais && !cdm && !amsalem) {
+  if (!plage && !palais && !cdm && (!amsalem || championnat)) {
   const ecran = texteCanvas((c, w, h) => {
     c.fillStyle = '#05070d'; c.fillRect(0, 0, w, h);
     c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -1651,7 +1656,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     dossier: base + (ULTRA ? 'decors-ultra/champdemars/' : 'decors/champdemars/') }));
   else if (palais) pubAnim.push(construirePalais({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, env: envPalais,
     spectateur: (x, y, z, geste, face) => { if (atlasPublic) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
-  else if (amsalem) habillerLeTartan(stade, [matA, matB, ...construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, ultra: ULTRA, nuit,
+  else if (amsalem) habillerLeTartan(stade, [matA, matB, ...construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, ultra: ULTRA, nuit, championnat,
     spectateur: (x, y, z, geste, face) => { if (atlasPublic) spectateur(repere(0, 0, 0), x, y, z, geste, face); } })], base);
   else if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });

@@ -796,6 +796,19 @@
       names: ['Rayan Lefort', 'Mathis Carre', 'Elias Boyer', 'Nolan Petit',
               'Kylian Masson', 'Adam Guerin', 'Ethan Roche'] },
 
+    // LE STADE BERNARD AMSALEM, EDITION CHAMPIONNAT DE FRANCE (27/10) : le meme stade, habille pour la finale du soir
+    // (THEMES.amsalemFrance) ; l'edition classique, au-dessus, reste nue. Tribune pleine, plateau de finale nationale.
+    { cle: 'amsalem-france', name: 'Stade Bernard Amsalem — Championnat de France', theme: 'amsalemFrance',
+      pool: 'sprint',
+      horsSerie: true,
+      brancheTest: true,
+      noms: ['Stade Bernard Amsalem — Championnat de France', 'Bernard Amsalem Stadium — French Championship'],
+      foule: 1,
+      plateau: { '100': [10.05, 10.40], '200': [20.30, 21.00],
+                 '400': [45.20, 46.80], '4x100': [39.00, 40.20] },
+      names: ['Rayan Lefort', 'Mathis Carre', 'Elias Boyer', 'Nolan Petit',
+              'Kylian Masson', 'Adam Guerin', 'Ethan Roche'] },
+
     // LE STADE COUVERT JESSE OWENS, VAL-DE-REUIL (26/10). La piste couverte (piste-salle.js,
     // salle-3d.ts) : on n'y court que ses epreuves, 60 m, 200 m et 400 m en salle — le menu ne
     // propose qu'elles quand ce stade est choisi (ModePanels). « Le stade n'apparait pas, la

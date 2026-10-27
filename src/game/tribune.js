@@ -123,7 +123,7 @@
     // Le Palais : le velours griotte des chaises.
     palais: [138, 15, 30],
     // Le stade Bernard Amsalem : des sieges rouges (vues aeriennes Polytan).
-    amsalem: [196, 40, 44],
+    amsalem: [196, 40, 44], amsalemFrance: [196, 40, 44],
   };
   const hexa = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
   // La couleur `c` dans la lumiere des gradins de `th` — la meme, le jour.

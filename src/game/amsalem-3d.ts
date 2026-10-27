@@ -39,6 +39,8 @@ export type ContexteAmsalem = {
   base: string;
   /** Une carte du public debout (course-3d.ts) : x, y, z, geste, cap — les joueurs du terrain de football. */
   spectateur?: (x: number, y: number, z: number, geste: number, face: number) => void;
+  /** L'edition Championnat de France (THEMES.amsalemFrance) : l'arche d'arrivee, les mats allumes. */
+  championnat?: boolean;
   /** Le palier ULTRA : la tribune pleine. */
   ultra?: boolean;
   /** La nuit : les mats eclairent. */
@@ -736,7 +738,8 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
 
   // --- LA NUIT : une lueur a la tete des quatre mats. (Des nappes de lumiere posees sur le tartan ont ete
   // essayees le 27/10 : elles se battaient avec la piste en profondeur, des stries sur les couloirs exterieurs.) ---
-  if (o.nuit) {
+  // (en edition championnat, la finale du soir : les mats sont allumes)
+  if (o.nuit || o.championnat) {
     const tache = toileSol((c, w, h) => {
       const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
       g.addColorStop(0, 'rgba(255,244,222,0.75)'); g.addColorStop(0.5, 'rgba(255,236,205,0.3)'); g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -747,6 +750,30 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     for (const a of [-DEMI + 4, DEMI - 4]) for (const y of [W + 3.6, yO - 2.4]) {
       const sp = new THREE.Sprite(halo); sp.position.set(X(a), y, 24.5); sp.scale.set(9, 9, 1); stade.add(sp);
     }
+  }
+  // --- L'ARCHE D'ARRIVEE (edition championnat) : une arche gonflable aux couleurs du jeu au-dessus de la ligne, 6 m de haut,
+  // ses deux pieds hors de la piste ; « ARRIVEE » face aux coureurs, le logo du jeu au dos ---
+  if (o.championnat) {
+    const y0 = -2.6, y1 = W + 2.6, L = y1 - y0, Hc = 6.2, ep = 1.1;
+    const n = 28, pts: THREE.Vector3[] = [];
+    for (let i = 0; i <= n; i++) { const a = Math.PI * i / n; pts.push(new THREE.Vector3(0, y0 + L / 2 - Math.cos(a) * L / 2, Math.sin(a) * Hc)); }
+    const tube = new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 64, ep / 2, 16, false).translate(D1, 0, 0);
+    poser([tube], new THREE.MeshStandardMaterial({ color: c3(247, 128, 40), roughness: 0.45, metalness: 0 }), true);
+    // le bandeau du haut, ecrit des deux cotes (le monde est en miroir : scale.x = -1, comme les panneaux de course-3d.ts)
+    const bandeau = (texte: string, sens: number) => {
+      const t = toileSol((c, w, h) => {
+        c.fillStyle = '#1a2a6e'; c.fillRect(0, 0, w, h);
+        c.fillStyle = '#f7802a'; c.fillRect(0, 0, w, h * 0.08); c.fillRect(0, h * 0.92, w, h * 0.08);
+        c.fillStyle = '#ffffff'; c.font = `900 ${h * 0.55}px system-ui, sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle';
+        c.fillText(texte, w / 2, h / 2 + h * 0.03);
+      }, 1024, 160);
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(L * 0.62, 1.15), new THREE.MeshBasicMaterial({ map: t, side: THREE.FrontSide }));
+      m.position.set(D1 + sens * 0.58, y0 + L / 2, Hc - 0.15);
+      m.rotation.set(Math.PI / 2, sens * Math.PI / 2, 0); m.scale.x = -1;
+      stade.add(m);
+    };
+    bandeau('ARRIVÉE', -1); bandeau('SPRINTER', 1);
   }
   return rouges;
 }
