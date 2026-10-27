@@ -1613,7 +1613,9 @@ async function servir(request, env, ctx, porteur) {
     if (url.pathname === '/objectif/tentative' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const nom = String(body?.nom || '').trim();
+      // cleanName comme partout : 20 caracteres, sans < ni >. Le nom finit au
+      // Classement des Objectifs, affiche a tous.
+      const nom = cleanName(body?.nom) === 'Anonyme' ? '' : cleanName(body?.nom);
       const deviceId = body?.device_id;
       const ms = Math.round(Number(body?.ms));
       const langue = body?.langue === 'en' ? 'en' : 'fr';
@@ -1698,7 +1700,7 @@ async function servir(request, env, ctx, porteur) {
       }
       if (request.method === 'POST') {
         let body; try { body = await request.json(); } catch { body = {}; }
-        const n = String(body?.nom || '').trim();
+        const n = cleanName(body?.nom) === 'Anonyme' ? '' : cleanName(body?.nom).trim();
         const deviceId = body?.device_id;
         const rythme = String(body?.rythme || '');
         if (!n) return json({ error: 'nom requis' }, 400);
@@ -1749,12 +1751,12 @@ async function servir(request, env, ctx, porteur) {
     // moderation des duels, comme la table du meme nom.
     if (url.pathname === '/objectif/suspectes' && request.method === 'GET') {
       if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
-      const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
+      const n = Math.max(1, Math.min(Math.floor(Number(url.searchParams.get('n'))) || 100, 500));
       return json({ suspectes: await listerSuspectes(env.DB, n) });
     }
 
     if (url.pathname === '/objectif/classement' && request.method === 'GET') {
-      const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
+      const n = Math.max(1, Math.min(Math.floor(Number(url.searchParams.get('n'))) || 100, 500));
       return json({ classement: await classementObjectifs(env.DB, n) });
     }
 
@@ -2253,7 +2255,7 @@ async function servir(request, env, ctx, porteur) {
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
         const r = await choisirPays(env.DB, key, pays);
-        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        return r.erreur ? json({ error: r.erreur, pays: r.pays }, r.code || 400) : json(r);
       }
 
       // Poser ou corriger la nationalite d'un joueur. Le seul geste qui passe
@@ -2905,9 +2907,23 @@ async function servir(request, env, ctx, porteur) {
       const cible = new URL(request.url);
       cible.pathname = sous === 'etat' ? '/etat' : '/ws';
       cible.searchParams.set('code', code);
+      // `canal` et `verifie` sont poses ici, jamais par le client : un
+      // `?canal=test` ajoute a la main envoyait un duel classe perdu dans la
+      // base de test, et un nom pris a un autre comptait a ses LP.
+      cible.searchParams.delete('canal');
+      cible.searchParams.delete('verifie');
       // Le canal voyage jusqu'a la salle : c'est elle qui ecrit le resultat du
       // duel, et elle doit l'ecrire dans la bonne base.
       if (canal.test) cible.searchParams.set('canal', 'test');
+      // Le nom doit etre celui de l'appareil, comme aux salles du championnat :
+      // sinon la salle le traite en anonyme (ni duel, ni piece).
+      if (sous !== 'etat') {
+        const cle = cleanName(url.searchParams.get('name') || '').trim().toLowerCase();
+        const appareil = url.searchParams.get('device') || '';
+        const verifie = !!cle && cle !== 'anonyme' && isValidDeviceId(appareil)
+          && await peutUtiliser(env.DB, cle, appareil);
+        if (verifie) cible.searchParams.set('verifie', '1');
+      }
 
       // Deux salles portant le meme code, une de test et une de production, ne
       // doivent jamais etre le meme objet — sans quoi deux joueurs qui ne se
@@ -3830,11 +3846,6 @@ async function servir(request, env, ctx, porteur) {
       const key = propre.trim().toLowerCase();
       if (!key || propre === 'Anonyme') return json({ error: 'nom invalide' }, 400);
       await ensurePlayerTables(env.DB);
-      // Plus bas, le rattachement des appareils lit la table des scores. Sur
-      // une base neuve — celle du canal de test, ou n'importe quel deploiement
-      // avant le premier chrono — cette table n'existe pas encore, et toute
-      // reservation de nom echouait sur un D1_ERROR muet.
-      await ensureScoreGhost(env.DB);
 
       const existe = await env.DB.prepare(
         `SELECT name, code FROM players WHERE name_key = ?`).bind(key).first();
@@ -3866,15 +3877,17 @@ async function servir(request, env, ctx, porteur) {
       }
 
       const code = makeCode();
-      await env.DB.prepare(
-        `INSERT INTO players (name_key, name, code, created_at) VALUES (?, ?, ?, ?)`
+      // OR IGNORE : deux reservations simultanees du meme nom passent toutes
+      // deux le SELECT ; la seconde violait la cle et repondait 500.
+      const cree = await env.DB.prepare(
+        `INSERT OR IGNORE INTO players (name_key, name, code, created_at) VALUES (?, ?, ?, ?)`
       ).bind(key, propre, code, Date.now()).run();
-      // Les appareils qui jouaient deja sous ce nom sont rattaches : sans
-      // cela, reserver son propre nom couperait le joueur de son historique.
-      await env.DB.prepare(
-        `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at)
-         SELECT DISTINCT ?, device_id, ? FROM scores WHERE lower(trim(name)) = ?`
-      ).bind(key, Date.now(), key).run();
+      if (cree?.meta?.changes === 0) return json({ ok: false, pris: true });
+      // Seul l'appareil qui reserve est rattache. Rattacher tous ceux qui
+      // avaient couru sous ce nom tant qu'il etait libre donnait le code a
+      // n'importe qui : il suffisait d'envoyer un chrono sous le nom d'un
+      // joueur du classement avant qu'il le reserve. Ses autres appareils se
+      // relient avec le code, comme ceux d'un nom deja reserve.
       await env.DB.prepare(
         `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
       ).bind(key, device_id, Date.now()).run();
@@ -4072,13 +4085,8 @@ async function servir(request, env, ctx, porteur) {
       let paysPose = null;
       if (veutPays) {
         await ensureChampTables(env.DB);
-        const deja = await env.DB.prepare(
-          `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(key).first();
-        if (deja && deja.source === 'choix') {
-          return json({ error: 'nationalite deja choisie', pays: deja.pays }, 409);
-        }
         const r = await choisirPays(env.DB, key, pays);
-        if (r.erreur) return json({ error: r.erreur }, 400);
+        if (r.erreur) return json({ error: r.erreur, pays: r.pays }, r.code || 400);
         paysPose = r.pays;
       }
 

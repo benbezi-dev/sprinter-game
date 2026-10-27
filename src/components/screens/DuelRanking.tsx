@@ -486,7 +486,11 @@ export function DuelRanking({ onClose, epreuves, surInviter }: {
               <div className="flex items-center justify-between gap-2 px-1 pb-2 mb-1 border-b border-white/10">
                 <span className="text-[10px] md:text-xs font-bold tracking-widest text-muted-foreground shrink-0">
                   {/* sous le filtre, ce qu'on voit : pas les 237 du classement */}
-                  {(seulEnLigne ? lignes : rows).length} {(seulEnLigne ? lignes : rows).length > 1 ? 'joueurs' : 'joueur'}
+                  {(() => {
+                    // la liste affichee : vide quand personne d'autre n'est en ligne
+                    const vus = seulEnLigne ? (autresEnLigne === 0 ? 0 : lignes.length) : rows.length;
+                    return `${vus} ${vus > 1 ? 'joueurs' : 'joueur'}`;
+                  })()}
                 </span>
                 {/* Le filtre, et combien il en garde. Le chiffre compte les
                     AUTRES : se compter soi-meme ferait croire qu'il y a

@@ -36,20 +36,55 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
 // Une couche neuve par scenario : son etat (palier, ultra perdu, moyenne) est
 // interne, et un scenario ne doit pas heriter de celui d'avant.
 const SOURCE = readFileSync(new URL('../src/game/rendu-premium.js', import.meta.url), 'utf8');
-function couche(densite = 3) {
+// Une horloge a nous : la grace de la montee a l'ultra se compte sur
+// performance.now(), et `images` la fait avancer au rythme des images.
+let horloge = 0;
+Object.defineProperty(globalThis, 'performance', { value: { now: () => horloge }, configurable: true });
+globalThis.SprinterApp = { G: { state: 'title' } };
+const GRACE_MS = 3000;
+
+/**
+ * Une couche neuve, deja a l'ultra quand l'ecran en a les images.
+ *
+ * Au-dela de deux pixels par point (DENSE), l'ultra ne part pas d'emblee : il
+ * arrive a l'accueil une fois ses images chargees (apporterUltra), et sa
+ * montee a GRACE_ULTRA_MS de grace. On joue ce chemin ici, `brut` le saute.
+ */
+function couche(densite = 3, brut = false) {
   globalThis.window = { devicePixelRatio: densite };
   new Function(SOURCE)();
-  return globalThis.RenduPremium;
+  const P = globalThis.RenduPremium;
+  if (!brut && P.DENSE) {
+    P.apporterUltra();
+    P.mesurer(1 / 60);
+    horloge += GRACE_MS + 1;
+  }
+  return P;
 }
 /** Fait passer `s` secondes d'images de `ms` millisecondes ; rend le temps
  *  ecoule au moment ou `quand` devient vrai, ou null. */
 function images(P, ms, s, quand) {
   let t = 0;
   while (t < s) {
+    horloge += ms;
     P.mesurer(ms / 1000); t += ms / 1000;
     if (quand && quand()) return t;
   }
   return null;
+}
+
+titre('L ULTRA ARRIVE A L ACCUEIL, SES IMAGES CHARGEES');
+{
+  const P = couche(3, true);
+  ok('un ecran dense part du plein', P.niveau === P.PLEIN, String(P.niveau));
+  ok('...et attend les images de l ultra', P.ultraAttendu === true);
+  P.apporterUltra();
+  globalThis.SprinterApp.G.state = 'count';
+  P.mesurer(1 / 60);
+  ok('...qui ne le posent pas pendant un depart', P.niveau === P.PLEIN, String(P.niveau));
+  globalThis.SprinterApp.G.state = 'title';
+  P.mesurer(1 / 60);
+  ok('...mais a l accueil', P.niveau === P.ULTRA, String(P.niveau));
 }
 
 titre('L ULTRA TIENT A PLEINE CADENCE');

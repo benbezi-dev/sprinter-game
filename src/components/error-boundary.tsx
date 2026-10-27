@@ -55,6 +55,10 @@ export function estMorceauManquant(error: unknown): boolean {
 // c'est le serveur qui est en cause, et l'ecran d'erreur reste.
 const CLE_RECHARGE = 'sprinter_recharge_morceau';
 export function rechargerUneFois(): boolean {
+  // Hors ligne, le morceau manque faute de reseau, pas parce qu'il est vieux :
+  // recharger n'y changerait rien, et sans service worker la page tomberait
+  // sur l'erreur du navigateur.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
   try {
     const avant = Number(sessionStorage.getItem(CLE_RECHARGE) || 0);
     if (Date.now() - avant < 10_000) return false;

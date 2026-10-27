@@ -28,7 +28,7 @@ function client(code, nom) {
     nom, recus: [], moi: null, presentation: null, depart: null,
     signaux: [], ws: null, pret: null,
   };
-  c.ws = new WebSocket(`${WS}/live/${code}?name=${encodeURIComponent(nom)}&races=100&level=4`);
+  c.ws = new WebSocket(`${WS}/live/${code}?device=harnais-${String(nom).replace(/[^a-zA-Z0-9]/g, "").slice(0, 50)}&name=${encodeURIComponent(nom)}&races=100&level=4`);
   c.ouvert = new Promise(res => { c.ws.addEventListener('open', res); });
   c.ws.addEventListener('message', ev => {
     const m = JSON.parse(ev.data);

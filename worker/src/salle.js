@@ -122,7 +122,9 @@ export function estAnonyme(nom) {
  * nommes.
  */
 export function rencontresDeLaCourse(partants, { code, course, hote = null }) {
-  const nommes = (partants || []).filter(x => x && !estAnonyme(x.nom));
+  // `verifie === false` : un nom que l'appareil ne porte pas (index.js, /live)
+  // court, mais ne compte pas plus qu'un anonyme.
+  const nommes = (partants || []).filter(x => x && !estAnonyme(x.nom) && x.verifie !== false);
   // L'hote d'abord, les autres dans l'ordre ou ils sont arrives.
   const roles = [
     ...nommes.filter(x => x.id === hote),
@@ -620,6 +622,7 @@ export class SalleDirecte {
     this.joueurs.set(serveur, {
       id, nom, pret: false, d: 0, c: null, fin: null, parti: false,
       couloir: null, forfait: false, mordu: null,
+      verifie: url.searchParams.get('verifie') === '1',
     });
     this.vivante();
 
@@ -1240,12 +1243,13 @@ export class SalleDirecte {
    * a condition qu'il soit reserve (voir pieces.js).
    */
   async crediterVainqueur(base, tous, course) {
-    const arrives = tous.filter(x => x && !estAnonyme(x.nom)
+    const compte = x => x && !estAnonyme(x.nom) && x.verifie !== false;
+    const arrives = tous.filter(x => compte(x)
       && Number.isFinite(x.fin) && x.fin > 0 && x.fin < ABANDON_MS);
     if (!arrives.length) return;
     const meilleur = Math.min(...arrives.map(x => x.fin));
     const premiers = tous.filter(x => x && Number.isFinite(x.fin) && x.fin <= meilleur);
-    if (premiers.length !== 1 || estAnonyme(premiers[0].nom)) return;
+    if (premiers.length !== 1 || !compte(premiers[0])) return;
     await crediterPieces(base, premiers[0].nom, 'duel',
       `LIVE-${this.code}-${course}`, BAREME.duel, { test: !!this.test });
   }

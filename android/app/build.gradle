@@ -99,7 +99,10 @@ android {
         // publique, la trace de course posee au pas fixe (les telephones lents
         // ne sont plus refuses pour « depasse 18 m/s »), et la carriere
         // Legende (canal de test seulement).
-        versionCode 13
+        // 14 le 21 octobre : le direct envoie l'appareil, que le serveur exige
+        // desormais pour compter un duel (LP, pieces) ; avant elle, un duel en
+        // direct se court mais ne rapporte rien.
+        versionCode 14
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {

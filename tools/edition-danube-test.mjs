@@ -228,7 +228,7 @@ for (const f of FICHIERS) {
 const app = lire('src/game/sprinter-app.js');
 const theme = app.slice(app.indexOf('    danube: {'));
 ok('le theme du Danube ne porte que des couleurs et des drapeaux de rendu',
-   !/logo|embleme|emblem|sponsor|marque/i.test(theme.slice(0, theme.indexOf('\n    }'))));
+   !/logo|embleme|emblem|sponsor|marque/i.test(sansCommentaires(theme.slice(0, theme.indexOf('\n    }')))));
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
 process.exit(e ? 1 : 0);
