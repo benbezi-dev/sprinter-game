@@ -675,9 +675,15 @@ const milieu = (T: any, k: number) => {
   const C = (globalThis as any).SprinterApp?.C;
   return T.curved && C ? LANE_W / 2 - (k ? C.MES_N : C.MES_1) : 0;
 };
+// LE PELOTON DU 400 M EN SALLE (piste-salle.js, rabattement) : passe la ligne, le moteur met tout le monde
+// sur la ligne de mesure du couloir 1 — deux coureurs a la meme distance s'y confondraient. A l'image
+// seulement, chacun garde un ecart vers l'exterieur (0 a 1,25 m), pris pendant la diagonale.
+// (l'ecart : piste-salle.js, PELOTON — le moteur y cherche aussi les accrochages)
+const enPeloton = (T: any, lane: number, d: number) =>
+  T.salle && T.salle.rabat ? T.rabattu(d, lane) * T.salle.peloton[lane % T.salle.peloton.length] : 0;
 const ouCourt = (T: any, r: any, d: number = r.d) => {
   const u = Math.min(1, Math.max(0, d / 10)), garde = 1 - u * u * (3 - 2 * u);
-  return ici(T.posDemi(d, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde));
+  return ici(T.posDemi(d, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r.lane, d)));
 };
 const c3 = (v: number[] | undefined, d: number[]) => {
   const a = v || d;
@@ -2490,7 +2496,10 @@ export function rendre(App: any, dt: number) {
     if (salleActive) {
       // (la camera de course ne passe pas le muret : derriere, les gradins et la coursive)
       if (!(G.state === 'cut' && G.cut && G.cut.kind === 'intro')) { const q = auBordDeLaPiste(_a.x, -_a.y); _a.x = q[0]; _a.y = -q[1]; }
-      const zs = zSol(_b.x, -_b.y); _a.z += zs; _b.z += zs;
+      // CHACUN SUR LE SOL SOUS LUI (« on ne ressent pas les montees et descentes sur l'anneau », l'auteur,
+      // 27/10) : montes d'une meme hauteur, camera et visee glissaient sans s'incliner — la pente ne se
+      // voyait pas. La camera reste a sa place (plateau ou releve), le coureur monte devant elle.
+      _a.z += zSol(_a.x, -_a.y); _b.z += zSol(_b.x, -_b.y);
     }
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';

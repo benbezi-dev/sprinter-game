@@ -1,4 +1,4 @@
 Textures photo de la salle — Poly Haven (polyhaven.com), licence CC0, recompressees en 1k.
   bois-chene.jpg / bois-chene-relief.jpg  <- oak_wood_planks (diff, nor_gl), Dimitrios Savva
   bardage.jpg / bardage-relief.jpg        <- box_profile_metal_sheet (diff passe au gris, nor_gl)
-  tartan.jpg / tartan-relief.jpg / tartan-rugosite.jpg <- ambientCG Rubber004 (CC0, ambientcg.com) : couleur passee en niveaux (moyenne 0,82, ecart type 0,12), 512 px
+  tartan.jpg / tartan-relief.jpg / tartan-rugosite.jpg <- generees (27/10) par tools/blender/salle/tartan_granules.py : granules de caoutchouc d'apres la coupe Polytan, moyenne 0,82, 1024 px pour 0,32 m

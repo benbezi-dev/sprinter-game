@@ -21,7 +21,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
-import { SALLE, DROITE } from './piste-salle.js';
+import { SALLE, DROITE, profil, RAMPE, lisse, rabattement } from './piste-salle.js';
 
 export const RS = SALLE.rayon;                       // la demi-largeur interieure (17,20 m)
 const S = DROITE;                                     // la ligne droite de l'anneau (35 m)
@@ -30,24 +30,12 @@ const A = SALLE.demiLong;                             // la demi-longueur des vi
 const versVirage = (x: number, y: number) => (x > 0 ? [x, y + RS] : [-S - x, -(y + RS)]);
 const NC = SALLE.couloirs, CW = SALLE.couloir;        // six couloirs de 0,90 m
 const W = NC * CW;
-// LA PENTE SE RAIDIT VERS L'EXTERIEUR (« les couloirs du dessus ont un pourcentage de montee et
-// descente de plus en plus fort », l'auteur, 26/10) : 10° au bord interieur, 18° au bord du
-// sixieme couloir (15° en moyenne sur les couloirs exterieurs), puis 18° jusqu'au muret. Les
-// couloirs du dessus montent donc plus haut, et plus raide, sur les memes rampes d'entree.
-// shortcut: angles a caler sur les cotes reelles quand on les aura (la recherche est en cours).
-const ALPHA0 = 10 * Math.PI / 180, ALPHA1 = 18 * Math.PI / 180;
-/** La hauteur du revetement plein-releve a d metres du bord interieur (la pente tourne de ALPHA0 a ALPHA1). */
-function profil(d: number) {
-  if (d <= 0) return 0;
-  const k = (ALPHA1 - ALPHA0) / W, dd = Math.min(d, W);
-  // (pente constante : k nul, la formule se reduit a d x tan)
-  const plein = Math.abs(k) < 1e-9 ? dd * Math.tan(ALPHA0) : (Math.log(Math.cos(ALPHA0)) - Math.log(Math.cos(ALPHA0 + k * dd))) / k;
-  return plein + Math.max(0, d - W) * Math.tan(ALPHA1);
-}
+// LA PENTE SE RAIDIT VERS L'EXTERIEUR : profil et rampe vivent dans piste-salle.js (le moteur en tire la
+// pente qui ralentit et relance le coureur ; 27/10).
 // LE RELEVEMENT EST DANS LE VIRAGE SEUL (« le muret blanc et la piste ne sont pas deformes mais
 // droits », l'auteur, 26/10) : les lignes droites sont plates ; il monte en douceur sur le premier
 // tiers du virage (« trop sec », 26/10 : courbe a derivee nulle aux deux bouts), redescend sur le dernier.
-const RAMPE = Math.PI / 3, ENTREE = Math.PI / 4;   // (ENTREE : l'evasement de la coursive)
+const ENTREE = Math.PI / 4;   // (l'evasement de la coursive ; RAMPE : piste-salle.js)
 // LE BORD DE L'ANNEAU : le muret blanc contre le sixieme couloir (« il n'y a pas de bande grise
 // apres le couloir 6 dans la salle », l'auteur, 26/10) ; le bord de la coursive a 1,90 m (le plan),
 // 1,15 m plus loin au coeur des virages.
@@ -71,7 +59,6 @@ const W60 = NC_DROITE * CW_DROITE;
 // les lignes peintes a 8 cm, comme dans tout le jeu en 3D (plus fines, elles se crenelaient au loin ; l auteur, 24/10)
 const LIGNE = 0.08;
 
-const lisse = (a: number, b: number, x: number) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * t * (t * (t * 6 - 15) + 10); };
 
 /** Le relevement (0 a 1) en un point du stade : nul en ligne droite, plein au coeur des virages. */
 function releve(x: number, y: number) {
@@ -120,8 +107,13 @@ export function zSol(x: number, y: number) {
 
 // LE 60 M (la visite de 2025, image 0661) : il court vers le virage qui suit l'arrivee de l'anneau,
 // celui de la perche, du sautoir et des fresques, ou un grand tapis l'attend derriere le dernier
-// couloir ; son arrivee a 3,6 m du bord de l'anneau. On y court vers +x, comme sur l'anneau.
-const DEPART_60 = -S - 5.07, ARRIVEE_60 = DEPART_60 + 60;
+// couloir. On y court vers +x, comme sur l'anneau.
+// LE DEPART EST AU BOUT DE LA PISTE (« le 60 m commence plus loin, presque en bout de piste, pour donner
+// plus de distance de deceleration », l'auteur, 27/10 ; photo fisheye de l'auteur : les numeros 1 a 8
+// juste derriere le bord interieur de l'anneau). Le plan de 2009 (page 2) mettait encore le depart a
+// 18 m du bout et l'arrivee a 2,2 m de l'autre ; c'est inverse : depart a 3,6 m du bord de l'anneau,
+// l'arrivee 60 m plus loin laisse 18,5 m pour freiner avant le bord (82,07 m d'un bout a l'autre).
+const DEPART_60 = -S - A + 3.6, ARRIVEE_60 = DEPART_60 + 60;
 /**
  * Du repere du jeu a celui de la salle (voir caler, course-3d.ts). L'anneau : le jeu met
  * son premier virage autour de l'origine et finit sur y = -r en allant vers -x ; on le
@@ -357,15 +349,18 @@ export function construireSalle(ctx: ContexteSalle) {
   // les textures de revetement sont en metres : une tuile pour 1,6 m
   for (const m of [bleu, anthracite, plateau]) { m.map!.repeat.set(1 / 1.6, 1 / 1.6); m.normalMap!.repeat.set(1 / 1.6, 1 / 1.6); }
   // LE TARTAN, sur l'anneau et la ligne droite du 60 m seulement (« texture tartan », « uniquement sur la
-  // piste anneau et 60 metres », l'auteur, 26/10) : le caoutchouc granule de ambientCG Rubber004 (CC0),
-  // ses niveaux de gris (moyenne 0,82, ecart type 0,12 : « augmente la texture tartan », 26/10) sous la couleur du couloir, son relief et sa rugosite ; une tuile
-  // pour 0,80 m. Le plateau et les couloirs d'elan des sauts gardent leur surface.
+  // piste anneau et 60 metres », l'auteur, 26/10) : des GRANULES DE CAOUTCHOUC (« la texture donne une
+  // mauvaise qualite, ce n'est pas de la texture tartan », 27/10 — le Rubber004 d'ambientCG etait un bruit
+  // gris pique de blanc) : tools/blender/salle/tartan_granules.py, d'apres la coupe Polytan en gros plan
+  // (img-2) — granules anguleux de ~3 mm, interstices dans l'ombre ; un multiplicateur de moyenne 0,82 sous
+  // la couleur du couloir, son relief et sa rugosite ; une tuile de 1024 px pour 0,32 m. Le plateau et les
+  // couloirs d'elan des sauts gardent leur surface.
   const tartan = (rgb: number[], base: THREE.MeshStandardMaterial) => {
     if (exporter) return base;
     const m = new THREE.MeshStandardMaterial({
       color: new THREE.Color().setRGB(rgb[0] / 255 / 0.82, rgb[1] / 255 / 0.82, rgb[2] / 255 / 0.82, THREE.SRGBColorSpace),
-      map: photo('tartan.jpg', 0.8, false), normalMap: photo('tartan-relief.jpg', 0.8, false), normalScale: new THREE.Vector2(1.2, 1.2),
-      roughnessMap: photo('tartan-rugosite.jpg', 0.8, false), roughness: 1, metalness: 0,
+      map: photo('tartan.jpg', 0.32, false), normalMap: photo('tartan-relief.jpg', 0.32, false), normalScale: new THREE.Vector2(1, 1),
+      roughnessMap: photo('tartan-rugosite.jpg', 0.32, false), roughness: 1, metalness: 0,
     });
     m.polygonOffset = base.polygonOffset; m.polygonOffsetFactor = base.polygonOffsetFactor; m.polygonOffsetUnits = base.polygonOffsetUnits;
     return m;
@@ -445,10 +440,30 @@ export function construireSalle(ctx: ContexteSalle) {
   };
   const ligneDouble = ligne.clone(); ligneDouble.side = THREE.DoubleSide;
   traitAnneau(0, RS + SALLE.mes1, RS, RS + W, 0.1);                    // l'arrivee
+
+  // LES NUMEROS DE COULOIR AU SOL (« il y a les numeros de couloir au sol au depart du 60 m et a l'arrivee
+  // de l'anneau », l'auteur, 27/10 ; sa photo fisheye : 1 a 8 derriere le depart du 60 m), comme dehors
+  // (course-3d.ts) : blancs, lus par le coureur qui arrive, juste avant la ligne
+  const numero = (n: number, x: number, y: number, cote: number) => {
+    const t = toile(128, 128, (c, w, h) => {
+      c.fillStyle = '#f6f6f2'; c.font = `900 ${h * 0.9}px system-ui, sans-serif`;
+      c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(n), w / 2, h / 2 + h * 0.04);
+    });
+    const mat = new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 });
+    const m = ajouter(new THREE.PlaneGeometry(cote, cote), mat, false);
+    m.position.set(x, y, 0.011); m.rotation.z = -Math.PI / 2;
+    m.scale.x = -1;   // le monde est en miroir (course-3d.ts) : le chiffre se lit a l'endroit
+  };
+  for (let k = 0; k < NC_DROITE; k++) numero(k + 1, DEPART_60 - 1.4, yD + (k + 0.5) * CW_DROITE, 0.95);
+  for (let k = 0; k < NC; k++) numero(k + 1, -1.2, (k + 0.5) * CW, 0.75);
   for (const total of [200, 400]) for (let k = 1; k < NC; k++) {
     const rm = RS + k * CW + SALLE.mesN;
-    traitAnneau(-total, rm, RS + k * CW, RS + (k + 1) * CW, LIGNE);
+    // (le 400 m se rabat : ses departs sont ceux du rabattement, piste-salle.js — le meme calcul que le moteur)
+    traitAnneau(total === 400 ? rabattement(rm - RS, 400).u0 : -total, rm, RS + k * CW, RS + (k + 1) * CW, LIGNE);
   }
+  // LA LIGNE DE RABATTEMENT DU 400 M, a la sortie du second virage, au debut de la ligne droite d'arrivee
+  // (piste-salle.js, rabattement) : verte, comme la decrit la source de l'auteur (27/10)
+  traitPlat(-S, W / 2, 0.05, W, new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(0.12, 0.62, 0.30, THREE.SRGBColorSpace), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
 
   // LES AIRES DE CONCOURS, au plateau, d'apres le plan, cotes relevees depuis le milieu de la salle
   // (« tapis de perche et couloir d'elan, bac de saut en longueur et triple, les tapis de saut en
@@ -587,16 +602,20 @@ export function construireSalle(ctx: ContexteSalle) {
   // AUTOUR DE L'ANNEAU : le muret blanc, le passage, puis le bandeau de bois qui porte la coursive
   const blanc = new THREE.MeshStandardMaterial({ map: mur(BLANC, 5), roughness: 0.9 });
   // (le haut du muret : le releve au muret plus 0,90 m — les gradins partent de la)
-  const hautMur = (p: PointTour) => profil(R_MUR - RS) * p.f + 0.9;
-  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k, 0, horsFreinage), double(blanc), 'coque');
-  enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, 0, 0, hautMur, horsFreinage), blanc, 'coque');
+  // LE MURET NAIT AVEC LE RELEVEMENT (« il n'y a pas de muret blanc sur toute la longueur des lignes
+  // droites », l'auteur, 27/10 ; images de l'auteur : le muret borde le virage releve et descend a rien
+  // en rejoignant la ligne droite, ou les couloirs longent la tribune sans mur) : nul en ligne droite
+  const hautMur = (p: PointTour) => (profil(R_MUR - RS) + 0.9) * p.f;
+  const auMuret = (p: PointTour) => p.f > 0.01 && horsFreinage(p);
+  enQuarts(k => murAnneau(R_MUR, () => 0, hautMur, k, 0, auMuret), double(blanc), 'coque');
+  enQuarts(k => bandeAnneau(R_MUR, R_G, 0, k, 0, 0, hautMur, auMuret), blanc, 'coque');
   // la zone de freinage : la piste prolongee a plat, en gris, du sixieme couloir jusqu'au tapis
   const zoneGrise = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.55, 0.56, 0.58, THREE.SRGBColorSpace), roughness: 0.85 });
   const zFrein = (p: PointTour) => profil(R_MUR - RS) * p.f;
   ajouter(bandeAnneau(RS + W, R_BOIS, 0.006, 1, 0, EV, p => zFrein(p) + 0.006, dansFreinage), zoneGrise, true, 'sol');
   // (sur le muret des virages, une rambarde d'acier a deux lisses : la photo Wikimedia)
   const acierRambarde = new THREE.MeshStandardMaterial({ color: 0x7a828a, roughness: 0.4, metalness: 0.6 });
-  for (const k of [1, 3]) for (const dz of [0.5, 1.0]) ajouter(murAnneau(R_MUR + 0.08, p => hautMur(p) + dz - 0.04, p => hautMur(p) + dz, k, 0, horsFreinage), acierRambarde, false);
+  for (const k of [1, 3]) for (const dz of [0.5, 1.0]) ajouter(murAnneau(R_MUR + 0.08, p => hautMur(p) + dz - 0.04, p => hautMur(p) + dz, k, 0, p => p.f > 0.5 && horsFreinage(p)), acierRambarde, false);
   // SOUS LA COURSIVE, HORS DE LA TRIBUNE (la visite filmee de 2025, images 0199, 0353, 0485, 0661 :
   // « analyse bien la ligne droite opposee », l'auteur, 26/10) : derriere le muret, un passage au
   // sol ; au bord de la coursive, un mur — en bas, les grandes vitres vertes de la salle

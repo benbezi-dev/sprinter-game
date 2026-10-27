@@ -2373,6 +2373,8 @@
     G.runners = [];
     const pl = new Runner('TOI', 3, { isPlayer: true, maxSpeed: R.maxSpeed,
       best: R.best, total: G.track.total });
+    // la piste couverte : la montee et la descente des virages releves (Track.accelPente)
+    if (G.track.salle) { const T = G.track; pl.pente = (s) => T.accelPente(s, pl.lane); pl.bouscule = bousculade; }
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
     const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
@@ -4152,6 +4154,22 @@
    * garde ce qui le distingue — son nom, son couloir, son apparence, et ce
    * qui fait de lui le joueur ou un adversaire en direct.
    */
+  // LES ACCROCHAGES DU 400 M EN SALLE (piste-salle.js, CONTACT ; Track.auContact) : appelee par le joueur
+  // a chaque pas (this), elle cherche un adversaire colle a lui dans le peloton du second tour
+  function bousculade(dt) {
+    const T = G.track;
+    if (!T || !T.salle || !T.salle.rabat || this.finished) return;
+    this.repitContact = Math.max(0, (this.repitContact || 0) - dt);
+    if (this.repitContact > 0) return;
+    for (const o of G.runners) {
+      if (o === this || !T.auContact(this, o)) continue;
+      this.v *= T.salle.contact.garde;
+      this.fallAnim = Math.max(this.fallAnim, 0.35);
+      this.repitContact = T.salle.contact.repit;
+      this.contacts = (this.contacts || 0) + 1;
+      break;
+    }
+  }
   function reposer(r) {
     const R = G.race;
     const neuf = r.isPlayer
@@ -4159,6 +4177,7 @@
                                      best: R.best, total: G.track.total })
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
                                      pool: LEVELS[G.levelIdx].pool });
+    if (neuf.isPlayer && G.track.salle) { const T = G.track; neuf.pente = (s) => T.accelPente(s, neuf.lane); neuf.bouscule = bousculade; }
     const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,
                     isGhost: r.isGhost, isLive: r.isLive, repere: r.repere,
                     fictif: r.fictif, cibleFictive: r.cibleFictive };

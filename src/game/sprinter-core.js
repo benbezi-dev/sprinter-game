@@ -1732,10 +1732,28 @@
   // couloir 1) : `r` reste la distance a l'axe en ligne droite ; dans un virage, on suit
   // la parallele au bord interieur a r - rayon metres, `v` est son angle (0 a pi) et
   // `theta` le cap tourne.
+  //
+  // LE 400 M SE RABAT (piste-salle.js, rabattement) : chaque couloir court dans le sien jusqu'a la sortie
+  // du second virage, rejoint la corde en diagonale sur la ligne droite d'arrivee (`decal` : l'ecart de
+  // rayon deja rattrape), puis fait son dernier tour sur la ligne de mesure du couloir 1.
   Track.prototype.boucle = function (s, r) {
     const P = this.salle, d = r - P.rayon;
+    if (P.rabat) {
+      const R = P.rabattement(d, this.total), r1 = P.rayon + R.d1;
+      if (s < R.avant) return this.surBoucle(R.u0 + s - (P.tours || 1) * R.tour, d);
+      if (s < R.avant + R.diag) {
+        const t = (s - R.avant) / R.diag;
+        return { bend: 0, v: t * this.straight, theta: 2 * Math.PI, tours: 0, moitie: 1, decal: t * (r1 - r) };
+      }
+      return Object.assign(this.surBoucle(s - this.total, R.d1), { decal: r1 - r });
+    }
+    return this.surBoucle(s - this.total, d);
+  };
+  // `brut` : metres apres l'arrivee (negatif avant), sur la boucle a d metres du bord interieur
+  Track.prototype.surBoucle = function (brut, d) {
+    const P = this.salle;
     const S = this.straight, B = P.longueurVirage(d), L = 2 * S + 2 * B;
-    const brut = s - this.total, n = Math.floor(brut / L);
+    const n = Math.floor(brut / L);
     let u = brut - n * L;
     const tours = 2 * Math.PI * (n + (this.salle.tours || 1));
     if (u < B) { const v = P.phiVirage(u, d); return { bend: 1, v, theta: P.capVirage(v), tours, rem: B - u }; }
@@ -1748,8 +1766,37 @@
   // Le point de la boucle `b` au rayon `r` (r peut differer du couloir : relais, bords peints).
   Track.prototype.pointDeBoucle = function (b, r) {
     const S = this.straight;
+    r += b.decal || 0;
     if (b.bend) { const q = this.salle.virage(b.v, r - this.salle.rayon); return b.bend === 1 ? [-q[0], -q[1]] : [S + q[0], q[1]]; }
     return b.moitie === 0 ? [b.v, r] : [S - b.v, -r];
+  };
+  // LA PENTE DU RELEVEMENT sous le coureur (piste-salle.js) : l'acceleration qu'elle lui donne, en m/s²
+  // — negative a la montee d'un virage, positive (et moindre) a la descente.
+  Track.prototype.accelPente = function (s, lane) {
+    const P = this.salle;
+    if (!P || !P.pente) return 0;
+    const r = this.radius(lane);
+    const z = (q) => { const b = this.boucle(q, r); return b.bend ? P.hauteur(b.v, r + (b.decal || 0) - P.rayon) : 0; };
+    const g = (z(s + 0.5) - z(s - 0.5));
+    return -9.81 * g * (g > 0 ? P.pente.monte : P.pente.descend);
+  };
+  // LE PELOTON DU 400 M EN SALLE (piste-salle.js) : la part de la diagonale de rabattement faite (0 avant
+  // la ligne, 1 a la corde), et l'ecart du coureur a la ligne de mesure du couloir 1, en travers.
+  Track.prototype.rabattu = function (s, lane) {
+    const P = this.salle;
+    if (!P || !P.rabat) return 0;
+    const R = P.rabattement(this.radius(lane) - P.rayon, this.total);
+    return Math.min(1, Math.max(0, (s - R.avant) / R.diag));
+  };
+  Track.prototype.enTravers = function (s, lane) {
+    const P = this.salle, k = this.rabattu(s, lane);
+    return (this.radius(lane) - this.radius(0)) * (1 - k) + P.peloton[lane % P.peloton.length] * k;
+  };
+  // Deux coureurs de la piste couverte au contact : rabattus (ou en train de l'etre) et colles l'un a l'autre
+  Track.prototype.auContact = function (a, b) {
+    const P = this.salle;
+    if (!P || !P.rabat || !this.rabattu(a.d, a.lane) || !this.rabattu(b.d, b.lane)) return false;
+    return Math.abs(a.d - b.d) < P.contact.long && Math.abs(this.enTravers(a.d, a.lane) - this.enTravers(b.d, b.lane)) < P.contact.large;
   };
   // Rayon de la ligne de mesure du couloir (lane compte a partir de zero) :
   // la trajectoire du coureur, pas le milieu du couloir.
@@ -2346,6 +2393,15 @@
       const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1);
       this.v *= Math.exp(-drag * dt);
     }
+    // la montee et la descente des virages releves (piste couverte : Track.accelPente) — et le rythme y
+    // compte : la cadence tenue (effort 1 a dix appuis par seconde) limite la perte dans la montee, et la
+    // descente ne rend que ce qu'on y tient
+    if (this.pente) {
+      const a = this.pente(this.d), e = this.effort == null ? 1 : this.effort;
+      this.v = Math.max(0, this.v + a * (a < 0 ? 1.6 - 0.6 * e : Math.min(1.2, e)) * dt);
+    }
+    // les accrochages du 400 m en salle (Track.auContact)
+    if (this.bouscule) this.bouscule(dt);
     const before = this.d;
     this.d += this.v * dt;
     // LE BOUT DE LA ZONE EST UN MUR, PAS UNE LIGNE D'ARRIVEE.
