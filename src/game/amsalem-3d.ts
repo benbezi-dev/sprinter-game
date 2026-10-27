@@ -75,10 +75,13 @@ function toileSol(dessin: (c: CanvasRenderingContext2D, w: number, h: number) =>
 function taches(c: CanvasRenderingContext2D, w: number, h: number, hasard: () => number, n: number, r0: number, r1: number, couleurs: string[]) {
   for (let i = 0; i < n; i++) {
     const x = hasard() * w, y = hasard() * h, rx = r0 + hasard() * (r1 - r0), ry = rx * (0.5 + hasard() * 0.8), a = hasard() * Math.PI;
-    c.fillStyle = couleurs[(hasard() * couleurs.length) | 0];
+    // (fondue du centre vers le bord : des ronds a bord net se lisaient comme des pastilles, 27/10)
+    const coul = couleurs[(hasard() * couleurs.length) | 0], vide = coul.replace(/[\d.]+\)$/, '0)');
     for (const dx of [-w, 0, w]) for (const dy of [-h, 0, h]) {
       if (x + dx + rx < 0 || x + dx - rx > w || y + dy + rx < 0 || y + dy - rx > h) continue;
-      c.beginPath(); c.ellipse(x + dx, y + dy, rx, ry, a, 0, Math.PI * 2); c.fill();
+      c.save(); c.translate(x + dx, y + dy); c.rotate(a); c.scale(1, ry / rx);
+      const g = c.createRadialGradient(0, 0, 0, 0, 0, rx); g.addColorStop(0, coul); g.addColorStop(0.6, coul); g.addColorStop(1, vide);
+      c.fillStyle = g; c.beginPath(); c.arc(0, 0, rx, 0, Math.PI * 2); c.fill(); c.restore();
     }
   }
 }
@@ -139,7 +142,8 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   const rouges: THREE.Material[] = [];   // le tartan hors de la piste (demi-lune, elans, prolongement) : habillerLeTartan
   const solMat = (c: THREE.Color, k: number) => {
     const m = lambert(c, true); m.polygonOffset = true; m.polygonOffsetFactor = -k; m.polygonOffsetUnits = -2 * k;
-    if (c === ROUGE) rouges.push(m);
+    // (la bordure beige, l'aire des sauts et la bande lie-de-vin sont du Polytan comme la piste : le meme grain, 27/10)
+    if (c === ROUGE || c === BEIGE || c === LIE) rouges.push(m);
     return m;
   };
   const poser = (geos: THREE.BufferGeometry[], mat: THREE.Material, ombre = false) => {
@@ -345,12 +349,13 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     // (img-4, img-6 : des plaques plus vertes ou plus pelees, des touffes, la terre qui perce — une tuile de 1 024 px
     // pour 30 m : trois echelles de taches, puis les brins)
     const sec = toileSol((c, w, h) => {
-      c.fillStyle = 'rgb(140,130,88)'; c.fillRect(0, 0, w, h);
-      taches(c, w, h, hasard, 70, 60, 180, ['rgba(110,118,62,0.35)', 'rgba(168,150,104,0.35)', 'rgba(124,108,72,0.3)']);
-      taches(c, w, h, hasard, 420, 10, 45, ['rgba(98,112,56,0.35)', 'rgba(176,160,116,0.35)', 'rgba(120,100,70,0.35)', 'rgba(150,140,90,0.3)']);
-      for (let i = 0; i < 26000; i++) {
+      // (« verdis l'herbe seche, embellis le decor », l'auteur, 27/10 : une herbe d'ete verte, a peine jaunie par plaques)
+      c.fillStyle = 'rgb(98,132,58)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 70, 60, 180, ['rgba(76,118,44,0.45)', 'rgba(150,152,88,0.35)', 'rgba(112,146,62,0.4)']);
+      taches(c, w, h, hasard, 420, 10, 45, ['rgba(70,110,40,0.4)', 'rgba(140,150,84,0.3)', 'rgba(124,160,70,0.35)', 'rgba(120,112,72,0.2)']);
+      for (let i = 0; i < 40000; i++) {
         const v = hasard(), x = hasard() * w, y = hasard() * h, l = 2 + hasard() * 6, a = -Math.PI / 2 + (hasard() - 0.5) * 1.2;
-        c.strokeStyle = v < 0.4 ? 'rgba(84,98,46,0.55)' : v < 0.75 ? 'rgba(186,170,120,0.5)' : v < 0.9 ? 'rgba(110,92,60,0.5)' : 'rgba(132,150,72,0.5)';
+        c.strokeStyle = v < 0.45 ? 'rgba(58,96,34,0.55)' : v < 0.75 ? 'rgba(140,176,82,0.5)' : v < 0.9 ? 'rgba(166,160,98,0.45)' : 'rgba(96,140,56,0.5)';
         c.lineWidth = 1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke();
       }
     }, 1024);
@@ -418,8 +423,8 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   {
     const t = TRIBUNE_AMSALEM, x0 = X(t.a0) - 8, x1 = X(t.a0) + t.long + 8, yF = Y(t.n0) - 0.6;
     const herbe = toileSol((c, w, h) => {
-      c.fillStyle = 'rgb(104,124,62)'; c.fillRect(0, 0, w, h);
-      taches(c, w, h, hasard, 60, 20, 80, ['rgba(140,132,86,0.4)', 'rgba(78,110,46,0.35)', 'rgba(120,104,70,0.3)']);
+      c.fillStyle = 'rgb(92,134,56)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 60, 20, 80, ['rgba(130,160,80,0.35)', 'rgba(70,112,42,0.35)', 'rgba(140,140,86,0.2)']);
       for (let i = 0; i < 16000; i++) {
         const x = hasard() * w, y = hasard() * h, l = 2 + hasard() * 5;
         c.strokeStyle = hasard() < 0.5 ? 'rgba(66,96,36,0.55)' : 'rgba(160,160,96,0.5)';
@@ -512,7 +517,9 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     // ligne droite du 100 m ne sont pas sur toute la ligne », l'auteur, 27/10 ; img-5, img-6 : le prolongement est borde
     // des deux cotes) ; puis le bout du prolongement. (Pas de barriere cote corde : elle couperait les couloirs du
     // virage, qui passent sous le prolongement — vu au depart du 400 m)
-    troncon(D0, W + 3.3, D1 + 33, W + 3.3);
+    // (« la rambarde noire s'arrete en face des gradins, des deux cotes », l'auteur, 27/10 : ouverte devant la tribune)
+    const tA = X(TRIBUNE_AMSALEM.a0), tB = tA + TRIBUNE_AMSALEM.long;
+    troncon(D0, W + 3.3, tA, W + 3.3); troncon(tB, W + 3.3, D1 + 33, W + 3.3);
     troncon(D1 + 33, W + 3.3, D1 + 33, -0.9);
     // l'aire des sauts : son bord exterieur et ses deux bouts
     troncon(xa0 - 1, yO - 17.5, xa1 + 1, yO - 17.5);
