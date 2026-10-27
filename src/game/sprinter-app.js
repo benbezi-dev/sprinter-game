@@ -52,7 +52,10 @@
     // tartan rouge rgb(195, 70, 70), bordure beige rgb(229, 201, 160), lignes blanches. `amsalem` est
     // lu par la course 3D (amsalem-3d.ts : tribune, halle, aire des sauts, demi-lune, mats, champs).
     amsalem: {
-      skyTop: [68, 81, 167], skyBot: [82, 95, 181], stars: 0,
+      // UN CIEL DE BEAU TEMPS (« ameliore la couleur du ciel pour lui donner un aspect plus de beau temps », l'auteur,
+      // 27/10) : un bleu franc en haut, presque blanc a l'horizon, la brume legere et claire des fins d'ete (course-3d.ts
+      // en tire le degrade et la brume)
+      skyTop: [46, 122, 214], skyBot: [150, 198, 236], stars: 0,
       grass: [36, 106, 26], grassEdge: [24, 84, 16],
       trackA: [195, 70, 70], trackB: [195, 70, 70],
       lane: [246, 242, 234], kerb: [229, 201, 160],

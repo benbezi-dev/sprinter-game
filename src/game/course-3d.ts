@@ -1651,7 +1651,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     dossier: base + (ULTRA ? 'decors-ultra/champdemars/' : 'decors/champdemars/') }));
   else if (palais) pubAnim.push(construirePalais({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, env: envPalais,
     spectateur: (x, y, z, geste, face) => { if (atlasPublic) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
-  else if (amsalem) habillerLeTartan(stade, [matA, matB, ...construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, ultra: ULTRA, nuit })], base);
+  else if (amsalem) habillerLeTartan(stade, [matA, matB, ...construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, ultra: ULTRA, nuit,
+    spectateur: (x, y, z, geste, face) => { if (atlasPublic) spectateur(repere(0, 0, 0), x, y, z, geste, face); } })], base);
   else if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 

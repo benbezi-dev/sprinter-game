@@ -37,6 +37,8 @@ export type ContexteAmsalem = {
   hasard: () => number;
   /** La racine des fichiers du jeu (import.meta.env.BASE_URL). */
   base: string;
+  /** Une carte du public debout (course-3d.ts) : x, y, z, geste, cap — les joueurs du terrain de football. */
+  spectateur?: (x: number, y: number, z: number, geste: number, face: number) => void;
   /** Le palier ULTRA : la tribune pleine. */
   ultra?: boolean;
   /** La nuit : les mats eclairent. */
@@ -218,16 +220,24 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     const halle = new THREE.Group(); halle.position.set(X(-146), Y(87.5), 0); stade.add(halle);
     const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
     chargeur.load(o.base + 'modeles/salle/exterieur.glb', gl => {
-      // le bardage gris argent, comme au survol de la salle (salle-3d.ts : la texture Tripo tire au beige)
+      // le bardage gris argent, comme au survol de la salle (salle-3d.ts : la texture Tripo tire au beige) — mais pas
+      // austere (« les couleurs du stade Jesse Owens sont austeres depuis la vue du stade Amsalem », l'auteur, 27/10 ; ses
+      // photos : un toit et un bardage argent clair, presque blancs au soleil, l'aile basse en brique rouge) : la moitie
+      // de la couleur Tripo est gardee (la brique ressort), le reste remonte vers un argent clair a peine bleute
       gl.scene.traverse((m: any) => {
         if (!m.isMesh || !m.material) return;
         m.castShadow = m.receiveShadow = false;
         const mat = m.material; mat.color?.setRGB(1, 1, 1);
         mat.onBeforeCompile = (sh: any) => {
           sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>',
-            '#include <map_fragment>\ndiffuseColor.rgb = vec3(dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114))) * vec3(0.98, 1.0, 0.98);');
+            '#include <map_fragment>\n{ vec3 c = diffuseColor.rgb; float l = dot(c, vec3(0.299, 0.587, 0.114));'
+            + ' vec3 argent = vec3(0.80, 0.83, 0.87) * (0.75 + 0.45 * l);'
+            + ' float sat = max(c.r, max(c.g, c.b)) - min(c.r, min(c.g, c.b));'
+            + ' diffuseColor.rgb = mix(argent, c * 1.15, smoothstep(0.08, 0.25, sat) * 0.8); }')
+            // (le cote a l'ombre sortait noir : un tiers de sa couleur en lumiere propre, comme le bardage clair qui renvoie le jour)
+            .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * 0.35;');
         };
-        mat.customProgramCacheKey = () => 'salle-argent';
+        mat.customProgramCacheKey = () => 'salle-argent-clair-2';
         mat.needsUpdate = true;
       });
       halle.add(gl.scene);
@@ -334,9 +344,13 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     const ble = new THREE.MeshLambertMaterial({ map: chaume, side: THREE.DoubleSide });
     ble.polygonOffset = true; ble.polygonOffsetFactor = -4; ble.polygonOffsetUnits = -8;
     const cx = X(0), cy = -R;
+    // (plat sur le terrain de football et 25 m autour, OSM a de 19,4 a 136,9, n de 95,7 a 168 : souleve, le chaume le
+    // recouvrait — vu le 27/10)
+    const fx0 = X(19.4) - 25, fx1 = X(136.9) + 25, fy0 = Y(95.7) - 25, fy1 = Y(168) + 25;
     const relief = (x: number, y: number) => {
       const d = Math.hypot(x - cx, (y - cy) * 1.25), k = Math.min(1, Math.max(0, (d - 120) / 260));
-      return k * k * (3 - 2 * k) * (3.2 + 1.6 * Math.sin(x * 0.011 + 1.3) + 1.2 * Math.sin(y * 0.014 - 0.4));
+      const ex = Math.max(fx0 - x, 0, x - fx1), ey = Math.max(fy0 - y, 0, y - fy1), loin = Math.min(1, Math.hypot(ex, ey) / 40);
+      return k * k * (3 - 2 * k) * loin * (3.2 + 1.6 * Math.sin(x * 0.011 + 1.3) + 1.2 * Math.sin(y * 0.014 - 0.4));
     };
     const champ = (x0: number, y0: number, x1: number, y1: number) => {
       const lx = Math.abs(x1 - x0), ly = Math.abs(y1 - y0);
@@ -371,12 +385,13 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     // pour 30 m : trois echelles de taches, puis les brins)
     const sec = toileSol((c, w, h) => {
       // (« verdis l'herbe seche, embellis le decor », l'auteur, 27/10 : une herbe d'ete verte, a peine jaunie par plaques)
-      c.fillStyle = 'rgb(98,132,58)'; c.fillRect(0, 0, w, h);
-      taches(c, w, h, hasard, 70, 60, 180, ['rgba(76,118,44,0.45)', 'rgba(150,152,88,0.35)', 'rgba(112,146,62,0.4)']);
-      taches(c, w, h, hasard, 420, 10, 45, ['rgba(70,110,40,0.4)', 'rgba(140,150,84,0.3)', 'rgba(124,160,70,0.35)', 'rgba(120,112,72,0.2)']);
+      // (« enrichis le vert pour qu'il ne paraisse pas sec et pale », 27/10 : un vert plein, les plaques jaunies retirees)
+      c.fillStyle = 'rgb(72,138,48)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 70, 60, 180, ['rgba(56,120,38,0.45)', 'rgba(96,158,58,0.4)', 'rgba(64,132,44,0.4)']);
+      taches(c, w, h, hasard, 420, 10, 45, ['rgba(50,112,34,0.4)', 'rgba(104,166,64,0.35)', 'rgba(84,150,52,0.35)']);
       for (let i = 0; i < 40000; i++) {
         const v = hasard(), x = hasard() * w, y = hasard() * h, l = 2 + hasard() * 6, a = -Math.PI / 2 + (hasard() - 0.5) * 1.2;
-        c.strokeStyle = v < 0.45 ? 'rgba(58,96,34,0.55)' : v < 0.75 ? 'rgba(140,176,82,0.5)' : v < 0.9 ? 'rgba(166,160,98,0.45)' : 'rgba(96,140,56,0.5)';
+        c.strokeStyle = v < 0.45 ? 'rgba(42,98,30,0.55)' : v < 0.8 ? 'rgba(116,176,70,0.5)' : 'rgba(70,140,46,0.5)';
         c.lineWidth = 1; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); c.stroke();
       }
     }, 1024);
@@ -444,11 +459,11 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   {
     const t = TRIBUNE_AMSALEM, x0 = X(t.a0) - 8, x1 = X(t.a0) + t.long + 8, yF = Y(t.n0) - 0.6;
     const herbe = toileSol((c, w, h) => {
-      c.fillStyle = 'rgb(92,134,56)'; c.fillRect(0, 0, w, h);
-      taches(c, w, h, hasard, 60, 20, 80, ['rgba(130,160,80,0.35)', 'rgba(70,112,42,0.35)', 'rgba(140,140,86,0.2)']);
+      c.fillStyle = 'rgb(70,140,48)'; c.fillRect(0, 0, w, h);
+      taches(c, w, h, hasard, 60, 20, 80, ['rgba(100,164,62,0.35)', 'rgba(52,114,36,0.35)']);
       for (let i = 0; i < 16000; i++) {
         const x = hasard() * w, y = hasard() * h, l = 2 + hasard() * 5;
-        c.strokeStyle = hasard() < 0.5 ? 'rgba(66,96,36,0.55)' : 'rgba(160,160,96,0.5)';
+        c.strokeStyle = hasard() < 0.5 ? 'rgba(44,100,30,0.55)' : 'rgba(110,172,66,0.5)';
         c.beginPath(); c.moveTo(x, y); c.lineTo(x + (hasard() - 0.5) * 3, y - l); c.stroke();
       }
     }, 512);
@@ -556,7 +571,15 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     const lg = a1 - a0, lr = n1 - n0;
     const terrain = toileSol((c, w, h) => {
       for (let i = 0; i < 12; i++) { c.fillStyle = i % 2 ? '#2f8a3a' : '#349640'; c.fillRect(i * w / 12, 0, w / 12 + 1, h); }
+      // (« le stade de foot en arriere-plan n'a pas de vie », l'auteur, 27/10) : le grain du gazon synthetique, l'usure
+      // devant les buts et au rond central
+      for (let i = 0; i < 40000; i++) { c.fillStyle = hasard() < 0.5 ? 'rgba(30,96,40,0.5)' : 'rgba(80,170,84,0.45)'; c.fillRect(hasard() * w, hasard() * h, 1, 2); }
       const kx = w / lg, ky = h / lr;   // les lignes : un terrain de 105 x 68 m au milieu
+      for (const [u, v, r] of [[(lg - 105) / 2 + 6, lr / 2, 9], [lg - (lg - 105) / 2 - 6, lr / 2, 9], [lg / 2, lr / 2, 7]]) {
+        const g = c.createRadialGradient(u * kx, v * ky, 0, u * kx, v * ky, r * kx);
+        g.addColorStop(0, 'rgba(120,150,80,0.45)'); g.addColorStop(1, 'rgba(120,150,80,0)');
+        c.fillStyle = g; c.beginPath(); c.ellipse(u * kx, v * ky, r * kx, r * ky * 1.4, 0, 0, Math.PI * 2); c.fill();
+      }
       c.strokeStyle = 'rgba(255,255,255,0.92)'; c.lineWidth = 3;
       const X0 = (lg - 105) / 2, Y0 = (lr - 68) / 2;
       c.strokeRect(X0 * kx, Y0 * ky, 105 * kx, 68 * ky);
@@ -573,6 +596,60 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     for (const a of [a0 + (lg - 105) / 2, a1 - (lg - 105) / 2])
       buts.push(new THREE.BoxGeometry(0.12, 7.44, 0.12).translate(X(a), Y((n0 + n1) / 2), 2.44));
     poser(buts, lambert(0xf4f4f2));
+    // LA VIE DU TERRAIN (« le stade de foot en arriere-plan n'a pas de vie, ameliore-le », l'auteur, 27/10 ; ses photos : les
+    // filets des buts, le grillage haut derriere les buts et plus bas le long des cotes, des mats d'eclairage fins)
+    const xa = X(a0 + (lg - 105) / 2), xb = X(a1 - (lg - 105) / 2), yc = Y((n0 + n1) / 2), ya = Y(n0) + 1, yb = Y(n1) - 1;
+    {
+      // les filets : une boite ouverte de mailles blanches derriere chaque but
+      const maille = toileSol((c, w, h) => {
+        c.clearRect(0, 0, w, h); c.strokeStyle = 'rgba(245,245,240,0.85)'; c.lineWidth = 1;
+        for (let k = 0; k <= w; k += 8) { c.beginPath(); c.moveTo(k, 0); c.lineTo(k, h); c.stroke(); c.beginPath(); c.moveTo(0, k); c.lineTo(w, k); c.stroke(); }
+      }, 64);
+      maille.repeat.set(6, 2);
+      const mf = new THREE.MeshLambertMaterial({ map: maille, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+      const filets: THREE.BufferGeometry[] = [];
+      for (const [x, s] of [[xa, -1], [xb, 1]] as const) {
+        filets.push(new THREE.PlaneGeometry(7.32, 2.44).rotateX(Math.PI / 2).rotateZ(Math.PI / 2).translate(x + s * 1.6, yc, 1.22));
+        for (const n of [-3.66, 3.66]) filets.push(new THREE.PlaneGeometry(1.6, 2.44).rotateX(Math.PI / 2).translate(x + s * 0.8, yc + n, 1.22));
+        filets.push(new THREE.PlaneGeometry(1.6, 7.32).translate(x + s * 0.8, yc, 2.44));
+      }
+      poser(filets, mf);
+      // le grillage : poteaux verts tous les 3 m, un treillis vert sombre — 6 m derriere les buts, 2 m le long des cotes
+      const grille = toileSol((c, w, h) => {
+        c.clearRect(0, 0, w, h); c.strokeStyle = 'rgba(30,70,40,0.9)'; c.lineWidth = 1.2;
+        for (let k = -h; k <= w; k += 6) { c.beginPath(); c.moveTo(k, 0); c.lineTo(k + h, h); c.stroke(); c.beginPath(); c.moveTo(k + h, 0); c.lineTo(k, h); c.stroke(); }
+      }, 64);
+      const panneaux: THREE.BufferGeometry[] = [], poteaux: THREE.BufferGeometry[] = [];
+      const cloture = (x0: number, y0: number, x1: number, y1: number, H: number) => {
+        const l = Math.hypot(x1 - x0, y1 - y0), a = Math.atan2(y1 - y0, x1 - x0);
+        const g = new THREE.PlaneGeometry(l, H); const uv = g.attributes.uv as THREE.BufferAttribute;
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * l / 1.2, uv.getY(i) * H / 1.2);
+        panneaux.push(g.rotateX(Math.PI / 2).rotateZ(a).translate((x0 + x1) / 2, (y0 + y1) / 2, H / 2));
+        for (let k = 0; k <= l; k += 3) poteaux.push(new THREE.CylinderGeometry(0.04, 0.04, H, 6).rotateX(Math.PI / 2).translate(x0 + (x1 - x0) * k / l, y0 + (y1 - y0) * k / l, H / 2));
+      };
+      const fa = X(a0) + 1, fb = X(a1) - 1;
+      cloture(fa, ya, fb, ya, 2); cloture(fa, yb, fb, yb, 2); cloture(fa, ya, fa, yb, 6); cloture(fb, ya, fb, yb, 6);
+      const mg = new THREE.MeshLambertMaterial({ map: grille, transparent: true, side: THREE.DoubleSide, depthWrite: false });
+      poser(panneaux, mg); poser(poteaux, lambert(c3(40, 84, 52)));
+      // six mats d'eclairage fins, 15 m, trois de chaque cote
+      const mats: THREE.BufferGeometry[] = [], feux: THREE.BufferGeometry[] = [];
+      for (const y of [ya - 1, yb + 1]) for (const u of [0.1, 0.5, 0.9]) {
+        const x = fa + (fb - fa) * u;
+        mats.push(new THREE.CylinderGeometry(0.1, 0.16, 15, 8).rotateX(Math.PI / 2).translate(x, y, 7.5));
+        feux.push(new THREE.BoxGeometry(1.2, 0.4, 0.6).translate(x, y, 15.2));
+      }
+      poser(mats, lambert(c3(180, 184, 188))); poser(feux, lambert(c3(60, 64, 70)));
+      // les joueurs : deux equipes a l'entrainement, deux gardiens, un ballon (des cartes du public, debout)
+      if (o.spectateur) {
+        const centre = (xa + xb) / 2;
+        o.spectateur(xa + 1.2, yc, 0, 3, 0); o.spectateur(xb - 1.2, yc, 0, 3, Math.PI);
+        for (let k = 0; k < 18; k++) {
+          const x = centre + (hasard() - 0.5) * 70, y = yc + (hasard() - 0.5) * 50;
+          o.spectateur(x, y, 0, 3, hasard() * Math.PI * 2);   // (geste 3 : debout ; les autres cartes portent leur siege)
+        }
+        poser([new THREE.SphereGeometry(0.11, 12, 8).translate(centre + 6, yc - 3, 0.11)], lambert(0xf6f6f2));
+      }
+    }
     // le skatepark : son contour OSM, beton clair
     const skate = new THREE.Shape([[-42.9, 124.5], [-41.9, 99.5], [-43.4, 87], [-35.8, 82.7], [-11.5, 82], [-12.3, 109.1], [-16.8, 116.2], [-32.5, 132.1], [-39.1, 129.7]]
       .map(([a, n]) => new THREE.Vector2(X(a), Y(n))));
