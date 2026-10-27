@@ -38,6 +38,7 @@ import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
+import { construireAmsalem, TRIBUNE_AMSALEM } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
 import { construireSalle, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -764,6 +765,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const palais = !!th.palais;
   // LE CHAMP-DE-MARS (champ-de-mars-3d.ts) : pas de stade, une tribune provisoire d'un gradin, la piste tricolore
   const cdm = !!th.champDeMars;
+  // LE STADE BERNARD AMSALEM (amsalem-3d.ts) : un lieu reel — sa tribune, sa halle, ses mats ; rien du stade generique
+  const amsalem = !!th.amsalem;
   profilBas = cdm;
   // LA PISTE ARC-EN-CIEL : un couloir, une couleur pure (piste-arc-en-ciel.js en 2D)
   const arc: number[][] | null = th.arcEnCiel || null;
@@ -1268,6 +1271,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     z1 = z2 = gradins(Mp, LS, 7, 0.4, 1.2);
     yFond = 0.4 + 7 * 0.85;
     boite(lBlanc, Mp, LS / 2, yFond + 0.05, z2 + 0.5, LS, 0.08, 1.0);        // la rambarde du haut
+  } else if (amsalem) {
+    // LA TRIBUNE DU STADE BERNARD AMSALEM (OSM : 25,3 x 9,9 m, au milieu de la ligne droite, a 17 m de
+    // la piste ; img-3 : sept rangs de sieges rouges) — sa voile et le reste du lieu : amsalem-3d.ts
+    const t = TRIBUNE_AMSALEM, Mt = repere(DROITE1 - 84.39 / 2 + t.a0, t.n0 - R_CORDE, 0);
+    boite(lBlanc, Mt, t.long / 2, -0.15, 0.6, t.long, 0.25, 1.2);
+    gradins(Mt, t.long, 7, 0.4, 1.2);
   } else if (basses) {
     // les tribunes du 2D pour les stades a ciel ouvert — basses et sans toit, pour laisser voir
     // la mer et le ciel (essayees le 23/10, « montre-moi le resultat si on reduit », puis
@@ -1391,17 +1400,20 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   });
   const panneau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 1.03), new THREE.MeshBasicMaterial({ map: pub }));
   panneau.position.set(XA + LS / 2, W + 1.7, 0.55); panneau.rotation.x = Math.PI / 2; panneau.scale.x = -1;  // (monde en miroir)
+  // (pas a Amsalem : aucun panneau au bord de sa piste sur les photos)
+  if (!amsalem) {
   stade.add(panneau);
   boite(lBloc, repere(0, 0, 0), XA + LS / 2, W + 1.78, 0.55, LS, 0.12, 1.1);
+  }
   // ... et le bandeau entre les deux etages (pas a la plage : pas de tribune)
-  if (!plage && !palais && !cdm && !basses) {
+  if (!plage && !palais && !cdm && !basses && !amsalem) {
   const bandeau = new THREE.Mesh(new THREE.PlaneGeometry(LS, 0.7), new THREE.MeshBasicMaterial({ map: pubHaut }));
   bandeau.position.set(XA + LS / 2, yS + yLoges + 0.05, z1 + 0.3); bandeau.rotation.x = Math.PI / 2; bandeau.scale.x = -1;
   stade.add(bandeau);
   }
 
   // L'ECRAN GEANT, au-dessus du virage d'arrivee, tourne vers la ligne droite (pas a la plage)
-  if (!plage && !palais && !cdm) {
+  if (!plage && !palais && !cdm && !amsalem) {
   const ecran = texteCanvas((c, w, h) => {
     c.fillStyle = '#05070d'; c.fillRect(0, 0, w, h);
     c.textAlign = 'center'; c.textBaseline = 'middle';
@@ -1453,7 +1465,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }
   }, 128, 96);
   const matLampes = new THREE.MeshBasicMaterial({ map: lampes });
-  for (const [x, y] of cyber || plage || palais || cdm || espace ? [] : [[DROITE1 + 30, W + 34], [DROITE0 - 30, W + 34], [DROITE1 + 30, yOppose - 34], [DROITE0 - 30, yOppose - 34]]) {
+  for (const [x, y] of cyber || plage || palais || cdm || espace || amsalem ? [] : [[DROITE1 + 30, W + 34], [DROITE0 - 30, W + 34], [DROITE1 + 30, yOppose - 34], [DROITE0 - 30, yOppose - 34]]) {
     boite(lMetal, repere(0, 0, 0), x, y, 24, 1.4, 1.4, 48);
     const p = new THREE.Mesh(new THREE.BoxGeometry(9, 1, 6), [matLampes, matLampes, matLampes, matLampes, matLampes, matLampes]);
     p.position.set(x, y, 49); p.lookAt(44, -R_CORDE, 0); stade.add(p);
@@ -1465,7 +1477,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     ? [flotter(new THREE.MeshLambertMaterial({ side: THREE.DoubleSide, map: texteCanvas((c, w, h) => {
         [BLEU, BLANC, ROUGE].forEach((v, i) => { c.fillStyle = css(v); c.fillRect(i * w / 3, 0, w / 3, h); }); }, 96, 64) }), 0.3)]
     : coulMaillots.slice(0, 4).map(c => flotter(new THREE.MeshLambertMaterial({ color: c, side: THREE.DoubleSide })));
-  for (let i = 0, x = 4; !plage && !palais && x < LS; x += cdm ? 16 : 9, i++) {
+  for (let i = 0, x = 4; !plage && !palais && !amsalem && x < LS; x += cdm ? 16 : 9, i++) {
     boite(lMetal, Mp, x, yFond + 0.1, z2 + 5.4, 0.08, 0.08, 4);
     // une toile qui flotte (drapeau-3d.ts), le mat a gauche
     const d = new THREE.Mesh(toileDeDrapeau(1.8, 1.1), lDrap[i % lDrap.length]);
@@ -1629,6 +1641,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     dossier: base + (ULTRA ? 'decors-ultra/champdemars/' : 'decors/champdemars/') }));
   else if (palais) pubAnim.push(construirePalais({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, env: envPalais,
     spectateur: (x, y, z, geste, face) => { if (atlasPublic) spectateur(repere(0, 0, 0), x, y, z, geste, face); } }));
+  else if (amsalem) construireAmsalem({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard });
   else if (plage) construirePlage({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard, base, nuit,
     spectateur: (x, y, z, geste, face) => { if (atlasPlage) spectateur(repere(0, 0, 0), x, y, z, geste, face); } });
 
@@ -1636,12 +1649,12 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // (ni dans le vide de l'espace, ni autour d'un stade de nuit au sol noir, ni au Champ-de-Mars : ses rideaux de tilleuls)
   // LES ARBRES DU LIEU (stades-classiques-3d.ts) : platanes, palmiers, cypres — a la place des blocs
   const ctxClassique = { stade, th, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard };
-  const arbresPoses = !(luxe || cyber || plage || palais || cdm || espace) && arbresDuLieu(ctxClassique);
+  const arbresPoses = !(luxe || cyber || plage || palais || cdm || espace || amsalem) && arbresDuLieu(ctxClassique);
   if (th.piscine && !plage) pubAnim.push(riviera(ctxClassique));
   if (th.tourbillons) pubAnim.push(nuitEtoilee(ctxClassique));
   // 0.Games : son decor propre, a la place du materiel du Championnat du monde (voir poserLesPieces)
   if (stadeCle === 'mondiaux') pubAnim.push(zeroGames(ctxClassique));
-  for (let i = 0; i < (arbresPoses || luxe || cyber || plage || palais || cdm || espace || (nuit && th.projecteurs) ? 0 : 70); i++) {
+  for (let i = 0; i < (arbresPoses || luxe || cyber || plage || palais || cdm || espace || amsalem || (nuit && th.projecteurs) ? 0 : 70); i++) {
     const a = hasard() * Math.PI * 2, rx = 150 + hasard() * 40, ry = 95 + hasard() * 30;
     const x = 44 + rx * Math.cos(a), y = -R_CORDE + ry * Math.sin(a), h = 5 + hasard() * 5;
     boite(lTronc, M0, x, y, h * 0.3, 1, 1, h * 0.6);

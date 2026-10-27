@@ -47,6 +47,24 @@
       accent: [72, 172, 222], dust: [190, 196, 210],
       horizon: 14
     },
+    // LE STADE BERNARD AMSALEM, VAL-DE-REUIL (27/10) : la piste exterieure renovee par Polytan,
+    // ses couleurs relevees sur les vues aeriennes (assets-sources/stade-bernard-amsalem-polytan) —
+    // tartan rouge rgb(195, 70, 70), bordure beige rgb(229, 201, 160), lignes blanches. `amsalem` est
+    // lu par la course 3D (amsalem-3d.ts : tribune, halle, aire des sauts, demi-lune, mats, champs).
+    amsalem: {
+      skyTop: [68, 81, 167], skyBot: [82, 95, 181], stars: 0,
+      grass: [36, 106, 26], grassEdge: [24, 84, 16],
+      trackA: [195, 70, 70], trackB: [195, 70, 70],
+      lane: [246, 242, 234], kerb: [229, 201, 160],
+      tread: [176, 178, 186], riser: [132, 136, 148], roof: [240, 240, 236],
+      barrier: [232, 234, 238],
+      panels: [[195, 70, 70], [229, 201, 160], [85, 195, 239], [60, 152, 118]],
+      crowdLo: [44, 40, 54], crowdHi: [250, 242, 232],
+      accent: [195, 70, 70], dust: [229, 201, 160],
+      tonte: 'long',
+      heure: true,
+      amsalem: true
+    },
     // Le vide, et non une pelouse de nuit : `espace` le peuple d'etoiles, de
     // nebuleuses et de planetes qui defilent sous la piste, et `neon` allume
     // ses deux bords (voir decor-cosmos.js). Le fond est plus noir qu'avant

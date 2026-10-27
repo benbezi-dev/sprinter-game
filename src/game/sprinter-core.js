@@ -774,6 +774,21 @@
       names: ['Louis Beaumont', 'Adele Versant', 'Victor Lisle', 'Margaux Ormel',
               'Gaspard Roy', 'Clemence Doré', 'Hugo Fontaine'] },
 
+    // LE STADE BERNARD AMSALEM, VAL-DE-REUIL (27/10). La piste exterieure, a cote de la halle
+    // Jesse Owens : 100, 200 et 400 m en 3D (amsalem-3d.ts). « Est-ce que tu l'as aussi ajoute
+    // dans le jeu ? Pour le 100 m, 200 m, 400 m en 3D » (l'auteur, 27/10). Une petite tribune :
+    // un meeting regional, peu de monde.
+    { cle: 'amsalem', name: 'Stade Bernard Amsalem', theme: 'amsalem',
+      pool: 'sprint',
+      horsSerie: true,
+      brancheTest: true,
+      noms: ['Stade Bernard Amsalem', 'Bernard Amsalem Stadium'],
+      foule: 0.5,
+      plateau: { '100': [10.40, 10.90], '200': [21.00, 22.20],
+                 '400': [47.00, 49.50], '4x100': [40.50, 42.50] },
+      names: ['Rayan Lefort', 'Mathis Carre', 'Elias Boyer', 'Nolan Petit',
+              'Kylian Masson', 'Adam Guerin', 'Ethan Roche'] },
+
     // LE STADE COUVERT JESSE OWENS, VAL-DE-REUIL (26/10). La piste couverte (piste-salle.js,
     // salle-3d.ts) : on n'y court que ses epreuves, 60 m, 200 m et 400 m en salle — le menu ne
     // propose qu'elles quand ce stade est choisi (ModePanels). « Le stade n'apparait pas, la
