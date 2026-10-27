@@ -1578,7 +1578,10 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // rendu-premium.js), c'est la lumiere — une rangee de lampes tres blanches sous la rive du toit,
   // des nappes de lumiere sur la piste tous les seize metres, cote exterieur (le couloir 1 reste
   // plus sombre), et le halo des panneaux LED au sol. Tout peint en addition, aucune lumiere de plus.
-  if (nuit && th.projecteurs && !luxe && !cyber && !plage && !palais && !cdm && !espace) {
+  // (pas a Amsalem : la nuit, l'heure du jour lui donne `projecteurs` et ce bloc posait les lampes des tribunes generiques
+  // — des barres blanches sur la piste —, des nappes en stries sur les couloirs et leur eblouissement ; elle a sa lumiere,
+  // la lueur de ses quatre mats, amsalem-3d.ts. Vu le 27/10 au soir)
+  if (nuit && th.projecteurs && !luxe && !cyber && !plage && !palais && !cdm && !espace && !amsalem) {
     const tache = texteCanvas((c, w, h) => {
       const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
       // (24/10) un centre moins blanc et un fondu plus large, a moitie moins fort : sur une piste claire,

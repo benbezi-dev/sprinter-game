@@ -200,7 +200,38 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   // les bacs a sable, au bout des couloirs d'elan, et les tapis bleus (img-3 : deux bacs par couloir, deux tapis)
   poser([[-DEMI + 6, yO - 5.7], [DEMI - 10, yO - 5.7], [-DEMI + 22, yO - 10.2], [DEMI - 18, yO - 10.2]]
     .map(([a, y]) => rect(X(a) - 4.5, y - 1.4, X(a) + 4.5, y + 1.4, 0.009)), solMat(SABLE, 5));
-  poser([[DEMI - 6, yO - 13.7], [-DEMI + 22, yO - 13.7]].map(([a, y]) => rect(X(a) - 3, y - 2.5, X(a) + 3, y + 2.5, 0.011)), solMat(BLEU, 6));
+  // LES SAUTOIRS DE PERCHE (« les taches bleues sont les sautoirs de saut a la perche », l'auteur, 27/10 ; ses vues aeriennes :
+  // deux grands tapis bleus bordes de rouge sur le couloir d'elan exterieur, leurs deux montants blancs) : le tapis en volume,
+  // 6 x 5 m sur 0,8 m, dessus bleu, flancs rouges ; devant, de part et d'autre du butoir, deux tapis bas ; le butoir gris
+  // dans le couloir ; deux montants de 5 m et la barre a 4,6 m. Les deux sautoirs se font face et partagent le couloir.
+  {
+    const bleu = new THREE.MeshStandardMaterial({ color: BLEU, roughness: 0.7 }), rouge = new THREE.MeshStandardMaterial({ color: c3(200, 40, 46), roughness: 0.7 });
+    const blanc = new THREE.MeshStandardMaterial({ color: 0xf2f2ee, roughness: 0.4, metalness: 0.3 }), gris = lambert(c3(120, 122, 126));
+    const corps: THREE.BufferGeometry[] = [], dessus: THREE.BufferGeometry[] = [], montants: THREE.BufferGeometry[] = [], butoirs: THREE.BufferGeometry[] = [];
+    // [a, y, sens] : sens = cote d'ou l'on arrive (le butoir est de ce cote)
+    for (const [a, y, sens] of [[DEMI - 6, yO - 13.7, -1], [-DEMI + 22, yO - 13.7, 1]] as const) {
+      const x = X(a);
+      corps.push(new THREE.BoxGeometry(6, 5, 0.75).translate(x, y, 0.375));
+      dessus.push(new THREE.BoxGeometry(5.9, 4.9, 0.06).translate(x, y, 0.78));
+      // les deux tapis avant, plus bas, de part et d'autre du butoir
+      for (const dy of [-1.55, 1.55]) {
+        corps.push(new THREE.BoxGeometry(1.6, 1.9, 0.45).translate(x + sens * 3.8, y + dy, 0.225));
+        dessus.push(new THREE.BoxGeometry(1.5, 1.8, 0.05).translate(x + sens * 3.8, y + dy, 0.47));
+      }
+      // le butoir : une boite grise enfoncee dans le couloir, devant le tapis
+      butoirs.push(new THREE.BoxGeometry(1.0, 0.6, 0.04).translate(x + sens * 4.9, y, 0.02));
+      // les montants, sur leurs socles, au bord avant du tapis ; la barre entre eux
+      for (const dy of [-2.7, 2.7]) {
+        montants.push(new THREE.CylinderGeometry(0.05, 0.05, 5, 8).rotateX(Math.PI / 2).translate(x + sens * 2.6, y + dy, 2.5));
+        montants.push(new THREE.BoxGeometry(0.5, 0.5, 0.12).translate(x + sens * 2.6, y + dy, 0.06));
+      }
+      montants.push(new THREE.CylinderGeometry(0.02, 0.02, 5.4, 6).translate(x + sens * 2.6, y, 4.6));
+    }
+    poser(corps, rouge, true); poser(dessus, bleu, true); poser(montants, blanc, true); poser(butoirs, gris);
+    // le couloir d'elan de la perche : le troisieme couloir rouge, le long du bord exterieur de l'aire, d'un bout a l'autre
+    // (vue aerienne de l'auteur depuis les sauts : les deux tapis sont dessus)
+    poser([rect(xa0 + 1.5, yO - 13.7 - 0.61, xa1 - 1.5, yO - 13.7 + 0.61, 0.007)], solMat(ROUGE, 4));
+  }
 
   // --- LA DEMI-LUNE (img-3, img-4) : le segment de l'aire interieure au-dela du terrain (52,5 m du centre),
   // dans le virage de l'arrivee, rouge — son coin du cote oppose a la tribune reste en gazon (les lancers) ---
