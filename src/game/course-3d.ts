@@ -1519,11 +1519,29 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   }
   for (const y of [-0.9, W + 0.9]) boite(lMetal, M0, 100, y, 1.6, 0.18, 0.18, 3.2);
   boite(lBlanc, M0, 100, W / 2, 3.25, 0.25, W + 1.8, 0.3);
-  const chrono = texteCanvas((c, w, h) => {
+  // LE CHRONO DE L'ARRIVEE TOURNE (« les panneaux de chronos de tous les stades sauf le Champ-de-Mars ne se
+  // declenchent pas », l'auteur, 27/10 : il etait peint une fois, « 0.00 ») : la regle de l'horloge du
+  // Champ-de-Mars (decor-champ-de-mars.js, chronoAffiche) — le temps de course, fige sur celui du vainqueur
+  // des qu'il a passe la ligne. Repeint seulement quand le centieme change.
+  const ecrireChrono = (c: CanvasRenderingContext2D, w: number, h: number, s: string) => {
     c.fillStyle = '#0a0a0a'; c.fillRect(0, 0, w, h);
     c.fillStyle = '#ffd23a'; c.font = `700 ${h * 0.7}px ui-monospace, monospace`;
-    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('0.00', w / 2, h / 2);
-  }, 256, 96);
+    c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(s, w / 2, h / 2);
+  };
+  const chrono = texteCanvas((c, w, h) => ecrireChrono(c, w, h, '0.00'), 256, 96);
+  let chronoVu = '0.00';
+  pubAnim.push(() => {
+    const G = (globalThis as any).SprinterApp?.G;
+    if (!G) return;
+    let vainqueur = Infinity;
+    for (const r of G.runners || []) if (r.finished && r.finishTime < vainqueur) vainqueur = r.finishTime;
+    const s = (vainqueur < Infinity ? vainqueur : G.state === 'race' ? (G.elapsed || 0) : 0).toFixed(2);
+    if (s === chronoVu) return;
+    chronoVu = s;
+    const cv = chrono.image as HTMLCanvasElement;
+    ecrireChrono(cv.getContext('2d')!, cv.width, cv.height, s);
+    chrono.needsUpdate = true;
+  });
   const ch = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 0.9), new THREE.MeshBasicMaterial({ map: chrono }));
   ch.position.set(103, W + 1.2, 1.4); ch.rotation.set(Math.PI / 2, -Math.PI / 2, 0); ch.scale.x = -1;
   stade.add(ch);

@@ -374,7 +374,7 @@ export function construirePalais(o: ContextePalais) {
     const k = 1.25;
     lLustre.poser(place(p.x, p.y, p.z, 0, k, k, k)); lCristal.poser(place(p.x, p.y, p.z, 0, k, k, k)); lBougie.poser(place(p.x, p.y, p.z, 0, k, k, k));
     const s = ajoute(new THREE.Sprite(matHalo)); s.position.set(p.x, p.y, p.z + 0.4); s.scale.set(6, 6, 1);
-    flaques.poser(place(p.x, p.y, 0.008, 0, 13, 13, 1));
+    flaques.poser(place(p.x, p.y, 0.06, 0, 13, 13, 1));   // (6 cm : a 8 mm, elle clignotait sur le tapis et la piste — course-3d.ts, LE SOL EN COUCHES)
   }
 
   // --- LES TABLES DE GALA, entre la piste et les murs ---------------------------------
@@ -567,7 +567,7 @@ export function construirePalais(o: ContextePalais) {
       if (Math.abs(x - xDais) < 7 && Math.abs(y - yDais) < 5) continue;
       for (const l of [lGirandole, lCierge, lFlammeG]) l.poser(place(x, y, 0, a));
       const s = ajoute(new THREE.Sprite(matHalo)); s.position.set(x, y, 1.95); s.scale.set(1.1, 1.1, 1);
-      flaques.poser(place(x, y, 0.009, 0, 5, 5, 1));
+      flaques.poser(place(x, y, 0.06, 0, 5, 5, 1));
     }
   }
 

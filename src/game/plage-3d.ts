@@ -114,13 +114,16 @@ export function construirePlage(o: ContextePlage) {
     bande(R - 0.8 - (i + 1) * 0.22, R - 0.8 - i * 0.22, mat, 0.0005);
     bande(R + W + 0.8 + i * 0.22, R + W + 0.8 + (i + 1) * 0.22, mat, 0.0005);
   }
-  const depots = new Lot(new THREE.CircleGeometry(1, 14), new THREE.MeshLambertMaterial({ color: c3(232, 202, 150) }));
+  // (« le sable sur le couloir exterieur clignote en permanence », l'auteur, 27/10 : a 6 mm du tartan, sans
+  // decalage de profondeur, ils se battaient avec lui — a 2 cm et tires en avant, comme les lumieres au sol)
+  const matDepot = new THREE.MeshLambertMaterial({ color: c3(232, 202, 150), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+  const depots = new Lot(new THREE.CircleGeometry(1, 14), matDepot);
   for (let i = 0; i < 700; i++) {
     const dehors = hasard() < 0.6, mord = hasard() * hasard() * 0.9;
     const r = dehors ? R + W + 0.8 - mord : R - 0.8 + mord;
     const t = hasard(), p = ovale(r, t), q = ovale(r, t + 0.0005);
     const cap = Math.atan2(q[1] - p[1], q[0] - p[0]);
-    depots.poser(place(p[0], p[1], 0.006, cap + (hasard() - 0.5) * 0.25, 0.5 + hasard() * 2, 0.1 + hasard() * 0.3, 1));
+    depots.poser(place(p[0], p[1], 0.02, cap + (hasard() - 0.5) * 0.25, 0.5 + hasard() * 2, 0.1 + hasard() * 0.3, 1));
   }
   depots.finir(stade);
 
@@ -454,8 +457,8 @@ export function construirePlage(o: ContextePlage) {
       f.position.copy(bout).add(sol).multiplyScalar(0.5);
       f.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), bout.clone().sub(sol).normalize());
       ajoute(f);
-      const n = new THREE.Mesh(new THREE.PlaneGeometry(26, 20), matNappe); n.position.set(sol.x, sol.y, 0.02); ajoute(n);
-      const n2 = new THREE.Mesh(new THREE.PlaneGeometry(30, 22), matNappe); n2.position.set(g.position.x, (y + W) / 2 + 6, 0.02); ajoute(n2);
+      const n = new THREE.Mesh(new THREE.PlaneGeometry(26, 20), matNappe); n.position.set(sol.x, sol.y, 0.04); ajoute(n);   // (au-dessus des depots de sable, 2 cm : voir plus haut)
+      const n2 = new THREE.Mesh(new THREE.PlaneGeometry(30, 22), matNappe); n2.position.set(g.position.x, (y + W) / 2 + 6, 0.04); ajoute(n2);
     }
   }
   if (guirlandes.length) {
