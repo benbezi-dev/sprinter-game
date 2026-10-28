@@ -38,7 +38,7 @@ import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
-import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM } from './amsalem-3d';
+import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM, OCCULTANTS } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
 import { construireSalle, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -196,6 +196,9 @@ let toile: HTMLCanvasElement, vignetteDe: HTMLDivElement | null = null;
 let visible = false;
 let nCouloirs = 8;
 const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
+const BORD_CADRE = 0.82, _joueur = new THREE.Vector3(), _viseCadre = new THREE.Vector3(), _ndc = new THREE.Vector3();
+const _rayon = new THREE.Ray(), _touche = new THREE.Vector3();
+let corrCadre = 0, amsalemActif = false;
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
 const soleilDecal = new THREE.Vector3(-10, -18, 30), solCam = new THREE.Vector3(), _solVoulu = new THREE.Vector3();
@@ -780,6 +783,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const cdm = !!th.champDeMars;
   // LE STADE BERNARD AMSALEM (amsalem-3d.ts) : un lieu reel — sa tribune, sa halle, ses mats ; rien du stade generique
   const amsalem = !!th.amsalem;
+  amsalemActif = amsalem;
   // ... son EDITION CHAMPIONNAT DE FRANCE (THEMES.amsalemFrance) : panneaux LED, ecran geant, arche, mats allumes
   const championnat = amsalem && !!th.championnat;
   profilBas = cdm;
@@ -2620,6 +2624,35 @@ export function rendre(App: any, dt: number) {
     if (plan2D && etire2D !== 1) {
       camera.projectionMatrix.elements[0] *= etire2D;
       camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+    }
+    // LE JOUEUR RESTE DANS L'IMAGE (« sur certains plans le joueur n'est plus dans la camera a Jesse Owens et au stade
+    // Bernard Amsalem », l'auteur, 28/10 ; mesure : .playwright-mcp/cadre*.js). Deux garde-fous, tous plans, tous stades :
+    // 1. s'il s'approche du bord (le rail de la salle, en sortie de virage), la camera tourne vers lui, en douceur ;
+    // 2. un mat, un arbre ou une cage d'Amsalem entre la camera et lui est masque le temps de passer.
+    // (en course seulement : pendant le decompte, la presentation d'une vedette vise un autre coureur, voir viseCamera.cri)
+    if (fo === 0 && G.state === 'race') {
+      _joueur.set(p[0], -p[1], 1);
+      camera.updateMatrixWorld();
+      let voulu = 0;
+      for (let k = 0; k <= 4; k++) {
+        const a = k / 4;
+        if (a > 0) { _viseCadre.lerpVectors(camVise, _joueur, a); camera.lookAt(_viseCadre); camera.updateMatrixWorld(); }
+        _ndc.copy(_joueur).project(camera);
+        voulu = a;
+        if (Math.abs(_ndc.x) <= BORD_CADRE && Math.abs(_ndc.y) <= BORD_CADRE) break;
+      }
+      corrCadre += (voulu - corrCadre) * Math.min(1, (dt || 0.016) * 6);
+      _viseCadre.lerpVectors(camVise, _joueur, corrCadre); camera.lookAt(_viseCadre); camera.updateMatrixWorld();
+    } else corrCadre = 0;
+    if (OCCULTANTS.length && amsalemActif) {
+      const vers = _joueur.set(p[0], -p[1], 1).sub(camera.position), loin = vers.length();
+      _rayon.set(camera.position, vers.normalize());
+      for (const o of OCCULTANTS) {
+        if (!o.parent) continue;
+        const b = (o.userData.boite ||= new THREE.Box3().setFromObject(o)) as THREE.Box3;
+        const t = _rayon.intersectBox(b, _touche);
+        o.visible = !(t && t.distanceTo(camera.position) < loin - 0.6);
+      }
     }
     // LA ZONE D'OMBRE AVANCE PAR PAS D'UN TEXEL : collee au joueur au pixel pres, ses bords
     // « nageaient » a chaque image — le sable de la Plage Paradis clignotait sous les panneaux

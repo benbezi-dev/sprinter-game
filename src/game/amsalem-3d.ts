@@ -142,7 +142,12 @@ export function habillerLeTartan(stade: THREE.Group, mats: THREE.Material[], bas
   });
 }
 
+/** LES PIECES QUI PEUVENT CACHER LE JOUEUR (mats, arbres, cages) : course-3d.ts les masque quand elles passent entre
+ *  la camera et lui (« sur certains plans le joueur n'est plus dans la camera », l'auteur, 28/10). */
+export const OCCULTANTS: THREE.Object3D[] = [];
+
 export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
+  OCCULTANTS.length = 0;
   const { stade, W, R, D0, D1, hasard } = o;
   const X = (a: number) => D1 - DEMI + a, Y = (n: number) => n - R;
   const lambert = (c: THREE.Color | number, double = false) => new THREE.MeshLambertMaterial({ color: c, side: double ? THREE.DoubleSide : THREE.FrontSide });
@@ -167,11 +172,12 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
    * [x, y, cap, echelle] ; les clones partagent geometrie et matiere. Sans le fichier : `repli` (la forme simple).
    */
   const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
-  const piece = (nom: string, places: [number, number, number, number][], repli: () => void, forme = [1, 1, 1]) => {
+  const piece = (nom: string, places: [number, number, number, number][], repli: () => void, forme = [1, 1, 1], occulte = false) => {
     chargeur.load(o.base + 'modeles/amsalem/' + nom, gl => {
       gl.scene.traverse((m: any) => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = true; } });
       for (const [x, y, cap, k] of places) {
         const c = gl.scene.clone(); c.position.set(x, y, 0); c.rotation.z = cap; c.scale.set(k * forme[0], k * forme[1], k * forme[2]); stade.add(c);
+        if (occulte) OCCULTANTS.push(c);
       }
     }, undefined, repli);
   };
@@ -366,7 +372,7 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
         tetes.push(new THREE.BoxGeometry(2.2, 0.5, 1.4).translate(x, y, 24.3));
       }
       poser(geos, lambert(c3(170, 174, 180))); poser(tetes, lambert(c3(60, 64, 72)));
-    });
+    }, undefined, true);
   }
 
   // --- LES ARBRES (img-3 : un rideau d'arbres derriere la tribune, entre elle et le terrain synthetique ;
@@ -386,7 +392,7 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
         cimes.push(new THREE.IcosahedronGeometry(1, 1).scale(2.6, 2.6, h * 0.36).translate(x, y, h * 0.62));
       }
       poser(troncs, lambert(0x5b4030)); poser(cimes, lambert(c3(46, 86, 40)), true);
-    });
+    }, undefined, true);
   }
 
   // --- LA HAIE ET LES CHAMPS (img-4, img-6 : une haie ferme le cote des sauts et le bout de la demi-lune,
@@ -518,13 +524,13 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     const cx = X(-DEMI - 19), cy = Y(17), versTerrain = Math.atan2(Y(0) - cy, X(0) - cx);
     // (CylinderGeometry couchee : l'angle t regarde la direction t - 90 degres ; l'ouverture vers le terrain)
     // la cage Tripo (7,5 m) ; sa face ouverte regarde -y dans son repere : on la tourne vers le terrain
-    piece('cage.glb', [[cx, cy, versTerrain + Math.PI / 2, 1]], () => cage(cx, cy, versTerrain + Math.PI / 2, 3.6, 7.5));
+    piece('cage.glb', [[cx, cy, versTerrain + Math.PI / 2, 1]], () => cage(cx, cy, versTerrain + Math.PI / 2, 3.6, 7.5), undefined, true);
     cercle(cx, cy, 1.25, versTerrain);
     // le coin de la demi-lune : deux cercles, le premier dans sa petite cage
     const p1x = X(55), p1y = Y(-22), p2x = X(62), p2y = Y(-18), versD = Math.atan2(Y(-6) - p1y, X(48) - p1x);
     cercle(p1x, p1y, 1.07, versD);
     // sa cage : la meme que celle du marteau, plus petite (img-6 : une cage noire aux longs bras, a hauteur d'homme et demi)
-    piece('cage.glb', [[p1x, p1y, versD + Math.PI / 2, 0.5]], () => cage(p1x, p1y, versD + Math.PI / 2, 2.6, 3.2));
+    piece('cage.glb', [[p1x, p1y, versD + Math.PI / 2, 0.5]], () => cage(p1x, p1y, versD + Math.PI / 2, 2.6, 3.2), undefined, true);
     cercle(p2x, p2y, 1.07, Math.atan2(Y(-6) - p2y, X(48) - p2x));
   }
 
