@@ -1053,9 +1053,20 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // (hors de la courbe ACES : elle delavait les teintes pures en pastel — « trop pales », 23/10)
     const matP = arc ? new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.DoubleSide, toneMapped: false })
       : new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide });
+    // LE FONDU DE L'ARC-EN-CIEL (« je veux que la piste arc-en-ciel ressemble a la piste avec Mario, avec un fondu des
+    // couleurs ; la notre est trop seche », l'auteur, 28/10) : chaque couloir est pur en son milieu et se fond dans ses
+    // voisins vers ses bords — quatre bandes par couloir, la teinte suit le rayon (pas la course)
+    const rayonEn = (x: number, y: number) => x >= DROITE0 && x <= DROITE1 ? Math.abs(y + R_CORDE)
+      : Math.hypot(x - (x > DROITE1 ? DROITE1 : DROITE0), y + R_CORDE);
+    const fondu = (x: number, y: number) => {
+      const t = Math.min(nCouloirs - 1, Math.max(0, (rayonEn(x, y) - R_CORDE) / LANE_W - 0.5));
+      const i = Math.floor(t), f = t - i, e = f * f * (3 - 2 * f), a = arc![i % arc!.length], b = arc![Math.min(nCouloirs - 1, i + 1) % arc!.length];
+      return a.map((v, j) => v + (b[j] - v) * e);
+    };
     for (let k = 0; k < nCouloirs; k++) {
       const r0 = R_CORDE + k * LANE_W - (k === 0 ? 0.8 : 0), r1 = R_CORDE + (k + 1) * LANE_W + (k === nCouloirs - 1 ? 0.8 : 0);
-      bande(r0, r1, 0, arc ? () => arc[k % arc.length] : (x, y) => tricolore(PISTE, avance(x, y)), matP);
+      if (arc) for (let q = 0; q < 4; q++) bande(r0 + (r1 - r0) * q / 4, r0 + (r1 - r0) * (q + 1) / 4, 0, fondu, matP);
+      else bande(r0, r1, 0, (x, y) => tricolore(PISTE, avance(x, y)), matP);
     }
     if (cdm) for (let k = 0; k <= nCouloirs; k++) {
       const r = R_CORDE + k * LANE_W, e = k === 0 || k === nCouloirs ? 0.05 : 0.03;
@@ -1071,7 +1082,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     for (let k = 1; k < nCouloirs; k += 2) plan(LD, LANE_W, matB, XD, y0 + (k + 0.5) * LANE_W, 0.001);
     for (let k = 0; k <= nCouloirs; k++) plan(LD, largeL, ligne, XD, y0 + k * LANE_W, 0.002);
   }
-  if (arc) for (const y0 of [0, yOppose]) for (let k = 0; k <= nCouloirs; k++) plan(LD, largeL, ligne, XD, y0 + k * LANE_W, 0.002);
+  // (sur le fondu, les lignes de couloir en filets de lumiere translucides ; departs et arrivee restent nets, `ligne`)
+  const ligneCouloir = arc ? Object.assign(ligne.clone(), { transparent: true, opacity: 0.32, depthWrite: false }) : ligne;
+  if (arc) for (const y0 of [0, yOppose]) for (let k = 0; k <= nCouloirs; k++) plan(LD, largeL, ligneCouloir, XD, y0 + k * LANE_W, 0.002);
   // les virages : des anneaux autour des deux centres, sur la pelouse
   for (const [xc, debut] of [[DROITE1, -Math.PI / 2], [DROITE0, Math.PI / 2]] as const) {
     const anneau = (r0: number, r1: number, mat: THREE.Material, z: number) => {
@@ -1082,7 +1095,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     };
     if (!peinte) anneau(R_CORDE - 0.8, R_CORDE + W + 0.8, matA, 0);
     for (let k = 1; !peinte && k < nCouloirs; k += 2) anneau(R_CORDE + k * LANE_W, R_CORDE + (k + 1) * LANE_W, matB, 0.001);
-    for (let k = 0; !cdm && k <= nCouloirs; k++) if (palais) anneau(R_CORDE + k * LANE_W - largeL / 2, R_CORDE + k * LANE_W + largeL / 2, ligne, 0.002); else anneau(R_CORDE + k * LANE_W - largeL / 2, R_CORDE + k * LANE_W + largeL / 2, ligne, 0.002);
+    for (let k = 0; !cdm && k <= nCouloirs; k++) anneau(R_CORDE + k * LANE_W - largeL / 2, R_CORDE + k * LANE_W + largeL / 2, ligneCouloir, 0.002);
   }
   // LA LISSE DE CORDE (`kerb`) : un filet saillant au bord interieur du couloir 1 — blanc au
   // stade de jour, vert a 0.Games, turquoise a la Riviera, or a la Nuit etoilee
