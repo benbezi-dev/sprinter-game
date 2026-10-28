@@ -304,7 +304,7 @@ function murAnneau(r: number, z0: (p: PointTour) => number, z1: (p: PointTour) =
 
 /** Les sieges de la coursive, pour y asseoir le public (placesDuPublic). */
 const sieges3: { x: number; y: number; z: number; face: number }[] = [];
-export type ContexteSalle = { stade: THREE.Group; renderer: THREE.WebGLRenderer | null; base: string };
+export type ContexteSalle = { stade: THREE.Group; renderer: THREE.WebGLRenderer | null; base: string; nuit?: boolean };
 
 /**
  * Construire la salle dans `stade`. Rend l'animation de la salle (rien a animer pour
@@ -775,7 +775,10 @@ export function construireSalle(ctx: ContexteSalle) {
   }) });
   // LES MURS DE LA HALLE, ses facades, et le plafond de bois sur des fermes d'acier
   const L = S + 2 * LONG, X0 = -S - LONG, X1 = LONG, Y0 = -RS - LARGE, Y1 = -RS + LARGE_T;
-  const ciel = new THREE.MeshStandardMaterial({ color: 0xe8f4ff, emissive: 0xcfe6ff, emissiveIntensity: 0.9, roughness: 0.1 });
+  // (la nuit, les vitres donnent sur le noir du dehors : un bleu nuit a peine lumineux)
+  const ciel = ctx.nuit
+    ? new THREE.MeshStandardMaterial({ color: 0x0c1424, emissive: 0x0a1428, emissiveIntensity: 0.6, roughness: 0.1 })
+    : new THREE.MeshStandardMaterial({ color: 0xe8f4ff, emissive: 0xcfe6ff, emissiveIntensity: 0.9, roughness: 0.1 });
   ciel.name = 'vitrage';
   const montant = new THREE.MeshStandardMaterial({ color: 0x3a3f46, roughness: 0.5, metalness: 0.6 });
   const pan = (lx: number, ly: number, x: number, y: number, z0: number, z1: number, mat: THREE.Material) => {
@@ -953,8 +956,10 @@ export function construireSalle(ctx: ContexteSalle) {
     }
   };
   if (!sansCuisson) {
-    appliquer('lumiere-coque.jpg', cuites.coque, true);
-    appliquer('lumiere-sol.jpg', cuites.sol, false);
+    // la nuit : les plafonniers seuls, vitres eteintes (cuire_lumiere.py, NUIT=1)
+    const n = ctx.nuit ? '-nuit' : '';
+    appliquer(`lumiere-coque${n}.jpg`, cuites.coque, true);
+    appliquer(`lumiere-sol${n}.jpg`, cuites.sol, false);
   }
 
   // L'EXTERIEUR (Tripo, d'apres la vue aerienne du ministere des Sports ; tools/blender/salle/exterieur_tripo.py) :
@@ -1139,3 +1144,5 @@ function exporterPourBlender(g: THREE.Object3D) {
 
 /** Les lumieres de la salle : un jour d'hiver par les vitres, les plafonniers, aucune ombre dure. */
 export const SALLE_LUMIERE = { fond: 0xdde4ec, brume: 0xd4dce6, hemiCiel: 0xf4f7ff, hemiSol: 0x8a8478, hemi: 1.55, soleil: 1.25, soleilCouleur: 0xfff6ea };
+/** La nuit (28/10, la video du club : « lumiere de jour et de nuit ») : le noir derriere les vitres, les plafonniers seuls. */
+export const SALLE_NUIT = { fond: 0x05080f, brume: 0x0a0e18, hemiCiel: 0xfff1dc, hemiSol: 0x2a2620, hemi: 1.0, soleil: 0.9, soleilCouleur: 0xfff0d8 };

@@ -18,6 +18,9 @@ import bpy, sys, os, math
 import numpy as np
 
 src, dossier = sys.argv[sys.argv.index('--') + 1:][:2]
+# NUIT=1 : les vitres eteintes, le dehors noir, les plafonniers seuls -> lumiere-*-nuit.jpg (28/10)
+NUIT = os.environ.get('NUIT') == '1'
+SUFFIXE = '-nuit' if NUIT else ''
 # les cotes de salle-3d.ts (piste-salle.js)
 # (les virages allonges, 26/10 : 35 m de ligne droite ; demi-longueur des virages 23,534 m, piste-salle.js)
 RS, S = 17.2, 35.0
@@ -50,7 +53,7 @@ sc.cycles.samples = int(os.environ.get('ECHANTILLONS', '160'))
 sc.cycles.max_bounces = 4
 w = bpy.data.worlds.new('dehors'); w.use_nodes = True
 w.node_tree.nodes['Background'].inputs[0].default_value = (0.55, 0.62, 0.72, 1)
-w.node_tree.nodes['Background'].inputs[1].default_value = 0.15
+w.node_tree.nodes['Background'].inputs[1].default_value = 0.005 if NUIT else 0.15
 sc.world = w
 
 # LE JOUR PAR LES VITRAGES : les vitres emettent une lumiere d'hiver, blanc bleute
@@ -58,7 +61,7 @@ for m in bpy.data.materials:
     if m.name.startswith('vitrage') and m.use_nodes:
         b = next(n for n in m.node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
         b.inputs['Emission Color'].default_value = (0.82, 0.9, 1.0, 1)
-        b.inputs['Emission Strength'].default_value = 9.0
+        b.inputs['Emission Strength'].default_value = 0.0 if NUIT else 9.0
 # LES PLAFONNIERS : une source carree sous chaque ferme (la grille de salle-3d.ts)
 x = X0 + 7.5
 while x < X1:
@@ -91,7 +94,7 @@ def cuire(cibles, image):
     sc.render.bake.margin = 4; sc.render.bake.use_clear = True
     bpy.ops.object.bake(type='DIFFUSE')
 
-def enregistrer(image, chemin, cible_p95=0.85):
+def enregistrer(image, chemin, cible_p95=0.7 if NUIT else 0.85):
     """Floute un peu le bruit, cale l'exposition (le 95e centile a cible_p95), passe en sRGB, ecrit un JPEG."""
     w_, h_ = image.size
     px = np.array(image.pixels[:], dtype=np.float32).reshape(h_, w_, 4)[..., :3]
@@ -115,7 +118,7 @@ os.makedirs(dossier, exist_ok=True)
 coque = objets('coque')
 img = bpy.data.images.new('coque', ATLAS, ATLAS, float_buffer=True)
 cuire(coque, img)
-enregistrer(img, os.path.join(dossier, 'lumiere-coque.jpg'))
+enregistrer(img, os.path.join(dossier, f'lumiere-coque{SUFFIXE}.jpg'))
 
 # 2. LE SOL ET LA PISTE, vus de dessus : sur une doublure plate (le sol du jeu, cache pendant la cuisson)
 sol = objets('sol')
@@ -132,5 +135,5 @@ mat = bpy.data.materials.new('doublure'); mat.use_nodes = True; me.materials.app
 # hors de l'anneau ; l'anneau prend la lumiere du sol au meme endroit
 img2 = bpy.data.images.new('sol', SOL_L, SOL_H, float_buffer=True)
 cuire([d], img2)
-enregistrer(img2, os.path.join(dossier, 'lumiere-sol.jpg'))
+enregistrer(img2, os.path.join(dossier, f'lumiere-sol{SUFFIXE}.jpg'))
 print('FINI')

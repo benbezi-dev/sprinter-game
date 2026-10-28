@@ -25,6 +25,8 @@ export const FICHIERS = {
   'modeles/salle/textures/bardage-relief.jpg': { moy: [128, 128, 244], l: 1024, h: 1024 },
   'modeles/salle/lumiere-coque.jpg': { moy: [124, 123, 125], l: 2048, h: 2048 },
   'modeles/salle/lumiere-sol.jpg': { moy: [166, 162, 156], l: 2048, h: 1316 },
+  'modeles/salle/lumiere-coque-nuit.jpg': { moy: [110, 108, 110], l: 2048, h: 2048 },
+  'modeles/salle/lumiere-sol-nuit.jpg': { moy: [152, 146, 141], l: 2048, h: 1316 },
 } satisfies Record<string, Fichier>;
 export type NomStable = keyof typeof FICHIERS;
 

@@ -122,7 +122,7 @@ def exporter(h, rig, chemin):
     V['miroir'](h)   # la meme convention que les vedettes (vedette_tripo.py, LE MIROIR)
     bpy.ops.export_scene.gltf(filepath=chemin, export_format='GLB', use_selection=True,
                               use_active_scene=True, export_skins=True, export_animations=False,
-                              export_morph=False, export_yup=True, export_apply=False,
+                              export_morph=True, export_yup=True, export_apply=False,
                               export_attributes=False, export_def_bones=False,
                               export_meshopt_compression_enable=True)
     print('GLB :', os.path.getsize(chemin), 'octets')
