@@ -1,0 +1,34 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — les postures des exercices</title>
+<style>body{margin:0;background:#cfe3c4;font:12px system-ui}canvas{display:block}</style>
+<canvas id="c" width="1400" height="460"></canvas>
+<script type="module">
+  import { SprinterApp } from '/src/game/engine.ts';
+  import { lookDe } from '/src/game/athlete/apparence.ts';
+  import { APPARENCE } from '/src/game/athlete/regles.ts';
+  import { POSTURES } from '/src/game/athlete/postures.ts';
+  const ctx = document.getElementById('c').getContext('2d');
+  const look = lookDe({ ...APPARENCE, corps: 'm', coiffure: 'fade', peau: 'cacao' }, false);
+  const base = () => ({ look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0 });
+  const vues = [
+    ['debout', { ...base(), debout: 1 }],
+    ['blocs prets', { ...base(), enBloc: 1, prets: 1 }],
+    ['course', { ...base(), v: 10, stride: 1.2 }],
+    ['squat 0.5', { ...base(), posture: POSTURES.squat(0.5) }],
+    ['squat 1', { ...base(), posture: POSTURES.squat(1) }],
+    ['gainage', { ...base(), posture: POSTURES.gainage() }],
+    ['genou G', { ...base(), posture: POSTURES.genoux(1) }],
+    ['talon D', { ...base(), posture: POSTURES.talons(-1) }],
+    ['bond', { ...base(), posture: POSTURES.bond(0.5, 1) }],
+  ];
+  const A = SprinterApp;
+  const cap = +(new URLSearchParams(location.search).get('cap') ?? Math.PI);
+  vues.forEach(([nom, r], i) => {
+    const k = 150, x = 80 + i * 150, y = 400;
+    const cp = A.personCapsules(r, cap, 0, false, false, A.niveauDetail(k));
+    A.drawFacetFigure(ctx, cp, x, y, k);
+    ctx.fillStyle = '#000'; ctx.fillText(nom, x - 30, 440);
+    ctx.strokeStyle = '#0003'; ctx.beginPath(); ctx.moveTo(x - 60, y); ctx.lineTo(x + 60, y); ctx.stroke();
+  });
+</script>

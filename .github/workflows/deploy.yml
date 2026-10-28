@@ -80,6 +80,56 @@ jobs:
           '
           mv dist-test dist/test
 
+      # LA BRANCHE DE TEST 3D, sous /test3d/ (23/10, l'auteur : « met le jeu en ligne mais
+      # pas pour les joueurs, uniquement sur une branche test 3D »). Elle est construite
+      # depuis la branche test-ferme/course-3d, en canal de test : la meme porte a code
+      # que /test/, aucun joueur n'y entre. La production et /test/ viennent toujours de
+      # main (ce depot-ci) ; la branche n'a pas de workflow a elle : une poussee sur elle
+      # ne publie rien, on relance ce deploiement (gh workflow run deploy.yml --ref main).
+      #
+      # Le JEU COMPLET (« je veux le jeu complet, en test », 23/10) : rien n'est retire ici.
+      # C'est GitHub Pages, plafonne vers 1 Go, qui en recoit plus bas une copie allegee ;
+      # Cloudflare Pages, lui, recoit tout. Si la branche n'existe plus, l'etape ne fait rien.
+      - name: Construire la branche de test 3D
+        run: |
+          git fetch --depth 1 origin test-ferme/course-3d || { echo "pas de branche test 3D"; exit 0; }
+          git worktree add ../course-3d FETCH_HEAD
+          cd ../course-3d
+          npm install
+          npx vite build --outDir dist-test3d
+          node -e '
+            const f = "dist-test3d/manifest.webmanifest";
+            const m = JSON.parse(require("fs").readFileSync(f, "utf8"));
+            const base = "/test3d/";
+            m.name = "Sprinter — test 3D";
+            m.short_name = "Sprinter 3D";
+            m.id = base;
+            m.scope = base;
+            m.start_url = ".";
+            require("fs").writeFileSync(f, JSON.stringify(m, null, 2));
+          '
+          mv dist-test3d "$GITHUB_WORKSPACE/dist/test3d"
+        env:
+          BASE_PATH: /test3d/
+          VITE_CANAL: test
+
+      # CLOUDFLARE PAGES (23/10, « heberger le site sur Cloudflare Pages » — pas de plafond
+      # de taille, 25 Mo par fichier, 20 000 fichiers) : le meme site, complet, sur le
+      # projet `sprinter-game` (sprinter-game.pages.dev). Tant que le domaine n'y a pas
+      # bascule, GitHub Pages reste la version servie aux joueurs : un echec ici ne bloque
+      # pas sa publication.
+      - name: Publier sur Cloudflare Pages
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx --yes wrangler@4 pages deploy dist --project-name sprinter-game --branch main --commit-dirty=true
+
+      # LA COPIE POUR GITHUB PAGES, sous son plafond d'1 Go : la version 3D y laisse les
+      # videos anglaises du molosse et les images 2D de la ruelle (~160 Mo).
+      - name: Alleger la version 3D pour GitHub Pages
+        run: rm -rf dist/test3d/modeles/stades-ultra dist/test3d/modeles/boss-plein dist/test3d/decors-ultra/halloween-* dist/test3d/halloween/*-en.mp4 dist/test3d/halloween/*-en.jpg dist/test3d/halloween/*-en.webp
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

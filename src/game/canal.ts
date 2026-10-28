@@ -410,6 +410,18 @@ export const HALLOWEEN_2026_OUVERT = HALLOWEEN_OUVERT;
 export const LEGENDE_OUVERTE = EST_TEST;
 
 /**
+ * LA CARRIERE D'ATHLETE (game/athlete/) : l'histoire d'un athlete, de la
+ * competition scolaire aux mondiaux — famille, club, coach, entrainements du
+ * lundi, du mercredi et du vendredi, argent, materiel. Troisieme carte de
+ * l'onglet CARRIERE, a cote de la classique et de la Legende.
+ *
+ * Canal de test seulement, pour la raison de LEGENDE_OUVERTE : `EST_TEST`
+ * se replie en `false` dans le build public et le mode n'y part pas. Ses
+ * ecrans ne sont atteints que par des `lazy` derriere ce drapeau.
+ */
+export const CARRIERE_ATHLETE_OUVERTE = EST_TEST;
+
+/**
  * LE TCHAT RAPIDE dans les salles de course : des phrases ecrites par le jeu,
  * envoyees par les joueurs (voir game/tchat-rapide.ts).
  *

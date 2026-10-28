@@ -68,6 +68,9 @@ export function RecordPopup() {
 
     const t = player.finishTime;
     if (t == null) return;               // abandon : pas de chrono a comparer
+    // Le corps de la carriere d'athlete (game/athlete/) n'est pas celui des autres :
+    // son chrono reste dans son palmares, jamais au classement mondial.
+    if (SprinterApp.G.reglagesJoueur) return;
     const key = raceKey as RaceKey;
     let cancelled = false;
     const t0 = SprinterApp.G.recTrace;

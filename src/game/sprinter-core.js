@@ -2376,7 +2376,7 @@
     if (this.lastKey === key) {
       const risk = (C.STUMBLE_BASE +
         C.STUMBLE_SPEED * Math.min(1, this.v / this.maxSpeed)) *
-        C.STUMBLE_INPUT_SCALE;
+        C.STUMBLE_INPUT_SCALE * (this.coefChute || 1);
       if (alea() < risk) {
         this.v *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;
@@ -2384,10 +2384,10 @@
         if (this.d - this.legStart < this.driveEnd) this.stumbledInDrive = true;
         stumbled = true;
       } else {
-        this.v = Math.min(this.plafond(), this.v + C.BOOST * 0.3);
+        this.v = Math.min(this.plafond(), this.v + C.BOOST * 0.3 * (this.coefBoost || 1));
       }
     } else {
-      this.v = Math.min(this.plafond(), this.v + C.BOOST);
+      this.v = Math.min(this.plafond(), this.v + C.BOOST * (this.coefBoost || 1));
     }
     this.lastKey = key;
     return stumbled;
@@ -2424,7 +2424,7 @@
       this.v *= Math.exp(-6 * dt);
     } else {
       // le freinage est allege quelques secondes apres une bonne transition
-      const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1);
+      const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1) * (this.coefDrag || 1);
       this.v *= Math.exp(-drag * dt);
     }
     // la montee et la descente des virages releves (piste couverte : Track.accelPente) — et le rythme y
@@ -3412,7 +3412,8 @@
     // maillage — les memes angles, pris aux memes endroits. Rien n'est calcule
     // deux fois, et le maillage ne peut pas faire un geste que les tubes ne
     // font pas.
-    // (r.squelette3D : la course en 3D, game/course-3d.ts, pose un maillage sur chaque coureur)
+    // (r.squelette3D : un maillage pose sur ce squelette — la course en 3D, game/course-3d.ts, et la ville de la
+    // carriere, game/athlete/ville.ts)
     const sq = (L.maillage || r.squelette3D) ? (r.squelette = {
       hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt - 0.12 * ke * calme,   // a l'effort, le menton rentre
       jambes: [], bras: [],

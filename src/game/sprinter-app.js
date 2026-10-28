@@ -2074,7 +2074,9 @@
     challenge: null,     // defi en cours (voir challenge.ts)
     // Le vrai mode de la course pour le tableau de bord, quand les drapeaux
     // ci-dessus ne le disent pas (vedette, Legende...). Voir contexte-course.ts.
-    etiquette: null
+    etiquette: null,
+    // Les coefficients du corps de l'athlete de la carriere, ou null. Voir buildLevel.
+    reglagesJoueur: null
   };
   // pas de trace ultra-fine : 12,5 relevés par seconde suffisent a rejouer
   // une course de maniere fluide, et gardent la trace assez courte pour
@@ -2377,7 +2379,9 @@
     // Danube lisait `plateau['110h']`, qui n'existe pas, et la construction
     // tombait. On court alors au plateau olympique de l'epreuve, comme un
     // index hors du tableau court au stade olympique.
-    const [lo, hi] = (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
+    // Une marche de la carriere d'athlete peut porter ses chronos (game/athlete/regles.ts).
+    const impose = G.reglagesJoueur && G.reglagesJoueur.plateau;
+    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
     // UN CHRONO FIXE, pour qui en a un. Un athlete reel qu'on vient defier
     // (voir `cibles`, STADES_HORS_SERIE) court le meme temps a chaque
     // tentative : sans cela, « le battre » dependrait du tirage.
@@ -2392,6 +2396,20 @@
     pl.cadenceLancee = true;   // (C.CADENCE_LANCEE : les haies l'otent, haies-pas.js)
     // la piste couverte : la montee et la descente des virages releves (Track.accelPente)
     if (G.track.salle) { const T = G.track; pl.pente = (s, v) => T.accelPente(s, pl.lane, v); pl.bouscule = bousculade; }
+    // LE CORPS DE L'ATHLETE DE LA CARRIERE (game/athlete/) : ses stats, son
+    // materiel et sa forme reglent sa vitesse de pointe, sa poussee, ce qu'il
+    // perd entre deux appuis et son risque de faux pas. Des coefficients
+    // proches de 1 : c'est toujours la frequence des appuis qui fait la course.
+    // Pose par le mode avant `startOneShot`, retire au retour a l'accueil.
+    if (G.reglagesJoueur) {
+      const rj = G.reglagesJoueur;
+      pl.maxSpeed *= rj.vitesse || 1;
+      pl.coefBoost = rj.boost || 1;
+      pl.coefDrag = rj.drag || 1;
+      pl.coefChute = rj.chute || 1;
+      // et son apparence, choisie a la creation (game/athlete/apparence.ts)
+      if (rj.look) pl.look = rj.look;
+    }
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
     const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
@@ -8350,7 +8368,7 @@
       return false;
     }
     return V.dessiner(ctx, chemin, r.squelette || null,
-                      repereDuCoureur(r, headAng, lean, mirror, curved), ax, ay, k);
+                      repereDuCoureur(r, headAng, lean, mirror, curved), ax, ay, k, r.look);
   }
 
   /* ------------------------------------------------- reperes des coureurs */

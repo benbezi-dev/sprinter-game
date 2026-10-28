@@ -1,0 +1,14 @@
+Corps MakeHuman (tools/blender/corps_mpfb.py, commit 30d055c3), apercu carriere-athlete, ?mesure=1.
+Chrome du telephone pilote par CDP (adb forward), ecran principal, rien d'autre au premier plan.
+
+SPRINTER · mesure de la ville · 26/10/2026 03:41:11
+images : 1795 en ~30 s · 59.7 i/s en moyenne
+médiane 16.6 ms · 95 % sous 16.7 ms · pire 116.5 ms
+images > 33 ms : 2 · > 50 ms : 2
+puce : ANGLE (Qualcomm, Adreno (TM) 750, OpenGL ES 3.2)
+écran : 720×1586 px · rapport 2 · ombres oui · corps 3D 15
+appareil : Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/155.0.0.0 Mobile Safari/537.36
+
+Comparaison : 25/10, corps Quaternius, meme appareil : 59,7 i/s, p95 16,7 ms.
+Les 2 images > 50 ms : probablement le chargement d'un fichier de corps (silhouette) en cours de mesure, non verifie.
+Haut de gamme : ne dit rien d'un petit telephone.
