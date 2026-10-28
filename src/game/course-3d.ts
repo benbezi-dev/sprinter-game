@@ -1144,6 +1144,52 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     });
   }
   if (arc) {
+    // LES TRAITS DE LUMIERE QUI FILENT (la piste de Mario, l'auteur, 28/10 : « les traits de lumiere qui donnent la
+    // vitesse ») : une nappe additive sur toute la piste, des filets blancs et pastel dans le sens de la course, qui
+    // defilent vers l'arriere plus vite que le joueur et s'allument avec sa vitesse (rien a l'arret). Une seule nappe,
+    // une seule texture : un appel de dessin, pour le plus faible des telephones.
+    {
+      const r0 = R_CORDE - 0.6, r1 = R_CORDE + W + 0.6, rm = (r0 + r1) / 2, REP = 12;   // une tuile tous les 12 m
+      const stations: [number, number, number, number][] = [];   // [x0, y0, x1, y1] aux deux bords, dans le sens de la course
+      for (let x = DROITE0; x <= DROITE1; x += 1) stations.push([x, r0 - R_CORDE, x, r1 - R_CORDE]);
+      const pas = 1 / rm;
+      for (let a = Math.PI / 2 - pas; a > -Math.PI / 2; a -= pas) stations.push([DROITE1 + r0 * Math.cos(a), -R_CORDE + r0 * Math.sin(a), DROITE1 + r1 * Math.cos(a), -R_CORDE + r1 * Math.sin(a)]);
+      for (let x = DROITE1; x >= DROITE0; x -= 1) stations.push([x, -R_CORDE - r0, x, -R_CORDE - r1]);
+      for (let a = -Math.PI / 2 - pas; a > -1.5 * Math.PI; a -= pas) stations.push([DROITE0 + r0 * Math.cos(a), -R_CORDE + r0 * Math.sin(a), DROITE0 + r1 * Math.cos(a), -R_CORDE + r1 * Math.sin(a)]);
+      stations.push(stations[0]);
+      const pos: number[] = [], uv: number[] = [], idx: number[] = [];
+      let u = 0;
+      stations.forEach((st, i) => {
+        if (i) { const p = stations[i - 1]; u += Math.hypot((st[0] + st[2]) / 2 - (p[0] + p[2]) / 2, (st[1] + st[3]) / 2 - (p[1] + p[3]) / 2); }
+        pos.push(st[0], st[1], 0.012, st[2], st[3], 0.012); uv.push(u / REP, 0, u / REP, 1);
+        if (i) { const k = i * 2; idx.push(k - 2, k - 1, k, k - 1, k + 1, k); }
+      });
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx);
+      const traits = texteCanvas((c, w, h) => {
+        c.clearRect(0, 0, w, h);
+        for (let i = 0; i < 110; i++) {
+          const y = hasard() * h, l = 80 + hasard() * 520, e = 1 + hasard() * 3, x = hasard() * w;
+          const teinte = hasard() < 0.6 ? '255,255,255' : ['255,200,240', '200,240,255', '255,250,200'][(hasard() * 3) | 0];
+          const g = c.createLinearGradient(0, 0, l, 0);
+          g.addColorStop(0, `rgba(${teinte},0)`); g.addColorStop(0.7, `rgba(${teinte},${0.5 + hasard() * 0.5})`); g.addColorStop(1, `rgba(${teinte},0)`);
+          c.fillStyle = g;
+          for (const dx of [0, -w]) { c.save(); c.translate(x + dx, y); c.fillRect(0, -e / 2, l, e); c.restore(); }
+        }
+      }, 1024, 256);
+      traits.wrapS = THREE.RepeatWrapping; traits.wrapT = THREE.ClampToEdgeWrapping;
+      const mat = new THREE.MeshBasicMaterial({ map: traits, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false,
+        toneMapped: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -8 });
+      const nappe = new THREE.Mesh(geo, mat); nappe.receiveShadow = false; nappe.renderOrder = 2; stade.add(nappe);
+      nappe.visible = Q.get('traits') !== '0';   // (?traits=0 : pour mesurer leur cout sur un telephone)
+      let tPrec = -1;
+      pubAnim.push(t => {
+        const dt = tPrec < 0 ? 0 : Math.min(0.1, Math.max(0, t - tPrec)); tPrec = t;
+        const v = Math.max(0, (globalThis as any).SprinterApp?.G?.player?.v || 0);
+        traits.offset.x += v * 0.8 * dt / REP;
+        mat.opacity = 0.6 * Math.min(1, v / 11);
+      });
+    }
     // LES GUIRLANDES : une ampoule tous les 1,5 m sur les deux bords, les couleurs qui
     // defilent (sept decalages par seconde, piste-arc-en-ciel.js)
     const pts: number[] = [];
@@ -2384,7 +2430,22 @@ const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _a = new THREE.Vect
 const AXE_Y = new THREE.Vector3(0, 1, 0);
 
 /** Une image de la course, lue sur l'etat du jeu. */
+// LE COMPTEUR D'IMAGES (?ips=1) : pour mesurer sur un telephone (« teste sur telephone », l'auteur, 28/10) — les
+// images par seconde et la pire image de la derniere seconde, en haut a gauche
+let ipsBoite: HTMLDivElement | null = null, ipsN = 0, ipsT0 = 0, ipsPire = 0, ipsPrec = 0;
+function compterLesImages() {
+  const t = performance.now();
+  if (!ipsBoite) {
+    ipsBoite = document.createElement('div');
+    ipsBoite.style.cssText = 'position:fixed;left:6px;top:6px;z-index:99999;font:700 13px ui-monospace,Menlo,monospace;color:#7fff7f;background:rgba(0,0,0,.65);padding:3px 6px;border-radius:4px;pointer-events:none';
+    document.body.appendChild(ipsBoite); ipsT0 = t; ipsPrec = t;
+  }
+  ipsN++; ipsPire = Math.max(ipsPire, t - ipsPrec); ipsPrec = t;
+  if (t - ipsT0 >= 1000) { ipsBoite.textContent = `${Math.round(ipsN * 1000 / (t - ipsT0))} i/s · pire ${Math.round(ipsPire)} ms`; ipsN = 0; ipsT0 = t; ipsPire = 0; }
+}
+const IPS = Q.get('ips') !== null;
 export function rendre(App: any, dt: number) {
+  if (IPS) compterLesImages();
   const { G, C } = App;
   tenirLaCadence(dt, G.state === 'race' && G.elapsed > 1);
   const T = G.track;
