@@ -2027,10 +2027,6 @@
     this.lane = lane;
     this.isPlayer = !!opts.isPlayer;
     this.look = this.isPlayer ? PLAYER_LOOK : lookFor(name, opts.pool);
-    // PAS DE COURSE HOMMES CONTRE FEMMES (l'auteur, 28/10) : un adversaire tire court dans la categorie du joueur.
-    // Les vedettes gardent leur gabarit (c'est leur identite).
-    if (!this.isPlayer && !ZEZE[name] && !VEDETTES[name] && this.look.build !== PLAYER_LOOK.build)
-      this.look = Object.assign({}, this.look, { build: PLAYER_LOOK.build });
     this.d = 0; this.v = 0;
     this.finished = false; this.finishTime = null;
     this.stride = alea() * TAU;
