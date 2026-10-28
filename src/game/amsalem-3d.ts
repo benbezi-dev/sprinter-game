@@ -147,6 +147,9 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   const X = (a: number) => D1 - DEMI + a, Y = (n: number) => n - R;
   const lambert = (c: THREE.Color | number, double = false) => new THREE.MeshLambertMaterial({ color: c, side: double ? THREE.DoubleSide : THREE.FrontSide });
   // au sol : chaque couche un peu au-dessus de la precedente, tiree en avant comme les marques de la piste
+  // (UN CENTIMETRE PAR COUCHE, 28/10 : a un millimetre d'ecart — et deux a 4 mm —, elles clignotaient sur un
+  // telephone, dans le virage de l'arrivee surtout ; course-3d.ts, LE SOL EN COUCHES. lie 1 cm, beige 2, demi-lune
+  // et aire des sauts 3, beton 4, elans 5, lignes 6, sable 7 ; la zone de freinage SOUS la piste, a -3 et -2 cm)
   const rouges: THREE.Material[] = [];   // le tartan hors de la piste (demi-lune, elans, prolongement) : habillerLeTartan
   const solMat = (c: THREE.Color, k: number) => {
     const m = lambert(c, true); m.polygonOffset = true; m.polygonOffsetFactor = -k; m.polygonOffsetUnits = -2 * k;
@@ -185,21 +188,21 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
 
   // --- LES BORDURES (img-3, img-4) : beige des deux cotes de la piste, la bande lie-de-vin dehors ---
   const R1 = R + W + 0.8;   // le bord exterieur du tartan pose par course-3d.ts
-  poser([...anneauOvale(R - 1.8, R - 0.8, 0.004), ...anneauOvale(R1, R1 + 1.2, 0.004)], solMat(BEIGE, 2));
-  poser(anneauOvale(R1 + 1.2, R1 + 2.4, 0.003), solMat(LIE, 1));
+  poser([...anneauOvale(R - 1.8, R - 0.8, 0.02), ...anneauOvale(R1, R1 + 1.2, 0.02)], solMat(BEIGE, 2));
+  poser(anneauOvale(R1 + 1.2, R1 + 2.4, 0.01), solMat(LIE, 1));
 
   // --- L'AIRE DES SAUTS (img-3, img-4) : beige, 15 m de large, le long de la ligne droite opposee ---
   const yO = -R - R1;
   // la haie : 3,6 m au-dela du chemin (lui-meme a 20 m du bord de la piste), le long de l'aire puis en arc (photos de l'auteur)
   const R_HAIE = R1 + 2.4 + 20 + 3.6;   // le bord exterieur de la ligne opposee
   const xa0 = X(-DEMI - 6), xa1 = X(DEMI + 6);
-  poser([rect(xa0, yO - 1.2, xa1, yO - 16.2, 0.005)], solMat(BEIGE, 3));
-  poser([rect(xa0 - 1, yO - 16.2, xa1 + 1, yO - 17.4, 0.004), rect(xa0 - 1, yO - 1.2, xa0, yO - 17.4, 0.004), rect(xa1, yO - 1.2, xa1 + 1, yO - 17.4, 0.004)], solMat(LIE, 2));
+  poser([rect(xa0, yO - 1.2, xa1, yO - 16.2, 0.03)], solMat(BEIGE, 3));
+  poser([rect(xa0 - 1, yO - 16.2, xa1 + 1, yO - 17.4, 0.02), rect(xa0 - 1, yO - 1.2, xa0, yO - 17.4, 0.02), rect(xa1, yO - 1.2, xa1 + 1, yO - 17.4, 0.02)], solMat(LIE, 2));
   // les deux couloirs d'elan rouges
-  poser([yO - 5.7, yO - 10.2].map(y => rect(X(-DEMI), y - 0.61, X(DEMI - 4), y + 0.61, 0.007)), solMat(ROUGE, 4));
+  poser([yO - 5.7, yO - 10.2].map(y => rect(X(-DEMI), y - 0.61, X(DEMI - 4), y + 0.61, 0.05)), solMat(ROUGE, 4));
   // les bacs a sable, au bout des couloirs d'elan, et les tapis bleus (img-3 : deux bacs par couloir, deux tapis)
   poser([[-DEMI + 6, yO - 5.7], [DEMI - 10, yO - 5.7], [-DEMI + 22, yO - 10.2], [DEMI - 18, yO - 10.2]]
-    .map(([a, y]) => rect(X(a) - 4.5, y - 1.4, X(a) + 4.5, y + 1.4, 0.009)), solMat(SABLE, 5));
+    .map(([a, y]) => rect(X(a) - 4.5, y - 1.4, X(a) + 4.5, y + 1.4, 0.07)), solMat(SABLE, 5));
   // LES SAUTOIRS DE PERCHE (« les taches bleues sont les sautoirs de saut a la perche », l'auteur, 27/10 ; ses vues aeriennes :
   // deux grands tapis bleus bordes de rouge sur le couloir d'elan exterieur, leurs deux montants blancs) : le tapis en volume,
   // 6 x 5 m sur 0,8 m, dessus bleu, flancs rouges ; devant, de part et d'autre du butoir, deux tapis bas ; le butoir gris
@@ -219,7 +222,7 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
         dessus.push(new THREE.BoxGeometry(1.5, 1.8, 0.05).translate(x + sens * 3.8, y + dy, 0.47));
       }
       // le butoir : une boite grise enfoncee dans le couloir, devant le tapis
-      butoirs.push(new THREE.BoxGeometry(1.0, 0.6, 0.04).translate(x + sens * 4.9, y, 0.02));
+      butoirs.push(new THREE.BoxGeometry(1.0, 0.6, 0.04).translate(x + sens * 4.9, y, 0.07));   // (sur l'elan, a 5 cm)
       // les montants, sur leurs socles, au bord avant du tapis ; la barre entre eux
       for (const dy of [-2.7, 2.7]) {
         montants.push(new THREE.CylinderGeometry(0.05, 0.05, 5, 8).rotateX(Math.PI / 2).translate(x + sens * 2.6, y + dy, 2.5));
@@ -230,7 +233,7 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     poser(corps, rouge, true); poser(dessus, bleu, true); poser(montants, blanc, true); poser(butoirs, gris);
     // le couloir d'elan de la perche : le troisieme couloir rouge, le long du bord exterieur de l'aire, d'un bout a l'autre
     // (vue aerienne de l'auteur depuis les sauts : les deux tapis sont dessus)
-    poser([rect(xa0 + 1.5, yO - 13.7 - 0.61, xa1 - 1.5, yO - 13.7 + 0.61, 0.007)], solMat(ROUGE, 4));
+    poser([rect(xa0 + 1.5, yO - 13.7 - 0.61, xa1 - 1.5, yO - 13.7 + 0.61, 0.05)], solMat(ROUGE, 4));
   }
 
   // --- LA DEMI-LUNE (img-3, img-4) : le segment de l'aire interieure au-dela du terrain (52,5 m du centre),
@@ -244,7 +247,7 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
       forme.lineTo(X(DEMI + rI * Math.cos(u)), Y(rI * Math.sin(u)));
     }
     forme.lineTo(X(DEMI + aBord), Y(nBas));
-    poser([new THREE.ShapeGeometry(forme).translate(0, 0, 0.004)], solMat(ROUGE, 3));
+    poser([new THREE.ShapeGeometry(forme).translate(0, 0, 0.03)], solMat(ROUGE, 3));
   }
 
   // --- LA HALLE JESSE OWENS : le modele Tripo de son exterieur (salle-3d.ts, tools/blender/salle/exterieur_tripo.py :
@@ -478,8 +481,8 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   // du virage de la demi-lune, bordee de beige — la zone de freinage) ---
   {
     const L = 32;   // (le virage s'ecarte de la droite : il faut une trentaine de metres pour que tout le prolongement sorte)
-    poser([rect(D1, -0.8, D1 + L, W + 0.8, -0.004)], solMat(ROUGE, 1));
-    poser([rect(D1, -1.8, D1 + L + 1, -0.8, -0.003), rect(D1, W + 0.8, D1 + L + 1, W + 2, -0.003), rect(D1 + L, -0.8, D1 + L + 1, W + 0.8, -0.003)], solMat(BEIGE, 1));
+    poser([rect(D1, -0.8, D1 + L, W + 0.8, -0.03)], solMat(ROUGE, 1));
+    poser([rect(D1, -1.8, D1 + L + 1, -0.8, -0.02), rect(D1, W + 0.8, D1 + L + 1, W + 2, -0.02), rect(D1 + L, -0.8, D1 + L + 1, W + 0.8, -0.02)], solMat(BEIGE, 1));
   }
 
   // --- LES LANCERS ---
@@ -502,12 +505,12 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
       poser([g], filet); poser(poteaux, noir);
     };
     const cercle = (x: number, y: number, rayon: number, secteur: number) => {
-      poser([new THREE.CircleGeometry(rayon + 0.25, 32).translate(x, y, 0.006)], beton);
+      poser([new THREE.CircleGeometry(rayon + 0.25, 32).translate(x, y, 0.04)], beton);
       if (secteur === undefined) return;
       const lignes: THREE.BufferGeometry[] = [];
       for (const d of [-0.305, 0.305]) {   // le secteur de 34,92 degres
         const a = secteur + d, l = 22;
-        lignes.push(new THREE.PlaneGeometry(l, 0.06).translate(l / 2 + rayon, 0, 0).rotateZ(a).translate(x, y, 0.008));
+        lignes.push(new THREE.PlaneGeometry(l, 0.06).translate(l / 2 + rayon, 0, 0).rotateZ(a).translate(x, y, 0.06));
       }
       poser(lignes, blanc);
     };
