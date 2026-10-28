@@ -284,6 +284,13 @@
     RUNOUT: 26.0
   };
 
+  // LES RECORDS DU MONDE MASCULINS, PLAFOND DE CHAQUE EPREUVE (l'auteur, 28/10 : « plafonne les temps des 60 m en
+  // salle, 100 m, 200 m, 400 m, 200 m et 400 m en salle a leurs records du monde respectifs chez les hommes ») :
+  // personne — joueur ni adversaire — ne court plus vite. Verifies le 28/10/2026 : 60 m salle 6,34 (Coleman 2018),
+  // 100 m 9,58 et 200 m 19,19 (Bolt 2009), 400 m 43,03 (van Niekerk 2016), 200 m salle 19,92 (Fredericks 1996),
+  // 400 m salle 44,49 (Morales Williams 2024).
+  const RECORDS_DU_MONDE = { '60': 6.34, '100': 9.58, '200': 19.19, '400': 43.03, '200s': 19.92, '400s': 44.49 };
+
   // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
   // est un tour complet de piste (deux virages, deux lignes droites).
   const RACES = {
@@ -2020,6 +2027,10 @@
     this.lane = lane;
     this.isPlayer = !!opts.isPlayer;
     this.look = this.isPlayer ? PLAYER_LOOK : lookFor(name, opts.pool);
+    // PAS DE COURSE HOMMES CONTRE FEMMES (l'auteur, 28/10) : un adversaire tire court dans la categorie du joueur.
+    // Les vedettes gardent leur gabarit (c'est leur identite).
+    if (!this.isPlayer && !ZEZE[name] && !VEDETTES[name] && this.look.build !== PLAYER_LOOK.build)
+      this.look = Object.assign({}, this.look, { build: PLAYER_LOOK.build });
     this.d = 0; this.v = 0;
     this.finished = false; this.finishTime = null;
     this.stride = alea() * TAU;
@@ -2062,6 +2073,8 @@
     this.transGrade = null; this.transRatio = 0;
     this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
     this.target = opts.target || null;
+    /** Le record du monde de l'epreuve (RECORDS_DU_MONDE) : le temps le plus court permis. `null` : sans plafond. */
+    this.record = opts.record || null;
     this.maxSpeed = opts.maxSpeed || 12;
     this.best = opts.best || 9.1;
     this.total = opts.total || 100;
@@ -2094,7 +2107,19 @@
     if (this.target) this.setPace(this.target);
   }
 
+  /**
+   * LE COUREUR DU RECORD : ou en serait, au temps t, un coureur qui bouclerait l'epreuve exactement en `record`
+   * (v(t) = vmax (1 - e^-t/tau), tau = 1 s). Le joueur ne le depasse jamais (stepPlayer) : on court aussi vite que
+   * le record du monde, pas plus vite.
+   */
+  Runner.prototype.distanceDuRecord = function (t) {
+    const tau = 1, R = this.record;
+    if (!this._vRecord) this._vRecord = this.total / (R - tau * (1 - Math.exp(-R / tau)));
+    return this._vRecord * (t - tau * (1 - Math.exp(-t / tau)));
+  };
+
   Runner.prototype.setPace = function (T) {
+    if (this.record && T < this.record) T = this.record;   // (RECORDS_DU_MONDE : jamais plus vite)
     // v(t) = vmax (1 - e^-t/tau) : montee en vitesse puis allure tenue.
     // Une courbe en S ferait ralentir le coureur jusqu'a l'arret sur la
     // ligne, ce qui donne l'illusion d'etre double au dernier metre.
@@ -2442,6 +2467,11 @@
     if (this.bouscule) this.bouscule(dt);
     const before = this.d;
     this.d += this.v * dt;
+    // le plafond du record du monde : jamais devant le coureur du record (distanceDuRecord)
+    if (this.record && elapsed !== undefined) {
+      const dr = this.distanceDuRecord(elapsed);
+      if (this.d > dr) { this.d = Math.max(before, dr); this.v = Math.min(this.v, this._vRecord * (1 - Math.exp(-elapsed))); }
+    }
     // LE BOUT DE LA ZONE EST UN MUR, PAS UNE LIGNE D'ARRIVEE.
     //
     // On ne le « termine » pas — un relayeur qui passe son temoin n'a pas
@@ -4053,7 +4083,7 @@
     GAIT, GAITS, gaitOf, gait, catmull, Track, Runner, CLAP,
     FOULEES, FOULEE_DES_EPREUVES, poserLAllure, allureCourante,
     pose, fallShape, alea, semer, desemer, estSeme,
-    ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL,
+    ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL, RECORDS_DU_MONDE,
     VEDETTES
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

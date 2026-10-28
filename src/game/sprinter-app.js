@@ -2391,8 +2391,9 @@
     // LE COULOIR TIRE AU SORT SUR L'ANNEAU COUVERT (« le couloir 6 a plus de montee, le couloir 1 un angle
     // plus serre », l'auteur, 27/10) : chaque couloir s'y court autrement — le joueur n'est plus toujours au 4
     const monCouloir = G.track.salle ? Math.floor(K.alea() * G.track.lanes) : 3;
+    const record = K.RECORDS_DU_MONDE[R.key] || null;   // (le plafond de l'epreuve, sprinter-core.js)
     const pl = new Runner('TOI', monCouloir, { isPlayer: true, maxSpeed: R.maxSpeed,
-      best: R.best, total: G.track.total });
+      best: R.best, total: G.track.total, record });
     pl.cadenceLancee = true;   // (C.CADENCE_LANCEE : les haies l'otent, haies-pas.js)
     // la piste couverte : la montee et la descente des virages releves (Track.accelPente)
     if (G.track.salle) { const T = G.track; pl.pente = (s, v) => T.accelPente(s, pl.lane, v); pl.bouscule = bousculade; }
@@ -2424,8 +2425,8 @@
       const t = cibles && cibles[n] ? cibles[n] : tire;
       const lane = i < monCouloir ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
-        total: G.track.total, pool: lvl.pool });
-      if (t < best) { best = t; G.champion = n; G.championTime = t; }
+        total: G.track.total, pool: lvl.pool, record });
+      if (r.target < best) { best = r.target; G.champion = n; G.championTime = r.target; }
       G.runners.push(r);
     });
     G.parts = [];
@@ -4209,9 +4210,9 @@
     const R = G.race;
     const neuf = r.isPlayer
       ? new Runner(r.name, r.lane, { isPlayer: true, maxSpeed: R.maxSpeed,
-                                     best: R.best, total: G.track.total })
+                                     best: R.best, total: G.track.total, record: K.RECORDS_DU_MONDE[R.key] || null })
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
-                                     pool: LEVELS[G.levelIdx].pool });
+                                     pool: LEVELS[G.levelIdx].pool, record: K.RECORDS_DU_MONDE[R.key] || null });
     if (neuf.isPlayer) neuf.cadenceLancee = !r.enHaies;
     if (neuf.isPlayer && G.track.salle) { const T = G.track; neuf.pente = (s, v) => T.accelPente(s, neuf.lane, v); neuf.bouscule = bousculade; }
     const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,

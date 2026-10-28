@@ -40,7 +40,7 @@ import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM, OCCULTANTS } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
-import { construireSalle, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, placesDuPublic } from './salle-3d';
+import { construireSalle, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -883,15 +883,18 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const espace = !!th.espace;
   voute = null; filante = null;
   if (salleActive) {
-    // LA SALLE : sous le toit — ni ciel, ni heure, ni pelouse, ni gradins du stade ; sa propre lumiere
-    scene.background = new THREE.Color(SALLE_LUMIERE.fond);
-    scene.fog = new THREE.Fog(SALLE_LUMIERE.brume, 110, 320);
-    hemi.color.set(SALLE_LUMIERE.hemiCiel); hemi.groundColor.set(SALLE_LUMIERE.hemiSol); hemi.intensity = SALLE_LUMIERE.hemi;
-    soleil.color.set(SALLE_LUMIERE.soleilCouleur); soleil.intensity = SALLE_LUMIERE.soleil;
+    // LA SALLE : sous le toit — ni ciel, ni pelouse, ni gradins du stade ; sa propre lumiere, de jour ou de nuit
+    // (le theme `salle` ne suit pas l'heure : on lit le moment du joueur, ?heure= compris)
+    const nuitSalle = (globalThis as any).SprinterHeure?.moment((globalThis as any).SprinterApp?.G) === 'nuit';
+    const SL = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
+    scene.background = new THREE.Color(SL.fond);
+    scene.fog = new THREE.Fog(SL.brume, 110, 320);
+    hemi.color.set(SL.hemiCiel); hemi.groundColor.set(SL.hemiSol); hemi.intensity = SL.hemi;
+    soleil.color.set(SL.soleilCouleur); soleil.intensity = SL.soleil;
     soleilDecal.set(-6, 10, 40);
     uFoule.uLum.value = 1; uLisere.value = 0;
     const base = (import.meta as any).env?.BASE_URL || '/';
-    const salle = construireSalle({ stade, renderer, base });
+    const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle });
     pubAnim.push(salle.animer); cameraSalle = salle.camera;
     // le public de la salle : les memes cartes que le stade (LE PUBLIC, EN CARTES)
     if (Q.get('foule') !== '0') {
@@ -1822,10 +1825,15 @@ function dimensionner() {
 // passe par le meme script le jour ou l'on va plus loin.
 const Qgl = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
 let gabarit: THREE.Object3D | null = null;
+// LES CORPS ROCKETBOX (28/10 ; Microsoft, licence MIT ; tools/blender/rocketbox_coureur.py) : Sports_Male_01 (le
+// gabarit) et Sports_Female_01, en maillot de bain, pres du corps. Sports_Male_04 et Sports_Female_02 ont leurs
+// vetements (short ample, pantalon) dans la peau : peints, ils faisaient des jambes en blocs — ecartes. La variete
+// vient des physiques (PHYSIQUES).
+const autresCorps: { homme: THREE.Object3D[]; femme: THREE.Object3D[] } = { homme: [], femme: [] };
 let chargement: Promise<void> | null = null;
 // echelle : un maillage Tripo n'a pas la taille du corps du jeu (Kouassi : 1,82 m au repos
 // contre 1,54) — ramene a lui, il a la taille de son look comme les autres
-type Corps = { m: Modele; mats: Record<string, THREE.MeshStandardMaterial>; echelle?: number };
+type Corps = { m: Modele; mats: Record<string, THREE.MeshStandardMaterial>; echelle?: number; tissu?: Map<THREE.Bone, { a: number; w: number; p: number | null }>; tPrec?: number };
 const hauteurDe = (o: THREE.Object3D) => { const b = new THREE.Box3().setFromObject(o); return b.max.y - b.min.y; };
 const corps = new Map<any, Corps>();
 
@@ -1873,6 +1881,8 @@ function chargerLeCorps() {
   chargement = l.loadAsync(base + 'modeles/coureur-homme.glb')
     .then(g => { gabarit = g.scene; })
     .catch(() => { /* les tubes restent */ });
+  for (const [genre, fichier] of [['femme', 'coureur-femme']] as const)
+    l.loadAsync(base + 'modeles/' + fichier + '.glb').then(g => { autresCorps[genre].push(g.scene); }).catch(() => { /* un corps de moins */ });
 }
 
 function modeleDe(racineGltf: THREE.Object3D): Modele {
@@ -1984,7 +1994,7 @@ function chargerLaBete() {
   }).catch(() => { beteDemandee = false; });
 }
 // ?sonde : la bete et la chasse, lisibles depuis la console (verifier sans jouer la nuit)
-if (Q.get('sonde') !== null) (globalThis as any).__course3d = { get bete() { return bete; }, get chasse() { const o = (globalThis as any).SprinterApp?.G?.obstacles; return o && o.molosse ? o.chasse : null; }, get monde() { return monde; }, get camera() { return camera; }, get rendu() { return renderer; }, get plan() { return planCam; } };
+if (Q.get('sonde') !== null) (globalThis as any).__course3d = { get bete() { return bete; }, get chasse() { const o = (globalThis as any).SprinterApp?.G?.obstacles; return o && o.molosse ? o.chasse : null; }, get monde() { return monde; }, get camera() { return camera; }, get rendu() { return renderer; }, get plan() { return planCam; }, get corps() { return corps; } };
 function poserLaBete(G: any, T: any, nuit: boolean) {
   if (!bete) return;
   // la chasse, portee par l'obstacle que la nuit pose (molosseDe) : pas d'import du mode,
@@ -2053,7 +2063,12 @@ function corpsDe(r: any): Corps | null {
     } catch { maillages.set(chemin, false); }    // pas le squelette du jeu : le corps generique
   }
   if (!gabarit) return null;
-  const copie = clonerSquelette(gabarit);
+  const femme = r.look?.build === 'f' && autresCorps.femme.length > 0;
+  const tirage = Math.abs(hacher('corps' + String(r.name || r.lane || '')));
+  const choix = femme ? autresCorps.femme : [gabarit, ...autresCorps.homme];
+  const source = choix[tirage % choix.length];
+  const copie = clonerSquelette(source);
+  doserLePhysique(copie, r.look, tirage);
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
   copie.traverse((o: any) => {
     if (!o.isMesh) return;
@@ -2079,13 +2094,122 @@ function corpsDe(r: any): Corps | null {
   // elle reste dans la chaussure, et au-dessus du col c'est la cheville — couleur de peau.
   mats.pointes?.color.copy(mats.chaussure ? rgb(L.skin) : rgb(L.shoe));
   mats.chaussure?.color.copy(rgb(L.shoe));
+  // (le lacage : blanc sur une chaussure foncee, noir sur une claire)
+  if (mats.lacets) { const c = rgb(L.shoe); mats.lacets.color.setRGB(...((c.r + c.g + c.b) / 3 > 0.45 ? [0.08, 0.08, 0.09] : [0.93, 0.93, 0.92]) as [number, number, number], THREE.SRGBColorSpace); }
   mats.semelle?.color.setRGB(0.93, 0.93, 0.91, THREE.SRGBColorSpace);
-  mats.plaque?.color.setRGB(0.06, 0.06, 0.07, THREE.SRGBColorSpace);
+  // (28/10, d'apres les pointes de reference : la plaque et le contrefort du talon prennent la couleur du maillot,
+  //  les clous sont en metal)
+  if (mats.talon) mats.plaque?.color.copy(rgb(L.jersey || [200, 40, 50]));
+  else mats.plaque?.color.setRGB(0.06, 0.06, 0.07, THREE.SRGBColorSpace);
+  mats.talon?.color.copy(rgb(L.jersey || [200, 40, 50]));
+  if (mats.clous) { mats.clous.color.setRGB(0.82, 0.82, 0.85, THREE.SRGBColorSpace); mats.clous.metalness = 0.9; mats.clous.roughness = 0.25; }
   mats.cheveux?.color.copy(SANS_CHEVEUX.has(L.hair) ? rgb(L.skin, 0.8) : rgb(L.hairCol || [20, 16, 14]));
-  c = { m: modeleDe(copie), mats };
+  // LES VRAIS VETEMENTS (tools/blender/coureur_realiste.py, 28/10 : « des vrais vetements de sport ») : le debardeur
+  // et le short fendu sont des pieces a part, teintes comme le maillot et le short du look ; chaque coureur tire sa
+  // tenue (comme en finale : tout le monde n'a pas la meme), le dossard numerote par-dessus.
+  const maillot = rgb(L.jersey || [200, 40, 50]);
+  const liste = femme ? TENUES_FEMMES : TENUES;
+  const tenue = liste[Math.abs(hacher(String(r.name || r.lane || ''))) % liste.length];
+  const brassiere = tenue.startsWith('brassiere'), culotte = tenue.endsWith('culotte');
+  // (une piece : le debardeur reste, le bas prend sa couleur ; la zone peinte du corps avait un bord en dents de scie)
+  const bas = tenue === 'une-piece' ? maillot : rgb(L.shorts);
+  mats.debardeur?.color.copy(maillot); mats.brassiere?.color.copy(maillot); mats.shortlarge?.color.copy(bas);
+  if (mats.debardeur) mats.debardeur.visible = !brassiere;
+  if (mats.brassiere) mats.brassiere.visible = brassiere;
+  if (mats.shortlarge) mats.shortlarge.visible = tenue === 'debardeur-short';
+  mats.short?.color.copy(bas);
+  // sous la brassiere le ventre est nu ; sous la culotte, le haut des cuisses
+  mats.ventre?.color.copy(brassiere ? rgb(L.skin) : maillot);
+  mats.shortbas?.color.copy(culotte ? rgb(L.skin) : bas);
+  if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; }
+  for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
+  // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
+  c = { m: modeleDe(copie), mats, echelle: source !== gabarit ? hauteurDe(gabarit) / hauteurDe(source) : undefined };
   monde.add(c.m.racine);
   corps.set(r, c);
   return c;
+}
+
+// LES PHYSIQUES (28/10, « fais des corpulences et des physiques differents d'athletes ») : quatre formes dans chaque
+// corps (coureur_realiste.formes : muscle, sec, epaules, bassin). Une vedette a sa morphologie (look.morph : sh, hip,
+// arm, leg) ; les autres tirent un physique d'athlete.
+const PHYSIQUES: Record<string, number>[] = [
+  { muscle: 1, epaules: 0.7, bassin: 0.2 },      // le sprinteur puissant
+  { sec: 0.85, epaules: 0.1 },                  // le longiligne du 400
+  { muscle: 0.6, bassin: 0.5 },                 // le compact
+  { muscle: 0.35, epaules: 0.3 },               // l'athlete
+  { sec: 0.4, muscle: 0.2 },                    // le sec
+  { muscle: 1, epaules: 1, bassin: 0.6 },       // le massif
+];
+const borne = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
+function doserLePhysique(o: THREE.Object3D, look: any, tirage: number) {
+  const MO = look?.morph;
+  const membres = MO ? ((MO.arm || 1) + (MO.leg || 1)) / 2 : 1;
+  const dose = MO ? { muscle: borne((membres - 1) / 0.12, 0, 1), sec: borne((1 - membres) / 0.1, 0, 1),
+    epaules: borne(((MO.sh || 1) - 1) / 0.14, -0.5, 1), bassin: borne(((MO.hip || 1) - 1) / 0.06, -0.5, 1) }
+    : PHYSIQUES[(tirage >> 3) % PHYSIQUES.length];
+  o.traverse((m: any) => {
+    if (!m.morphTargetDictionary || !m.morphTargetInfluences) return;
+    for (const [nom, i] of Object.entries(m.morphTargetDictionary as Record<string, number>)) m.morphTargetInfluences[i] = (dose as any)[nom] || 0;
+  });
+}
+
+const TENUES = ['debardeur-short', 'debardeur-cuissard', 'debardeur-short', 'une-piece'];
+// (les coureuses : brassiere et culotte, comme en finale, ou debardeur, cuissard, une piece)
+const TENUES_FEMMES = ['brassiere-culotte', 'debardeur-culotte', 'brassiere-cuissard', 'brassiere-culotte', 'une-piece'];
+const hacher = (t: string) => { let h = 7; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return h; };
+/** Le dossard : un carton blanc, le numero en noir, la marque du jeu en tete. */
+function dossardDe(n: number): THREE.Texture {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 205;
+  const x = c.getContext('2d')!;
+  x.translate(256, 0); x.scale(-1, 1);   // (le maillage est exporte en miroir : on ecrit a l'envers pour qu'il se lise a l'endroit)
+  x.fillStyle = '#f4f4f0'; x.fillRect(0, 0, 256, 205);
+  x.fillStyle = '#ff7a1a'; x.fillRect(0, 0, 256, 40);
+  x.fillStyle = '#fff'; x.font = '700 28px Outfit, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('SPRINTER', 128, 21);
+  x.fillStyle = '#111'; x.font = '900 128px Outfit, sans-serif'; x.fillText(String(n), 128, 128);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.flipY = false;
+  return t;
+}
+
+// LE TISSU (28/10 : « des vetements qui bougent lorsque la vitesse est importante ») : le bas du debardeur, des jambes
+// du short et des dossards pend a des os de tissu (coureur_realiste.py). Chacun est un ressort autour de l'axe lateral
+// du coureur : il garde son orientation quand son parent tourne (la cuisse qui balance, le buste qui se penche), le
+// vent de la course le rabat vers l'arriere, et il claque un peu a haute vitesse. Quelques os par coureur : rien
+// pour un petit telephone.
+// (inertie : la part du mouvement du parent que le tissu refuse de suivre ; borne : son angle maximal)
+const TISSU: Record<string, { k: number; amort: number; vent: number; claque: number; inertie: number; borne: number }> = {
+  tissu_avant: { k: 60, amort: 9, vent: -0.15, claque: 0.05, inertie: 0.5, borne: 0.4 },      // plaque contre le ventre par le vent
+  tissu_dos: { k: 45, amort: 7, vent: 0.45, claque: 0.10, inertie: 0.6, borne: 0.7 },         // s'ecarte du dos
+  tissu_short_l: { k: 90, amort: 10, vent: 0.18, claque: 0.06, inertie: 0.25, borne: 0.45 }, // suit la cuisse, en retard
+  tissu_short_r: { k: 90, amort: 10, vent: 0.18, claque: 0.06, inertie: 0.25, borne: 0.45 },
+  tissu_dossard: { k: 35, amort: 5, vent: -0.10, claque: 0.12, inertie: 0.8, borne: 0.5 },
+  tissu_dossard_dos: { k: 35, amort: 5, vent: 0.55, claque: 0.16, inertie: 0.8, borne: 0.8 },
+};
+const _qw = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _ax = new THREE.Vector3(), _dir = new THREE.Vector3(), _bas = new THREE.Vector3();
+const LATERAL_MODELE = new THREE.Vector3(0, 0, -1);   // l'axe y du jeu (le cote), dans le repere du modele (Qi)
+function faireFlotter(c: Corps, v: number, dt: number, t: number) {
+  if (!c.tissu) { c.tissu = new Map(); for (const [n, b] of c.m.os) if (TISSU[n]) c.tissu.set(b, { a: 0, w: 0, p: null }); }
+  if (!c.tissu.size) return;
+  c.m.racine.updateMatrixWorld(true);
+  const racine = c.m.racine.children[0];
+  const lat = _ax.copy(LATERAL_MODELE).applyQuaternion(racine.getWorldQuaternion(_qw)).normalize();
+  const vite = Math.min(1, Math.max(0, v / 11)), h = Math.min(0.05, dt || 0.016);
+  for (const [b, e] of c.tissu) {
+    const r = TISSU[b.name], parent = b.parent!;
+    // l'angle du parent autour de l'axe lateral (sa direction, rapportee au bas)
+    parent.getWorldQuaternion(_qp);
+    _dir.set(0, 1, 0).applyQuaternion(_qp);
+    _bas.set(0, -1, 0).applyQuaternion(_qw);
+    const ap = Math.atan2(_bas.clone().cross(_dir).dot(lat), _bas.dot(_dir));
+    if (e.p !== null) e.a -= (ap - e.p) * r.inertie;           // l'inertie : le tissu garde (en partie) son orientation
+    e.p = ap;
+    const cible = r.vent * vite * vite + r.claque * vite * Math.sin(t * 17 + b.id);
+    e.w += (r.k * (cible - e.a) - r.amort * e.w) * h;
+    e.a = Math.max(-r.borne, Math.min(r.borne, e.a + e.w * h));
+    // la rotation, autour de l'axe lateral exprime dans le repere du parent
+    const axe = _dir.copy(lat).applyQuaternion(_qp.invert()).normalize();
+    b.quaternion.copy(c.m.reposLocal.get(b)!).premultiply(new THREE.Quaternion().setFromAxisAngle(axe, e.a));
+  }
 }
 
 const _M = new THREE.Matrix4(), _S = new THREE.Matrix4(), _T = new THREE.Matrix4();
@@ -2101,6 +2225,9 @@ function poserLeCorps(App: any, r: any, p: number[], cap: number, lean: number, 
     .multiply(_M).multiply(Qgl);
   c.m.racine.matrixWorldNeedsUpdate = true;
   c.m.racine.visible = true;
+  const maintenant = performance.now() / 1000;
+  faireFlotter(c, r.v || 0, c.tPrec ? maintenant - c.tPrec : 1 / 60, maintenant);
+  c.tPrec = maintenant;
   return true;
 }
 
@@ -2594,6 +2721,10 @@ export function rendre(App: any, dt: number) {
       camPos.lerp(voulu, lisse); camVise.lerp(vise, lisse);
       camPret = true;
     }
+    // LE TOURNAGE (28/10, la video du club de Val-de-Reuil) : un harnais peut poser sa propre camera
+    // (globalThis.__tournage.camera(camPos, camVise, vise, G, dt, p) ; reperes du monde, y retourne ; p : le joueur, repere 2D). Rien sans lui.
+    const tournage = (globalThis as any).__tournage;
+    if (tournage?.camera) { tournage.camera(camPos, camVise, vise, G, dt || 0.016, p); survol = survol || !!tournage.survol; }
     camera.position.copy(camPos);
     // (y retourne : voir monde) — l'exterieur ne se montre qu'au survol, camera dehors
     if (salleActive && cameraSalle) cameraSalle(camera.position.x, -camera.position.y, camera.position.z, survol, camera, camVise);
