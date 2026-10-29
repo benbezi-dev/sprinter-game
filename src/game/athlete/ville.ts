@@ -482,6 +482,16 @@ const _T = new THREE.Matrix4(), _R = new THREE.Matrix4(), _S = new THREE.Matrix4
 /** La foulee de course en ville, en metres (le moteur avance sa phase d'un demi-tour par appui). */
 const FOULEE = 2.1;
 
+/** Un inconnu en tenue de ville (les passants, les figurants des interieurs), toujours le meme pour une meme cle. */
+export function lookDePassant(cle: string) {
+  const C = SprinterCore as any;
+  const base = C.lookFor(cle, 'divers');
+  const look = C.look({ ...base, civil: true, manches: base.jersey, pantalon: [50, 52, 70] });
+  look.tenue = tenueDeVilleDe(cle, look.build === 'f' ? 'f' : 'm');
+  look.origine = origineDe(cle, look.skin);
+  return look;
+}
+
 export class Personne {
   sprite: THREE.Sprite;
   ombre: THREE.Mesh;
@@ -1150,12 +1160,8 @@ export class Ville {
     const [dx, dz] = this.o.depart || this.portes.maison;
     this.moi = new Personne(this.o.look, dx, dz, this.scene, 320);
     this.cible.copy(this.moi.pos);
-    const C = SprinterCore as any;
     for (let i = 0; i < 14; i++) {
-      const base = C.lookFor('passant-' + i, 'divers');
-      const look = C.look({ ...base, civil: true, manches: base.jersey, pantalon: [50, 52, 70] });
-      look.tenue = tenueDeVilleDe('passant-' + i, look.build === 'f' ? 'f' : 'm');
-      look.origine = origineDe('passant-' + i, look.skin);
+      const look = lookDePassant('passant-' + i);
       const k = this.pietons.auHasard([dx, dz], 120);
       if (k >= 0) this.passants.push(new Personne(look, this.pietons.xs[k], this.pietons.zs[k], this.scene, 160));
     }

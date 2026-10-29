@@ -10,7 +10,7 @@
 // la maison tout de suite. L'athlete est le meme corps qu'en ville (Personne, ville.ts).
 
 import * as THREE from 'three';
-import { Personne, SOL, type Habitant, type Lieu } from './ville';
+import { Personne, SOL, lookDePassant, type Habitant, type Lieu } from './ville';
 import { POSTURES } from './postures';
 
 // TOUS LES BATIMENTS (29/10, l'auteur : « on ne peut toujours pas entrer dans les batiments comme dans les Sims »,
@@ -75,7 +75,13 @@ const SIEGES: Partial<Record<Amenagement, Assise[]>> = {
   vestiaire: [-2.6, -1.9, -0.5, 0.2].map(x => S_(x, -P + 1.5, 0, 1)),
   pizzeria: [S_(-2.65, 0.6, -1, 0), S_(-1.45, 1.6, 1, 0), S_(-1.15, 1.6, -1, 0)],
   guichet: [-2.85, -2.35, -1.85].map(x => S_(x, 0.95, 0, -1)),
+  magasin: [-3.0, -2.5, -2.0].map(x => S_(x, -0.65, 0, -1)),
+  bassin: [1.6, 2.2, 2.8, 3.4].map(x => S_(x, 1.95, 0, -1)),
+  cabinet: [2.2, 2.8].map(x => S_(x, 2.45, 0, -1)),
 };
+// LES FIGURANTS (« personne ne s'assoit » a la boutique, a la piscine, chez le kine : aucun proche n'y va) : des
+// inconnus du quartier qui y flanent et s'y assoient, sans etiquette ; le magasin a son vendeur, la piscine ses nageurs
+const FIGURANTS: Partial<Record<Amenagement, number>> = { magasin: 3, bassin: 3, cabinet: 1, pizzeria: 2, guichet: 2 };
 const COQUILLES: Record<Exclude<Amenagement, 'maison'>, { sol: string; mur: string; mur2: string }> = {
   classe: { sol: '#C9B79A', mur: '#F1E6C8', mur2: '#E6D9B5' }, vestiaire: { sol: '#8E9AA3', mur: '#DDE3E8', mur2: '#CDD5DC' },
   cabinet: { sol: '#D9DEE2', mur: '#F4F6F8', mur2: '#E6ECEF' }, magasin: { sol: '#3A3F46', mur: '#F4F1EA', mur2: '#E0453A' },
@@ -113,7 +119,7 @@ export class Interieur {
   private fini = false;
   private ecoute: Array<[string, any]> = [];
 
-  private gens: { id: string; p: Personne; el: HTMLElement; attente: number; part?: boolean; siege?: number; assis?: boolean }[] = [];
+  private gens: { id: string; p: Personne; el: HTMLElement | null; attente: number; part?: boolean; siege?: number; assis?: boolean; figurant?: boolean }[] = [];
   private am: Amenagement = 'maison';
 
   constructor(private hote: HTMLElement, look: any, nuit: boolean,
@@ -132,6 +138,11 @@ export class Interieur {
     this.construire(nuit, this.am);
     this.moi = new Personne(look, 0.6, P - 0.9, this.scene, 320);
     this.majGens(o.gens || []);
+    for (let i = 0; i < (FIGURANTS[this.am] || 0); i++) {
+      const [x, z] = this.pointLibre();
+      const p = new Personne(lookDePassant(`figurant-${this.am}-${i}`), x, z, this.scene, 200);
+      this.gens.push({ id: `figurant-${i}`, p, el: null, attente: 1 + i * 2, figurant: true });
+    }
     this.moi.dir.set(0, 0, -1); this.moi.placer();
     this.anneau = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.38, 32),
       new THREE.MeshBasicMaterial({ color: '#3DDC84', transparent: true, opacity: 0, depthWrite: false }));
@@ -321,6 +332,9 @@ export class Interieur {
         boite(this.scene, 1.2, 2.2, 0.08, -2.6, SOL, -P + 0.06, mat('#C9A36B'));
         { const b = new THREE.Mesh(new THREE.SphereGeometry(0.33, 20, 16), mat('#E0453A', { roughness: 0.4 })); b.position.set(3.4, SOL + 0.33, 1.6); b.castShadow = true; this.scene.add(b); }
         this.bloquer([-3.2, -P, -2.0, -P + 0.3]); this.bloquer([3.0, 1.2, 3.8, 2.0]);
+        // l'attente : deux chaises a l'avant de la piece, face a la table de soins (le mur de gauche sort du cadre)
+        for (const x of [2.2, 2.8]) chaise(this.scene as unknown as THREE.Group, x, 2.9, '#5A6470');
+        this.bloquer([1.95, 2.65, 3.05, 3.15]);
         break;
       case 'magasin':
         M('rayons', -1.0, -P + 0.3, [-1.0, -P + 1.4], [0, -1], [-3.4, -P, 1.4, -P + 0.7], g => {
@@ -344,6 +358,9 @@ export class Interieur {
         boite(this.scene, 1.6, 0.04, 0.04, 0.5, SOL + 1.5, 0.6, mat('#9AA4AA', { metalness: 0.7 }));
         for (let k = 0; k < 6; k++) boite(this.scene, 0.06, 0.7, 0.45, -0.1 + k * 0.24, SOL + 0.75, 0.6, mat(['#E0453A', '#2F6FB0', '#F2F2F2'][k % 3]));
         this.bloquer([-0.4, 0.3, 1.4, 0.9]);
+        // le banc d'essayage, face aux rayons de chaussures
+        boite(this.scene, 1.5, 0.42, 0.42, -2.5, SOL, -0.2, mat('#C9A36B'));
+        this.bloquer([-3.25, -0.4, -1.75, 0.0]);
         break;
       case 'bureaux':
         M('bureau', -1.2, -0.4, [0.4, 1.4], [0, -1], [-3.6, -P + 0.4, 1.4, 1.0], g => {
@@ -398,6 +415,9 @@ export class Interieur {
           eau.position.set(0, SOL + 0.03, 0); g.add(eau);
           for (let k = 1; k < 5; k++) boite(g, 6.0, 0.03, 0.05, 0, SOL + 0.04, -1.8 + k * 0.72, mat(k % 2 ? '#E0453A' : '#F4F1EA'));
         });
+        // le banc du bord du bassin
+        boite(this.scene, 2.6, 0.42, 0.42, 2.5, SOL, 2.4, mat('#E8EEF0'));
+        this.bloquer([1.2, 2.2, 3.8, 2.6]);
         break;
     }
   }
@@ -410,6 +430,7 @@ export class Interieur {
     const vus = new Set(liste.map(h => h.id));
     // qui s'en va marche jusqu'a la porte, et ne disparait qu'en la passant (boucle)
     for (const g of this.gens) {
+      if (g.figurant) continue;
       if (!vus.has(g.id) && !g.part) { g.part = true; g.p.route = this.chemin(g.p.pos.x, g.p.pos.z, 0.6, P - 0.2); }
       else if (vus.has(g.id) && g.part) { g.part = false; g.attente = 0; }
     }
@@ -574,7 +595,7 @@ export class Interieur {
     }
     this.moi.peindre(this.camera);
     const w = this.hote.clientWidth, h = this.hote.clientHeight, v = new THREE.Vector3();
-    for (const g of this.gens.filter(g => g.part && !g.p.route.length)) { g.p.retirer(); g.el.remove(); }
+    for (const g of this.gens.filter(g => g.part && !g.p.route.length)) { g.p.retirer(); g.el?.remove(); }
     this.gens = this.gens.filter(g => !(g.part && !g.p.route.length));
     const sieges = SIEGES[this.am] || [];
     for (const g of this.gens) {
@@ -596,6 +617,7 @@ export class Interieur {
       }
       else g.p.marche = false;
       g.p.peindre(this.camera);
+      if (!g.el) continue;
       v.set(g.p.pos.x, SOL + 2.0, g.p.pos.z).project(this.camera);
       g.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h}px) translate(-50%, -100%)`;
     }
@@ -611,7 +633,7 @@ export class Interieur {
     cancelAnimationFrame(this.id);
     for (const [t, f] of this.ecoute) window.removeEventListener(t, f);
     this.scene.traverse((o: any) => { o.geometry?.dispose?.(); });
-    for (const g of this.gens) g.el.remove();
+    for (const g of this.gens) g.el?.remove();
     this.rendu.dispose();
     this.rendu.domElement.remove();
   }
