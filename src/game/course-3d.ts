@@ -2254,10 +2254,8 @@ function corpsDe(r: any): Corps | null {
   if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
   if (L.kit === 'vrac' && mats.debardeur) {
-    maillotDuClub(mats.debardeur);
-    if (mats.peau) maillotDuClub(mats.peau, true);
+    maillotTripo(mats.debardeur, femme);
     if (mats.dossard) dossardSousLaBande(mats.dossard);
-    copie.traverse((o: any) => { if (o.isMesh && o.material === mats.debardeur) bordsDuDebardeur(o.geometry); });
   }
   // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
   c = { m: modeleDe(copie), mats, echelle: source !== gabarit ? hauteurDe(gabarit) / hauteurDe(source) : undefined };
@@ -2330,6 +2328,20 @@ function dossardSousLaBande(m: THREE.MeshStandardMaterial) {
   };
   m.customProgramCacheKey = () => 'dossard-vrac';
   m.needsUpdate = true;
+}
+// LE MAILLOT TRIPO (29-30/10 : « fait ce maillot via Tripo pour le jeu », d'apres la face et le dos dessines par l'auteur) :
+// le modele Tripo, cale sur le debardeur, y est CUIT dans ses UV (scratchpad cuire-maillot.py, Blender) — une image par
+// corps. Le debardeur garde ainsi son squelette, ses os de tissu et les physiques : le maillot bouge comme avant.
+const textesTripo: Record<string, THREE.Texture> = {};
+function maillotTripo(m: THREE.MeshStandardMaterial, femme: boolean) {
+  const n = femme ? 'vrac-femme' : 'vrac-homme';
+  if (!textesTripo[n]) {
+    const base = (import.meta as any).env?.BASE_URL || '/';
+    const t = new THREE.TextureLoader().load(base + 'modeles/maillots/' + n + '.jpg');
+    t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;   // (les UV du glb : sans retournement)
+    textesTripo[n] = t;
+  }
+  m.map = textesTripo[n]; m.color.setRGB(1, 1, 1); m.roughness = 0.82; m.needsUpdate = true;
 }
 let logoVRAC: THREE.Texture | null = null;
 const lin = (c: number) => new THREE.Color(c);   // (hex sRGB, range lineaire par three)
