@@ -2255,6 +2255,7 @@ function corpsDe(r: any): Corps | null {
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
   if (L.kit === 'vrac' && mats.debardeur) {
     maillotDuClub(mats.debardeur);
+    if (mats.peau) maillotDuClub(mats.peau, true);
     copie.traverse((o: any) => { if (o.isMesh && o.material === mats.debardeur) bordsDuDebardeur(o.geometry); });
   }
   // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
@@ -2307,13 +2308,18 @@ function bordsDuDebardeur(g: THREE.BufferGeometry) {
 let logoVRAC: THREE.Texture | null = null;
 const lin = (c: number) => new THREE.Color(c);   // (hex sRGB, range lineaire par three)
 const uVRAC = { blanc: { value: lin(0xf4f6f8) }, vert: { value: lin(0x4cb248) }, bleu: { value: lin(0x1c40c4) } };
-function maillotDuClub(m: THREE.MeshStandardMaterial) {
+// LE COL EN V, MOINS PROFOND (« le col est trop bas », « le col est en V mais tu l'as fait trop bas », l'auteur, 29/10) :
+// le debardeur du jeu est echancre jusqu'a 1,29 m ; le V du club a sa pointe a 1,312 m et remonte vers la base du cou
+// (1,36 m chez l'homme, 1,35 chez la femme, mesure). Le haut de la poitrine se peint donc sur la PEAU, dans l'echancrure
+// seulement (au-dessus de 1,28 m), sous la ligne du V, avec son liseré : `peau` ne garde que ce col.
+const COL_VRAC = 'float yCol = 1.312 + 0.62 * abs(vKit.z); bool dansLeCol = vKitN.x > 0.0 && abs(vKit.z) < 0.066 && vKit.y > 1.28 && vKit.y < yCol;';
+function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
   if (!logoVRAC) {
     const base = (import.meta as any).env?.BASE_URL || '/';
     logoVRAC = new THREE.TextureLoader().load(base + 'modeles/maillots/vrac-logo.png');
     logoVRAC.colorSpace = THREE.SRGBColorSpace; logoVRAC.anisotropy = 4;
   }
-  m.color.setRGB(1, 1, 1); m.roughness = 0.82;
+  if (!peau) { m.color.setRGB(1, 1, 1); m.roughness = 0.82; }
   const avant = m.onBeforeCompile;   // (le lisere s'y pose deja)
   m.onBeforeCompile = (sh, r) => {
     avant.call(m, sh, r);
@@ -2322,10 +2328,14 @@ function maillotDuClub(m: THREE.MeshStandardMaterial) {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aBord; varying float vBord; varying vec3 vKit; varying vec3 vKitN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = position; vKitN = normal; vBord = aBord;');
-    sh.fragmentShader = sh.fragmentShader
+    sh.fragmentShader = (peau ? '#define PEAU_VRAC\n' : '') + sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vBord; varying vec3 vKit; varying vec3 vKitN;\nuniform sampler2D uLogoVRAC; uniform vec3 uBlancVRAC, uVertVRAC, uBleuVRAC;')
       .replace('#include <map_fragment>', `#include <map_fragment>
 {
+  ${COL_VRAC}
+#ifdef PEAU_VRAC
+  if (dansLeCol) {
+#endif
   float y = vKit.y, z = vKit.z, nz = abs(vKitN.z);
   bool devant = vKitN.x > 0.15, dos = vKitN.x < -0.15;
   // le haut blanc, le bas bleu roi
@@ -2346,12 +2356,19 @@ function maillotDuClub(m: THREE.MeshStandardMaterial) {
     if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 t = texture2D(uLogoVRAC, uv); kc = mix(kc, t.rgb, t.a); }
   }
   // le liseré bleu du col et des emmanchures (bordsDuDebardeur), un peu plus d'un centimetre
-  if (vBord < 0.013) kc = uBleuVRAC;
+  // (le bord du V, recouvert par le col rond, n'a plus de liseré ; le col rond a le sien)
+#ifndef PEAU_VRAC
+  if (vBord < 0.013 && !dansLeCol) kc = uBleuVRAC;
+#endif
+  if (devant && abs(z) < 0.066 && y < yCol && yCol - y < 0.012) kc = uBleuVRAC;
   float maille = 0.96 + 0.04 * sin(vKit.y * 900.0) * sin(vKit.z * 900.0 + vKit.x * 600.0);
   diffuseColor.rgb = kc * maille;
+#ifdef PEAU_VRAC
+  }
+#endif
 }`);
   };
-  m.customProgramCacheKey = () => 'maillot-vrac';
+  m.customProgramCacheKey = () => (peau ? 'maillot-vrac-col' : 'maillot-vrac');
   m.needsUpdate = true;
 }
 
