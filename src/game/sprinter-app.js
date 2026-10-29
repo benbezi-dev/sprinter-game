@@ -2435,7 +2435,7 @@
       const t = (cibles && cibles[n] ? cibles[n] : tire) * (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1);
       const lane = i < monCouloir ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
-        total: G.track.total, pool: lvl.pool, record });
+        total: G.track.total, pool: lvl.pool, record, allure: 1 / (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1) });
       if (r.target < best) { best = r.target; G.champion = n; G.championTime = r.target; }
       G.runners.push(r);
     });
@@ -4223,7 +4223,8 @@
                                      best: R.best, total: G.track.total, record: enTroisD(K.RECORDS_DU_MONDE, R.key) || null,
                                      allure: enTroisD(K.ALLURE_DU_JOUEUR, R.key) })
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
-                                     pool: LEVELS[G.levelIdx].pool, record: enTroisD(K.RECORDS_DU_MONDE, R.key) || null });
+                                     pool: LEVELS[G.levelIdx].pool, record: enTroisD(K.RECORDS_DU_MONDE, R.key) || null,
+                                     allure: 1 / (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1) });
     if (neuf.isPlayer) neuf.cadenceLancee = !r.enHaies;
     if (neuf.isPlayer && G.track.salle) { const T = G.track; neuf.pente = (s, v) => T.accelPente(s, neuf.lane, v); neuf.bouscule = bousculade; }
     const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,

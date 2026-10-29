@@ -2080,7 +2080,8 @@
     this.target = opts.target || null;
     /** Le record du monde de l'epreuve (RECORDS_DU_MONDE) : le temps le plus court permis. `null` : sans plafond. */
     this.record = opts.record || null;
-    /** ALLURE_DU_JOUEUR : ce qui reste de la vitesse de pointe et de la poussee de chaque appui. 1 : le moteur d'avant. */
+    /** ALLURE_DU_JOUEUR (1 / CONVERSION_ADVERSAIRES pour les autres) : ce qui reste de la vitesse de pointe, de la poussee
+     *  de chaque appui et de la longueur de foulee. 1 : le moteur d'avant. */
     this.allure = opts.allure || 1;
     this.maxSpeed = (opts.maxSpeed || 12) * this.allure;
     this.best = opts.best || 9.1;
@@ -2264,7 +2265,9 @@
     // la cadence lancee du joueur (C.CADENCE_LANCEE), de TRANS_END a dix metres plus loin
     const qL = this.cadenceLancee ? Math.min(1, Math.max(0, ((this.d || 0) - (this.legStart || 0) - C.TRANS_END) / 10)) : 0;
     const lance = 1 + (C.CADENCE_LANCEE - 1) * qL * qL * (3 - 2 * qL);
-    return Math.max(0.85, 4 * leg * P.stride * dep * (this.foulee || 1) *
+    // L'ALLURE 3D (ALLURE_DU_JOUEUR, CONVERSION_ADVERSAIRES) ralentit la course, pas les jambes : la foulee
+    // raccourcit d'autant (« plus lourd, moins technique, moins frequent », l'auteur, 29/10 : 6,0 -> 4,9 appuis/s).
+    return Math.max(0.85, 4 * leg * P.stride * dep * (this.foulee || 1) * this.allure *
                     Math.sin(Math.min(1.15, 0.70 * amp)) / lance);
   };
 
