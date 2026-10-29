@@ -7,12 +7,12 @@ import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
 import { ChampPanel } from './ChampPanel';
 import { RelaisPanel } from './RelaisPanel';
-import { RELAIS_OUVERT } from '@/game/canal';
+import { RELAIS_OUVERT, TROIS_D_OUVERTE } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
 import { Repliable } from './Repliable';
-import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, EPREUVES_EN_SALLE } from '@/game/jeux';
 import { stadeDebloque, VEDETTES, defiPossible } from '@/game/vedettes';
 import { mot } from '@/game/vedettes-mots';
 
@@ -23,10 +23,12 @@ export function OneShotPanel() {
   const { N, LEVELS } = SprinterApp;
   // Les epreuves du jeu courant : le one shot de Hurdlers enchaine des haies.
   const jeu = useJeu();
-  const RACE_KEYS = epreuvesDuJeu(jeu);
-  const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
-  useEffect(() => { setPicked([epreuvesDuJeu(jeu)[0]]); }, [jeu]);
   const [level, setLevel] = useState(4);
+  // AU STADE COUVERT (la salle de Val-de-Reuil), ses epreuves seulement : 60 m, 200 m et 400 m en salle
+  const enSalle = !!(LEVELS[level] as any)?.salle;
+  const RACE_KEYS = (enSalle ? EPREUVES_EN_SALLE : epreuvesDuJeu(jeu)) as readonly RaceKey[];
+  const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
+  useEffect(() => { setPicked([RACE_KEYS[0]]); }, [jeu, enSalle]);
 
   const toggle = (k: RaceKey) => {
     setPicked(p => (p.includes(k) ? p.filter(x => x !== k) : [...p, k]));
@@ -130,6 +132,8 @@ export function OneShotPanel() {
                     choisissent pas non plus : on y arrive etape par etape. */}
                 {LEVELS.map((l: any, i: number) => {
                   if (!l.horsSerie || l.evenement || l.legende || (l.reserve && import.meta.env.VITE_CANAL !== 'test')) return null;
+                  // (le stade couvert Jesse Owens n'existe qu'en 3D : il attend sa sortie, canal.ts)
+                  if (l.avecLa3D && !TROIS_D_OUVERTE) return null;
                   if (stadeDebloque(l)) return (
                     <option key={i} value={i} className="bg-neutral-900">
                       {N.levelName(i)}

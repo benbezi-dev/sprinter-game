@@ -1,0 +1,17 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sprinter — la ville de la carriere d'athlete</title>
+<style>html,body{margin:0;height:100%;background:#000;overflow:hidden}#v{position:fixed;inset:0}
+#l{position:fixed;left:8px;bottom:8px;color:#fff;font:12px system-ui;background:#0008;padding:4px 8px;border-radius:6px;z-index:9}</style>
+<div id="v"></div><div id="l">touche un lieu, ou les fleches ; Q / E tournent</div>
+<script type="module">
+  import { Ville } from '/src/game/athlete/ville.ts';
+  import { lookDe } from '/src/game/athlete/apparence.ts';
+  import { APPARENCE } from '/src/game/athlete/regles.ts';
+  window.ville = new Ville(document.getElementById('v'), {
+    look: lookDe(APPARENCE, true), depart: null,
+    nom: l => ({ college: 'Collège Alphonse Allais', stade: 'Stade Bernard Amsalem', gare: 'Gare', piscine: 'Piscine Alice Milliat', mairie: 'Mairie', parc: 'Parc de Sztum', marche: 'Marché', cote: 'Les Falaises', lycee: 'Lycée Marc Bloch' })[l] || l.replace('_', ' '),
+    surLieu: l => { document.getElementById('l').textContent = 'entree : ' + l; },
+  });
+</script>

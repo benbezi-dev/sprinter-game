@@ -279,8 +279,9 @@ export function jeterLeFilm(g: GenreFilm | null) {
  *   winall                    -> on arrete, et le compte a rebours part
  *   over                      -> defaite de carriere : on arrete AUSSI — la
  *                                course a eu lieu, l'ecran de defaite la propose
- *   falseout                  -> on arrete : le depart manque se partage lui
- *                                aussi (demande du 20/10/2026)
+ *   falseout                  -> on arrete trois secondes et demie plus tard : le depart
+ *                                manque se partage lui aussi (20/10/2026), et
+ *                                le faux depart lui-meme est dans le film (24/10)
  *   title                     -> on jette si l'on QUITTE une course
  *
  * ONE SHOT ET CARRIERE SE FILMENT DIFFEREMMENT. Le one shot additionne les
@@ -302,6 +303,13 @@ export function jeterLeFilm(g: GenreFilm | null) {
  * ET ON NE FILME PAS UN ECRAN QU'ON NE MONTRERA PAS. Un appareil qui ne sait
  * pas encoder le dit tout de suite ; on ne lui prend pas d'images pour rien.
  */
+// LE FAUX DEPART LUI-MEME DANS LE FILM (« faux depart compris », l'auteur, 24/10) : couper a l'instant
+// ou il est siffle laissait un film qui s'arretait sur le decompte, sans le coureur parti trop tot
+// ni le « FAUX DEPART » rouge du HUD (hud-film.ts). La camera tourne donc encore un peu.
+// le depart franc, l'arret, puis les mains sur la tete (faux-depart.ts) : trois secondes et demie
+const FAUX_DEPART_MS = 3500;
+let attenteFaux: ReturnType<typeof setTimeout> | null = null;
+
 export function useFilmerLeOneShot() {
   const state = useGameStore(s => s.state);
   const mode = useGameStore(s => s.mode);
@@ -315,6 +323,13 @@ export function useFilmerLeOneShot() {
     if (state === avant.current) return;
     const veille = avant.current;
     avant.current = state;
+
+    // un faux depart encore filme, et le joueur passe deja a autre chose : on garde ce qu'on a
+    if (attenteFaux && state !== 'falseout') {
+      clearTimeout(attenteFaux); attenteFaux = null;
+      const g0 = genreDuFilm();
+      if (g0) { void arreterLeFilm(g0); return; }
+    }
 
     // Une course qu'on abandonne n'a pas de replay, quel que soit son mode.
     //
@@ -373,7 +388,11 @@ export function useFilmerLeOneShot() {
     // one shot (falseStartOut) ; au lieu de jeter la prise, on l'arrete, et
     // l'ecran de fin propose le replay du depart manque. Le carton sort sans
     // chrono — il n'y en a pas (voir chronoDuCarton).
-    if (state === 'falseout') { void arreterLeFilm(g); return; }
+    if (state === 'falseout') {
+      if (attenteFaux) clearTimeout(attenteFaux);
+      attenteFaux = setTimeout(() => { attenteFaux = null; void arreterLeFilm(g); }, FAUX_DEPART_MS);
+      return;
+    }
 
     // Retour a l'ecran-titre, mais seulement en QUITTANT une course. La video
     // prete survit a tout le reste : le joueur peut ouvrir le classement, lire

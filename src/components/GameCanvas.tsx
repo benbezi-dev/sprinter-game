@@ -5,12 +5,43 @@ import { dessinerLeGenerique, placerLaCameraDuGenerique } from '@/game/scene-gen
 import { cameraPassage, appliquerCamera } from '@/game/passage';
 import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
+import { jeuCourant } from '@/game/jeux';
 import { cameraPour } from '@/game/cadrage';
-import { POUSSEE_OUVERTE } from '@/game/canal';
+import { POUSSEE_OUVERTE, TROIS_D_OUVERTE } from '@/game/canal';
 import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
 import { chargementFini, partChargee } from '@/game/chargement';
+import { dessinSuspendu } from '@/game/dessin-suspendu';
+
+// LA COURSE EN VRAIE 3D (22/10/2026). Sur la branche de test ferme test-ferme/course-3d,
+// elle est la par defaut (`?rendu=2d` revient au dessin du jeu) ; chargee a part pour
+// que three ne pese rien tant qu'elle n'est pas demandee. Voir game/course-3d.ts.
+// (la 3D a tout le monde a son heure : canal.ts, TROIS_D_OUVERTE)
+const RENDU_3D = (() => {
+  try { const r = new URLSearchParams(location.search).get('rendu'); return r === '3d' || (TROIS_D_OUVERTE && r !== '2d'); }
+  catch { return TROIS_D_OUVERTE; }
+})();
+// Les epreuves deja faites en 3D, et les nuits du molosse (`nuit-*`, la ruelle de ruelle-3d.ts) ;
+// les autres (relais, concours) restent en 2D. Les haies y sont depuis le 29/10 (« on passe Hurdlers en 3D aussi »).
+const EPREUVES_3D = new Set(['100', '200', '400', '60', '200s', '400s', '100h', '110h', '400h']);
+let rendu3D: any = null;
+// LE REPERE DU JOUEUR EN 3D : un chevron jaune et « TOI » au-dessus de sa tete — le seul nom
+// ecrit sur la piste, comme en championnat
+function marquerLeJoueur(ctx: CanvasRenderingContext2D, e: { x: number; y: number }) {
+  const y = e.y - 6;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ctx.fillStyle = '#ffd23a';
+  ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(e.x - 7, y - 9); ctx.lineTo(e.x + 7, y - 9); ctx.lineTo(e.x, y); ctx.closePath();
+  ctx.stroke(); ctx.fill();
+  ctx.font = '800 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+  ctx.strokeText('TOI', e.x, y - 12); ctx.fillText('TOI', e.x, y - 12);
+  ctx.restore();
+}
+if (RENDU_3D) import('@/game/course-3d').then(m => { rendu3D = m; }).catch(() => { /* reste en 2D */ });
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
 function pointDuPersonnage(G: any): [number, number] {
@@ -121,7 +152,8 @@ export function GameCanvas() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d', { alpha: false });
+    // Transparente sous ?rendu=3d seulement : la course 3D se voit dessous.
+    const ctx = canvas.getContext('2d', { alpha: RENDU_3D });
     if (!ctx) return;
 
     // Add roundRect fallback if needed
@@ -208,6 +240,8 @@ export function GameCanvas() {
     // L'accueil le demande au moment ou il apparait — voir accueilPose dans
     // game/scene-accueil.ts.
     const frame = (now: number, redessin = false) => {
+      // une scene plein ecran (la ville de la carriere) couvre l'accueil : on ne le dessine pas
+      if (!redessin && dessinSuspendu() && SprinterApp.G.state === 'title') { rafRef.current = requestAnimationFrame(frame); return; }
       // LE TEMPO DU MONDE MULTIPLIE LE PAS, ET APRES LE PLAFOND. Plafonner
       // ensuite laisserait un ralenti relever un `dt` deja ecrete — le plafond
       // protege le moteur d'un bond apres un onglet en veille, le tempo ne doit
@@ -273,6 +307,12 @@ export function GameCanvas() {
       // garde le fond de l'ouverture plutot que de montrer le stade sous une
       // camera qui n'est pas la sienne. Voir game/scene-accueil.ts.
       const accueilSansScene = G.state === 'title' && !placerLaCameraDeLAccueil(SprinterApp);
+      // la presentation de l'adversaire (cinematique `intro`) se passe aussi en 3D : la camera
+      // y fait le tour du stade avant de plonger vers le depart (course-3d.ts, LE SURVOL)
+      const introCourse = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
+      const en3D = !!rendu3D && (EPREUVES_3D.has(G.raceKey) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
+        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || introCourse);
+      if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {
         const g = ctx.createLinearGradient(0, 0, 0, G.VH);
         g.addColorStop(0, '#0a0f1c'); g.addColorStop(1, '#05070d');
@@ -345,7 +385,10 @@ export function GameCanvas() {
           if (G.cut.kind === 'ending') placerLaCameraDuGenerique(SprinterApp);
           else placerLaCameraDeLaScenette(G.cut);
         }
-        drawWorld(ctx, theme);
+        // En 3D, la course se dessine dans sa propre toile, sous celle-ci laissee transparente.
+        if (rendu3D) rendu3D.afficher(en3D);
+        if (en3D) rendu3D.rendre(SprinterApp, dt);
+        else drawWorld(ctx, theme);
 
         // LES HAIES VIVENT SUR LA PISTE TANT QUE LE MONDE EST HURDLERS,
         // passage ou non : un accueil de Hurdlers sans haies dans les couloirs
@@ -371,7 +414,21 @@ export function GameCanvas() {
         // qu'ils avaient disparu ; sous le voile allege, on voyait des blocs
         // vides.
         if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') {
-          drawAthletes(ctx);
+          if (!en3D) drawAthletes(ctx);
+          else {
+            // en 3D, la bulle de l'entree se pose sur la toile du jeu, au-dessus de sa tete
+            if (G.presBulle && G.presente && rendu3D.ecranDe) {
+              const e = rendu3D.ecranDe(SprinterApp, G.presente);
+              if (e) SprinterApp.drawBulle3D(ctx, e);
+            }
+            // et le joueur se reconnait parmi huit (« un indicateur pour que le joueur sache qui
+            // il est sur la piste », l'auteur, 24/10)
+            if (G.player && rendu3D.ecranDe) {
+              // juste au-dessus de la tete : plus haut, de loin, il semblait pose sur le coureur du fond
+              const e = rendu3D.ecranDe(SprinterApp, G.player, 1.1);
+              if (e) marquerLeJoueur(ctx, e);
+            }
+          }
         } else if (G.state === 'title') {
           // Les trois coureurs de l'accueil : sur la piste, hors des cartes.
           dessinerLesCoureursDeLAccueil(ctx, SprinterApp, theme);
@@ -394,7 +451,8 @@ export function GameCanvas() {
             dessinerCinematique(ctx, G.sortie, theme);
             ctx.restore();
           }
-        } else if (G.state === 'cut') {
+        } else if (G.state === 'cut' && !en3D) {
+          // en 3D, la presentation n'a pas son coureur dessine : le stade la porte
           if (G.cut) dessinerCinematique(ctx, G.cut, theme);
         }
         
@@ -436,12 +494,12 @@ export function GameCanvas() {
       // depuis le 18/10. Ni sur l'ouverture, ou il n'y a pas de stade, ni sur
       // le generique, qui a sa propre nuit. Avant la vignette, qui ferme les
       // bords de l'image deja etalonnee.
-      const ambiance = (G.state === 'open' || accueilSansScene || (G.state === 'cut' && G.cut && G.cut.kind === 'ending'))
+      const ambiance = (en3D || G.state === 'open' || accueilSansScene || (G.state === 'cut' && G.cut && G.cut.kind === 'ending'))
         ? null : SprinterApp.theme().ambiance;
       if (ambiance) appliquerAmbiance(ctx, ctx.canvas.width, ctx.canvas.height, ambiance,
         SprinterApp.theme().ambianceForce ?? 1);
 
-      if (Prem) {
+      if (Prem && !en3D) {
         const enCourse = G.state === 'race';
         // DEUX GESTES, DEUX COUPS DE VITESSE.
         //

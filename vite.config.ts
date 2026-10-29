@@ -267,10 +267,25 @@ const LANCEMENT_DUEL_MARQUES = (() => {
 // Meme valeur que DUREE_MS dans worker/src/marques.js.
 const DUREE_DUEL_MARQUES_MS = 6 * 24 * 3600 * 1000;
 
+/* ---------------------------------------------------------------------------
+   LA SORTIE DE LA 3D (29/10, decide par l'auteur) : vendredi 30 octobre 2026,
+   21 h a Paris (UTC+1, heure d'hiver). Avant, le jeu public reste en 2D ; des
+   cette minute la course 3D (Hurdlers compris) et le stade couvert Jesse Owens
+   s'ouvrent TOUT SEULS, sans deploiement, a l'heure de l'appareil lue au
+   chargement (canal.ts, TROIS_D_OUVERTE ; sprinter-app.js, l'echelle des records).
+   Le canal de test l'a toujours. Essai : LANCEMENT_3D=0 npx vite build (ouverte).
+--------------------------------------------------------------------------- */
+const LANCEMENT_3D = (() => {
+  const v = process.env.LANCEMENT_3D;
+  if (v) { const n = Number(v); return Number.isFinite(n) ? n : Date.parse(v); }
+  return Date.UTC(2026, 9, 30, 20, 0, 0);
+})();
+
 export default defineConfig(({ mode }) => ({
   base: basePath,
   define: {
     __LANCEMENT_DEFI_MEBA__: JSON.stringify(LANCEMENT_DEFI_MEBA),
+    __LANCEMENT_3D__: JSON.stringify(LANCEMENT_3D),
     __DUREE_EVENEMENT_MS__: JSON.stringify(DUREE_EVENEMENT_MS),
     __LANCEMENT_DUEL_MARQUES__: JSON.stringify(LANCEMENT_DUEL_MARQUES),
     __DUREE_DUEL_MARQUES_MS__: JSON.stringify(DUREE_DUEL_MARQUES_MS),

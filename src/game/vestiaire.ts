@@ -127,7 +127,8 @@ export function habillerLeJoueur(epreuve: unknown) {
   const s = porte ? SKINS[porte] : null;
   const chezLui = !!s && typeof epreuve === 'string' && avecHaies(epreuve) === s.surHaies;
   const look = chezLui && !(lvl && lvl.evenement) ? lookDuSkin(porte as string) : null;
-  G.player.look = look || SprinterCore.PLAYER_LOOK;
+  // L'athlete de la carriere court avec le corps qu'on lui a choisi (game/athlete/).
+  G.player.look = (G.reglagesJoueur && G.reglagesJoueur.look) || look || SprinterCore.PLAYER_LOOK;
 }
 
 export function useVestiaire(): Etat {

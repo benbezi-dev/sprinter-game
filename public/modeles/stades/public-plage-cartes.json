@@ -1,0 +1,33 @@
+{
+ "silhouettes": 6,
+ "gestes": [
+  "transat",
+  "applaudit",
+  "debout",
+  "pied",
+  "photo"
+ ],
+ "angles": [
+  -60,
+  -30,
+  0,
+  30,
+  60
+ ],
+ "case": [
+  128,
+  256
+ ],
+ "metres": [
+  1.1,
+  2.2
+ ],
+ "passes": [
+  "base",
+  "peau",
+  "maillot",
+  "siege",
+  "cheveux",
+  "pantalon"
+ ]
+}
