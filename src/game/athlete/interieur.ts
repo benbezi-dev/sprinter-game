@@ -64,6 +64,18 @@ function boite(g: THREE.Object3D, l: number, h: number, p: number, x: number, y:
 }
 
 const ASSIS = POSTURES.assis();
+// LES SIEGES DES GENS (29/10, « les gens dans la piece ne s'assoient jamais ») : les pieds et le regard de chaque
+// place libre, d'apres les meubles d'amenager (meme regle que ASSISES ; celle du joueur n'y est pas)
+const S_ = (x: number, z: number, dx: number, dz: number): Assise => ({ pos: [x, z], dir: [dx, dz] });
+const SIEGES: Partial<Record<Amenagement, Assise[]>> = {
+  maison: [S_(-2.1, 0.95, 0, -1), S_(-1.1, 0.95, 0, -1)],
+  classe: [-0.4, 0.8, 2.0].flatMap(dz => [-1.4, 0.1].flatMap(dx => [-0.25, 0.25].map(s => S_(dx - 1.2 + s, dz - 0.15, 0, -1))))
+    .filter(a => !(a.pos[0] === -0.85 && a.pos[1] === 1.85)),
+  bureaux: [S_(-2.8, -2.25, 0, -1), S_(-0.8, -2.25, 0, -1), S_(-2.8, -0.45, 0, -1), S_(2.3, 1.05, 0, -1), S_(3.3, 1.05, 0, -1)],
+  vestiaire: [-2.6, -1.9, -0.5, 0.2].map(x => S_(x, -P + 1.5, 0, 1)),
+  pizzeria: [S_(-2.65, 0.6, -1, 0), S_(-1.45, 1.6, 1, 0), S_(-1.15, 1.6, -1, 0)],
+  guichet: [-2.85, -2.35, -1.85].map(x => S_(x, 0.95, 0, -1)),
+};
 const COQUILLES: Record<Exclude<Amenagement, 'maison'>, { sol: string; mur: string; mur2: string }> = {
   classe: { sol: '#C9B79A', mur: '#F1E6C8', mur2: '#E6D9B5' }, vestiaire: { sol: '#8E9AA3', mur: '#DDE3E8', mur2: '#CDD5DC' },
   cabinet: { sol: '#D9DEE2', mur: '#F4F6F8', mur2: '#E6ECEF' }, magasin: { sol: '#3A3F46', mur: '#F4F1EA', mur2: '#E0453A' },
@@ -101,7 +113,7 @@ export class Interieur {
   private fini = false;
   private ecoute: Array<[string, any]> = [];
 
-  private gens: { id: string; p: Personne; el: HTMLElement; attente: number; part?: boolean }[] = [];
+  private gens: { id: string; p: Personne; el: HTMLElement; attente: number; part?: boolean; siege?: number; assis?: boolean }[] = [];
   private am: Amenagement = 'maison';
 
   constructor(private hote: HTMLElement, look: any, nuit: boolean,
@@ -130,6 +142,8 @@ export class Interieur {
     const ro = () => this.cadrer();
     window.addEventListener('resize', ro); this.ecoute.push(['resize', ro]);
     this.id = requestAnimationFrame(this.boucle);
+    // ?sonde : les bancs d'essai visent un meuble sans deviner ou toucher l'ecran (comme __course3d)
+    if (/[?&]sonde\b/.test(location.search)) (window as any).__interieur = this;
   }
 
   /** Les murs, le sol, les meubles et la lumiere. */
@@ -249,7 +263,9 @@ export class Interieur {
   private amenager(am: Amenagement) {
     const M = (m: Meuble, x: number, z: number, ou: [number, number], regard: [number, number], e: [number, number, number, number], f: (g: THREE.Group) => void) =>
       this.meuble(m, x, z, ou, regard, f, e);
-    const chaise = (g: THREE.Group, x: number, z: number, c = '#2B2F36') => { boite(g, 0.42, 0.45, 0.42, x, SOL, z, mat(c)); boite(g, 0.42, 0.45, 0.05, x, SOL + 0.45, z + 0.19, mat(c)); };
+    // le dossier derriere l'assis : vers +z par defaut, vers -x ou +x (dosX) pour qui regarde une table de cote
+    const chaise = (g: THREE.Group, x: number, z: number, c = '#2B2F36', dosX = 0) => { boite(g, 0.42, 0.45, 0.42, x, SOL, z, mat(c));
+      if (dosX) boite(g, 0.05, 0.45, 0.42, x + dosX * 0.19, SOL + 0.45, z, mat(c)); else boite(g, 0.42, 0.45, 0.05, x, SOL + 0.45, z + 0.19, mat(c)); };
     const pupitre = (g: THREE.Group, x: number, z: number) => {
       boite(g, 1.1, 0.04, 0.5, x, SOL + 0.72, z, mat('#D9C7A6'));
       for (const dx of [-0.5, 0.5]) boite(g, 0.04, 0.72, 0.45, x + dx, SOL, z, mat('#7A828C'));
@@ -371,7 +387,7 @@ export class Interieur {
           for (const [x, z] of [[-0.6, -0.4], [0.9, 0.6]] as [number, number][]) {
             boite(g, 0.9, 0.05, 0.9, x, SOL + 0.74, z, mat('#F4F1EA'));
             boite(g, 0.08, 0.74, 0.08, x, SOL, z, mat('#3A3F46'));
-            chaise(g, x - 0.6, z, '#E0453A'); chaise(g, x + 0.6, z, '#E0453A');
+            chaise(g, x - 0.6, z, '#E0453A', -1); chaise(g, x + 0.6, z, '#E0453A', 1);
           }
         });
         break;
@@ -409,6 +425,12 @@ export class Interieur {
       this.hote.appendChild(el);
       this.gens.push({ id: h.id, p, el, attente: 0 });
     }
+  }
+
+  private leverDuSiege(g: { p: Personne; siege?: number; assis?: boolean }) {
+    const a = g.siege != null ? (SIEGES[this.am] || [])[g.siege] : null;
+    g.p.pose = null; g.assis = false; g.siege = undefined;
+    if (a) { g.p.pos.set(a.pos[0] + a.dir[0] * 0.5, 0, a.pos[1] + a.dir[1] * 0.5); g.p.placer(); }
   }
 
   /** Un point du sol ou personne ne bute : ni meuble, ni la porte. */
@@ -554,10 +576,24 @@ export class Interieur {
     const w = this.hote.clientWidth, h = this.hote.clientHeight, v = new THREE.Vector3();
     for (const g of this.gens.filter(g => g.part && !g.p.route.length)) { g.p.retirer(); g.el.remove(); }
     this.gens = this.gens.filter(g => !(g.part && !g.p.route.length));
+    const sieges = SIEGES[this.am] || [];
     for (const g of this.gens) {
-      if (g.part) g.p.avancer(dt, 1.3);
-      else if (g.p.route.length) { if (g.p.avancer(dt, 1.1)) g.attente = 3 + Math.random() * 6; }
-      else if ((g.attente -= dt) <= 0) { g.p.route = this.chemin(g.p.pos.x, g.p.pos.z, ...this.pointLibre()); g.attente = 99; }
+      if (g.part) { if (g.assis) this.leverDuSiege(g); g.p.avancer(dt, 1.3); }
+      else if (g.p.route.length) {
+        if (g.p.avancer(dt, 1.1)) {
+          g.attente = 3 + Math.random() * 6;
+          // arrive a son siege : il s'assoit, et y reste plus longtemps
+          if (g.siege != null) { const a = sieges[g.siege]; g.p.pos.set(a.pos[0], 0, a.pos[1]); g.p.dir.set(a.dir[0], 0, a.dir[1]).normalize(); g.p.pose = ASSIS; g.assis = true; g.p.placer(); g.attente = 8 + Math.random() * 10; }
+        }
+      }
+      else if ((g.attente -= dt) <= 0) {
+        if (g.assis) this.leverDuSiege(g);
+        // une fois sur deux, une chaise libre ; sinon un coin de la piece
+        const libres = sieges.map((_, i) => i).filter(i => !this.gens.some(o => o.siege === i));
+        if (libres.length && Math.random() < 0.5) { g.siege = libres[Math.floor(Math.random() * libres.length)]; const a = sieges[g.siege]; g.p.route = this.chemin(g.p.pos.x, g.p.pos.z, a.pos[0], a.pos[1]); }
+        else g.p.route = this.chemin(g.p.pos.x, g.p.pos.z, ...this.pointLibre());
+        g.attente = 99;
+      }
       else g.p.marche = false;
       g.p.peindre(this.camera);
       v.set(g.p.pos.x, SOL + 2.0, g.p.pos.z).project(this.camera);
