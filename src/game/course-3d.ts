@@ -2312,7 +2312,8 @@ function dossardSousLaBande(m: THREE.MeshStandardMaterial) {
   const avant = m.onBeforeCompile;
   m.onBeforeCompile = (sh, r) => {
     avant.call(m, sh, r);
-    sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.y -= 0.06;');
+    // (celui du devant seulement : celui du dos, plus bas, ressortait sous l'ourlet)
+    sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nif (position.x > 0.0) transformed.y -= 0.06;');
   };
   m.customProgramCacheKey = () => 'dossard-vrac';
   m.needsUpdate = true;
@@ -2364,11 +2365,12 @@ function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
   }
   // LES FLANCS (les photos de profil) : un panneau vert uni sous la bande, de l'aisselle a l'ourlet, qui s'evase vers
   // le bas en mordant sur le devant et le dos, borde d'un filet blanc
-  float evase = clamp((1.185 - y) * 0.8, 0.0, 0.12);
-  if (y < 1.185 && nz > 0.80 - evase) kc = nz > 0.86 - evase ? uVertVRAC : uBlancVRAC;
-  // LE DEVANT : le petit logo du club sur la poitrine, cote gauche du coureur
+  // (« la bande verte sur le cote est beaucoup trop importante », l'auteur, 29/10 : une bande etroite sur la couture)
+  float evase = clamp((1.185 - y) * 0.35, 0.0, 0.05);
+  if (y < 1.185 && nz > 0.935 - evase) kc = nz > 0.955 - evase ? uVertVRAC : uBlancVRAC;
+  // LE DEVANT, comme sur la photo : le logo du club cote gauche du coureur (sans les logos des partenaires, l'auteur, 29/10)
   if (devant) {
-    vec2 uv = vec2((z - 0.015) / 0.085, (y - 1.268) / 0.032);
+    vec2 uv = vec2((z - 0.034) / 0.072, (y - 1.252) / 0.027);
     if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 t = texture2D(uLogoVRAC, uv); kc = mix(kc, t.rgb, t.a); }
   }
   // le liseré bleu du col et des emmanchures (bordsDuDebardeur), un peu plus d'un centimetre
