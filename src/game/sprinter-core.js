@@ -513,6 +513,24 @@
       names: ['Mathis Duval', 'Yanis Moreau', 'Theo Garnier', 'Enzo Delmas',
               'Nolan Vasseur', 'Lucas Morvan', 'Ilyes Barthe'] },
 
+    // LE STADE COUVERT JESSE OWENS, VAL-DE-REUIL (26/10). La piste couverte (piste-salle.js,
+    // salle-3d.ts) : on n'y court que ses epreuves, 60 m, 200 m et 400 m en salle — le menu ne
+    // propose qu'elles quand ce stade est choisi (ModePanels). « Le stade n'apparait pas, la
+    // distance 60 m non plus » (l'auteur, 26/10) : il manquait ici. Le plateau est celui de
+    // l'avant-derniere etape (les France U18-U20 s'y courent).
+    // OUVERT A TOUT LE MONDE AVEC LA 3D (l'auteur, 29/10) : remonte avec les stades ouverts, juste apres
+    // le Champ-de-Mars, pour que son index soit le meme sur les deux canaux (voir le contrat plus haut).
+    { cle: 'salle', name: 'Stade couvert Jesse Owens', theme: 'salle',
+      pool: 'sprint',
+      horsSerie: true,
+      ouvert: true,
+      salle: true,
+      noms: ['Stade couvert Jesse Owens', 'Jesse Owens Indoor Stadium'],
+      foule: 0.8,
+      plateau: { '60': [6.50, 6.65], '200s': [19.54, 20.09], '400s': [43.83, 44.15] },
+      names: ['Hugo Lemaire', 'Yanis Bertin', 'Lucas Ferrand', 'Noam Diallo',
+              'Theo Marchal', 'Ilan Rousseau', 'Sacha Morel'] },
+
     // LE DEFI AUREL MANGA — l'evenement qui annonce Hurdlers.
     //
     // Un 110 m haies contre un vrai hurdleur de l'equipe de France, qui a
@@ -742,7 +760,6 @@
       // stade luxury n'est pas selectionnable dans le test 3D », l'auteur, 22/10).
       // Hors du canal de test il ne tombe donc pas a l'index de LEVEL_NAMES qui
       // l'attend : `noms` repose son nom a sa vraie place (sprinter-app.js).
-      brancheTest: true,
       noms: ["Stade d'Or", 'Golden Stadium'],
       foule: 0.92,
       plateau: { '100': [9.50, 9.85], '200': [19.10, 19.80],
@@ -758,7 +775,6 @@
     { cle: 'cyber', name: 'Stade Neon', theme: 'cyber',
       pool: 'sprint',
       horsSerie: true,
-      brancheTest: true,
       noms: ['Stade Néon', 'Neon Stadium'],
       foule: 0.9,
       plateau: { '100': [9.45, 9.85], '200': [19.00, 19.80],
@@ -774,7 +790,6 @@
     { cle: 'plage', name: 'Plage Paradis', theme: 'plage',
       pool: 'sprint',
       horsSerie: true,
-      brancheTest: true,
       noms: ['Plage Paradis', 'Paradise Beach'],
       foule: 0.8,
       plateau: { '100': [9.60, 9.95], '200': [19.30, 20.00],
@@ -789,7 +804,6 @@
     { cle: 'palais', name: 'Palais Royal', theme: 'palais',
       pool: 'sprint',
       horsSerie: true,
-      brancheTest: true,
       noms: ['Palais Royal', 'Royal Palace'],
       foule: 0.85,
       plateau: { '100': [9.60, 9.95], '200': [19.30, 20.00],
@@ -804,7 +818,6 @@
     { cle: 'amsalem', name: 'Stade Bernard Amsalem', theme: 'amsalem',
       pool: 'sprint',
       horsSerie: true,
-      brancheTest: true,
       noms: ['Stade Bernard Amsalem', 'Bernard Amsalem Stadium'],
       // (« le gradin est place de facon vide », l'auteur, 27/10 : a moitie, la petite tribune paraissait deserte)
       foule: 0.85,
@@ -818,29 +831,12 @@
     { cle: 'amsalem-france', name: 'Stade Bernard Amsalem — Championnat de France', theme: 'amsalemFrance',
       pool: 'sprint',
       horsSerie: true,
-      brancheTest: true,
       noms: ['Stade Bernard Amsalem — Championnat de France', 'Bernard Amsalem Stadium — French Championship'],
       foule: 1,
       plateau: { '100': [10.05, 10.40], '200': [20.30, 21.00],
                  '400': [45.20, 46.80], '4x100': [39.00, 40.20] },
       names: ['Rayan Lefort', 'Mathis Carre', 'Elias Boyer', 'Nolan Petit',
               'Kylian Masson', 'Adam Guerin', 'Ethan Roche'] },
-
-    // LE STADE COUVERT JESSE OWENS, VAL-DE-REUIL (26/10). La piste couverte (piste-salle.js,
-    // salle-3d.ts) : on n'y court que ses epreuves, 60 m, 200 m et 400 m en salle — le menu ne
-    // propose qu'elles quand ce stade est choisi (ModePanels). « Le stade n'apparait pas, la
-    // distance 60 m non plus » (l'auteur, 26/10) : il manquait ici. Le plateau est celui de
-    // l'avant-derniere etape (les France U18-U20 s'y courent).
-    { cle: 'salle', name: 'Stade couvert Jesse Owens', theme: 'salle',
-      pool: 'sprint',
-      horsSerie: true,
-      brancheTest: true,
-      salle: true,
-      noms: ['Stade couvert Jesse Owens', 'Jesse Owens Indoor Stadium'],
-      foule: 0.8,
-      plateau: { '60': [6.50, 6.65], '200s': [19.54, 20.09], '400s': [43.83, 44.15] },
-      names: ['Hugo Lemaire', 'Yanis Bertin', 'Lucas Ferrand', 'Noam Diallo',
-              'Theo Marchal', 'Ilan Rousseau', 'Sacha Morel'] },
 
   ];
 
