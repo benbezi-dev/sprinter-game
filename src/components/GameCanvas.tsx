@@ -7,7 +7,7 @@ import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
 import { jeuCourant } from '@/game/jeux';
 import { cameraPour } from '@/game/cadrage';
-import { POUSSEE_OUVERTE, TROIS_D_OUVERTE } from '@/game/canal';
+import { POUSSEE_OUVERTE, RENDU_3D } from '@/game/canal';
 import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
@@ -17,11 +17,7 @@ import { dessinSuspendu } from '@/game/dessin-suspendu';
 // LA COURSE EN VRAIE 3D (22/10/2026). Sur la branche de test ferme test-ferme/course-3d,
 // elle est la par defaut (`?rendu=2d` revient au dessin du jeu) ; chargee a part pour
 // que three ne pese rien tant qu'elle n'est pas demandee. Voir game/course-3d.ts.
-// (la 3D a tout le monde a son heure : canal.ts, TROIS_D_OUVERTE)
-const RENDU_3D = (() => {
-  try { const r = new URLSearchParams(location.search).get('rendu'); return r === '3d' || (TROIS_D_OUVERTE && r !== '2d'); }
-  catch { return TROIS_D_OUVERTE; }
-})();
+// (la 3D a tout le monde a son heure : canal.ts, TROIS_D_OUVERTE et RENDU_3D)
 // Les epreuves deja faites en 3D, et les nuits du molosse (`nuit-*`, la ruelle de ruelle-3d.ts) ;
 // les autres (relais, concours) restent en 2D. Les haies y sont depuis le 29/10 (« on passe Hurdlers en 3D aussi »).
 const EPREUVES_3D = new Set(['100', '200', '400', '60', '200s', '400s', '100h', '110h', '400h']);

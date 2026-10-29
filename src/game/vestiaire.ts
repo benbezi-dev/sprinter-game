@@ -22,6 +22,7 @@
 import { useSyncExternalStore } from 'react';
 import { SprinterApp, SprinterCore } from './engine';
 import { HAIES } from './haies.js';
+import { RENDU_3D } from './canal';
 
 /** L'epreuve se court-elle avec des haies ? (la meme question que game/jeux.ts,
  *  posee ici sans l'importer : jeux.ts importe ce module-ci.) */
@@ -38,6 +39,18 @@ export const SKINS: Record<string, { coureur: string; surHaies: boolean }> = {
   // son rituel dans les blocs et son clap (VEDETTES, sprinter-core.js).
   meba: { coureur: 'Méba-Mickael ZÉZÉ', surHaies: false },
 };
+
+/**
+ * LES MAILLOTS DE CLUB (29/10, « cree le maillot du club de Val-de-Reuil dans le jeu, ajoute-le dans le vestiaire,
+ * que pour la version 3D ») : une tenue sur le corps du joueur, pas un athlete. Offerts — rien a gagner —, portes sur
+ * toutes les courses, et seulement en 3D (le dessin en est fait par course-3d.ts, `kit`) : en 2D, le maillot or.
+ * Le Val-de-Reuil Athletique Club : haut blanc au logo du club, bande verte, bas bleu roi, sans les sponsors.
+ */
+export const MAILLOTS: Record<string, { kit: string; jersey: number[]; shorts: number[] }> = {
+  vrac: { kit: 'vrac', jersey: [28, 64, 196], shorts: [22, 22, 26] },
+};
+const porteAutorise = (cle: unknown, gagnes: string[]) =>
+  typeof cle === 'string' && (gagnes.includes(cle) || (RENDU_3D && !!MAILLOTS[cle]));
 
 type Etat = {
   /** Les clefs des skins gagnes. */
@@ -58,7 +71,7 @@ function lire(): Etat {
       : [];
     // On ne porte que ce qu'on a gagne : une valeur recopiee a la main dans le
     // stockage ne suffit pas a enfiler un skin.
-    const porte = typeof brut.porte === 'string' && gagnes.includes(brut.porte) ? brut.porte : null;
+    const porte = porteAutorise(brut.porte, gagnes) ? brut.porte : null;
     return { gagnes, porte };
   } catch {
     return VIDE;
@@ -100,7 +113,7 @@ export function gagnerSkin(cle: string): boolean {
 /** Porter un skin gagne, ou `null` pour reprendre son maillot. */
 export function porterSkin(cle: string | null) {
   const etat = etatCourant();
-  if (cle !== null && !etat.gagnes.includes(cle)) return;
+  if (cle !== null && !porteAutorise(cle, etat.gagnes)) return;
   ecrire({ ...etat, porte: cle });
 }
 
@@ -124,6 +137,12 @@ export function habillerLeJoueur(epreuve: unknown) {
   if (!G || !G.player) return;
   const lvl = SprinterApp.LEVELS && SprinterApp.LEVELS[G.levelIdx];
   const porte = etatCourant().porte;
+  // un maillot de club : sur toutes les courses, le corps du joueur (en 3D seulement : voir MAILLOTS)
+  const club = porte && RENDU_3D ? MAILLOTS[porte] : null;
+  if (club) {
+    G.player.look = (G.reglagesJoueur && G.reglagesJoueur.look) || { ...SprinterCore.PLAYER_LOOK, ...club };
+    return;
+  }
   const s = porte ? SKINS[porte] : null;
   const chezLui = !!s && typeof epreuve === 'string' && avecHaies(epreuve) === s.surHaies;
   const look = chezLui && !(lvl && lvl.evenement) ? lookDuSkin(porte as string) : null;

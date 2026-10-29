@@ -2237,7 +2237,9 @@ function corpsDe(r: any): Corps | null {
   // tenue (comme en finale : tout le monde n'a pas la meme), le dossard numerote par-dessus.
   const maillot = rgb(L.jersey || [200, 40, 50]);
   const liste = femme ? TENUES_FEMMES : TENUES;
-  const tenue = liste[Math.abs(hacher(String(r.name || r.lane || ''))) % liste.length];
+  // (un maillot de club se porte en debardeur : c'est la piece qui flotte, LE TISSU)
+  const tenue = L.kit ? (femme ? 'debardeur-culotte' : 'debardeur-short')
+    : liste[Math.abs(hacher(String(r.name || r.lane || ''))) % liste.length];
   const brassiere = tenue.startsWith('brassiere'), culotte = tenue.endsWith('culotte');
   // (une piece : le debardeur reste, le bas prend sa couleur ; la zone peinte du corps avait un bord en dents de scie)
   const bas = tenue === 'une-piece' ? maillot : rgb(L.shorts);
@@ -2251,11 +2253,106 @@ function corpsDe(r: any): Corps | null {
   mats.shortbas?.color.copy(culotte ? rgb(L.skin) : bas);
   if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
+  if (L.kit === 'vrac' && mats.debardeur) {
+    maillotDuClub(mats.debardeur);
+    copie.traverse((o: any) => { if (o.isMesh && o.material === mats.debardeur) bordsDuDebardeur(o.geometry); });
+  }
   // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
   c = { m: modeleDe(copie), mats, echelle: source !== gabarit ? hauteurDe(gabarit) / hauteurDe(source) : undefined };
   monde.add(c.m.racine);
   corps.set(r, c);
   return c;
+}
+
+// LE MAILLOT DU VAL-DE-REUIL ATHLETIQUE CLUB (29/10, game/vestiaire.ts MAILLOTS ; d'apres deux photos de l'auteur, sans
+// les sponsors) : haut blanc, bas bleu roi, col en V et emmanchures bleus ; devant, le petit logo ; dans le dos, le grand
+// logo, la bande verte et ses hachures ; sur les flancs, un panneau vert raye borde de blanc. Peint sur le DEBARDEUR, la piece qui flotte (LE TISSU) : il bouge en course comme les autres. Le motif
+// se lit sur la pose de repos du maillage (`position`, avant le squelette) : il suit le tissu au lieu de glisser
+// dessus. Reperes mesures sur coureur-homme/femme.glb : debardeur de 0,87 a 1,415 m, le devant vers +x.
+// Un grain de maille, un rien de lumiere rasante : un maillot, pas une peinture.
+// LE COL ET LES EMMANCHURES (« au niveau du col ca va pas », l'auteur, 29/10) : le liseré bleu du vrai maillot suit les
+// bords du debardeur. Ils se trouvent une fois par maillage : les aretes qui n'ont qu'un triangle, une fois soudees les
+// coutures des UV ; chaque sommet garde sa distance au bord le plus proche (`aBord`, en metres). L'ourlet du bas n'en
+// est pas : il reste bleu comme le bas du maillot.
+function bordsDuDebardeur(g: THREE.BufferGeometry) {
+  if (g.getAttribute('aBord')) return;
+  const pos = g.getAttribute('position'), n = pos.count;
+  const ids = new Map<string, number>(), soude = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = `${Math.round(pos.getX(i) * 2000)},${Math.round(pos.getY(i) * 2000)},${Math.round(pos.getZ(i) * 2000)}`;
+    let id = ids.get(k); if (id === undefined) { id = ids.size; ids.set(k, id); } soude[i] = id;
+  }
+  const tri = g.index ? g.index.array : Array.from({ length: n }, (_, i) => i);
+  const aretes = new Map<string, number>();
+  for (let t = 0; t + 2 < tri.length; t += 3) for (let e = 0; e < 3; e++) {
+    const a = soude[tri[t + e]], b = soude[tri[t + (e + 1) % 3]];
+    const k = a < b ? `${a}_${b}` : `${b}_${a}`; aretes.set(k, (aretes.get(k) || 0) + 1);
+  }
+  const auBord = new Set<number>();
+  for (const [k, c] of aretes) if (c === 1) for (const v of k.split('_')) auBord.add(+v);
+  const bords: number[] = [];
+  for (let i = 0; i < n; i++) if (auBord.has(soude[i]) && pos.getY(i) > 1.0) bords.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+  const d = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    let m = 0.1;
+    for (let j = 0; j < bords.length; j += 3) {
+      const dx = x - bords[j], dy = y - bords[j + 1], dz = z - bords[j + 2], q = dx * dx + dy * dy + dz * dz;
+      if (q < m * m) m = Math.sqrt(q);
+    }
+    d[i] = m;
+  }
+  g.setAttribute('aBord', new THREE.BufferAttribute(d, 1));
+}
+let logoVRAC: THREE.Texture | null = null;
+const lin = (c: number) => new THREE.Color(c);   // (hex sRGB, range lineaire par three)
+const uVRAC = { blanc: { value: lin(0xf4f6f8) }, vert: { value: lin(0x4cb248) }, bleu: { value: lin(0x1c40c4) } };
+function maillotDuClub(m: THREE.MeshStandardMaterial) {
+  if (!logoVRAC) {
+    const base = (import.meta as any).env?.BASE_URL || '/';
+    logoVRAC = new THREE.TextureLoader().load(base + 'modeles/maillots/vrac-logo.png');
+    logoVRAC.colorSpace = THREE.SRGBColorSpace; logoVRAC.anisotropy = 4;
+  }
+  m.color.setRGB(1, 1, 1); m.roughness = 0.82;
+  const avant = m.onBeforeCompile;   // (le lisere s'y pose deja)
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.uniforms.uLogoVRAC = { value: logoVRAC };
+    sh.uniforms.uBlancVRAC = uVRAC.blanc; sh.uniforms.uVertVRAC = uVRAC.vert; sh.uniforms.uBleuVRAC = uVRAC.bleu;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aBord; varying float vBord; varying vec3 vKit; varying vec3 vKitN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = position; vKitN = normal; vBord = aBord;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vBord; varying vec3 vKit; varying vec3 vKitN;\nuniform sampler2D uLogoVRAC; uniform vec3 uBlancVRAC, uVertVRAC, uBleuVRAC;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+{
+  float y = vKit.y, z = vKit.z, nz = abs(vKitN.z);
+  bool devant = vKitN.x > 0.15, dos = vKitN.x < -0.15;
+  // le haut blanc, le bas bleu roi
+  vec3 kc = y > 1.215 ? uBlancVRAC : uBleuVRAC;
+  // LE DOS (la photo a plat) : la bande verte, ses hachures en biais, le grand logo
+  float h = 1.185 - y;
+  if (dos && y > 1.185 && y <= 1.215) kc = uVertVRAC;
+  if (dos && h > 0.0 && h < 0.075 && z > -0.02 && z < 0.11 && fract((h - z) * 34.0) < 0.42) kc = uVertVRAC;
+  if (dos) {
+    vec2 uv = vec2((0.095 - z) / 0.19, (y - 1.252) / 0.070);
+    if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 t = texture2D(uLogoVRAC, uv); kc = mix(kc, t.rgb, t.a); }
+  }
+  // LES FLANCS (la photo de profil) : un panneau vert a rayures en biais, de l'aisselle a l'ourlet, borde d'un filet blanc
+  if (y < 1.26 && nz > 0.62) kc = nz > 0.70 ? (fract((y + vKit.x) * 26.0) < 0.5 ? uVertVRAC : uVertVRAC * 0.72) : uBlancVRAC;
+  // LE DEVANT : le petit logo du club sur la poitrine, cote gauche du coureur
+  if (devant) {
+    vec2 uv = vec2((z - 0.015) / 0.085, (y - 1.268) / 0.032);
+    if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 t = texture2D(uLogoVRAC, uv); kc = mix(kc, t.rgb, t.a); }
+  }
+  // le liseré bleu du col et des emmanchures (bordsDuDebardeur), un peu plus d'un centimetre
+  if (vBord < 0.013) kc = uBleuVRAC;
+  float maille = 0.96 + 0.04 * sin(vKit.y * 900.0) * sin(vKit.z * 900.0 + vKit.x * 600.0);
+  diffuseColor.rgb = kc * maille;
+}`);
+  };
+  m.customProgramCacheKey = () => 'maillot-vrac';
+  m.needsUpdate = true;
 }
 
 // LES PHYSIQUES (28/10, « fais des corpulences et des physiques differents d'athletes ») : quatre formes dans chaque

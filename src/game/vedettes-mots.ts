@@ -119,6 +119,10 @@ const MOTS: Record<string, Paire> = {
   vs_maillot:     ['TON MAILLOT', 'YOUR JERSEY'],
   vs_maillot_sous: ['Sur toutes les courses.', 'In every race.'],
   vs_bonus_titre: ['BONUS', 'BONUS'],
+  // le maillot du Val-de-Reuil Athletique Club (game/vestiaire.ts, MAILLOTS)
+  vs_club:        ['MAILLOT DU CLUB', 'CLUB JERSEY'],
+  vs_club_nom:    ['Val-de-Reuil Athlétique Club', 'Val-de-Reuil Athlétique Club'],
+  vs_club_sous:   ['Offert. Sur toutes les courses, en 3D.', 'Free. In every race, in 3D.'],
   // celui du skin d'Aurel (look.freinHaie, sprinter-core.js) ; celui de Meba
   // est plus haut, avec ses mots
   'vs_bonus:manga': ['−20 % de freinage après une haie mal passée',

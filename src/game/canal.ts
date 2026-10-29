@@ -237,6 +237,11 @@ declare const __LANCEMENT_3D__: number;
  * (hors de Vite — un harnais de tools/ —, la valeur n'existe pas : fermee)
  */
 export const TROIS_D_OUVERTE = EST_TEST || (typeof __LANCEMENT_3D__ === 'number' && Date.now() >= __LANCEMENT_3D__);
+/** Ce joueur court-il en 3D ? L'heure de sortie, et `?rendu=` pour forcer l'un ou l'autre (GameCanvas.tsx, game/vestiaire.ts). */
+export const RENDU_3D = (() => {
+  try { const r = new URLSearchParams(location.search).get('rendu'); return r === '3d' || (TROIS_D_OUVERTE && r !== '2d'); }
+  catch { return TROIS_D_OUVERTE; }
+})();
 export const LANCEMENT_DUEL_MARQUES: number =
   typeof __LANCEMENT_DUEL_MARQUES__ === 'number' ? __LANCEMENT_DUEL_MARQUES__ : Infinity;
 declare const __DUREE_DUEL_MARQUES_MS__: number;
