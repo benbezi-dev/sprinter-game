@@ -268,7 +268,7 @@ const LANCEMENT_DUEL_MARQUES = (() => {
 const DUREE_DUEL_MARQUES_MS = 6 * 24 * 3600 * 1000;
 
 /* ---------------------------------------------------------------------------
-   LA SORTIE DE LA 3D (29/10, decide par l'auteur) : vendredi 30 octobre 2026,
+   LA SORTIE DE LA 3D (29/10, decalee par l'auteur) : samedi 31 octobre 2026,
    21 h a Paris (UTC+1, heure d'hiver). Avant, le jeu public reste en 2D ; des
    cette minute la course 3D (Hurdlers compris) et le stade couvert Jesse Owens
    s'ouvrent TOUT SEULS, sans deploiement, a l'heure de l'appareil lue au
@@ -278,7 +278,7 @@ const DUREE_DUEL_MARQUES_MS = 6 * 24 * 3600 * 1000;
 const LANCEMENT_3D = (() => {
   const v = process.env.LANCEMENT_3D;
   if (v) { const n = Number(v); return Number.isFinite(n) ? n : Date.parse(v); }
-  return Date.UTC(2026, 9, 30, 20, 0, 0);
+  return Date.UTC(2026, 9, 31, 20, 0, 0);
 })();
 
 export default defineConfig(({ mode }) => ({
