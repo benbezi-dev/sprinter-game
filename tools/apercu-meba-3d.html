@@ -25,7 +25,7 @@
   import { charger, dessiner } from '/src/game/vedette-3d.ts';
 
   // (n'importe quelle vedette qui a un maillage : ?nom=Aurel%20MANGA)
-  const NOM = new URLSearchParams(location.search).get('nom') || 'Méba-Mickaël ZÉZÉ';
+  const NOM = new URLSearchParams(location.search).get('nom') || 'Méba-Mickael ZÉZÉ';
   // le nom de celui qu'on regarde, en titre : Aurel porte un bandeau, pas Meba
   document.title = 'Sprinter — ' + NOM + ' : tubes et maillage';
   document.getElementById('nom').textContent = NOM;

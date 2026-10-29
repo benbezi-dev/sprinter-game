@@ -109,7 +109,7 @@ titre('SON SKIN SE RELEVE MIEUX D UNE HAIE MAL PASSEE');
 // 03/10, a la demande de l'auteur : « reduit de 20 % le freinage suite a un
 // mauvais passage de haie » (look.freinHaie ; haies-jeu.js, adoucir)
 ok('Aurel garde 80 % du freinage, le maillot et Meba tout',
-   L.freinHaie === 0.8 && !K.PLAYER_LOOK.freinHaie && !K.VEDETTES['Méba-Mickaël ZÉZÉ'].freinHaie);
+   L.freinHaie === 0.8 && !K.PLAYER_LOOK.freinHaie && !K.VEDETTES['Méba-Mickael ZÉZÉ'].freinHaie);
 ok('une haie percutee garde 0,68 de la vitesse au lieu de 0,60',
    Math.abs(adoucir(GARDE_PERCUTE, 0.8) - 0.68) < 1e-12);
 ok('une haie bien passee ne rapporte rien de plus, un gain reste un gain',
@@ -152,7 +152,7 @@ ok('jamais de ciseau : plus d un demi-seconde de rendue',
 
 // ---------------------------------------------------------------------------
 titre('MEBA-MICKAEL ZEZE : LE STADE');
-const NOM = 'Méba-Mickaël ZÉZÉ';
+const NOM = 'Méba-Mickael ZÉZÉ';
 const iM = stades.findIndex(s => s.cle === 'defi-meba');
 const M = stades[iM];
 ok('un evenement ferme, au decor de la Riviera', M && M.evenement && !M.ouvert && M.theme === 'riviera');

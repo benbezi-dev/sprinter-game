@@ -36,7 +36,7 @@ export const SKINS: Record<string, { coureur: string; surHaies: boolean }> = {
   manga: { coureur: 'Aurel MANGA', surHaies: true },
   // Le skin premium de l'evenement special du sprint : son corps, sa foulee,
   // son rituel dans les blocs et son clap (VEDETTES, sprinter-core.js).
-  meba: { coureur: 'Méba-Mickaël ZÉZÉ', surHaies: false },
+  meba: { coureur: 'Méba-Mickael ZÉZÉ', surHaies: false },
 };
 
 type Etat = {

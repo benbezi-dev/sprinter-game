@@ -191,7 +191,7 @@ chaîne Unity (rig Rigify → squelette Humanoid → FBX) de la section 2.
   d'éclairage (pièces Blender à faire, comme la tour du Champ-de-Mars).
 - **Harnais `haies-course-test`** : 2 échecs **préexistants** sur `main`
   (niveau ZEZE trop facile), sans lien avec ce travail.
-- **Événement suivant** : Mickaël Méba-Zézé. Le système est générique : une
+- **Événement suivant** : Mickael Méba-Zézé. Le système est générique : une
   entrée dans `VEDETTES` (moteur et `vedettes.ts`), un stade-événement, des
   retouches dans `anatomie.py`, un portrait et, si besoin, un export Unity.
 

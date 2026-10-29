@@ -1,4 +1,4 @@
-# La musique du défi Méba-Mickaël Zézé — fiche FL Studio
+# La musique du défi Méba-Mickael Zézé — fiche FL Studio
 
 Le morceau de course de l'événement spécial du sprint. Il remplace, pour ce
 défi seulement, la city pop du Stade de la Riviera (112 BPM, trop posée).
@@ -71,7 +71,7 @@ Les repères sont comptés depuis le pistolet (mesure 3 = 0 s).
 
 ### Sa signature : les claps
 
-Méba-Mickaël frappe dans ses mains au-dessus de la tête pour faire lever le
+Méba-Mickael frappe dans ses mains au-dessus de la tête pour faire lever le
 public : c'est son geste d'après-course, et le jeu le lui fait faire
 à **2,5 claps par seconde, soit exactement une noire à 150 BPM**. Des claps
 de stade sur chaque temps, qui s'ouvrent au drop, sont donc le fil rouge
