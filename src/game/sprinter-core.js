@@ -295,11 +295,13 @@
   // transition parfaits, cadence sans fin — valait 4,81 / 7,90 / 16,15 / 33,47 / 16,16 / 33,55 s ; ramenee ici
   // pile sur le record. Le meilleur reel du classement (8,16 s au 100 m) donne desormais ~9,9 s.
   // Recalculer avec tools/records-du-monde-test.mjs si BOOST, DRAG ou un maxSpeed change.
-  const ALLURE_DU_JOUEUR = { '60': 0.7533, '100': 0.8219, '200': 0.8406, '400': 0.7772, '200s': 0.8082, '400s': 0.752 };
+  // SAUF LE 60 M (l'auteur, 29/10 : « 1000 appuis secondes c'est impossible ») : le record y tombe a 39 appuis/s,
+  // la cadence du meilleur joueur reel, et plus a une cadence infinie (6,57 s a 39/s avec 0,7533).
+  const ALLURE_DU_JOUEUR = { '60': 0.7816, '100': 0.8219, '200': 0.8406, '400': 0.7772, '200s': 0.8082, '400s': 0.752 };
   // ET LES ADVERSAIRES SUIVENT (l'auteur, 29/10 : « meme conversion ») : les plateaux, chronos fixes et plateaux de
   // la carriere restent ecrits dans l'echelle d'avant ; leur temps tire est multiplie par ce que l'allure fait au
   // joueur a 17 appuis/s (x1,19 a x1,21 de 8 a 40 appuis/s au 100 m) — chaque course garde sa difficulte.
-  const CONVERSION_ADVERSAIRES = { '60': 1.287, '100': 1.200, '200': 1.182, '400': 1.281, '200s': 1.225, '400s': 1.320 };
+  const CONVERSION_ADVERSAIRES = { '60': 1.244, '100': 1.200, '200': 1.182, '400': 1.281, '200s': 1.225, '400s': 1.320 };
 
   // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
   // est un tour complet de piste (deux virages, deux lignes droites).

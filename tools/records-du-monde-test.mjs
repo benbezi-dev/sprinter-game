@@ -42,7 +42,11 @@ function parfait(cle, f) {
 for (const cle of Object.keys(R)) {
   const t = parfait(cle, 1000);
   assert.ok(t < R[cle] + 0.03, `${cle} : la limite du jeu donne ${t.toFixed(3)}, loin du record ${R[cle]} (recalculer ALLURE_DU_JOUEUR)`);
+  if (cle === '60') continue;
   assert.ok(parfait(cle, 39) > R[cle] + 0.1, `${cle} : 39 appuis/s atteignent le record`);
 }
+// LE 60 M (29/10/2026) : le record tombe a 39 appuis/s, pas avant 37.
+assert.ok(parfait('60', 39) < R['60'] + 0.005, `60 : 39 appuis/s donnent ${parfait('60', 39).toFixed(3)}, pas le record`);
+assert.ok(parfait('60', 37) > R['60'] + 0.01, '60 : 37 appuis/s atteignent deja le record');
 console.log('allure du joueur : OK (100 m : 39/s ' + parfait('100', 39).toFixed(2) + ' s, limite ' + parfait('100', 1000).toFixed(2) + ' s)');
 console.log('records du monde : OK', Object.entries(R).map(([k, v]) => `${k} ${v}`).join(', '));
