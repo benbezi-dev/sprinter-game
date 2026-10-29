@@ -2325,7 +2325,9 @@ const uVRAC = { blanc: { value: lin(0xf4f6f8) }, vert: { value: lin(0x4cb248) },
 // le debardeur du jeu est echancre jusqu'a 1,29 m ; le V du club a sa pointe a 1,312 m et remonte vers la base du cou
 // (1,36 m chez l'homme, 1,35 chez la femme, mesure). Le haut de la poitrine se peint donc sur la PEAU, dans l'echancrure
 // seulement (au-dessus de 1,28 m), sous la ligne du V, avec son liseré : `peau` ne garde que ce col.
-const COL_VRAC = 'float yCol = 1.312 + 0.62 * abs(vKit.z); bool dansLeCol = vKit.x > 0.02 && abs(vKit.z) < 0.066 && vKit.y > 1.28 && vKit.y < yCol;';
+// (« la partie entouree existe des deux cotes, supprime-les » : l'ancien V depassait sous la jonction des bretelles ;
+//  le col se nettoie et se borde jusqu'a 9 cm du milieu, sur la bretelle comme sur la peau)
+const COL_VRAC = 'float yCol = 1.312 + 0.62 * abs(vKit.z); bool dansLeCol = vKit.x > 0.02 && abs(vKit.z) < 0.09 && vKit.y > 1.25 && vKit.y < yCol;';
 function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
   if (!logoVRAC) {
     const base = (import.meta as any).env?.BASE_URL || '/';
@@ -2379,7 +2381,10 @@ function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
   if (vBord < 0.013 && !dansLeCol) kc = uBleuVRAC;
 #endif
   // (sur la position, pas la normale : au bord du tissu elle tourne, et l'ancien V gardait son liseré)
-  if (vKit.x > 0.02 && abs(z) < 0.066 && y < yCol && yCol - y < 0.012) kc = uBleuVRAC;
+  // (le V ne se trace que sur la peau, dans l'echancrure : il s'arrete au bord de la bretelle, dont le liseré prend le relais)
+#ifdef PEAU_VRAC
+  if (dansLeCol && yCol - y < 0.012) kc = uBleuVRAC;
+#endif
   float maille = 0.96 + 0.04 * sin(vKit.y * 900.0) * sin(vKit.z * 900.0 + vKit.x * 600.0);
   diffuseColor.rgb = kc * maille;
 #ifdef PEAU_VRAC
