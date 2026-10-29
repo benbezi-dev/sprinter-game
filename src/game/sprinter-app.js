@@ -2197,7 +2197,7 @@
     const precedent = s[s.length - 1];
     const bornes = R.ranges && R.ranges[idx];
     if (precedent == null || !bornes) return false;
-    return precedent > bornes[1];
+    return precedent > bornes[1] * (K.CONVERSION_ADVERSAIRES[R.key] || 1);
   }
 
   // --- mise en place d'une course ------------------------------------
@@ -2393,7 +2393,7 @@
     const monCouloir = G.track.salle ? Math.floor(K.alea() * G.track.lanes) : 3;
     const record = K.RECORDS_DU_MONDE[R.key] || null;   // (le plafond de l'epreuve, sprinter-core.js)
     const pl = new Runner('TOI', monCouloir, { isPlayer: true, maxSpeed: R.maxSpeed,
-      best: R.best, total: G.track.total, record });
+      best: R.best, total: G.track.total, record, allure: K.ALLURE_DU_JOUEUR[R.key] });
     pl.cadenceLancee = true;   // (C.CADENCE_LANCEE : les haies l'otent, haies-pas.js)
     // la piste couverte : la montee et la descente des virages releves (Track.accelPente)
     if (G.track.salle) { const T = G.track; pl.pente = (s, v) => T.accelPente(s, pl.lane, v); pl.bouscule = bousculade; }
@@ -2422,7 +2422,7 @@
       // Le tirage se fait meme pour un chrono fixe : le sauter decalerait la
       // suite, et les autres couloirs d'un defi seme changeraient de temps.
       const tire = lo + K.alea() * (hi - lo);
-      const t = cibles && cibles[n] ? cibles[n] : tire;
+      const t = (cibles && cibles[n] ? cibles[n] : tire) * (K.CONVERSION_ADVERSAIRES[R.key] || 1);
       const lane = i < monCouloir ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
         total: G.track.total, pool: lvl.pool, record });
@@ -4210,7 +4210,8 @@
     const R = G.race;
     const neuf = r.isPlayer
       ? new Runner(r.name, r.lane, { isPlayer: true, maxSpeed: R.maxSpeed,
-                                     best: R.best, total: G.track.total, record: K.RECORDS_DU_MONDE[R.key] || null })
+                                     best: R.best, total: G.track.total, record: K.RECORDS_DU_MONDE[R.key] || null,
+                                     allure: K.ALLURE_DU_JOUEUR[R.key] })
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
                                      pool: LEVELS[G.levelIdx].pool, record: K.RECORDS_DU_MONDE[R.key] || null });
     if (neuf.isPlayer) neuf.cadenceLancee = !r.enHaies;

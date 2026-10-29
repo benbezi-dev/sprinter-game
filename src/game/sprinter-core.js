@@ -290,6 +290,16 @@
   // 100 m 9,58 et 200 m 19,19 (Bolt 2009), 400 m 43,03 (van Niekerk 2016), 200 m salle 19,92 (Fredericks 1996),
   // 400 m salle 44,49 (Morales Williams 2024).
   const RECORDS_DU_MONDE = { '60': 6.34, '100': 9.58, '200': 19.19, '400': 43.03, '200s': 19.92, '400s': 44.49 };
+  // L'ALLURE DU JOUEUR, part de la vitesse et de la poussee du moteur d'avant (l'auteur, 29/10 : « meme niveau de
+  // difficulte » que pour le chrono le plus rapide faisable dans le jeu public) : la limite de ce moteur — depart et
+  // transition parfaits, cadence sans fin — valait 4,81 / 7,90 / 16,15 / 33,47 / 16,16 / 33,55 s ; ramenee ici
+  // pile sur le record. Le meilleur reel du classement (8,16 s au 100 m) donne desormais ~9,9 s.
+  // Recalculer avec tools/records-du-monde-test.mjs si BOOST, DRAG ou un maxSpeed change.
+  const ALLURE_DU_JOUEUR = { '60': 0.7533, '100': 0.8219, '200': 0.8406, '400': 0.7772, '200s': 0.8082, '400s': 0.752 };
+  // ET LES ADVERSAIRES SUIVENT (l'auteur, 29/10 : « meme conversion ») : les plateaux, chronos fixes et plateaux de
+  // la carriere restent ecrits dans l'echelle d'avant ; leur temps tire est multiplie par ce que l'allure fait au
+  // joueur a 17 appuis/s (x1,19 a x1,21 de 8 a 40 appuis/s au 100 m) — chaque course garde sa difficulte.
+  const CONVERSION_ADVERSAIRES = { '60': 1.287, '100': 1.200, '200': 1.182, '400': 1.281, '200s': 1.225, '400s': 1.320 };
 
   // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
   // est un tour complet de piste (deux virages, deux lignes droites).
@@ -2071,7 +2081,9 @@
     this.target = opts.target || null;
     /** Le record du monde de l'epreuve (RECORDS_DU_MONDE) : le temps le plus court permis. `null` : sans plafond. */
     this.record = opts.record || null;
-    this.maxSpeed = opts.maxSpeed || 12;
+    /** ALLURE_DU_JOUEUR : ce qui reste de la vitesse de pointe et de la poussee de chaque appui. 1 : le moteur d'avant. */
+    this.allure = opts.allure || 1;
+    this.maxSpeed = (opts.maxSpeed || 12) * this.allure;
     this.best = opts.best || 9.1;
     this.total = opts.total || 100;
     /**
@@ -2102,17 +2114,6 @@
       : null;
     if (this.target) this.setPace(this.target);
   }
-
-  /**
-   * LE COUREUR DU RECORD : ou en serait, au temps t, un coureur qui bouclerait l'epreuve exactement en `record`
-   * (v(t) = vmax (1 - e^-t/tau), tau = 1 s). Le joueur ne le depasse jamais (stepPlayer) : on court aussi vite que
-   * le record du monde, pas plus vite.
-   */
-  Runner.prototype.distanceDuRecord = function (t) {
-    const tau = 1, R = this.record;
-    if (!this._vRecord) this._vRecord = this.total / (R - tau * (1 - Math.exp(-R / tau)));
-    return this._vRecord * (t - tau * (1 - Math.exp(-t / tau)));
-  };
 
   Runner.prototype.setPace = function (T) {
     if (this.record && T < this.record) T = this.record;   // (RECORDS_DU_MONDE : jamais plus vite)
@@ -2405,10 +2406,10 @@
         if (this.d - this.legStart < this.driveEnd) this.stumbledInDrive = true;
         stumbled = true;
       } else {
-        this.v = Math.min(this.plafond(), this.v + C.BOOST * 0.3 * (this.coefBoost || 1));
+        this.v = Math.min(this.plafond(), this.v + C.BOOST * 0.3 * (this.coefBoost || 1) * this.allure);
       }
     } else {
-      this.v = Math.min(this.plafond(), this.v + C.BOOST * (this.coefBoost || 1));
+      this.v = Math.min(this.plafond(), this.v + C.BOOST * (this.coefBoost || 1) * this.allure);
     }
     this.lastKey = key;
     return stumbled;
@@ -2463,11 +2464,6 @@
     if (this.bouscule) this.bouscule(dt);
     const before = this.d;
     this.d += this.v * dt;
-    // le plafond du record du monde : jamais devant le coureur du record (distanceDuRecord)
-    if (this.record && elapsed !== undefined) {
-      const dr = this.distanceDuRecord(elapsed);
-      if (this.d > dr) { this.d = Math.max(before, dr); this.v = Math.min(this.v, this._vRecord * (1 - Math.exp(-elapsed))); }
-    }
     // LE BOUT DE LA ZONE EST UN MUR, PAS UNE LIGNE D'ARRIVEE.
     //
     // On ne le « termine » pas — un relayeur qui passe son temoin n'a pas
@@ -2489,7 +2485,9 @@
       // Le chrono affiche doit toujours etre le temps reellement couru : le
       // plancher a `this.best` cachait les performances qui le battaient
       // (rendait par exemple un 37 s affiche comme 40,50 s sur le 400 m).
-      this.finishTime = elapsed;
+      // Le plafond du record du monde (RECORDS_DU_MONDE) porte sur le chrono, pas sur la course : retenir le
+      // coureur en route le freinait au depart, ou il va plus vite que le profil du record (0,58 s perdus au 100 m).
+      this.finishTime = this.record ? Math.max(elapsed, this.record) : elapsed;
     }
   };
 
@@ -4079,7 +4077,7 @@
     GAIT, GAITS, gaitOf, gait, catmull, Track, Runner, CLAP,
     FOULEES, FOULEE_DES_EPREUVES, poserLAllure, allureCourante,
     pose, fallShape, alea, semer, desemer, estSeme,
-    ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL, RECORDS_DU_MONDE,
+    ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL, RECORDS_DU_MONDE, ALLURE_DU_JOUEUR, CONVERSION_ADVERSAIRES,
     VEDETTES
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);
