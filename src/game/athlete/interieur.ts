@@ -10,13 +10,28 @@
 // la maison tout de suite. L'athlete est le meme corps qu'en ville (Personne, ville.ts).
 
 import * as THREE from 'three';
-import { Personne, SOL } from './ville';
+import { Personne, SOL, type Habitant, type Lieu } from './ville';
 
-export type Meuble = 'lit' | 'bureau' | 'canape' | 'table' | 'douche' | 'miroir' | 'porte';
+// TOUS LES BATIMENTS (29/10, l'auteur : « on ne peut toujours pas entrer dans les batiments comme dans les Sims »,
+// avec un bureau de Lagos Life ou les collegues travaillent). La meme piece en vue coupee, amenagee selon le lieu :
+// la classe, le vestiaire du club, le cabinet du kine, le magasin, l'open space, le guichet, la pizzeria, le bassin.
+// Les gens qui sont la a cette heure (gens.ts, ouEst) y sont ; on les touche pour leur parler. Un meuble touche :
+// l'athlete y va, puis le lieu ouvre ce qu'on y fait (le panneau du lieu, CarriereAthlete). Les lieux de plein air
+// (stade, cote, parc, marche) n'ont pas de piece.
+export type Amenagement = 'maison' | 'classe' | 'vestiaire' | 'cabinet' | 'magasin' | 'bureaux' | 'guichet' | 'pizzeria' | 'bassin';
+export const AMENAGEMENT: Partial<Record<Lieu, Amenagement>> = {
+  maison: 'maison', parents: 'maison', babysitting: 'maison', college: 'classe', lycee: 'classe',
+  club_quartier: 'vestiaire', club_horizon: 'vestiaire', kine: 'cabinet', boutique: 'magasin', travail: 'bureaux',
+  gare: 'guichet', mairie: 'guichet', livraison: 'pizzeria', piscine: 'bassin',
+};
+
+export type Meuble = 'lit' | 'bureau' | 'canape' | 'table' | 'douche' | 'miroir' | 'porte'
+  | 'tableau' | 'pupitres' | 'casiers' | 'muscu' | 'massage' | 'rayons' | 'caisse' | 'guichet' | 'comptoir' | 'bassin';
 /** Ce qu'on fait a chaque meuble (les id d'ACTIONS ; « miroir » ouvre la garde-robe, « porte » ressort). */
 export const ACTIONS_DU_MEUBLE: Record<Meuble, string[]> = {
   lit: ['dormir', 'sieste'], bureau: ['devoirs'], canape: ['console', 'telephone'],
   table: ['manger'], douche: ['douche'], miroir: [], porte: [],
+  tableau: [], pupitres: [], casiers: [], muscu: [], massage: [], rayons: [], caisse: [], guichet: [], comptoir: [], bassin: [],
 };
 
 // LE PLAN, en metres : x vers la droite, z vers la camera. Les murs du fond (z = -P) et de
@@ -31,6 +46,13 @@ function boite(g: THREE.Object3D, l: number, h: number, p: number, x: number, y:
   b.position.set(x, y + h / 2, z); b.castShadow = true; b.receiveShadow = true;
   g.add(b); return b;
 }
+
+const COQUILLES: Record<Exclude<Amenagement, 'maison'>, { sol: string; mur: string; mur2: string }> = {
+  classe: { sol: '#C9B79A', mur: '#F1E6C8', mur2: '#E6D9B5' }, vestiaire: { sol: '#8E9AA3', mur: '#DDE3E8', mur2: '#CDD5DC' },
+  cabinet: { sol: '#D9DEE2', mur: '#F4F6F8', mur2: '#E6ECEF' }, magasin: { sol: '#3A3F46', mur: '#F4F1EA', mur2: '#E0453A' },
+  bureaux: { sol: '#B9BEC4', mur: '#EEF0F2', mur2: '#DDE1E5' }, guichet: { sol: '#C9C2B4', mur: '#EDE6D8', mur2: '#D8CDB8' },
+  pizzeria: { sol: '#B5652E', mur: '#F2E3C9', mur2: '#E7CFA4' }, bassin: { sol: '#E8EEF0', mur: '#D6EEF7', mur2: '#C3E3F0' },
+};
 
 type Place = { meuble: Meuble; groupe: THREE.Group; ou: [number, number]; regard: [number, number]; emprise: [number, number, number, number] };
 
@@ -49,8 +71,10 @@ export class Interieur {
   private fini = false;
   private ecoute: Array<[string, any]> = [];
 
+  private gens: { p: Personne; el: HTMLElement }[] = [];
+
   constructor(private hote: HTMLElement, look: any, nuit: boolean,
-              private o: { surMeuble: (m: Meuble) => void }) {
+              private o: { surMeuble: (m: Meuble) => void; amenagement?: Amenagement; gens?: Habitant[]; surPersonne?: (id: string) => void }) {
     const cv = document.createElement('canvas');
     cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block';
     hote.appendChild(cv);
@@ -61,8 +85,9 @@ export class Interieur {
     this.rendu.shadowMap.enabled = true;
     this.rendu.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene.background = new THREE.Color(nuit ? '#0E1620' : '#1B2A24');
-    this.construire(nuit);
+    this.construire(nuit, o.amenagement || 'maison');
     this.moi = new Personne(look, 0.6, P - 0.9, this.scene, 320);
+    this.placerLesGens(o.gens || []);
     this.moi.dir.set(0, 0, -1); this.moi.placer();
     this.anneau = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.38, 32),
       new THREE.MeshBasicMaterial({ color: '#3DDC84', transparent: true, opacity: 0, depthWrite: false }));
@@ -76,7 +101,8 @@ export class Interieur {
   }
 
   /** Les murs, le sol, les meubles et la lumiere. */
-  private construire(nuit: boolean) {
+  private construire(nuit: boolean, am: Amenagement) {
+    if (am !== 'maison') { this.coquille(nuit, COQUILLES[am]); this.amenager(am); this.lumiere(nuit); return; }
     const s = this.scene;
     // le sol en parquet, une plinthe, le carrelage de la salle d'eau
     const parquet = mat('#B98A5E', { roughness: 0.7 });
@@ -152,8 +178,13 @@ export class Interieur {
     }, null);
     // la cloison de la salle d'eau bloque aussi le passage
     this.bloquer([L - 2.3, -P, L - 2.1, -P + 2.1]);
+    this.lumiere(nuit);
+    if (nuit) { const lampe = new THREE.PointLight('#FFC27A', 6, 7, 1.6); lampe.position.set(-1.6, SOL + 2.2, 0.6); s.add(lampe); }
+  }
 
-    // la lumiere : le jour par la fenetre, le soir une lampe chaude
+  /** La lumiere : le jour par la fenetre, le soir une lampe chaude. */
+  private lumiere(nuit: boolean) {
+    const s = this.scene;
     s.add(new THREE.HemisphereLight(nuit ? '#6B7CA8' : '#DCEBFF', '#6A5040', nuit ? 0.55 : 1.0));
     const soleil = new THREE.DirectionalLight(nuit ? '#FFC98A' : '#FFF4E0', nuit ? 1.4 : 2.4);
     soleil.position.set(nuit ? 1 : -2.5, 6, nuit ? 2 : -1);
@@ -163,7 +194,181 @@ export class Interieur {
     c.left = -L - 1; c.right = L + 1; c.top = P + 1; c.bottom = -P - 1; c.near = 0.5; c.far = 20;
     soleil.shadow.bias = -0.0005;
     s.add(soleil);
-    if (nuit) { const lampe = new THREE.PointLight('#FFC27A', 6, 7, 1.6); lampe.position.set(-1.6, SOL + 2.2, 0.6); s.add(lampe); }
+  }
+
+  /** Le sol, les deux murs montres, la fenetre, et la porte qui ramene en ville. */
+  private coquille(nuit: boolean, c: { sol: string; mur: string; mur2: string }) {
+    const s = this.scene;
+    this.sol = new THREE.Mesh(new THREE.BoxGeometry(2 * L, 0.1, 2 * P), mat(c.sol, { roughness: 0.6 }));
+    this.sol.position.set(0, SOL - 0.05, 0); this.sol.receiveShadow = true; s.add(this.sol);
+    const g = new THREE.Group(); s.add(g);
+    boite(g, 2 * L + MUR, HAUT, MUR, 0, SOL, -P - MUR / 2, mat(c.mur));
+    boite(g, MUR, HAUT, 2 * P, -L - MUR / 2, SOL, 0, mat(c.mur2));
+    const fen = boite(g, 0.04, 1.1, 1.8, -L + 0.01, SOL + 1.0, 0.4, mat(nuit ? '#1D2C44' : '#BFE3FF', { emissive: nuit ? '#0A1430' : '#A8D8FF', emissiveIntensity: nuit ? 0.4 : 0.6 }));
+    fen.castShadow = false;
+    // les plafonniers, allumes le soir
+    if (nuit) for (const x of [-2, 2]) { const l = new THREE.PointLight('#FFE2B0', 5, 8, 1.5); l.position.set(x, SOL + 2.4, 0); s.add(l); }
+    this.meuble('porte', 0.6, P - 0.05, [0.6, P - 0.9], [0, 1], g2 => {
+      boite(g2, 0.95, 0.03, 0.4, 0, SOL, 0, mat('#3DDC84', { transparent: true, opacity: 0.6 }));
+    }, null);
+  }
+
+  /** Les meubles de chaque lieu ; chacun ouvre ce qu'on fait ici (le panneau du lieu). */
+  private amenager(am: Amenagement) {
+    const M = (m: Meuble, x: number, z: number, ou: [number, number], regard: [number, number], e: [number, number, number, number], f: (g: THREE.Group) => void) =>
+      this.meuble(m, x, z, ou, regard, f, e);
+    const chaise = (g: THREE.Group, x: number, z: number, c = '#2B2F36') => { boite(g, 0.42, 0.45, 0.42, x, SOL, z, mat(c)); boite(g, 0.42, 0.45, 0.05, x, SOL + 0.45, z + 0.19, mat(c)); };
+    const pupitre = (g: THREE.Group, x: number, z: number) => {
+      boite(g, 1.1, 0.04, 0.5, x, SOL + 0.72, z, mat('#D9C7A6'));
+      for (const dx of [-0.5, 0.5]) boite(g, 0.04, 0.72, 0.45, x + dx, SOL, z, mat('#7A828C'));
+      chaise(g, x - 0.25, z + 0.5, '#3E6B8C'); chaise(g, x + 0.25, z + 0.5, '#3E6B8C');
+    };
+    switch (am) {
+      case 'classe':
+        M('tableau', -0.4, -P + 0.06, [-0.4, -P + 1.2], [0, -1], [-1.6, -P, 0.8, -P + 0.2], g => {
+          boite(g, 2.6, 1.1, 0.05, 0, SOL + 0.9, 0, mat('#1F4D3A', { roughness: 0.9 }));
+          boite(g, 2.7, 0.06, 0.12, 0, SOL + 0.85, 0.05, mat('#C9B48A'));
+          boite(g, 1.2, 0.05, 0.6, 2.2, SOL + 0.75, 0.9, mat('#8C6A44'));        // le bureau du prof
+          boite(g, 1.1, 0.75, 0.55, 2.2, SOL, 0.9, mat('#6B4A30'));
+        });
+        this.bloquer([1.6, -P + 0.5, 2.8, -P + 1.3]);
+        M('pupitres', -1.2, 0.2, [0.4, 0.9], [-1, 0], [-3.4, -0.4, -0.4, 2.3], g => {
+          for (const dz of [-0.4, 0.8, 2.0]) for (const dx of [-1.4, 0.1]) pupitre(g, dx, dz - 0.4);
+        });
+        break;
+      case 'vestiaire':
+        M('casiers', -1.2, -P + 0.3, [-1.2, -P + 1.5], [0, -1], [-3.4, -P, 1.0, -P + 0.9], g => {
+          for (let i = 0; i < 8; i++) {
+            boite(g, 0.5, 1.9, 0.5, -1.75 + i * 0.52, SOL, 0, mat(i % 2 ? '#2F6FB0' : '#2A62A0', { roughness: 0.5, metalness: 0.3 }));
+            boite(g, 0.06, 0.06, 0.02, -1.6 + i * 0.52, SOL + 1.1, 0.26, mat('#D0D4D8', { metalness: 0.7 }));
+          }
+          boite(g, 4.0, 0.45, 0.35, 0, SOL, 0.75, mat('#B98A5E'));               // le banc
+        });
+        M('tableau', -L + 0.06, -0.6, [-L + 1.1, -0.6], [-1, 0], [-L, -1.6, -L + 0.3, 0.4], g => {
+          boite(g, 0.04, 1.0, 1.8, 0, SOL + 1.0, 0, mat('#F4F6F8', { roughness: 0.3 }));
+          boite(g, 0.03, 0.08, 1.2, 0.02, SOL + 1.6, 0, mat('#E0453A'));         // le programme du coach
+        });
+        M('muscu', 2.4, 0.4, [1.2, 0.4], [1, 0], [1.6, -0.6, 4.4, 1.6], g => {
+          boite(g, 2.4, 0.03, 2.0, 0, SOL, 0, mat('#2B2F36', { roughness: 0.95 }));      // le tapis
+          boite(g, 0.06, 1.6, 0.06, -0.6, SOL, -0.7, mat('#9AA4AA', { metalness: 0.6 }));
+          boite(g, 0.06, 1.6, 0.06, 0.6, SOL, -0.7, mat('#9AA4AA', { metalness: 0.6 }));
+          boite(g, 1.8, 0.04, 0.04, 0, SOL + 1.35, -0.7, mat('#C9CED2', { metalness: 0.8, roughness: 0.3 })); // la barre
+          for (const x of [-0.85, 0.85]) boite(g, 0.08, 0.45, 0.45, x, SOL + 1.12, -0.7, mat('#1A1D21'));
+          boite(g, 1.2, 0.35, 0.4, 0, SOL, 0.5, mat('#3A3F46'));                   // le banc de developpe
+          for (let i = 0; i < 5; i++) boite(g, 0.22, 0.12, 0.12, -0.9 + i * 0.3, SOL, 0.95, mat('#1A1D21')); // les halteres
+        });
+        break;
+      case 'cabinet':
+        M('massage', -1.0, -0.6, [-1.0, 0.5], [0, -1], [-2.0, -1.0, 0.0, -0.2], g => {
+          boite(g, 1.9, 0.7, 0.7, 0, SOL, 0, mat('#EDEFF1'));
+          boite(g, 1.95, 0.12, 0.72, 0, SOL + 0.7, 0, mat('#4A9BB5'));
+          boite(g, 0.4, 0.06, 0.6, -0.8, SOL + 0.82, 0, mat('#FFFFFF'));
+        });
+        M('bureau', 2.4, -P + 0.6, [2.4, -P + 1.6], [0, -1], [1.6, -P, 3.2, -P + 1.0], g => {
+          boite(g, 1.4, 0.05, 0.7, 0, SOL + 0.74, 0, mat('#E8E2D6'));
+          boite(g, 1.3, 0.74, 0.6, 0, SOL, 0, mat('#B0A89C'));
+          boite(g, 0.5, 0.32, 0.03, 0, SOL + 0.78, -0.2, mat('#1F6FB5', { emissive: '#1F6FB5', emissiveIntensity: 0.5 }));
+        });
+        // l'espalier, le ballon, un squelette d'anatomie
+        boite(this.scene, 1.2, 2.2, 0.08, -2.6, SOL, -P + 0.06, mat('#C9A36B'));
+        { const b = new THREE.Mesh(new THREE.SphereGeometry(0.33, 20, 16), mat('#E0453A', { roughness: 0.4 })); b.position.set(3.4, SOL + 0.33, 1.6); b.castShadow = true; this.scene.add(b); }
+        this.bloquer([-3.2, -P, -2.0, -P + 0.3]); this.bloquer([3.0, 1.2, 3.8, 2.0]);
+        break;
+      case 'magasin':
+        M('rayons', -1.0, -P + 0.3, [-1.0, -P + 1.4], [0, -1], [-3.4, -P, 1.4, -P + 0.7], g => {
+          for (let i = 0; i < 4; i++) {
+            boite(g, 1.15, 2.0, 0.45, -1.8 + i * 1.2, SOL, 0, mat('#F2F2F2'));
+            for (let r = 0; r < 4; r++) for (let k = 0; k < 3; k++)
+              boite(g, 0.26, 0.14, 0.3, -2.15 + i * 1.2 + k * 0.35, SOL + 0.35 + r * 0.42, 0.05,
+                mat(['#E0453A', '#2F6FB0', '#3DDC84', '#F2B33D', '#1A1D21'][(i + r + k) % 5]));
+          }
+        });
+        M('miroir', -L + 0.3, 1.0, [-L + 1.2, 1.0], [-1, 0], [-L, 0.4, -L + 0.6, 1.6], g => {
+          boite(g, 0.05, 1.8, 0.9, -0.2, SOL, 0, mat('#CFE4EE', { roughness: 0.05, metalness: 0.6 }));
+          boite(g, 0.5, 0.05, 1.0, 0, SOL + 1.9, 0, mat('#3A3F46'));            // la cabine
+        });
+        M('caisse', 2.6, 0.6, [2.6, 1.6], [0, -1], [1.6, 0.1, 3.6, 1.1], g => {
+          boite(g, 1.9, 1.0, 0.7, 0, SOL, 0, mat('#2B2F36'));
+          boite(g, 0.35, 0.3, 0.3, 0.4, SOL + 1.0, 0, mat('#D0D4D8'));
+          boite(g, 1.95, 0.04, 0.75, 0, SOL + 1.0, 0, mat('#E0453A'));
+        });
+        // un portant de maillots
+        boite(this.scene, 1.6, 0.04, 0.04, 0.5, SOL + 1.5, 0.6, mat('#9AA4AA', { metalness: 0.7 }));
+        for (let k = 0; k < 6; k++) boite(this.scene, 0.06, 0.7, 0.45, -0.1 + k * 0.24, SOL + 0.75, 0.6, mat(['#E0453A', '#2F6FB0', '#F2F2F2'][k % 3]));
+        this.bloquer([-0.4, 0.3, 1.4, 0.9]);
+        break;
+      case 'bureaux':
+        M('bureau', -1.2, -0.4, [0.4, 1.4], [0, -1], [-3.6, -P + 0.4, 1.4, 1.0], g => {
+          for (const [x, z] of [[-1.6, -2.4], [0.4, -2.4], [-1.6, -0.6], [0.4, -0.6]] as [number, number][]) {
+            boite(g, 1.5, 0.05, 0.75, x, SOL + 0.74, z + 0.4, mat('#F4F1EA'));
+            boite(g, 1.4, 0.74, 0.05, x, SOL, z + 0.05, mat('#B0A89C'));
+            boite(g, 0.55, 0.36, 0.03, x, SOL + 0.79, z + 0.2, mat('#1F6FB5', { emissive: '#1F6FB5', emissiveIntensity: 0.5 }));
+            chaise(g, x, z + 1.0);
+          }
+        });
+        M('canape', 2.8, 1.5, [2.8, 0.6], [0, 1], [1.8, 1.1, 3.9, 2.0], g => {
+          boite(g, 2.0, 0.42, 0.8, 0, SOL, 0, mat('#1F5C3A'));
+          boite(g, 2.0, 0.45, 0.18, 0, SOL + 0.42, 0.32, mat('#174A2E'));
+        });
+        M('table', 2.8, -P + 0.9, [2.8, -P + 2.0], [0, -1], [1.8, -P + 0.4, 3.8, -P + 1.4], g => {
+          boite(g, 1.6, 0.05, 0.8, 0, SOL + 0.74, 0, mat('#C9A36B'));                 // le coin cafe
+          boite(g, 1.5, 0.74, 0.7, 0, SOL, 0, mat('#8C6A44'));
+          boite(g, 0.3, 0.4, 0.3, 0.5, SOL + 0.76, 0, mat('#2B2F36'));
+        });
+        break;
+      case 'guichet':
+        M('guichet', -0.6, -P + 0.6, [-0.6, -P + 1.8], [0, -1], [-3.4, -P, 2.2, -P + 1.2], g => {
+          boite(g, 5.4, 1.05, 0.6, 0, SOL, 0, mat('#C9A36B'));
+          boite(g, 5.4, 0.05, 0.7, 0, SOL + 1.05, 0, mat('#F4F1EA'));
+          boite(g, 5.4, 0.9, 0.03, 0, SOL + 1.1, 0.1, mat('#BFE6F5', { transparent: true, opacity: 0.3, roughness: 0.1 }));
+          boite(g, 2.2, 0.5, 0.05, 1.2, SOL + 2.0, -0.25, mat('#0F1418', { emissive: '#F2B33D', emissiveIntensity: 0.25 })); // le panneau
+        });
+        M('canape', -2.6, 1.4, [-2.6, 0.5], [0, 1], [-3.8, 1.0, -1.4, 1.8], g => {
+          for (let k = 0; k < 4; k++) chaise(g, -0.75 + k * 0.5, 0, '#5A6470');                  // les sieges d'attente
+        });
+        break;
+      case 'pizzeria':
+        M('comptoir', 0.4, -P + 1.0, [0.4, -P + 2.1], [0, -1], [-1.6, -P, 2.6, -P + 1.5], g => {
+          boite(g, 4.0, 1.0, 0.7, 0, SOL, 0, mat('#8C3A2B'));
+          boite(g, 4.0, 0.05, 0.75, 0, SOL + 1.0, 0, mat('#E8E2D6'));
+          const four = new THREE.Mesh(new THREE.SphereGeometry(0.9, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), mat('#B5652E'));
+          four.position.set(1.4, SOL, -0.7); four.castShadow = true; g.add(four);
+          boite(g, 0.5, 0.35, 0.05, 1.4, SOL + 0.05, 0.17 - 0.7, mat('#FF8A3D', { emissive: '#FF6A1A', emissiveIntensity: 0.9 }));
+        });
+        M('table', -2.2, 1.0, [-1.0, 1.0], [-1, 0], [-3.6, 0.0, -0.8, 2.2], g => {
+          for (const [x, z] of [[-0.6, -0.4], [0.9, 0.6]] as [number, number][]) {
+            boite(g, 0.9, 0.05, 0.9, x, SOL + 0.74, z, mat('#F4F1EA'));
+            boite(g, 0.08, 0.74, 0.08, x, SOL, z, mat('#3A3F46'));
+            chaise(g, x - 0.6, z, '#E0453A'); chaise(g, x + 0.6, z, '#E0453A');
+          }
+        });
+        break;
+      case 'bassin':
+        M('bassin', -0.6, -0.8, [-0.6, 1.4], [0, -1], [-3.8, -P + 0.4, 2.6, 0.9], g => {
+          boite(g, 6.4, 0.06, 4.0, 0, SOL - 0.04, 0, mat('#E8EEF0'));
+          const eau = new THREE.Mesh(new THREE.BoxGeometry(6.0, 0.02, 3.6), mat('#3AA7D9', { transparent: true, opacity: 0.85, roughness: 0.05, metalness: 0.1 }));
+          eau.position.set(0, SOL + 0.03, 0); g.add(eau);
+          for (let k = 1; k < 5; k++) boite(g, 6.0, 0.03, 0.05, 0, SOL + 0.04, -1.8 + k * 0.72, mat(k % 2 ? '#E0453A' : '#F4F1EA'));
+        });
+        break;
+    }
+  }
+
+  /** Les gens qui sont la : chacun a une place libre, et une etiquette qu'on touche pour lui parler. */
+  private placerLesGens(liste: Habitant[]) {
+    const places: [number, number][] = [[-2.6, 2.4], [2.8, 2.6], [-0.8, 2.6], [1.6, 2.2], [-3.4, 0.4], [3.6, -0.6]];
+    liste.slice(0, places.length).forEach((h, i) => {
+      const [x, z] = places[i];
+      const p = new Personne(h.look, x, z, this.scene, 200);
+      p.dir.set(0.6 - x, 0, -z).normalize(); p.placer();
+      const el = document.createElement('button');
+      el.textContent = h.nom;
+      el.style.cssText = 'position:absolute;left:0;top:0;white-space:nowrap;z-index:1;padding:2px 8px;border-radius:999px;'
+        + 'background:rgba(255,255,255,0.92);color:#0F2A1E;font:800 10px system-ui,sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.25)';
+      el.addEventListener('click', ev => { ev.stopPropagation(); this.o.surPersonne?.(h.id); });
+      this.hote.appendChild(el);
+      this.gens.push({ p, el });
+    });
   }
 
   private meuble(m: Meuble, x: number, z: number, ou: [number, number], regard: [number, number],
@@ -251,10 +456,12 @@ export class Interieur {
     this.rendu.setSize(w, h, false);
     this.camera.aspect = w / h;
     // la piece doit tenir en largeur (telephone en portrait) comme en hauteur
-    const rayon = Math.hypot(L, P) * 1.02;
+    // en portrait, la piece vue plus d'en haut et de plus pres : elle remplit l'ecran (« comme dans les Sims », 29/10)
+    const portrait = this.camera.aspect < 0.8;
+    const rayon = Math.hypot(L, P) * (portrait ? 0.74 : 1.02);
     const fovV = THREE.MathUtils.degToRad(this.camera.fov), fovH = 2 * Math.atan(Math.tan(fovV / 2) * this.camera.aspect);
     const d = rayon / Math.sin(Math.min(fovV, fovH) / 2);
-    const dir = new THREE.Vector3(0.35, 0.95, 1).normalize();
+    const dir = new THREE.Vector3(0.35, portrait ? 1.7 : 0.95, 1).normalize();
     this.camera.position.copy(dir.multiplyScalar(d)).add(new THREE.Vector3(0, 0.6, 0));
     this.camera.lookAt(0, 0.6, 0.2);
     this.camera.updateProjectionMatrix();
@@ -275,6 +482,12 @@ export class Interieur {
       }
     }
     this.moi.peindre(this.camera);
+    const w = this.hote.clientWidth, h = this.hote.clientHeight, v = new THREE.Vector3();
+    for (const g of this.gens) {
+      g.p.peindre(this.camera);
+      v.set(g.p.pos.x, SOL + 2.0, g.p.pos.z).project(this.camera);
+      g.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h}px) translate(-50%, -100%)`;
+    }
     this.rendu.render(this.scene, this.camera);
     this.id = requestAnimationFrame(this.boucle);
   };
@@ -287,6 +500,7 @@ export class Interieur {
     cancelAnimationFrame(this.id);
     for (const [t, f] of this.ecoute) window.removeEventListener(t, f);
     this.scene.traverse((o: any) => { o.geometry?.dispose?.(); });
+    for (const g of this.gens) g.el.remove();
     this.rendu.dispose();
     this.rendu.domElement.remove();
   }

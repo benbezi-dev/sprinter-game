@@ -36,6 +36,7 @@ import { mot, dans, seanceDuJour, lang, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe, lookDePersonne } from '@/game/athlete/apparence';
 import { type Personne, GENS, PERSONNES, ouEst, lienDe, etiquette, interactionsAvec, interagir, roleDe } from '@/game/athlete/gens';
 import { Ville, LIEUX, type Lieu } from '@/game/athlete/ville';
+import { Interieur, AMENAGEMENT } from '@/game/athlete/interieur';
 import { Telephone, type App } from './TelephoneAthlete';
 import { type Mode, voyager, trajet, nonLus, messagesDuReveil, messagesDeBienvenue } from '@/game/athlete/telephone';
 import { SeanceJeu } from './SeancesAthlete';
@@ -927,6 +928,8 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
   const [, maj] = useReducer((x: number) => x + 1, 0);
   const [seance, setSeance] = useState<Jour | null>(null);
   const [lieu, setLieu] = useState<Lieu | null>(null);
+  // le batiment ou l'on est entre (interieur.ts) : sa piece en 3D, sous le panneau du lieu
+  const [dedans, setDedans] = useState<Lieu | null>(null);
   // le telephone : ferme (null), ou l'appli ouverte ; et le lieu a montrer sur la carte
   const [tel, setTel] = useState<App | null>(null);
   const [personne, setPersonne] = useState<Personne | null>(null);
@@ -951,7 +954,7 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
       depart: a.position || null,
       nom: l => nomLieu(l, a),
       adulte: etape(a) === 'adulte',
-      surLieu: l => setLieu(l),
+      surLieu: l => (AMENAGEMENT[l] ? setDedans(l) : setLieu(l)),
       surPosition: p => { a.position = p; },
       surPret: () => setPret(true),
       surPersonne: id => { setLieu(null); setTel(null); setPersonne(id as Personne); },
@@ -963,7 +966,7 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
 
   const ev = evenement(a.evenement);
   // la ville se fige tant qu'un lieu, une seance, un dialogue ou le menu est ouvert
-  useEffect(() => { ville.current?.pause(!!(lieu || seance || ev || tel || personne)); }, [lieu, seance, ev, tel, personne]);
+  useEffect(() => { ville.current?.pause(!!(lieu || seance || ev || tel || personne || dedans)); }, [lieu, seance, ev, tel, personne, dedans]);
 
   // LE TEMPS QUI PASSE : une seconde, `vitesse` minutes ; rien ne bouge
   // pendant qu'un lieu, une seance, un dialogue ou le menu est ouvert.
@@ -1005,7 +1008,7 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
   // partir vers un lieu : a pied on y marche dans la ville ; a velo ou en bus on y est,
   // le temps du trajet passe et le ticket se paie (telephone.ts, trajet)
   const aller = (l: Lieu, mode: Mode = 'pied') => {
-    setLieu(null); setTel(null);
+    setLieu(null); setTel(null); setDedans(null);
     if (mode === 'pied') { ville.current?.allerA(l); return; }
     if (voyager(a, mode, Math.round((ville.current?.distance(l) || 0) * 1.3))) return;
     sauver(a);
@@ -1019,13 +1022,19 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
     const modes = (['velo', 'bus', 'pied'] as Mode[]).map(md => ({ md, t: trajet(a, md, m) })).filter(x => !x.t.refus);
     const meilleur = modes.sort((x, y) => x.t.minutes - y.t.minutes)[0];
     if (!meilleur) { aller(l, 'pied'); return; }
-    setLieu(null); setTel(null);
+    setLieu(null); setTel(null); setDedans(null);
     voyager(a, meilleur.md, m); sauver(a); ville.current?.filerA(l); maj();
   };
 
   return createPortal(
     <div className="fixed inset-0 z-[70] bg-[#A9D3F0] text-foreground select-none">
       <div ref={hote} className="absolute inset-0 overflow-hidden" />
+      {dedans && (
+        <Piece key={dedans} lieu={dedans} titre={nomLieu(dedans, a)} look={lookDe(apparenceDe(a), true, tenueVue)} nuit={heureDe(a) < 7 * 60 || heureDe(a) >= 20 * 60}
+               gens={PERSONNES.flatMap(p => (ouEst(a, p) === dedans ? [{ id: p, nom: dans(GENS[p].nom(a)), lieu: dedans, look: lookDePersonne(a, p) }] : []))}
+               ouvrir={() => setLieu(dedans)} parler={id => { setLieu(null); setPersonne(id as Personne); }}
+               sortir={() => { sauver(a); setLieu(null); setDedans(null); }} />
+      )}
       {!pret && <div className="absolute inset-0 flex items-center justify-center bg-[#0A1410] text-white/70 text-sm">
         {dans(['Val-de-Reuil se dessine…', 'Drawing Val-de-Reuil…'])}</div>}
 
@@ -1215,6 +1224,37 @@ function EspaceSante({ a, ev, changer }: { a: Athlete; ev: boolean; changer: (f:
 }
 
 /** Qui est la, dans ce lieu, en ce moment. */
+/** LA PIECE DU BATIMENT (interieur.ts) : on y marche, on touche un meuble ou quelqu'un ; la porte ramene en ville. */
+function Piece({ lieu, titre, look, nuit, gens, ouvrir, parler, sortir }: {
+  lieu: Lieu; titre: string; look: any; nuit: boolean; gens: { id: string; nom: string; lieu: Lieu; look: any }[];
+  ouvrir: () => void; parler: (id: string) => void; sortir: () => void;
+}) {
+  const hote = useRef<HTMLDivElement>(null);
+  const rappels = useRef({ ouvrir, parler, sortir }); rappels.current = { ouvrir, parler, sortir };
+  useEffect(() => {
+    if (!hote.current) return;
+    const p = new Interieur(hote.current, look, nuit, {
+      amenagement: AMENAGEMENT[lieu], gens,
+      surMeuble: m => (m === 'porte' ? rappels.current.sortir() : rappels.current.ouvrir()),
+      surPersonne: id => rappels.current.parler(id),
+    });
+    return () => p.detruire();
+  }, []);
+  return (
+    <div className="absolute inset-0 z-[5] bg-[#0A1410]">
+      <div ref={hote} className="absolute inset-0 overflow-hidden" />
+      <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-3 pt-[max(env(safe-area-inset-top),0.75rem)] pointer-events-none">
+        <span className="rounded-xl bg-[rgba(8,18,14,0.86)] px-3 py-1.5 font-black font-display tracking-wide" style={{ color: VERT }}>{titre.toUpperCase()}</span>
+        <span className="flex gap-1.5 pointer-events-auto">
+          <button onClick={ouvrir} className="rounded-xl px-3 py-1.5 text-[11px] font-black text-[#0F2A1E]" style={{ background: VERT }}>{dans(['ICI', 'HERE'])}</button>
+          <button onClick={sortir} className="rounded-xl bg-[rgba(8,18,14,0.86)] px-3 py-1.5 text-[11px] font-black text-white">{dans(['SORTIR', 'LEAVE'])}</button>
+        </span>
+      </div>
+      <p className="absolute inset-x-0 bottom-3 text-center text-[11px] font-bold text-white/60 pointer-events-none">{dans(['Touche un meuble ou quelqu’un. La porte verte ramène en ville.', 'Tap furniture or someone. The green door takes you back to town.'])}</p>
+    </div>
+  );
+}
+
 function Ici({ a, lieu, parler }: { a: Athlete; lieu: Lieu; parler: (p: Personne) => void }) {
   const la = PERSONNES.filter(p => ouEst(a, p) === lieu);
   if (!la.length) return null;
