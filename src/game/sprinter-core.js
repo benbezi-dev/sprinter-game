@@ -611,9 +611,9 @@
                  '400': [42.80, 43.80], '4x100': [37.20, 38.00],
                  '100h': [12.00, 12.60], '110h': [12.95, 13.60],
                  '400h': [42.50, 44.00] },
-      cibles: { '100': { 'Méba-Mickaël ZÉZÉ': 8.39 },
-                '200': { 'Méba-Mickaël ZÉZÉ': 17.30 } },
-      names: ['Enzo Marchal', 'Kylian Brault', 'Jordan Mensah', 'Méba-Mickaël ZÉZÉ',
+      cibles: { '100': { 'Méba-Mickael ZÉZÉ': 8.39 },
+                '200': { 'Méba-Mickael ZÉZÉ': 17.30 } },
+      names: ['Enzo Marchal', 'Kylian Brault', 'Jordan Mensah', 'Méba-Mickael ZÉZÉ',
               'Rayan Delorme', 'Tom Guerin', 'Moussa Keita'] },
 
     { cle: 'riviera', name: 'Stade de la Riviera', theme: 'riviera',
@@ -1637,7 +1637,7 @@
     // de la tete (pose). Et soixante-quatre facettes au moins par volume a
     // l'ultra : c'est le skin premium de l'evenement.
     // (peau eclaircie le 30/09, comme celle du maillage : qu'on le distingue)
-    'Méba-Mickaël ZÉZÉ': look({ build: 'm', skin: [112, 69, 53], profil: 'meba',
+    'Méba-Mickael ZÉZÉ': look({ build: 'm', skin: [112, 69, 53], profil: 'meba',
       jersey: [242, 244, 248], shorts: [30, 44, 110], shoe: [214, 240, 44],
       // SES CHEVEUX, SUR SES PHOTOS (01/10, a sa demande) : noirs, courts,
       // du volume sur le dessus, degrades sur les cotes, sans bandeau — les

@@ -105,7 +105,7 @@ export const VEDETTES: Record<string, Vedette> = {
     ],
   },
   meba: {
-    cle: 'meba', coureur: 'Méba-Mickaël ZÉZÉ', prenom: 'Méba-Mickaël', nom: 'ZÉZÉ',
+    cle: 'meba', coureur: 'Méba-Mickael ZÉZÉ', prenom: 'Méba-Mickael', nom: 'ZÉZÉ',
     epreuves: ['100', '200'], jeux: ['sprint'], stade: 'defi-meba', skin: 'meba',
     portraits: { buste: 'vedettes/meba-buste.webp', pied: 'vedettes/meba-pied.webp' },
     // Le blanc et le bleu de l'equipe de France, le rouge en filet.
