@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
+import { ligneCadence } from '@/game/cadence';
 import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, raisonDe, NO_RUN_MS,
@@ -926,6 +927,11 @@ export function OneShotEndScreen() {
             {aFantome && !falseOut && (
               <div className="text-[10px] sm:text-xs md:text-sm court:text-[10px] font-bold tracking-widest text-cyan-300 uppercase">
                 {N.t('challenge_gap', { s: (Math.abs(runTime - ghostTime)).toFixed(2) })}
+              </div>
+            )}
+            {!falseOut && ligneCadence(player, N.t) && (
+              <div className="text-[10px] sm:text-xs md:text-sm court:text-[10px] font-bold tracking-widest text-cyan-200 uppercase">
+                {ligneCadence(player, N.t)}
               </div>
             )}
             {/* La manche, et ce qu'elle a fait de nous : la place dans la

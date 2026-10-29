@@ -23,7 +23,7 @@ for (const [cle, rec] of Object.entries(R)) {
 assert.ok(courir(100, null) < 5, 'sans record, pas de plafond');
 
 // L'ALLURE DU JOUEUR (29/10/2026) : la limite du jeu — depart et transition parfaits, cadence sans fin (1000/s) —
-// tombe sur le record ; le meilleur joueur reel (8,16 s au 100 m d'avant, ~39 appuis/s) reste au-dessus.
+// tombe sur le record ; depuis le 29/10 au soir, 39 appuis/s (le meilleur joueur reel) l'atteignent aussi.
 const { COURSES_EN_SALLE } = await import('../src/game/piste-salle.js');
 const EP = { ...K.RACES, ...COURSES_EN_SALLE };
 function parfait(cle, f) {
@@ -42,7 +42,9 @@ function parfait(cle, f) {
 for (const cle of Object.keys(R)) {
   const t = parfait(cle, 1000);
   assert.ok(t < R[cle] + 0.03, `${cle} : la limite du jeu donne ${t.toFixed(3)}, loin du record ${R[cle]} (recalculer ALLURE_DU_JOUEUR)`);
-  assert.ok(parfait(cle, 39) > R[cle] + 0.1, `${cle} : 39 appuis/s atteignent le record`);
+  // (29/10/2026) : le record tombe a 39 appuis/s, la cadence du meilleur joueur reel, pas avant 37.
+  assert.ok(parfait(cle, 39) < R[cle] + 0.005, `${cle} : 39 appuis/s donnent ${parfait(cle, 39).toFixed(3)}, pas le record ${R[cle]}`);
+  assert.ok(parfait(cle, 37) > R[cle] + 0.01, `${cle} : 37 appuis/s atteignent deja le record`);
 }
 console.log('allure du joueur : OK (100 m : 39/s ' + parfait('100', 39).toFixed(2) + ' s, limite ' + parfait('100', 1000).toFixed(2) + ' s)');
 console.log('records du monde : OK', Object.entries(R).map(([k, v]) => `${k} ${v}`).join(', '));

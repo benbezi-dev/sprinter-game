@@ -290,16 +290,18 @@
   // 100 m 9,58 et 200 m 19,19 (Bolt 2009), 400 m 43,03 (van Niekerk 2016), 200 m salle 19,92 (Fredericks 1996),
   // 400 m salle 44,49 (Morales Williams 2024).
   const RECORDS_DU_MONDE = { '60': 6.34, '100': 9.58, '200': 19.19, '400': 43.03, '200s': 19.92, '400s': 44.49 };
-  // L'ALLURE DU JOUEUR, part de la vitesse et de la poussee du moteur d'avant (l'auteur, 29/10 : « meme niveau de
-  // difficulte » que pour le chrono le plus rapide faisable dans le jeu public) : la limite de ce moteur — depart et
-  // transition parfaits, cadence sans fin — valait 4,81 / 7,90 / 16,15 / 33,47 / 16,16 / 33,55 s ; ramenee ici
-  // pile sur le record. Le meilleur reel du classement (8,16 s au 100 m) donne desormais ~9,9 s.
+  // L'ALLURE DU JOUEUR, part de la vitesse et de la poussee du moteur d'avant. Le 29/10, elle mettait le record a la
+  // limite de ce moteur — depart et transition parfaits, cadence sans fin — et 39 appuis/s, la cadence du meilleur
+  // joueur reel, restaient a 0,2-0,5 s du record (l'auteur : « 1000 appuis secondes c'est impossible »). Desormais
+  // (l'auteur, 29/10 : « applique pour toutes les courses ») : depart et transition parfaits a 39 appuis/s donnent
+  // pile le record, 37 appuis/s ne l'atteignent pas. Valeurs d'avant, si c'est trop facile : 0,7533 / 0,8219 /
+  // 0,8406 / 0,7772 / 0,8082 / 0,752 et 1,287 / 1,200 / 1,182 / 1,281 / 1,225 / 1,320.
   // Recalculer avec tools/records-du-monde-test.mjs si BOOST, DRAG ou un maxSpeed change.
-  const ALLURE_DU_JOUEUR = { '60': 0.7533, '100': 0.8219, '200': 0.8406, '400': 0.7772, '200s': 0.8082, '400s': 0.752 };
+  const ALLURE_DU_JOUEUR = { '60': 0.7816, '100': 0.8455, '200': 0.8571, '400': 0.7887, '200s': 0.8253, '400s': 0.764 };
   // ET LES ADVERSAIRES SUIVENT (l'auteur, 29/10 : « meme conversion ») : les plateaux, chronos fixes et plateaux de
   // la carriere restent ecrits dans l'echelle d'avant ; leur temps tire est multiplie par ce que l'allure fait au
-  // joueur a 17 appuis/s (x1,19 a x1,21 de 8 a 40 appuis/s au 100 m) — chaque course garde sa difficulte.
-  const CONVERSION_ADVERSAIRES = { '60': 1.287, '100': 1.200, '200': 1.182, '400': 1.281, '200s': 1.225, '400s': 1.320 };
+  // joueur a 17 appuis/s — chaque course garde sa difficulte.
+  const CONVERSION_ADVERSAIRES = { '60': 1.244, '100': 1.169, '200': 1.160, '400': 1.263, '200s': 1.201, '400s': 1.300 };
 
   // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
   // est un tour complet de piste (deux virages, deux lignes droites).
@@ -2044,6 +2046,8 @@
     // depart : reaction, cadence de poussee, note de transition
     this.reaction = null; this.reactBonus = 0; this.jumped = false;
     this.freeze = 0; this.pressTimes = []; this.stumbledInDrive = false;
+    /** Tous les appuis de la course, faux pas compris, en secondes de course (cadence.ts). */
+    this.appuis = [];
     // Relais : note du passage recu, et ecart entre les deux touches.
     this.passGrade = null; this.passGap = 0;
     // Ou commence la portion de ce coureur, et sur quelle longueur il se met
@@ -2360,6 +2364,7 @@
   };
 
   Runner.prototype.press = function (key, elapsed) {
+    if (!this.finished && elapsed !== undefined && this.appuis) this.appuis.push(elapsed);
     if (this.finished || this.stumbleTimer > 0 || this.freeze > 0) return false;
     // premier appui : on mesure le temps de reaction et on en fait un gain
     if (this.reaction === null && elapsed !== undefined) {
