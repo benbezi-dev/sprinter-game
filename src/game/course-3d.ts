@@ -835,6 +835,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     if (menole) { soleil.color.set(0xb8c8ff); soleil.intensity = 1.2; }
   }
   uLisere.value = luxe || cyber ? 1 : 0;
+  envCorps = null; eclairerLesCorps();
   uLisereCoul.value.set(cyber ? 0x30e8ff : 0xffc76b);
   // au Stade Neon, le lisere reste un fil (« les neons sur les personnages sont trop forts,
   // un jeu de lumiere qui fait qu'on les voit clairement », 22/10) : la lumiere de face fait le reste
@@ -893,6 +894,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     soleil.color.set(SL.soleilCouleur); soleil.intensity = SL.soleil;
     soleilDecal.set(-6, 10, 40);
     uFoule.uLum.value = 1; uLisere.value = 0;
+    if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+    envCorps = envPalais;
+    eclairerLesCorps();
     const base = (import.meta as any).env?.BASE_URL || '/';
     const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle });
     pubAnim.push(salle.animer); cameraSalle = salle.camera;
@@ -1973,7 +1977,20 @@ const SANS_CHEVEUX = new Set(['ras', 'shaved']);
 // sur leurs contours et un rien de lumiere propre. Des flaques et des faisceaux poses sur
 // la piste « cassaient le style du stade » (l'auteur, 22/10). Eteint (0) ailleurs.
 const uLisere = { value: 0 }, uLisereCoul = { value: new THREE.Color(0xffc76b) }, uLisereForce = { value: 0.9 }, uLisereFace = { value: 0 };
+// LES LED DE LA SALLE (« au moins 800 lux », « pas de spot directement sur eux, plusieurs LED dans le stade »,
+// l'auteur, 29/10) : sous le toit, les corps baignent dans la lumiere d'une piece eclairee de partout
+// (RoomEnvironment), la nuit dehors comme le jour. Le decor garde sa lumiere cuite. null ailleurs.
+let envCorps: THREE.Texture | null = null;
+function eclairerCorps(m: THREE.MeshStandardMaterial) {
+  if (m.envMap === envCorps) return;
+  m.envMap = envCorps; m.envMapIntensity = 0.5; m.needsUpdate = true;
+}
+// (les corps deja poses quand le stade change)
+function eclairerLesCorps() {
+  for (const c of corps.values()) c.m.racine.traverse((o: any) => { if (o.isMesh) for (const m of [].concat(o.material)) eclairerCorps(m); });
+}
 function lisere(m: THREE.MeshStandardMaterial) {
+  eclairerCorps(m);
   m.onBeforeCompile = (sh) => {
     sh.uniforms.uLisere = uLisere; sh.uniforms.uLisereCoul = uLisereCoul; sh.uniforms.uLisereForce = uLisereForce; sh.uniforms.uLisereFace = uLisereFace;
     sh.fragmentShader = sh.fragmentShader
