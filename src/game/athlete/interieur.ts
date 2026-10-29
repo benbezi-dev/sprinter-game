@@ -34,6 +34,21 @@ export const ACTIONS_DU_MEUBLE: Record<Meuble, string[]> = {
   tableau: [], pupitres: [], casiers: [], muscu: [], massage: [], rayons: [], caisse: [], guichet: [], comptoir: [], bassin: [],
 };
 
+/**
+ * CE QU'ON FAIT A CE MEUBLE, ICI (29/10, « une action a lui, dormir au lit ») : les id d'ACTIONS (regles.ts).
+ * Vide : le meuble ouvre ce que le lieu propose (seances, soins, boutique, competition...).
+ */
+export function actionsDuMeuble(lieu: Lieu, m: Meuble): string[] {
+  if (lieu === 'maison') return ACTIONS_DU_MEUBLE[m];
+  if (lieu === 'parents') return m === 'table' ? ['manger_parents'] : [];
+  if (lieu === 'college' || lieu === 'lycee') return m === 'pupitres' ? [lieu === 'college' ? 'cours' : 'cours_lycee'] : [];
+  if (lieu === 'travail') return m === 'bureau' ? ['travail'] : [];
+  if (lieu === 'club_quartier' || lieu === 'club_horizon') return m === 'casiers' ? ['discuter_club'] : [];
+  if (lieu === 'livraison') return m === 'comptoir' || m === 'table' ? ['pizza'] : [];
+  if (lieu === 'gare') return m === 'canape' ? ['echauffement'] : [];
+  return [];
+}
+
 // LE PLAN, en metres : x vers la droite, z vers la camera. Les murs du fond (z = -P) et de
 // gauche (x = -L) sont montres ; les deux autres sont ouverts, comme une maison de poupee.
 const L = 4.6, P = 3.6, HAUT = 2.6, MUR = 0.12, CASE = 0.2;
@@ -71,7 +86,7 @@ export class Interieur {
   private fini = false;
   private ecoute: Array<[string, any]> = [];
 
-  private gens: { p: Personne; el: HTMLElement }[] = [];
+  private gens: { id: string; p: Personne; el: HTMLElement; attente: number }[] = [];
 
   constructor(private hote: HTMLElement, look: any, nuit: boolean,
               private o: { surMeuble: (m: Meuble) => void; amenagement?: Amenagement; gens?: Habitant[]; surPersonne?: (id: string) => void }) {
@@ -87,7 +102,7 @@ export class Interieur {
     this.scene.background = new THREE.Color(nuit ? '#0E1620' : '#1B2A24');
     this.construire(nuit, o.amenagement || 'maison');
     this.moi = new Personne(look, 0.6, P - 0.9, this.scene, 320);
-    this.placerLesGens(o.gens || []);
+    this.majGens(o.gens || []);
     this.moi.dir.set(0, 0, -1); this.moi.placer();
     this.anneau = new THREE.Mesh(new THREE.RingGeometry(0.28, 0.38, 32),
       new THREE.MeshBasicMaterial({ color: '#3DDC84', transparent: true, opacity: 0, depthWrite: false }));
@@ -354,21 +369,36 @@ export class Interieur {
     }
   }
 
-  /** Les gens qui sont la : chacun a une place libre, et une etiquette qu'on touche pour lui parler. */
-  private placerLesGens(liste: Habitant[]) {
-    const places: [number, number][] = [[-2.6, 2.4], [2.8, 2.6], [-0.8, 2.6], [1.6, 2.2], [-3.4, 0.4], [3.6, -0.6]];
-    liste.slice(0, places.length).forEach((h, i) => {
-      const [x, z] = places[i];
-      const p = new Personne(h.look, x, z, this.scene, 200);
-      p.dir.set(0.6 - x, 0, -z).normalize(); p.placer();
+  /**
+   * Les gens qui sont la (gens.ts, ouEst) : ceux qui arrivent entrent par la porte, ceux qui s'en vont sortent ;
+   * l'ecran le redemande a chaque minute de jeu (« la liste des presents ne change pas si l'heure tourne »).
+   */
+  majGens(liste: Habitant[]) {
+    const vus = new Set(liste.map(h => h.id));
+    for (const g of this.gens.filter(g => !vus.has(g.id))) { g.p.retirer(); g.el.remove(); }
+    this.gens = this.gens.filter(g => vus.has(g.id));
+    for (const h of liste.slice(0, 6)) {
+      if (this.gens.some(g => g.id === h.id)) continue;
+      const p = new Personne(h.look, 0.6, P - 0.3, this.scene, 200);
+      p.route = this.chemin(0.6, P - 0.3, ...this.pointLibre());
       const el = document.createElement('button');
       el.textContent = h.nom;
       el.style.cssText = 'position:absolute;left:0;top:0;white-space:nowrap;z-index:1;padding:2px 8px;border-radius:999px;'
         + 'background:rgba(255,255,255,0.92);color:#0F2A1E;font:800 10px system-ui,sans-serif;box-shadow:0 2px 6px rgba(0,0,0,.25)';
       el.addEventListener('click', ev => { ev.stopPropagation(); this.o.surPersonne?.(h.id); });
       this.hote.appendChild(el);
-      this.gens.push({ p, el });
-    });
+      this.gens.push({ id: h.id, p, el, attente: 0 });
+    }
+  }
+
+  /** Un point du sol ou personne ne bute : ni meuble, ni la porte. */
+  private pointLibre(): [number, number] {
+    for (let k = 0; k < 40; k++) {
+      const x = -L + 0.5 + Math.random() * (2 * L - 1), z = -P + 0.5 + Math.random() * (2 * P - 1.6);
+      const i = Math.floor((x + L) / CASE), j = Math.floor((z + P) / CASE);
+      if (!this.bloque[j * COLS + i]) return [x, z];
+    }
+    return [-2.6, 2.4];
   }
 
   private meuble(m: Meuble, x: number, z: number, ou: [number, number], regard: [number, number],
@@ -484,6 +514,9 @@ export class Interieur {
     this.moi.peindre(this.camera);
     const w = this.hote.clientWidth, h = this.hote.clientHeight, v = new THREE.Vector3();
     for (const g of this.gens) {
+      if (g.p.route.length) { if (g.p.avancer(dt, 1.1)) g.attente = 3 + Math.random() * 6; }
+      else if ((g.attente -= dt) <= 0) { g.p.route = this.chemin(g.p.pos.x, g.p.pos.z, ...this.pointLibre()); g.attente = 99; }
+      else g.p.marche = false;
       g.p.peindre(this.camera);
       v.set(g.p.pos.x, SOL + 2.0, g.p.pos.z).project(this.camera);
       g.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h}px) translate(-50%, -100%)`;

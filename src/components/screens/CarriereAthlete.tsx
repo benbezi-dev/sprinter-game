@@ -36,7 +36,7 @@ import { mot, dans, seanceDuJour, lang, EXOS } from '@/game/athlete/mots';
 import { lookDe, apparenceDe, lookDePersonne } from '@/game/athlete/apparence';
 import { type Personne, GENS, PERSONNES, ouEst, lienDe, etiquette, interactionsAvec, interagir, roleDe } from '@/game/athlete/gens';
 import { Ville, LIEUX, type Lieu } from '@/game/athlete/ville';
-import { Interieur, AMENAGEMENT } from '@/game/athlete/interieur';
+import { Interieur, AMENAGEMENT, actionsDuMeuble, type Meuble } from '@/game/athlete/interieur';
 import { Telephone, type App } from './TelephoneAthlete';
 import { type Mode, voyager, trajet, nonLus, messagesDuReveil, messagesDeBienvenue } from '@/game/athlete/telephone';
 import { SeanceJeu } from './SeancesAthlete';
@@ -407,6 +407,14 @@ const NOMS_LIEUX: Record<Lieu, [string, string]> = {
   travail: ['Ton travail', 'Your job'], parents: ['Chez tes parents', 'Your parents’ home'],
 };
 /** Le nom d'un lieu ; pour un adulte, la maison est son appartement. */
+/** Le nom de chaque meuble de la piece (interieur.ts). */
+const NOMS_MEUBLES: Record<Meuble, [string, string]> = {
+  lit: ['Le lit', 'Bed'], bureau: ['Le bureau', 'Desk'], canape: ['Le canapé', 'Sofa'], table: ['La table', 'Table'],
+  douche: ['La douche', 'Shower'], miroir: ['Le miroir', 'Mirror'], porte: ['La porte', 'Door'], tableau: ['Le tableau', 'Board'],
+  pupitres: ['Ta place en classe', 'Your desk'], casiers: ['Les casiers', 'Lockers'], muscu: ['La muscu', 'Weights'],
+  massage: ['La table de soins', 'Treatment table'], rayons: ['Les rayons', 'Shelves'], caisse: ['La caisse', 'Till'],
+  guichet: ['Le guichet', 'Counter'], comptoir: ['Le comptoir', 'Counter'], bassin: ['Le bassin', 'Pool'],
+};
 const nomLieu = (l: Lieu, a?: Athlete) => (l === 'maison' && a && etape(a) === 'adulte' ? dans(['Ton appart', 'Your flat'])
   : l === 'club_quartier' && CLUB_PARTENAIRE ? CLUB_PARTENAIRE.court : dans(NOMS_LIEUX[l]));
 const PRIX_VELO = 120;
@@ -437,9 +445,9 @@ function noterEpuise(a: Athlete) {
 }
 
 /** Les actions de la journee qu'on peut faire dans ce lieu. */
-function Actions({ a, lieu, ev, changer }: { a: Athlete; lieu: string; ev: boolean; changer: (f: () => void) => void }) {
-  // ce qui ne concerne pas l'age (le college a 25 ans) n'apparait pas
-  const liste = ACTIONS.filter(x => x.lieu === lieu && actionPossible(a, x.id) !== 'etape');
+function Actions({ a, lieu, ev, changer, ids }: { a: Athlete; lieu: string; ev: boolean; changer: (f: () => void) => void; ids?: string[] }) {
+  // ce qui ne concerne pas l'age (le college a 25 ans) n'apparait pas ; `ids` : celles d'un meuble (interieur.ts)
+  const liste = ACTIONS.filter(x => (ids ? ids.includes(x.id) : x.lieu === lieu) && actionPossible(a, x.id) !== 'etape');
   if (!liste.length) return null;
   return (
     <Carte titre={dans(['FAIRE', 'DO'])}>
@@ -930,6 +938,8 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
   const [lieu, setLieu] = useState<Lieu | null>(null);
   // le batiment ou l'on est entre (interieur.ts) : sa piece en 3D, sous le panneau du lieu
   const [dedans, setDedans] = useState<Lieu | null>(null);
+  // le meuble touche dans la piece, et ce qu'on y fait
+  const [meuble, setMeuble] = useState<{ m: Meuble; ids: string[] } | null>(null);
   // le telephone : ferme (null), ou l'appli ouverte ; et le lieu a montrer sur la carte
   const [tel, setTel] = useState<App | null>(null);
   const [personne, setPersonne] = useState<Personne | null>(null);
@@ -1032,8 +1042,22 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
       {dedans && (
         <Piece key={dedans} lieu={dedans} titre={nomLieu(dedans, a)} look={lookDe(apparenceDe(a), true, tenueVue)} nuit={heureDe(a) < 7 * 60 || heureDe(a) >= 20 * 60}
                gens={PERSONNES.flatMap(p => (ouEst(a, p) === dedans ? [{ id: p, nom: dans(GENS[p].nom(a)), lieu: dedans, look: lookDePersonne(a, p) }] : []))}
-               ouvrir={() => setLieu(dedans)} parler={id => { setLieu(null); setPersonne(id as Personne); }}
-               sortir={() => { sauver(a); setLieu(null); setDedans(null); }} />
+               ouvrir={m => {
+                 const ids = m ? actionsDuMeuble(dedans, m) : [];
+                 if (m && (ids.length || m === 'miroir')) { setLieu(null); setMeuble({ m, ids }); } else { setMeuble(null); setLieu(dedans); }
+               }}
+               parler={id => { setLieu(null); setMeuble(null); setPersonne(id as Personne); }}
+               sortir={() => { sauver(a); setLieu(null); setMeuble(null); setDedans(null); }} />
+      )}
+      {dedans && meuble && (
+        <Feuille titre={dans(NOMS_MEUBLES[meuble.m]).toUpperCase()} sous={nomLieu(dedans, a)} onFermer={() => { sauver(a); setMeuble(null); }}>
+          {meuble.m === 'miroir' ? <>
+            <ChoixApparence ap={apparenceDe(a)} onChange={ap => changer(() => { a.apparence = ap; ville.current?.habiller(lookDe(ap, true, tenueVue)); })} />
+            <GardeRobe a={a} changer={changer} />
+          </> : <Actions a={a} lieu={dedans} ids={meuble.ids} ev={!!ev} changer={changer} />}
+          <button onClick={() => { setMeuble(null); setLieu(dedans); }} className="text-[11px] font-black tracking-widest text-white/60 underline self-center">
+            {dans(['TOUT CE QU’ON FAIT ICI', 'EVERYTHING HERE'])}</button>
+        </Feuille>
       )}
       {!pret && <div className="absolute inset-0 flex items-center justify-center bg-[#0A1410] text-white/70 text-sm">
         {dans(['Val-de-Reuil se dessine…', 'Drawing Val-de-Reuil…'])}</div>}
@@ -1227,26 +1251,34 @@ function EspaceSante({ a, ev, changer }: { a: Athlete; ev: boolean; changer: (f:
 /** LA PIECE DU BATIMENT (interieur.ts) : on y marche, on touche un meuble ou quelqu'un ; la porte ramene en ville. */
 function Piece({ lieu, titre, look, nuit, gens, ouvrir, parler, sortir }: {
   lieu: Lieu; titre: string; look: any; nuit: boolean; gens: { id: string; nom: string; lieu: Lieu; look: any }[];
-  ouvrir: () => void; parler: (id: string) => void; sortir: () => void;
+  ouvrir: (m?: Meuble) => void; parler: (id: string) => void; sortir: () => void;
 }) {
   const hote = useRef<HTMLDivElement>(null);
+  const piece = useRef<Interieur | null>(null);
   const rappels = useRef({ ouvrir, parler, sortir }); rappels.current = { ouvrir, parler, sortir };
   useEffect(() => {
     if (!hote.current) return;
     const p = new Interieur(hote.current, look, nuit, {
       amenagement: AMENAGEMENT[lieu], gens,
-      surMeuble: m => (m === 'porte' ? rappels.current.sortir() : rappels.current.ouvrir()),
+      surMeuble: m => (m === 'porte' ? rappels.current.sortir() : rappels.current.ouvrir(m)),
       surPersonne: id => rappels.current.parler(id),
     });
-    return () => p.detruire();
+    piece.current = p;
+    return () => { p.detruire(); piece.current = null; };
   }, []);
+  // l'heure tourne : qui arrive, qui s'en va (gens.ts, ouEst)
+  const presents = gens.map(g => g.id).join();
+  useEffect(() => { piece.current?.majGens(gens); }, [presents]);
+  // le miroir, la garde-robe : l'athlete se change sans sortir
+  const habit = JSON.stringify(look);
+  useEffect(() => { piece.current?.habiller(look); }, [habit]);
   return (
     <div className="absolute inset-0 z-[5] bg-[#0A1410]">
       <div ref={hote} className="absolute inset-0 overflow-hidden" />
       <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-3 pt-[max(env(safe-area-inset-top),0.75rem)] pointer-events-none">
         <span className="rounded-xl bg-[rgba(8,18,14,0.86)] px-3 py-1.5 font-black font-display tracking-wide" style={{ color: VERT }}>{titre.toUpperCase()}</span>
         <span className="flex gap-1.5 pointer-events-auto">
-          <button onClick={ouvrir} className="rounded-xl px-3 py-1.5 text-[11px] font-black text-[#0F2A1E]" style={{ background: VERT }}>{dans(['ICI', 'HERE'])}</button>
+          <button onClick={() => ouvrir()} className="rounded-xl px-3 py-1.5 text-[11px] font-black text-[#0F2A1E]" style={{ background: VERT }}>{dans(['ICI', 'HERE'])}</button>
           <button onClick={sortir} className="rounded-xl bg-[rgba(8,18,14,0.86)] px-3 py-1.5 text-[11px] font-black text-white">{dans(['SORTIR', 'LEAVE'])}</button>
         </span>
       </div>
