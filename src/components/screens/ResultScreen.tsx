@@ -3,6 +3,7 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { EcartRecord } from './RecordPerso';
+import { ligneCadence } from '@/game/cadence';
 
 export function ResultScreen() {
   const levelIdx = useGameStore(s => s.levelIdx);
@@ -66,6 +67,11 @@ export function ResultScreen() {
             <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-400 uppercase">
               {startRecap()}
             </div>
+            {ligneCadence(player, N.t) && (
+              <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-200 uppercase">
+                {ligneCadence(player, N.t)}
+              </div>
+            )}
           </div>
 
           {/* Leaderboard Card */}

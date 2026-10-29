@@ -2046,6 +2046,8 @@
     // depart : reaction, cadence de poussee, note de transition
     this.reaction = null; this.reactBonus = 0; this.jumped = false;
     this.freeze = 0; this.pressTimes = []; this.stumbledInDrive = false;
+    /** Tous les appuis de la course, faux pas compris, en secondes de course (cadence.ts). */
+    this.appuis = [];
     // Relais : note du passage recu, et ecart entre les deux touches.
     this.passGrade = null; this.passGap = 0;
     // Ou commence la portion de ce coureur, et sur quelle longueur il se met
@@ -2362,6 +2364,7 @@
   };
 
   Runner.prototype.press = function (key, elapsed) {
+    if (!this.finished && elapsed !== undefined && this.appuis) this.appuis.push(elapsed);
     if (this.finished || this.stumbleTimer > 0 || this.freeze > 0) return false;
     // premier appui : on mesure le temps de reaction et on en fait un gain
     if (this.reaction === null && elapsed !== undefined) {

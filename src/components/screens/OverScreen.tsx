@@ -6,6 +6,7 @@ import { Coins } from 'lucide-react';
 import { rafraichirPieces, usePieces, coutDuContinue, acheterContinue } from '@/game/pieces';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
+import { ligneCadence } from '@/game/cadence';
 
 export function OverScreen() {
   const levelIdx = useGameStore(s => s.levelIdx);
@@ -87,6 +88,11 @@ export function OverScreen() {
             <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-400 uppercase">
               {startRecap()}
             </div>
+            {ligneCadence(player, N.t) && (
+              <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-200 uppercase">
+                {ligneCadence(player, N.t)}
+              </div>
+            )}
           </div>
 
           {/* Leaderboard Card */}
