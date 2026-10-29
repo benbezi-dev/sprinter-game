@@ -11,6 +11,7 @@
 
 import * as THREE from 'three';
 import { Personne, SOL, type Habitant, type Lieu } from './ville';
+import { POSTURES } from './postures';
 
 // TOUS LES BATIMENTS (29/10, l'auteur : « on ne peut toujours pas entrer dans les batiments comme dans les Sims »,
 // avec un bureau de Lagos Life ou les collegues travaillent). La meme piece en vue coupee, amenagee selon le lieu :
@@ -62,6 +63,7 @@ function boite(g: THREE.Object3D, l: number, h: number, p: number, x: number, y:
   g.add(b); return b;
 }
 
+const ASSIS = POSTURES.assis();
 const COQUILLES: Record<Exclude<Amenagement, 'maison'>, { sol: string; mur: string; mur2: string }> = {
   classe: { sol: '#C9B79A', mur: '#F1E6C8', mur2: '#E6D9B5' }, vestiaire: { sol: '#8E9AA3', mur: '#DDE3E8', mur2: '#CDD5DC' },
   cabinet: { sol: '#D9DEE2', mur: '#F4F6F8', mur2: '#E6ECEF' }, magasin: { sol: '#3A3F46', mur: '#F4F1EA', mur2: '#E0453A' },
@@ -70,6 +72,19 @@ const COQUILLES: Record<Exclude<Amenagement, 'maison'>, { sol: string; mur: stri
 };
 
 type Place = { meuble: Meuble; groupe: THREE.Group; ou: [number, number]; regard: [number, number]; emprise: [number, number, number, number] };
+/** S'installer sur un meuble : ou poser les pieds, vers ou regarder, assis ou couche (a quelle hauteur). */
+type Assise = { pos: [number, number]; dir: [number, number]; couche?: number };
+// (les places assises : les pieds une cuisse devant le siege ; couche : les pieds au bout, la tete vers -dir)
+const ASSISES: Partial<Record<Amenagement, Partial<Record<Meuble, Assise>>>> = {
+  maison: { lit: { pos: [-L + 1.1, -P + 2.05], dir: [0, 1], couche: 0.66 }, canape: { pos: [-1.6, 0.95], dir: [0, -1] },
+    bureau: { pos: [1.0, -P + 0.55], dir: [0, -1] }, table: { pos: [2.9, 1.3], dir: [-1, 0] } },
+  classe: { pupitres: { pos: [-0.85, 1.85], dir: [0, -1] } },
+  bureaux: { bureau: { pos: [-0.8, -0.45], dir: [0, -1] }, canape: { pos: [2.8, 1.05], dir: [0, -1] } },
+  vestiaire: { casiers: { pos: [-1.2, -P + 1.5], dir: [0, 1] } },
+  cabinet: { massage: { pos: [-0.1, -0.6], dir: [1, 0], couche: 0.92 } },
+  pizzeria: { table: { pos: [-2.95, 0.6], dir: [1, 0] } },
+  guichet: { canape: { pos: [-3.35, 0.95], dir: [0, -1] } },
+};
 
 export class Interieur {
   private rendu: THREE.WebGLRenderer;
@@ -86,7 +101,8 @@ export class Interieur {
   private fini = false;
   private ecoute: Array<[string, any]> = [];
 
-  private gens: { id: string; p: Personne; el: HTMLElement; attente: number }[] = [];
+  private gens: { id: string; p: Personne; el: HTMLElement; attente: number; part?: boolean }[] = [];
+  private am: Amenagement = 'maison';
 
   constructor(private hote: HTMLElement, look: any, nuit: boolean,
               private o: { surMeuble: (m: Meuble) => void; amenagement?: Amenagement; gens?: Habitant[]; surPersonne?: (id: string) => void }) {
@@ -100,7 +116,8 @@ export class Interieur {
     this.rendu.shadowMap.enabled = true;
     this.rendu.shadowMap.type = THREE.PCFSoftShadowMap;
     this.scene.background = new THREE.Color(nuit ? '#0E1620' : '#1B2A24');
-    this.construire(nuit, o.amenagement || 'maison');
+    this.am = o.amenagement || 'maison';
+    this.construire(nuit, this.am);
     this.moi = new Personne(look, 0.6, P - 0.9, this.scene, 320);
     this.majGens(o.gens || []);
     this.moi.dir.set(0, 0, -1); this.moi.placer();
@@ -375,8 +392,11 @@ export class Interieur {
    */
   majGens(liste: Habitant[]) {
     const vus = new Set(liste.map(h => h.id));
-    for (const g of this.gens.filter(g => !vus.has(g.id))) { g.p.retirer(); g.el.remove(); }
-    this.gens = this.gens.filter(g => vus.has(g.id));
+    // qui s'en va marche jusqu'a la porte, et ne disparait qu'en la passant (boucle)
+    for (const g of this.gens) {
+      if (!vus.has(g.id) && !g.part) { g.part = true; g.p.route = this.chemin(g.p.pos.x, g.p.pos.z, 0.6, P - 0.2); }
+      else if (vus.has(g.id) && g.part) { g.part = false; g.attente = 0; }
+    }
     for (const h of liste.slice(0, 6)) {
       if (this.gens.some(g => g.id === h.id)) continue;
       const p = new Personne(h.look, 0.6, P - 0.3, this.scene, 200);
@@ -446,10 +466,20 @@ export class Interieur {
     return pts;
   }
 
+  /** La ou il se tenait avant de s'asseoir : il s'y releve. */
+  private debout: [number, number] | null = null;
+  /** Se lever du siege ou du lit avant de repartir. */
+  private relever() {
+    if (!this.debout) return;
+    this.moi.pose = null; this.moi.couche = 0;
+    this.moi.pos.set(this.debout[0], 0, this.debout[1]); this.debout = null; this.moi.placer();
+  }
+
   /** Aller a un meuble : l'athlete y marche, puis le meuble propose ce qu'on y fait. */
   allerA(m: Meuble) {
     const p = this.places.find(q => q.meuble === m); if (!p) return;
     this.vise = m;
+    this.relever();
     this.moi.route = this.chemin(this.moi.pos.x, this.moi.pos.z, p.ou[0], p.ou[1]);
     this.marquer(p.ou[0], p.ou[1]);
   }
@@ -474,6 +504,7 @@ export class Interieur {
       if (m) { this.allerA(m); return; }
       const px = Math.max(-L + 0.3, Math.min(L - 0.3, touche.point.x)), pz = Math.max(-P + 0.3, Math.min(P - 0.3, touche.point.z));
       this.vise = null;
+      this.relever();
       this.moi.route = this.chemin(this.moi.pos.x, this.moi.pos.z, px, pz);
       this.marquer(px, pz);
     };
@@ -506,15 +537,26 @@ export class Interieur {
       (this.anneau.material as THREE.MeshBasicMaterial).opacity = 0;
       if (this.vise) {
         const p = this.places.find(q => q.meuble === this.vise)!;
-        this.moi.dir.set(p.regard[0], 0, p.regard[1]).normalize(); this.moi.placer();
+        this.moi.dir.set(p.regard[0], 0, p.regard[1]).normalize();
+        // s'installer : assis sur le siege, couche sur le lit ou la table de soins
+        const as = ASSISES[this.am]?.[p.meuble];
+        if (as) {
+          this.debout = [this.moi.pos.x, this.moi.pos.z];
+          this.moi.pos.set(as.pos[0], 0, as.pos[1]); this.moi.dir.set(as.dir[0], 0, as.dir[1]).normalize();
+          if (as.couche) this.moi.couche = as.couche; else this.moi.pose = ASSIS;
+        }
+        this.moi.placer();
         const m = this.vise; this.vise = null;
         this.o.surMeuble(m);
       }
     }
     this.moi.peindre(this.camera);
     const w = this.hote.clientWidth, h = this.hote.clientHeight, v = new THREE.Vector3();
+    for (const g of this.gens.filter(g => g.part && !g.p.route.length)) { g.p.retirer(); g.el.remove(); }
+    this.gens = this.gens.filter(g => !(g.part && !g.p.route.length));
     for (const g of this.gens) {
-      if (g.p.route.length) { if (g.p.avancer(dt, 1.1)) g.attente = 3 + Math.random() * 6; }
+      if (g.part) g.p.avancer(dt, 1.3);
+      else if (g.p.route.length) { if (g.p.avancer(dt, 1.1)) g.attente = 3 + Math.random() * 6; }
       else if ((g.attente -= dt) <= 0) { g.p.route = this.chemin(g.p.pos.x, g.p.pos.z, ...this.pointLibre()); g.attente = 99; }
       else g.p.marche = false;
       g.p.peindre(this.camera);

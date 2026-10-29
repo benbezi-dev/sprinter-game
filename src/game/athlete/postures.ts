@@ -19,6 +19,12 @@ export const POSTURES = {
   debout(): Posture {
     return { w: 1, jambes: [debout, [-0.02, 0, 0]], bras: [[0.06, 0.18], [-0.03, 0.12]], buste: 0 };
   },
+  /** Assis sur une chaise, un banc, un canape (29/10) : les cuisses a l'horizontale, le bassin descendu et recule
+   *  d'une cuisse sur les pieds, les mains posees sur les cuisses. */
+  assis(): Posture {
+    const j: Jambe = [1.5, 0.05, 0];
+    return { w: 1, jambes: [j, j], bras: [[0.35, 1.25], [0.3, 1.2]], buste: 0.06, leve: -0.46, hanche: -0.44 };
+  },
   /** Le squat, de 0 (debout) a 1 (cuisses paralleles) : la barre derriere la nuque. */
   squat(p: number): Posture {
     const d = Math.max(0, Math.min(1.1, p));

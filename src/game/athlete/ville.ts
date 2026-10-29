@@ -496,6 +496,10 @@ export class Personne {
   marche = false;
   /** Il court (plus vite que la marche) : la phase de foulee avance avec la distance. */
   court = false;
+  /** Sa posture a l'arret (assis : postures.ts) ; null : debout. */
+  pose: any = null;
+  /** Couche sur le dos, a cette hauteur au-dessus du sol (le matelas, la table de soins) ; 0 : debout ou assis. */
+  couche = 0;
   private dejaPeint = '';
   private m3: ReturnType<typeof corps3D> = null;
   private scene: THREE.Object3D;
@@ -532,8 +536,10 @@ export class Personne {
     // tourne vers ou il va : +x du corps sur la direction de marche
     // a sa taille choisie : le corps est construit a 1,68 m (femme) ou 1,78 m (homme)
     const k = GRANDI * (((this.corps.look && this.corps.look.h) || 0) / this.m3.hauteur || 1);
-    this.m3.m.racine.matrix.multiplyMatrices(_T.makeTranslation(this.pos.x, SOL, this.pos.z), _R.makeRotationY(Math.atan2(-this.dir.z, this.dir.x)))
+    this.m3.m.racine.matrix.multiplyMatrices(_T.makeTranslation(this.pos.x, SOL + this.couche, this.pos.z), _R.makeRotationY(Math.atan2(-this.dir.z, this.dir.x)))
       .multiply(_S.makeScale(k, k, k));
+    // couche sur le dos : le corps bascule d'un quart de tour, le regard vers le haut, la tete derriere ses pieds
+    if (this.couche) this.m3.m.racine.matrix.multiply(_R.makeRotationZ(Math.PI / 2));
     this.m3.m.racine.matrixWorldNeedsUpdate = true;
   }
   /** Le retirer de la ville (affiche, ombre, corps). */
@@ -575,7 +581,7 @@ export class Personne {
       c.marche = this.marche && !this.court ? 1 : 0;
       c.marcheT = this.marcheT;
       if (!this.marche || !this.court) c.v = 0;
-      c.posture = this.marche ? null : DEBOUT;   // a l'arret, debout (pas une foulee figee)
+      c.posture = this.marche ? null : (this.pose || DEBOUT);   // a l'arret, debout ou assis (pas une foulee figee)
       A.personCapsules(c, 0, 0, false, false, 0);
       if (c.squelette) poser(this.m3.m, c.squelette);
       return;
