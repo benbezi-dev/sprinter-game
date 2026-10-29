@@ -9,7 +9,8 @@ import {
   meilleurDuDefi, epreuveDuDefi, chronoDeLaVedette, battuSur, stadeDonne, demanderSonMaillage,
   type Vedette, type Verdict,
 } from '@/game/vedettes';
-import { useVestiaire, porterSkin } from '@/game/vestiaire';
+import { useVestiaire, porterSkin, MAILLOTS } from '@/game/vestiaire';
+import { RENDU_3D } from '@/game/canal';
 import { mot, chrono, ligne, aLeMot, phraseDeDefaite, type CasDeDefaite, type PhraseDeDefaite } from '@/game/vedettes-mots';
 import { useRetour } from '@/hooks/use-retour';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
@@ -578,15 +579,33 @@ function VignetteMaillot({ largeur, hauteur }: { largeur: number; hauteur: numbe
   );
 }
 
+/** Le maillot du Val-de-Reuil Athletique Club (game/vestiaire.ts, MAILLOTS), en vignette : haut blanc au logo, bande verte, bas bleu. */
+const VRAC_BLEU = 'rgb(28, 64, 196)', VRAC_VERT = 'rgb(76, 178, 72)';
+function VignetteVRAC({ largeur, hauteur }: { largeur: number; hauteur: number }) {
+  return (
+    <span className="block relative" style={{ width: largeur, height: hauteur }}>
+      <span className="absolute left-[22%] right-[22%] top-[10%] h-[50%] rounded-t-[40%] rounded-b-md overflow-hidden"
+            style={{ background: `linear-gradient(180deg, #fff 0 42%, ${VRAC_VERT} 42% 52%, ${VRAC_BLEU} 52%)` }}>
+        <img src={`${import.meta.env.BASE_URL}modeles/maillots/vrac-logo.png`} alt=""
+             className="absolute left-[8%] right-[8%] top-[14%] w-[84%]" />
+      </span>
+      <span className="absolute left-[26%] right-[26%] top-[58%] h-[24%] rounded-b-lg"
+            style={{ background: 'rgb(22, 22, 26)' }} />
+    </span>
+  );
+}
+
 /** Le panneau SKINS de MES COURSES. `onPartir` ferme le TOP 500 quand un defi se lance. */
 export function SkinsMesCourses({ onPartir }: { onPartir: () => void }) {
   const vest = useVestiaire();
   const [fiche, setFiche] = useState<Vedette | null>(null);
   const montres = skinsMontres(vest.gagnes);
-  if (!montres.length) return null;
+  // (en 3D, il y a toujours le maillot du club a choisir)
+  if (!montres.length && !RENDU_3D) return null;
   const porte = montres.find(v => v.skin === vest.porte) || null;
   const aGagner = montres.filter(v => !vest.gagnes.includes(v.skin)).length;
-  const maillotPorte = !porte;
+  const club = vest.porte && MAILLOTS[vest.porte] ? vest.porte : null;
+  const maillotPorte = !vest.porte;
 
   return (
     <div className="w-full">
@@ -597,7 +616,7 @@ export function SkinsMesCourses({ onPartir }: { onPartir: () => void }) {
         couleur="text-primary"
         marque={
           <span className="shrink-0 text-[9px] font-bold tracking-widest uppercase text-muted-foreground text-right">
-            {porte ? `${porte.prenom} ${porte.nom}` : mot('vs_maillot_porte')}
+            {porte ? `${porte.prenom} ${porte.nom}` : club ? mot('vs_club') : mot('vs_maillot_porte')}
             {aGagner > 0 && <><br />{mot('vs_a_gagner_n', { n: String(aGagner) })}</>}
           </span>
         }
@@ -622,6 +641,28 @@ export function SkinsMesCourses({ onPartir }: { onPartir: () => void }) {
               {maillotPorte ? mot('vd_porte') : mot('vd_porter')}
             </button>
           </div>
+
+          {/* LE MAILLOT DU CLUB, offert, en 3D seulement (game/vestiaire.ts, MAILLOTS) */}
+          {RENDU_3D && (
+            <div className="rounded-2xl border-2 p-3 flex items-center gap-3"
+                 style={{ borderColor: club ? VRAC_BLEU : 'rgba(255,255,255,0.15)',
+                          background: 'linear-gradient(100deg, #0E1A3A, #0E0A1A)' }}>
+              <span className="shrink-0 rounded-xl overflow-hidden border border-white/10"
+                    style={{ background: 'radial-gradient(circle at 50% 35%, #22305A, #0A0C18)' }}>
+                <VignetteVRAC largeur={56} hauteur={64} />
+              </span>
+              <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: VRAC_VERT }}>{mot('vs_club')}</span>
+                <span className="font-black font-display text-lg leading-none text-white">{mot('vs_club_nom')}</span>
+                <span className="text-[11px] text-white/65">{mot('vs_club_sous')}</span>
+              </div>
+              <button onClick={() => porterSkin(club ? null : 'vrac')}
+                      className="shrink-0 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest"
+                      style={club ? { background: VRAC_BLEU, color: '#fff' } : { background: '#fff', color: '#000' }}>
+                {club ? mot('vd_porte') : mot('vd_porter')}
+              </button>
+            </div>
+          )}
 
           {montres.map(v => (
             <CarteSkin key={v.cle} v={v} gagne={vest.gagnes.includes(v.skin)} porte={vest.porte === v.skin}
