@@ -2256,6 +2256,7 @@ function corpsDe(r: any): Corps | null {
   if (L.kit === 'vrac' && mats.debardeur) {
     maillotDuClub(mats.debardeur);
     if (mats.peau) maillotDuClub(mats.peau, true);
+    if (mats.dossard) dossardSousLaBande(mats.dossard);
     copie.traverse((o: any) => { if (o.isMesh && o.material === mats.debardeur) bordsDuDebardeur(o.geometry); });
   }
   // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
@@ -2305,6 +2306,17 @@ function bordsDuDebardeur(g: THREE.BufferGeometry) {
   }
   g.setAttribute('aBord', new THREE.BufferAttribute(d, 1));
 }
+// LE DOSSARD SOUS LA BANDE (les photos du club : la bande verte et ses hachures se voient au-dessus du dossard) : avec
+// ce maillot, le dossard descend de 6 cm, sur un devant presque plat a cet endroit (1,01 a 1,22 m, mesure).
+function dossardSousLaBande(m: THREE.MeshStandardMaterial) {
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed.y -= 0.06;');
+  };
+  m.customProgramCacheKey = () => 'dossard-vrac';
+  m.needsUpdate = true;
+}
 let logoVRAC: THREE.Texture | null = null;
 const lin = (c: number) => new THREE.Color(c);   // (hex sRGB, range lineaire par three)
 const uVRAC = { blanc: { value: lin(0xf4f6f8) }, vert: { value: lin(0x4cb248) }, bleu: { value: lin(0x1c40c4) } };
@@ -2340,16 +2352,20 @@ function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
   bool devant = vKitN.x > 0.15, dos = vKitN.x < -0.15;
   // le haut blanc, le bas bleu roi
   vec3 kc = y > 1.215 ? uBlancVRAC : uBleuVRAC;
-  // LE DOS (la photo a plat) : la bande verte, ses hachures en biais, le grand logo
+  // DEVANT ET DANS LE DOS (les photos du club) : la bande verte, et ses hachures en biais sous elle, du cote droit du
+  // coureur — a gauche quand on le regarde de face, a droite de dos
   float h = 1.185 - y;
-  if (dos && y > 1.185 && y <= 1.215) kc = uVertVRAC;
+  if (y > 1.185 && y <= 1.215) kc = uVertVRAC;
   if (dos && h > 0.0 && h < 0.075 && z > -0.02 && z < 0.11 && fract((h - z) * 34.0) < 0.42) kc = uVertVRAC;
+  if (devant && h > 0.0 && h < 0.06 && z > -0.11 && z < 0.0 && fract((h + z) * 34.0) < 0.42) kc = uVertVRAC;
   if (dos) {
     vec2 uv = vec2((0.095 - z) / 0.19, (y - 1.252) / 0.070);
     if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 t = texture2D(uLogoVRAC, uv); kc = mix(kc, t.rgb, t.a); }
   }
-  // LES FLANCS (la photo de profil) : un panneau vert a rayures en biais, de l'aisselle a l'ourlet, borde d'un filet blanc
-  if (y < 1.26 && nz > 0.62) kc = nz > 0.70 ? (fract((y + vKit.x) * 26.0) < 0.5 ? uVertVRAC : uVertVRAC * 0.72) : uBlancVRAC;
+  // LES FLANCS (les photos de profil) : un panneau vert uni sous la bande, de l'aisselle a l'ourlet, qui s'evase vers
+  // le bas en mordant sur le devant et le dos, borde d'un filet blanc
+  float evase = clamp((1.185 - y) * 0.8, 0.0, 0.12);
+  if (y < 1.185 && nz > 0.80 - evase) kc = nz > 0.86 - evase ? uVertVRAC : uBlancVRAC;
   // LE DEVANT : le petit logo du club sur la poitrine, cote gauche du coureur
   if (devant) {
     vec2 uv = vec2((z - 0.015) / 0.085, (y - 1.268) / 0.032);
