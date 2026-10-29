@@ -91,7 +91,12 @@ titre('l\'argent');
   pauvre.club = 'quartier';
   ok('le club en prend la moitie', R.coutDuDeplacement(pauvre, 3) === 75);
   ok('un boulot rapporte', R.prendreUnBoulot(pauvre, 'marche') && pauvre.argent === 80);
-  ok('un seul par semaine', !R.prendreUnBoulot(pauvre, 'livraison'));
+  ok('pas deux fois le meme', !R.prendreUnBoulot(pauvre, 'marche'));
+  ok('deux boulots se cumulent', R.prendreUnBoulot(pauvre, 'livraison') && pauvre.argent === 125);
+  ok('pas un troisieme', !R.prendreUnBoulot(pauvre, 'babysitting'));
+  // un adulte : les deux boulots les moins payes couvrent le loyer et laissent de quoi se deplacer
+  const paies = R.BOULOTS.map(b => b.adulte).sort((x, y) => x - y);
+  ok('deux boulots paient le loyer d\'un adulte', paies[0] + paies[1] - R.LOYER >= 40);
   ok('le marche prend le samedi', R.seancePossible(pauvre, 'samedi') === 'boulot');
   ok('pas les pointes carbone sans les autres', R.achatPossible(riche, 'pointes3') === 'avant');
   ok('les pointes montent en gamme', R.acheter(riche, 'pointes2') && !riche.materiel.includes('pointes1'));
