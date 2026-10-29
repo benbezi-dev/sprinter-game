@@ -227,6 +227,16 @@ export const VEDETTES_LANCEES = EST_TEST || Date.now() >= LANCEMENT_DEFI_MEBA;
  * ensemble.
  */
 declare const __LANCEMENT_DUEL_MARQUES__: number | null;
+declare const __LANCEMENT_3D__: number;
+
+/**
+ * LA COURSE EN 3D A TOUT LE MONDE (29/10) : le vendredi 30 octobre 2026 a 21 h, a
+ * l'heure de l'appareil (vite.config.ts, LANCEMENT_3D). Avant, le jeu public court
+ * en 2D et ne montre pas le stade couvert Jesse Owens ; le canal de test a tout.
+ * `?rendu=3d` la montre avant l'heure, `?rendu=2d` l'ote apres (GameCanvas.tsx).
+ * (hors de Vite — un harnais de tools/ —, la valeur n'existe pas : fermee)
+ */
+export const TROIS_D_OUVERTE = EST_TEST || (typeof __LANCEMENT_3D__ === 'number' && Date.now() >= __LANCEMENT_3D__);
 export const LANCEMENT_DUEL_MARQUES: number =
   typeof __LANCEMENT_DUEL_MARQUES__ === 'number' ? __LANCEMENT_DUEL_MARQUES__ : Infinity;
 declare const __DUREE_DUEL_MARQUES_MS__: number;

@@ -2192,7 +2192,12 @@
    */
   // LA 3D COURT A L'ECHELLE DES RECORDS DU MONDE, LA 2D GARDE SES TEMPS D'AVANT (l'auteur, 29/10) : plafond, allure
   // du joueur et conversion des adversaires (sprinter-core.js) ne valent qu'en rendu 3D — `?rendu=2d` (GameCanvas) les ote.
-  const RENDU_3D = (() => { try { return new URLSearchParams(location.search).get('rendu') !== '2d'; } catch (e) { return false; } })();
+  // (le meme choix que GameCanvas.tsx : la 3D a tout le monde a son heure, canal.ts TROIS_D_OUVERTE)
+  const TROIS_D = import.meta.env.VITE_CANAL === 'test' || (typeof __LANCEMENT_3D__ === 'number' && Date.now() >= __LANCEMENT_3D__);
+  const RENDU_3D = (() => {
+    try { const r = new URLSearchParams(location.search).get('rendu'); return r === '3d' || (TROIS_D && r !== '2d'); }
+    catch (e) { return false; }
+  })();
   function enTroisD(table, cle) { return RENDU_3D ? table[cle] : undefined; }
 
   function enDessousDuNiveau(R, idx) {

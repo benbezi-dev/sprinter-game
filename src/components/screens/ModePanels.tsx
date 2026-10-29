@@ -7,7 +7,7 @@ import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
 import { ChampPanel } from './ChampPanel';
 import { RelaisPanel } from './RelaisPanel';
-import { RELAIS_OUVERT } from '@/game/canal';
+import { RELAIS_OUVERT, TROIS_D_OUVERTE } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
@@ -132,6 +132,8 @@ export function OneShotPanel() {
                     choisissent pas non plus : on y arrive etape par etape. */}
                 {LEVELS.map((l: any, i: number) => {
                   if (!l.horsSerie || l.evenement || l.legende || (l.reserve && import.meta.env.VITE_CANAL !== 'test')) return null;
+                  // (le stade couvert Jesse Owens n'existe qu'en 3D : il attend sa sortie, canal.ts)
+                  if (l.avecLa3D && !TROIS_D_OUVERTE) return null;
                   if (stadeDebloque(l)) return (
                     <option key={i} value={i} className="bg-neutral-900">
                       {N.levelName(i)}

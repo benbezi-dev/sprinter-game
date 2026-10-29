@@ -524,6 +524,9 @@
       pool: 'sprint',
       horsSerie: true,
       ouvert: true,
+      // ... mais cache du menu jusqu'a la sortie de la 3D (canal.ts, TROIS_D_OUVERTE ; ModePanels.tsx) :
+      // il garde son index, la piste couverte n'existe qu'en 3D
+      avecLa3D: true,
       salle: true,
       noms: ['Stade couvert Jesse Owens', 'Jesse Owens Indoor Stadium'],
       foule: 0.8,
