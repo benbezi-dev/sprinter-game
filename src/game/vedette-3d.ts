@@ -239,7 +239,7 @@ function preparer(racineGltf: THREE.Object3D): Modele {
   racineGltf.updateMatrixWorld(true);
   // UN CORPS DES GENS (la carte des zones dans sa deuxieme UV) : sa matiere teinte, ni facettes ni liseret
   let gens = false;
-  racineGltf.traverse((o: any) => { if (o.isMesh && o.geometry.getAttribute('uv1')) gens = true; });
+  racineGltf.traverse((o: any) => { if (o.isMesh && (o.geometry.getAttribute('uv1') || String(o.material?.name || '').startsWith('Coureur_'))) gens = true; });
   if (gens) {
     const teinte = habiller(racineGltf, null);
     // LES DEUX FACES (26/10) : le repere du coureur est un miroir, qui retourne le sens des faces.

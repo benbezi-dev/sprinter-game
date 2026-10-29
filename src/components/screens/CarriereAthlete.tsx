@@ -1,4 +1,5 @@
 import { ORIGINES, NOMS_ORIGINES, origineDe, cheminDe } from '@/game/athlete/corps-gens';
+import { POSTURES } from '@/game/athlete/postures';
 import { charger as chargerMaillage, pret, dessiner } from '@/game/vedette-3d';
 import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -252,7 +253,7 @@ function Apercu({ ap, haut = 260 }: { ap: Apparence; haut?: number }) {
     // le corps MakeHuman de la ville (corps-gens.ts) : l'origine choisie s'y voit ; les facettes en attendant
     const look = lookDe(ap, true, tenue(GARDE_ROBE_DE_DEPART.porte.ville));
     look.maillage = cheminDe(look); chargerMaillage(look.maillage);
-    const corps = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0 } as any;
+    const corps = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0, posture: POSTURES.debout() } as any;
     let id = 0;
     const tic = (t: number) => {
       c.clearRect(0, 0, cv.width, cv.height);

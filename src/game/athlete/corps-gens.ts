@@ -48,14 +48,47 @@ function silhouetteDe(look: any): string {
   if (!c.manches) return 'debardeur-short';
   return c.mollets ? 'tshirt-pantalon' : 'tshirt-short';
 }
+// LES CORPS ROCKETBOX (29/10, l'auteur : « change ces assets, ils sont moches », « les hommes ont des seins ») : la
+// carriere prend les coureurs de la course 3D (tools/blender/rocketbox_coureur.py), une matiere par zone (Coureur_*)
+// au lieu de la carte des zones MakeHuman. Ils sont en tenue de sport : la tenue de garde-robe.ts en donne les
+// couleurs (haut, bas, chaussures) ; l'origine ne se voit plus qu'a la peau. silhouetteDe reste pour les fichiers
+// MakeHuman (public/modeles/gens), que rien ne charge plus.
 /** Le fichier du corps de ce look (public/). */
-export const cheminDe = (look: any) => `modeles/gens/${look && look.build === 'f' ? 'femme' : 'homme'}-${silhouetteDe(look)}.glb`;
+export const cheminDe = (look: any) => `modeles/coureur-${look && look.build === 'f' ? 'femme' : 'homme'}.glb`;
+void silhouetteDe;
 
-export type Teinte = { teintes: { value: THREE.Color[] }; sansCheveux: { value: number } };
+export type Teinte = { teintes: { value: THREE.Color[] }; sansCheveux: { value: number };
+  /** Un coureur Rocketbox : ses matieres, par zone (le nom de la matiere sans « Coureur_ »). */
+  zones?: [string, THREE.MeshStandardMaterial][] };
+
+const VETEMENTS = new Set(['debardeur', 'shortlarge', 'brassiere', 'dossard']);
+/** La couleur d'une zone du coureur Rocketbox d'apres le look (course-3d.ts teint le meme corps en course). */
+function teindreLeCoureur(zones: [string, THREE.MeshStandardMaterial][], L: any) {
+  const t = L.tenue, sport = !t || t.moment === 'competition';
+  const rgb = (v: number[] | undefined, d: number[]) => { const a = v || d; return new THREE.Color().setRGB(a[0] / 255, a[1] / 255, a[2] / 255, THREE.SRGBColorSpace); };
+  const peau = rgb(L.skin, [180, 130, 100]);
+  const haut = rgb(t ? (sport && L.jersey ? L.jersey : t.haut) : L.jersey, [200, 40, 50]);
+  const bas = rgb(t ? t.bas : L.shorts, [30, 30, 40]), pied = rgb(t ? t.chaussures : L.shoe, [240, 240, 240]);
+  const clair = (pied.r + pied.g + pied.b) / 3 > 0.45;
+  for (const [z, m] of zones) {
+    if (z === 'peau' || z === 'pointes') m.color.copy(peau);
+    else if (z === 'maillot' || z === 'debardeur' || z === 'ventre') m.color.copy(haut);
+    else if (z === 'short' || z === 'shortbas' || z === 'shortlarge') m.color.copy(bas);
+    else if (z === 'chaussure' || z === 'talon' || z === 'plaque') m.color.copy(pied);
+    else if (z === 'lacets') m.color.setRGB(...((clair ? [0.08, 0.08, 0.09] : [0.93, 0.93, 0.92]) as [number, number, number]), THREE.SRGBColorSpace);
+    else if (z === 'semelle') m.color.setRGB(0.93, 0.93, 0.91, THREE.SRGBColorSpace);
+    else if (z === 'clous') m.color.setRGB(0.82, 0.82, 0.85, THREE.SRGBColorSpace);
+    else if (z === 'cheveux') { m.color.copy(rgb(L.hairCol, [20, 16, 14])); m.visible = !SANS_CHEVEUX.has(L.hair); }
+    // pas de brassiere en ville ; le dossard ne se porte qu'en competition
+    if (z === 'brassiere') m.visible = false;
+    if (z === 'dossard') m.visible = !!(t && t.moment === 'competition');
+  }
+}
 
 /** La couleur de chaque zone, et l'origine (les cles de forme), d'apres le look. */
 export function teindre(T: Teinte, racine: THREE.Object3D, L: any) {
   if (!L) return;
+  if (T.zones) { teindreLeCoureur(T.zones, L); return; }
   // la texture des pieces teintes est grise a GRIS : la couleur voulue s'obtient en multipliant par c / GRIS
   const rgb = (c: THREE.Color, v: number[] | undefined, d: number[]) => { const a = v || d; c.setRGB(a[0] / 255 / GRIS, a[1] / 255 / GRIS, a[2] / 255 / GRIS, THREE.SRGBColorSpace); };
   const z = T.teintes.value, peau = L.skin || [180, 130, 100];
@@ -79,6 +112,20 @@ export function teindre(T: Teinte, racine: THREE.Object3D, L: any) {
  */
 export function habiller(racine: THREE.Object3D, look: any): Teinte {
   const T: Teinte = { teintes: { value: Array.from({ length: 6 }, () => new THREE.Color(1, 1, 1)) }, sansCheveux: { value: 0 } };
+  // le coureur Rocketbox : une matiere neuve par zone, que teindreLeCoureur colore (le logo garde sa texture)
+  racine.traverse((o: any) => {
+    if (!o.isMesh || !String(o.material?.name || '').startsWith('Coureur_')) return;
+    const z = o.material.name.replace('Coureur_', '');
+    const mat = new THREE.MeshStandardMaterial({ roughness: z === 'peau' ? 0.55 : 0.7, metalness: z === 'clous' ? 0.9 : 0, side: THREE.DoubleSide,
+      ...(z === 'logo' ? { map: o.material.map, transparent: true, alphaTest: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } : {}),
+      // les vetements poses sur le corps passent devant lui (sinon la peau perce a l'encolure dans l'apercu)
+      ...(VETEMENTS.has(z) ? { polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 } : {}) });
+    // et s'ecartent de 6 mm de la peau : le corps traversait le debardeur a l'encolure (points de peau)
+    if (VETEMENTS.has(z)) mat.onBeforeCompile = sh => { sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\ntransformed += objectNormal * 0.006;'); };
+    (T.zones ||= []).push([z, mat]);
+    mat.name = o.material.name; o.material = mat; o.frustumCulled = false; o.castShadow = true;
+  });
+  if (T.zones) { teindre(T, racine, look); return T; }
   racine.traverse((o: any) => {
     if (!o.isMesh) return;
     const g = o.geometry as THREE.BufferGeometry;

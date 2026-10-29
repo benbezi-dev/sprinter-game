@@ -35,6 +35,8 @@ import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils
 import { poser, type Modele } from '../vedette-3d';
 import { tenueDeVilleDe } from './garde-robe';
 import { cheminDe, habiller, teindre, origineDe, type Teinte } from './corps-gens';
+import { POSTURES } from './postures';
+const DEBOUT = POSTURES.debout();
 
 export type Lieu =
   | 'maison' | 'college' | 'stade' | 'club_quartier' | 'club_horizon' | 'kine'
@@ -573,6 +575,7 @@ export class Personne {
       c.marche = this.marche && !this.court ? 1 : 0;
       c.marcheT = this.marcheT;
       if (!this.marche || !this.court) c.v = 0;
+      c.posture = this.marche ? null : DEBOUT;   // a l'arret, debout (pas une foulee figee)
       A.personCapsules(c, 0, 0, false, false, 0);
       if (c.squelette) poser(this.m3.m, c.squelette);
       return;

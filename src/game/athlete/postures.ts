@@ -15,6 +15,10 @@ export type Posture = { w: number; jambes?: [Jambe, Jambe]; bras?: [Bras, Bras];
 const debout: Jambe = [0.02, 0, 0];
 
 export const POSTURES = {
+  /** Debout, au repos (29/10, « une jambe en l'air ne me plait pas ») : l'arret sans foulee figee. */
+  debout(): Posture {
+    return { w: 1, jambes: [debout, [-0.02, 0, 0]], bras: [[0.06, 0.18], [-0.03, 0.12]], buste: 0 };
+  },
   /** Le squat, de 0 (debout) a 1 (cuisses paralleles) : la barre derriere la nuque. */
   squat(p: number): Posture {
     const d = Math.max(0, Math.min(1.1, p));
