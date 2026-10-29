@@ -61,6 +61,8 @@
     trans_2:      ['TRANSITION PARFAITE', 'PERFECT TRANSITION'],
     trans_1:      ['BONNE TRANSITION', 'GOOD TRANSITION'],
     trans_0:      ['TRANSITION RATÉE', 'TRANSITION MISSED'],
+    cadence_line: ['cadence : départ {d}/s   -   ensuite {c}/s   -   moyenne {m}/s',
+                   'cadence: start {d}/s   -   then {c}/s   -   average {m}/s'],
     start_line:   ['départ : réaction {r} s   -   {g}',
                    'start: {r} s reaction   -   {g}'],
     no_start:     ['départ manqué', 'start missed'],
