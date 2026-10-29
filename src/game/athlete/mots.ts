@@ -65,7 +65,7 @@ export const MOTS: Record<string, [string, string]> = {
   monde:        ['Championnats du Monde', 'World championships'],
   // l'argent
   boulots:      ['PETITS BOULOTS', 'ODD JOBS'],
-  boulot_pris:  ['Boulot de la semaine fait.', 'This week’s job is done.'],
+  boulot_pris:  ['Fait cette semaine', 'Done this week'],
   babysitting:  ['Baby-sitting', 'Babysitting'],
   livraison:    ['Livraison à vélo', 'Bike delivery'],
   marche:       ['Marché du samedi', 'Saturday market'],
