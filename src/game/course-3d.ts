@@ -2251,7 +2251,7 @@ function corpsDe(r: any): Corps | null {
   // sous la brassiere le ventre est nu ; sous la culotte, le haut des cuisses
   mats.ventre?.color.copy(brassiere ? rgb(L.skin) : maillot);
   mats.shortbas?.color.copy(culotte ? rgb(L.skin) : bas);
-  if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; }
+  if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
   if (L.kit === 'vrac' && mats.debardeur) {
     maillotDuClub(mats.debardeur);
@@ -2306,6 +2306,19 @@ function bordsDuDebardeur(g: THREE.BufferGeometry) {
   }
   g.setAttribute('aBord', new THREE.BufferAttribute(d, 1));
 }
+// LE DOSSARD DU DOS A L'ENDROIT : les deux dossards partagent une texture, ecrite a l'envers pour celui du devant
+// (le maillage est en miroir) ; celui du dos se lisait donc en miroir (« SPRINTER » et le numero, 29/10)
+function dossardALEndroit(m: THREE.MeshStandardMaterial) {
+  if ((m as any).__aLEndroit) return;
+  (m as any).__aLEndroit = true;
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nif (position.x < 0.0) vMapUv.x = 1.0 - vMapUv.x;\n#endif');
+  };
+  m.customProgramCacheKey = () => 'dossard';
+  m.needsUpdate = true;
+}
 // LE DOSSARD SOUS LA BANDE (les photos du club : la bande verte et ses hachures se voient au-dessus du dossard) : avec
 // ce maillot, le dossard descend de 6 cm, sur un devant presque plat a cet endroit (1,01 a 1,22 m, mesure).
 function dossardSousLaBande(m: THREE.MeshStandardMaterial) {
@@ -2346,10 +2359,14 @@ function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
     sh.fragmentShader = (peau ? '#define PEAU_VRAC\n' : '') + sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying float vBord; varying vec3 vKit; varying vec3 vKitN;\nuniform sampler2D uLogoVRAC; uniform vec3 uBlancVRAC, uVertVRAC, uBleuVRAC;')
       .replace('#include <map_fragment>', `#include <map_fragment>
+bool sansOmbreVRAC = false, enversVRAC = false;
 {
   ${COL_VRAC}
 #ifdef PEAU_VRAC
-  if (dansLeCol) {
+  // (et toute la peau de l'ancien V, jusqu'a la bande : celui des coureuses descendait jusque-la, et ses bords
+  // percaient le tissu en lignes sombres, 29/10)
+  if (dansLeCol || (vKit.x > 0.02 && abs(vKit.z) < 0.11 && vKit.y > 1.10 && vKit.y < yCol)) {
+  sansOmbreVRAC = true;   // (dans la fente, l'ombre du tissu la noircissait : elle prend la lumiere du tissu)
 #endif
   float y = vKit.y, z = vKit.z, nz = abs(vKitN.z);
   bool devant = vKitN.x > 0.15, dos = vKitN.x < -0.15;
@@ -2378,7 +2395,12 @@ function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
   // le liseré bleu du col et des emmanchures (bordsDuDebardeur), un peu plus d'un centimetre
   // (le bord du V, recouvert par le col rond, n'a plus de liseré ; le col rond a le sien)
 #ifndef PEAU_VRAC
-  if (vBord < 0.013 && !dansLeCol) kc = uBleuVRAC;
+  // (ni sur les bords de l'ancien V, qui chez les coureuses descend jusqu'a la bande : ils tracaient des lignes sur la poitrine)
+  bool ancienV = vKit.x > 0.02 && abs(vKit.z) < 0.125 && vKit.y > 1.10 && vKit.y < yCol;
+  if (vBord < 0.013 && !dansLeCol && !ancienV) kc = uBleuVRAC;
+  // (l'envers du tissu, qui se retourne au bord de l'ancien V : sans lumiere il tracait des lignes noires)
+  enversVRAC = !gl_FrontFacing && ancienV;
+  sansOmbreVRAC = ancienV;
 #endif
   // (sur la position, pas la normale : au bord du tissu elle tourne, et l'ancien V gardait son liseré)
   // (le V ne se trace que sur la peau, dans l'echancrure : il s'arrete au bord de la bretelle, dont le liseré prend le relais)
@@ -2391,6 +2413,10 @@ function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
   }
 #endif
 }`);
+    if (!peau) sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\nif (enversVRAC) totalEmissiveRadiance += diffuseColor.rgb * 0.75;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>',
+      THREE.ShaderChunk.lights_fragment_begin.split('receiveShadow )').join('receiveShadow && !sansOmbreVRAC )'));
   };
   m.customProgramCacheKey = () => (peau ? 'maillot-vrac-col' : 'maillot-vrac');
   m.needsUpdate = true;
