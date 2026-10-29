@@ -114,16 +114,6 @@
     namek: [226, 118, 38], champdemars: [26, 60, 150], arcenciel: [236, 96, 196],
     // Jean-Delbert n'a pas de sieges : des gradins-bancs de beton clair.
     montreuil: [206, 204, 198],
-    // Le Stade d'Or : des sieges de cuir noir.
-    or: [26, 23, 20],
-    // Le Stade Neon : des coques de metal sombre.
-    cyber: [20, 18, 30],
-    // La plage : la toile des transats.
-    plage: [236, 120, 96],
-    // Le Palais : le velours griotte des chaises.
-    palais: [138, 15, 30],
-    // Le stade Bernard Amsalem : des sieges rouges (vues aeriennes Polytan).
-    amsalem: [196, 40, 44], amsalemFrance: [196, 40, 44],
   };
   const hexa = (c) => 'rgb(' + (c[0] | 0) + ',' + (c[1] | 0) + ',' + (c[2] | 0) + ')';
   // La couleur `c` dans la lumiere des gradins de `th` — la meme, le jour.
@@ -815,8 +805,6 @@
   // `etat` : pour la console d'un telephone branche.
   root.Tribune = {
     dessiner, pret: () => charger(), images: () => Object.values(atlas), enAttente, composerDAvance,
-    // la couleur des sieges par stade, que la course 3D reprend (course-3d.ts)
-    SIEGES,
     etat: () => ({ atlas: jeu === JEUX.ultra ? 'ultra' : 'ordinaire', caps: capsVus.size,
                    composees: cache.size, plafond: plafondImages(), inacheve,
                    reserve: [...reserve.values()].map(r => r.cache.size) }),

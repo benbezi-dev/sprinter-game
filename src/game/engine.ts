@@ -5,11 +5,6 @@ import './coureur-hd.js';
 import './coureur-vedettes.js';
 import './coureur-premium.js';
 import './sprinter-core.js';
-import { echauffer, finirLEchauffement } from './echauffement';
-// LA PISTE COUVERTE DE VAL-DE-REUIL (piste-salle.js) : le 60 m, le 200 et le 400 m en salle
-// rejoignent les epreuves du moteur ; seule la carriere d'athlete les court pour l'instant.
-import { COURSES_EN_SALLE } from './piste-salle.js';
-Object.assign((globalThis as any).SprinterCore.RACES, COURSES_EN_SALLE);
 import './chiffres-piste.js';
 // Le registre des images de decor : les modules qui suivent y prennent les
 // leurs, decodees, et le decompte attend celles qui manquent (chargement.ts).
@@ -68,7 +63,6 @@ import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
 import { DUEL_MARQUES_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
-import { jouerLeFauxDepart, rangerLeFauxDepart } from './faux-depart';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
          courseLancee } from './chargement';
 
@@ -999,8 +993,6 @@ export function updateLogic(dt: number) {
     return;
   }
 
-  // la presentation finie (ou passee), chacun revient derriere ses blocs
-  if (G.state !== 'cut' && G.runners && G.runners.some((r: any) => r && r.echauffe)) finirLEchauffement(G);
   G.skipArm = Math.max(0, G.skipArm - dt);
   G.reactFlash = Math.max(0, G.reactFlash - dt);
   G.transFlash = Math.max(0, G.transFlash - dt);
@@ -1008,8 +1000,6 @@ export function updateLogic(dt: number) {
   G.shake = Math.max(0, G.shake - dt * 3.2);
   G.flash = Math.max(0, G.flash - dt * 1.4);
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
-  // le faux depart se joue (faux-depart.ts) ; hors de lui, le joueur rend sa posture
-  if (G.state === 'falseout') jouerLeFauxDepart(dt); else rangerLeFauxDepart();
 
   // Le championnat en direct joue son propre morceau, cale sur la salle (voir
   // game/musique-championnat.ts) : la musique de course ferait deux morceaux a
@@ -1063,8 +1053,6 @@ export function updateLogic(dt: number) {
     if (G.openT > OUVERTURE_FIN && chargementFini()) G.state = 'title';
   } else if (G.state === 'cut') {
     G.cut.t += dt;
-    // pendant la carte de l'adversaire, les coureurs s'echauffent (game/echauffement.ts)
-    if (G.cut.kind === 'intro') echauffer(G, SprinterCore.C, dt);
     G.cut.man.stride += dt * (G.cut.kind === 'intro' ? 11
       : G.cut.kind === 'ending' ? 7.5 : 3.2);
     // Le sacre qui s'efface par-dessus le generique continue de vivre le temps

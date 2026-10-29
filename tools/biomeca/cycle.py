@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # DU RELEVE IMAGE PAR IMAGE A UN CYCLE DE FOULEE, DANS LA CONVENTION DU JEU.
 #
-#   python3 cycle.py releve.json [--de T] [--a T] [--ralenti F]
+#   python3 cycle.py releve.json [--de T] [--a T]
 #
 # Les appuis : une cheville au plus bas de sa trajectoire (le plus haut y a
 # l'ecran), un pied pose. Deux appuis successifs du meme pied font un cycle ;
@@ -34,11 +34,6 @@ def main():
     im = [x for x in d['images'] if de <= x['t'] <= a and x['profil'] < 0.6 and x['vis'] > 0.4]
     if len(im) < 20:
         print('trop peu d images de profil'); return
-    # UN RALENTI (--ralenti 2 : deux fois plus lent) : on revient au temps reel,
-    # sinon ses foulees sortent des bornes de 0,3 a 0,8 s et la cadence est fausse
-    ral = float(sys.argv[sys.argv.index('--ralenti') + 1]) if '--ralenti' in sys.argv else 1.0
-    for x in im:
-        x['t'] /= ral
     # LES JAMBES (ET LES BRAS) INTERVERTIS. De profil, MediaPipe confond
     # parfois la gauche et la droite le temps d'une image : la cuisse gauche
     # saute de +1,3 a -0,4 et revient. On garde, image par image, l'etiquetage

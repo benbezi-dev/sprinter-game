@@ -305,9 +305,8 @@ async function partagerEnNatif(blob: Blob, nom: string): Promise<Sortie | null> 
  * ils raisonnent deja en `l` x `h` et ne s'accrochent a aucune position de la
  * piste (hud-film.ts, carton-film.ts) ; `echelle` les met a la taille du 2K.
  *
- * Un ecran couche sort en 2560 x 1440 ; un ecran presque carre (telephone plie
- * ouvert, tablette) garde son cadre — le rogner en 9:16 couperait la course —
- * mais grandit lui aussi jusqu'au 2K (voir cadreDuFilm).
+ * Un ecran couche, un ordinateur ou un ecran presque carre (telephone plie
+ * ouvert, tablette) garde son cadre : le rogner en 9:16 couperait la course.
  */
 const RATIO_PORTRAIT = 1.6;
 
@@ -331,19 +330,11 @@ function debitDuFilm(): number {
 const LARGEUR_2K = 1440;
 interface Cadre { l: number; h: number; sx: number; sy: number; sl: number; sh: number; ecran?: string }
 
-// LE 2K TOUJOURS (« film en 2K toujours », l'auteur, 24/10) : un ecran couche sort en 2560 x 1440 ;
-// un ecran presque carre (telephone plie ouvert, tablette) garde son cadre — le rogner couperait la
-// course — mais grandit jusqu'a 2560 pixels sur son grand cote.
 function cadreDuFilm(sw: number, sh: number): Cadre {
   const ecran = `${sw}x${sh}`;
-  if (!sw || !sh) return { l: sw, h: sh, sx: 0, sy: 0, sl: sw, sh, ecran };
-  const portrait = sh / sw >= RATIO_PORTRAIT, couche = sw / sh >= RATIO_PORTRAIT;
-  if (!portrait && !couche) {
-    const k = (LARGEUR_2K * 16 / 9) / Math.max(sw, sh);
-    return { l: Math.round(sw * k) & ~1, h: Math.round(sh * k) & ~1, sx: 0, sy: 0, sl: sw, sh, ecran };
-  }
-  const court = LARGEUR_2K & ~1, long = Math.round(court * 16 / 9) & ~1;
-  const l = portrait ? court : long, h = portrait ? long : court;
+  if (!sw || !sh || sh / sw < RATIO_PORTRAIT) return { l: sw, h: sh, sx: 0, sy: 0, sl: sw, sh, ecran };
+  const l = LARGEUR_2K & ~1;
+  const h = Math.round(l * 16 / 9) & ~1;
   const k = Math.max(l / sw, h / sh);
   const sl = l / k, shv = h / k;
   return { l, h, sx: (sw - sl) / 2, sy: (sh - shv) / 2, sl, sh: shv, ecran };
@@ -365,10 +356,6 @@ export class Review {
    * canvas du jeu directement, comme avant.
    */
   private montage: HTMLCanvasElement | null = null;
-  // l'image de la course en 3D, recopiee par course-3d.ts a chaque trace (voir `tracer`)
-  private copie3D: HTMLCanvasElement | null = null;
-  private toile3D: HTMLCanvasElement | null = null;
-  private copie3DA = 0;
   private pinceau: CanvasRenderingContext2D | null = null;
   private source: HTMLCanvasElement | null = null;
   private surcouche: Surcouche | null = null;
@@ -506,14 +493,6 @@ export class Review {
     this.montage = m;
     this.source = source;
     this.surcouche = surcouche;
-    (globalThis as any).__filmer3D = (t: HTMLCanvasElement) => {
-      // trente copies par seconde suffisent : le film n'en prend pas plus
-      if (performance.now() - this.copie3DA < 30) return;
-      const c = this.copie3D || (this.copie3D = document.createElement('canvas'));
-      if (c.width !== t.width || c.height !== t.height) { c.width = t.width; c.height = t.height; }
-      c.getContext('2d')?.drawImage(t, 0, 0);
-      this.toile3D = t; this.copie3DA = performance.now();
-    };
     this.caler();
     this.tracer();
     return m;
@@ -562,17 +541,6 @@ export class Review {
     }
     const c = this.cadre;
     try {
-      // LA COURSE EN 3D (« les videos d'apres course ne fonctionnent pas », l'auteur, 24/10) : le
-      // canvas du jeu n'y porte que le HUD, sur un fond transparent. Le film ne voyait que lui —
-      // un fond noir — et, sans fond repeint, chaque image s'empilait sur la precedente (des
-      // trainees de TOI et de bulles). On repeint donc le fond, on pose l'image 3D recopiee par
-      // course-3d.ts (si elle est fraiche et visible), puis le canvas du jeu par-dessus.
-      ctx.fillStyle = '#000'; ctx.fillRect(0, 0, m.width, m.height);
-      const t3 = this.toile3D, c3 = this.copie3D;
-      if (t3 && c3 && t3.style.display !== 'none' && performance.now() - this.copie3DA < 250) {
-        const fx = c3.width / s.width, fy = c3.height / s.height;
-        ctx.drawImage(c3, c.sx * fx, c.sy * fy, c.sl * fx, c.sh * fy, 0, 0, c.l, c.h);
-      }
       ctx.drawImage(s, c.sx, c.sy, c.sl, c.sh, 0, 0, c.l, c.h);
       const k = this.echelle;
       ctx.save();
@@ -688,8 +656,6 @@ export class Review {
     this.suspendreLeTrait();
     this.montage = null; this.pinceau = null;
     this.source = null; this.surcouche = null;
-    delete (globalThis as any).__filmer3D;
-    this.copie3D = null; this.toile3D = null;
     this.carton = null; this.gel = null; this.cartonA = 0;
     const f = this.fluxVideo;
     this.fluxVideo = null;

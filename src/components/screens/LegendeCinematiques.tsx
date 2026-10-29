@@ -19,8 +19,6 @@
 // depuis le temps (rien ne s'accumule), une touche passe. Pas de son.
 
 import React, { useEffect, useRef } from 'react';
-import * as THREE from 'three';
-import { moteur3D, poserLaScene, texture3D, panneau, FOV_VOYAGE } from './voyage-3d-moteur';
 import { createPortal } from 'react-dom';
 import { getSavedName } from '@/game/leaderboard';
 import { drapeauDe } from '@/components/Insignes';
@@ -918,259 +916,6 @@ function hudVoyageEcrit(ctx: CanvasRenderingContext2D, W: number, H: number, t: 
   }
 }
 
-/* ===========================================================================
-   LES VOYAGES EN 3D (23/10, l'auteur : « pour le mode carriere Legende, les voyages et
-   tout ce qui vient avant le stade est reste en 2D, bascule en 3D »)
-   ===========================================================================
-   On GARDE CE QU'ON A (18/10 : « je voulais seulement des transitions plus travaillees ...
-   on garde ce qu'on a ») : les memes paysages, les memes images Tripo de profil, le meme
-   cadrage — le vehicule a 36 % de la largeur, l'horizon a 60 % de la hauteur, la route a
-   80 % — et le meme habillage. Seulement, le paysage est une vraie scene three.js : le sol
-   et la route en perspective, trois rangees d'arbres a leurs profondeurs, les silhouettes
-   au loin, les nuages, le monument, le vehicule en panneau sur la route ; la camera ouvre
-   en grue, de trois quarts arriere, et se pose de profil. Le ciel, l'heure (etalonner),
-   les lumieres, le texte et le fil se peignent comme avant, en 2D, par-dessus ou dessous.
-   Sans WebGL (ou ?rendu=2d), le voyage reste celui d'avant. */
-/** Le cadrage du 2D, en 3D : la focale, la distance de la route, la hauteur et l'inclinaison
- *  de la camera qui posent l'horizon a 60 % et le pied du vehicule a 78 % de l'ecran. */
-function cadrageVoyage(W: number, H: number, ppmRoute: number) {
-  const f = H / (2 * Math.tan(FOV_VOYAGE * Math.PI / 360));
-  const leve = Math.atan(0.1 * H / f);                      // la camera regarde un peu au-dessus de l'horizon
-  const Dc = f / ppmRoute;                                   // a cette distance, un metre fait ppmRoute pixels
-  const sous = (y: number) => Math.atan((y - 0.5) * H / f) - leve;   // angle sous l'horizon du point d'ecran y
-  const hc = Dc * Math.tan(sous(0.782));
-  const prof = (y: number) => hc / Math.tan(sous(y));      // la profondeur du sol vu a l'ordonnee y
-  const ppm = (d: number) => f / d;                          // pixels par metre a la profondeur d
-  return { f, leve, Dc, hc, prof, ppm };
-}
-
-type Route3D = {
-  rendre: (ctx: CanvasRenderingContext2D, W: number, H: number, t: number, X: number, mix: { sol: Rgb; mer: number; nuit: boolean; pM: number },
-           vehicule: (c: CanvasRenderingContext2D, x: number, yPied: number) => void, tailleV: [number, number], cahot: number) =>
-    { xv: number; yPied: number } | null;
-};
-/** LA ROUTE EN 3D : les memes couches que peintreRoute, a leurs profondeurs (voir plus haut). */
-function routeEn3D(rang: number, o: { local?: boolean }, sD: Style, sT: Style, sA: Style, arrivee: Lieu, transport: string,
-                   cielB: Rgb, poids: (fr: number) => [number, number, number]): Route3D | null {
-  if (!moteur3D()) return null;
-  let scene: THREE.Scene | null = null, cam: THREE.PerspectiveCamera | null = null, cle = '';
-  let C: ReturnType<typeof cadrageVoyage>, Dm = 0, ppm0 = 0, x0 = 0;
-  let sol: THREE.MeshBasicMaterial, mer: THREE.MeshBasicMaterial | null = null, ecume: THREE.MeshBasicMaterial | null = null;
-  let monument: THREE.Mesh | null = null, monumentX = 0, dM = 0, kMpx = 0;
-  const attente: { slot: THREE.Object3D; essai: () => THREE.Mesh | null }[] = [];
-  let vPlan: THREE.Mesh | null = null, vToile: HTMLCanvasElement | null = null, vTex: THREE.CanvasTexture | null = null;
-  const fond = (sty: Style) => sty;
-  const melS = (w: [number, number, number], f: (s: Style) => Rgb): Rgb => {
-    const A = f(sD), B = f(sT), Cc = f(sA);
-    return [A[0] * w[0] + B[0] * w[1] + Cc[0] * w[2], A[1] * w[0] + B[1] * w[1] + Cc[1] * w[2], A[2] * w[0] + B[2] * w[1] + Cc[2] * w[2]];
-  };
-  const couleur = (c: Rgb) => new THREE.Color().setRGB(c[0] / 255, c[1] / 255, c[2] / 255, THREE.SRGBColorSpace);
-  const arbres = new Map<string, HTMLCanvasElement>();
-  const toileArbre = (type: Arbre, feuille: Rgb, g: number) => {
-    const k = type + feuille.join() + (g % 4);
-    let cv = arbres.get(k);
-    if (!cv) {
-      const hp = 160;
-      cv = document.createElement('canvas'); cv.width = Math.round(hp * 1.7); cv.height = Math.round(hp * 1.4);
-      arbre(cv.getContext('2d')!, type, cv.width / 2, cv.height - 2, hp, feuille, g);
-      arbres.set(k, cv);
-    }
-    return cv;
-  };
-
-  const construire = (W: number, H: number, X: number) => {
-    ppm0 = Math.min(H * 0.07, W * 0.062);
-    C = cadrageVoyage(W, H, ppm0);
-    const D = W * 7;
-    Dm = D / ppm0;
-    x0 = -(W * 0.36 - W / 2) / ppm0;                         // la camera, quand le vehicule est a x = 0
-    scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(couleur(cielB), C.Dc * 2.5, C.Dc * 30);
-    cam = new THREE.PerspectiveCamera(FOV_VOYAGE, W / H, 0.5, C.Dc * 200);
-    cam.up.set(0, 0, 1);
-    const ajoute = <M extends THREE.Object3D>(m: M) => { scene!.add(m); return m; };
-    const L = Dm + C.Dc * 60, xc = Dm / 2;
-    // LE SOL, a perte de vue, avec son grain : c'est lui qui fait la profondeur
-    const grain = document.createElement('canvas'); grain.width = grain.height = 256;
-    const cg = grain.getContext('2d')!;
-    cg.fillStyle = '#fff'; cg.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 1800; i++) {
-      const v = 200 + alea(i * 3) * 55 | 0;
-      cg.fillStyle = `rgb(${v},${v},${v})`; cg.fillRect(alea(i) * 256, alea(i * 7) * 256, 2 + alea(i * 5) * 5, 1 + alea(i * 11) * 2);
-    }
-    const tg = texture3D(grain); tg.wrapS = tg.wrapT = THREE.RepeatWrapping; tg.repeat.set(L / 6, C.Dc * 60 / 6);
-    sol = new THREE.MeshBasicMaterial({ map: tg, color: 0xffffff });
-    const plan = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(L, C.Dc * 60), sol));
-    plan.position.set(xc, C.Dc * 30 - 5, 0);
-    // LA MER, quand le paysage en a une : juste sous l'horizon, comme en 2D
-    if (sD.loin === 'mer' || sA.loin === 'mer') {
-      const dMer = C.prof(0.65);
-      mer = new THREE.MeshBasicMaterial({ color: couleur([60, 140, 200]), transparent: true, opacity: 0, depthWrite: false });
-      const pm = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(L, C.Dc * 60), mer)); pm.position.set(xc, dMer + C.Dc * 30, 0.05);
-      ecume = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false });
-      const pe = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(L, C.Dc * 0.08), ecume)); pe.position.set(xc, dMer, 0.08);
-    }
-    // LA ROUTE : du sable tasse pour le velo, l'asphalte ensuite, ses tirets et ses bornes
-    const dAv = C.prof(0.8), dAr = C.prof(0.72), sable = transport === 'velo';
-    const per = 92 / ppm0;
-    const tr = document.createElement('canvas'); tr.width = 256; tr.height = 64;
-    const cr = tr.getContext('2d')!;
-    cr.fillStyle = sable ? css(mel(melS([0.5, 0, 0.5], s => s.sol), [200, 170, 120], 0.5)) : '#4A4C55'; cr.fillRect(0, 0, 256, 64);
-    cr.fillStyle = sable ? 'rgba(255,255,255,0.18)' : '#D8D4C8'; cr.fillRect(0, 0, 256, 3);
-    if (!sable) { cr.fillStyle = '#F2EFE6'; cr.fillRect(0, 30, 128, 4); }
-    else for (let i = 0; i < 60; i++) { cr.fillStyle = `rgba(120,96,60,${0.12 + 0.1 * alea(i)})`; cr.fillRect(alea(i * 3) * 256, 6 + alea(i * 5) * 56, 6, 1); }
-    const tt = texture3D(tr); tt.wrapS = THREE.RepeatWrapping; tt.repeat.set(L / per, 1);
-    const route = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(L, dAr - dAv), new THREE.MeshBasicMaterial({ map: tt })));
-    route.position.set(xc, (dAv + dAr) / 2, 0.02);
-    if (!sable) {
-      const hB = 16 / ppm0, n = Math.ceil(L / (260 / ppm0));
-      const fut = new THREE.InstancedMesh(new THREE.BoxGeometry(4 / ppm0, 4 / ppm0, hB).translate(0, 0, hB / 2), new THREE.MeshBasicMaterial({ color: 0xf4f4f4 }), n);
-      const bande = new THREE.InstancedMesh(new THREE.BoxGeometry(4.4 / ppm0, 4.4 / ppm0, 3 / ppm0).translate(0, 0, hB * 0.7), new THREE.MeshBasicMaterial({ color: 0xd33a2c }), n);
-      for (let i = 0; i < n; i++) {
-        const mm = new THREE.Matrix4().makeTranslation(xc - L / 2 + i * 260 / ppm0, dAr + 0.3, 0);
-        fut.setMatrixAt(i, mm); bande.setMatrixAt(i, mm);
-      }
-      ajoute(fut); ajoute(bande);
-    }
-    // LES ARBRES ET LES MAISONS DU BORD, en trois rangees : la premiere est celle du 2D
-    // (memes lieux, memes essences, meme degagement devant le monument), les deux autres
-    // plus loin, plus clairsemees, dans la brume
-    const objets = o.local ? objetsCulturels(arrivee.cle) : [];
-    const rangees: [number, number, number][] = [[1 / 0.45, 1, 0.22], [1 / 0.3, 0.85, 0.45], [1 / 0.18, 0.7, 0.6]];
-    rangees.forEach(([kd, kh, vide], r) => {
-      const d = C.Dc * kd, pas = 92 / C.ppm(d), demi = (W / 2) / C.ppm(d);
-      for (let i = Math.floor((-demi - 30) / pas); i * pas < Dm + demi + 30; i++) {
-        if (alea(i * 13 + r * 1000) < vide) continue;
-        const x = i * pas + alea(i + r * 77) * 40 / C.ppm(d) + x0 * 0;
-        const fr = Math.max(0, Math.min(1, x / Dm));
-        if (fr > 0.93 && r === 0) continue;
-        const sty = fr < 0.3 ? sD : fr > 0.66 ? sA : sT;
-        const yy = d + (alea(i * 19 + r) - 0.5) * pas * 0.6;
-        if (r === 0 && objets.length && hache(i * 5) % 2 === 0) {
-          const ob = objets[hache(i * 11) % objets.length];
-          const larg = Math.min(ob.largeurM, 6) * ppm0 / C.ppm(d);
-          const m = panneau(ob.im, ob.w, ob.h, ob.ax, ob.ay, larg); m.position.set(x, yy, 0); ajoute(m);
-          continue;
-        }
-        const type = sty.arbres[hache(i + r * 31) % sty.arbres.length];
-        const hpx = H * 0.1 * (0.8 + 0.5 * alea(i * 3 + r)) * (type === 'maison' ? 0.75 : 1) * kh;
-        const hm = hpx / C.ppm(d);
-        const cv = toileArbre(type, sty.feuille, hache(i * 7 + r));
-        const m = panneau(cv, cv.width, cv.height, cv.width / 2, cv.height - 2, hm * cv.width / 160);
-        m.position.set(x, yy, 0); ajoute(m);
-      }
-    });
-    // LE MONUMENT D'ARRIVEE, qui se leve a droite en fin de voyage (a 66 % de l'ecran a l'arrivee)
-    const plage = arrivee.cle === 'menole';
-    dM = C.Dc / (plage ? 0.45 : 0.22);
-    const camFin = Dm + x0;
-    monumentX = camFin + ((plage ? 0.78 : 0.66) * W - W / 2) / C.ppm(dM) * (plage ? 0.75 : 1);
-    kMpx = plage ? W * 0.4 : H * (W > H ? 0.5 : 0.36);
-    const slotM = new THREE.Group(); ajoute(slotM);
-    attente.push({ slot: slotM, essai: () => {
-      const M = monumentDuLieu(arrivee.cle);
-      if (!M) return null;
-      let k = plage ? kMpx / M.w : kMpx / M.ay;
-      if (M.w * k > W * 0.9) k = (W * 0.9) / M.w;
-      const m = panneau(M.im, M.w, M.h, M.ax, M.ay, M.w * k / C.ppm(dM), false);
-      m.position.set(monumentX, dM, 0);
-      monument = m;
-      return m;
-    } });
-    // LES SILHOUETTES LOINTAINES, qui changent de forme du depart a l'arrivee (une bande peinte)
-    const dL = C.Dc * 10, pL = C.ppm(dL), demiL = (W / 2) / pL + 20;
-    const xa = x0 - demiL, xb = Dm + x0 + demiL, largL = xb - xa;
-    const NL = 2048, hMax = H * 0.16 / pL;
-    const tl = document.createElement('canvas'); tl.width = NL; tl.height = 256;
-    const cl = tl.getContext('2d')!;
-    for (let c = 0; c < NL; c++) {
-      const x = xa + (c / NL) * largL, fr = Math.max(0, Math.min(1, (x - x0) / Dm)), w = poids(fr), u = x * pL;
-      const h = w[0] * hauteurLoin(sD.loin, u, H) + w[1] * hauteurLoin(sT.loin, u, H) + w[2] * hauteurLoin(sA.loin, u, H);
-      cl.fillStyle = css(mel(melS(w, s => s.loinC), cielB, 0.35));
-      const hp = Math.min(255, (h / pL) / hMax * 255);
-      cl.fillRect(c, 256 - hp, 1.5, hp);
-    }
-    const ml = new THREE.MeshBasicMaterial({ map: texture3D(tl), transparent: true, fog: false, depthWrite: false });
-    const bandeL = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(largL, hMax).rotateX(Math.PI / 2), ml));
-    bandeL.position.set(xa + largL / 2, dL, hMax / 2 - 0.5);
-    bandeL.renderOrder = -2;
-    // DES CUMULUS QUI PASSENT LENTEMENT, tout au fond
-    const dN = C.Dc / 0.03, pN = C.ppm(dN), demiN = (W / 2) / pN, pasN = (W * 1.8 / 5) / pN;
-    for (let i = 0, x = x0 - demiN - pasN; x < Dm + x0 + demiN + pasN; i++, x += pasN) {
-      const slot = new THREE.Group(); ajoute(slot);
-      const yEcran = 0.3 + 0.06 * (i % 3), larg = W * (0.22 + 0.06 * (i % 2)) / pN;
-      const z = dN * Math.tan(C.leve + Math.atan((0.5 - yEcran) * H / C.f)) + C.hc;
-      const xx = x;
-      attente.push({ slot, essai: () => {
-        const im = cumulus(i * 2 + rang, true);
-        if (!im) return null;
-        const m = panneau(im, im.naturalWidth, im.naturalHeight, im.naturalWidth / 2, im.naturalHeight * 0.9, larg, false);
-        if (i % 2 === 1) m.scale.x = -1;
-        m.position.set(xx, dN, z);
-        (m.material as THREE.MeshBasicMaterial).depthWrite = false; m.renderOrder = -3;
-        return m;
-      } });
-    }
-    // LE VEHICULE : un panneau sur la route, sa toile repeinte a chaque image (le pedalage, les roues)
-    vToile = document.createElement('canvas');
-    vTex = new THREE.CanvasTexture(vToile); vTex.colorSpace = THREE.SRGBColorSpace;
-    vPlan = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(Math.PI / 2).translate(0, 0, 0.5),
-      new THREE.MeshBasicMaterial({ map: vTex, transparent: true, alphaTest: 0.05, side: THREE.DoubleSide, fog: false })));
-    void X;
-  };
-
-  return {
-    rendre(ctx, W, H, t, X, mix, peindreV, tailleV, cahot) {
-      const k = `${W}x${H}`;
-      if (k !== cle) { cle = k; construire(W, H, X); }
-      if (!scene || !cam || !vPlan || !vToile || !vTex) return null;
-      for (let i = attente.length - 1; i >= 0; i--) {
-        const m = attente[i].essai();
-        if (m) { attente[i].slot.add(m); attente.splice(i, 1); }
-      }
-      // les couleurs du moment : le sol du lieu traverse, la mer qui vient ou s'en va
-      sol.color.copy(couleur(mix.sol));
-      if (mer) mer.opacity = mix.mer;
-      if (ecume) ecume.opacity = 0.8 * mix.mer;
-      if (monument && mix.nuit) (monument.material as THREE.MeshBasicMaterial).color.copy(couleur(mel([255, 255, 255], [236, 196, 140], 0.85 * mix.pM)));
-      // le vehicule : sa toile a la taille de son image a l'ecran (deux fois, pour la finesse)
-      const Xm = X / ppm0, q = 2;
-      const [lw, lh] = tailleV;
-      if (vToile.width !== Math.round(lw * q) || vToile.height !== Math.round(lh * q)) {
-        vToile.width = Math.round(lw * q); vToile.height = Math.round(lh * q);
-        vTex.dispose(); vTex = new THREE.CanvasTexture(vToile); vTex.colorSpace = THREE.SRGBColorSpace;
-        (vPlan.material as THREE.MeshBasicMaterial).map = vTex;
-      }
-      const cv = vToile.getContext('2d')!;
-      cv.setTransform(q, 0, 0, q, 0, 0); cv.clearRect(0, 0, lw, lh);
-      peindreV(cv, lw / 2, lh);
-      vTex.needsUpdate = true;
-      vPlan.scale.set(lw / ppm0, 1, lh / ppm0);
-      vPlan.position.set(Xm, C.Dc, cahot / ppm0);
-      // LA CAMERA : de profil, comme le 2D ; elle ouvre en grue, de trois quarts arriere et
-      // de haut, et se pose en deux secondes et demie — puis respire a peine
-      const e = lisse(t / 2.6);
-      const lacet = -0.62 * (1 - e) + 0.035 * Math.sin(t * 0.5) * e, leveG = 0.32 * (1 - e);
-      const V = new THREE.Vector3(Xm, C.Dc, 0);
-      const base = new THREE.Vector3(Xm + x0, 0, C.hc).sub(V);
-      const vise = new THREE.Vector3(Xm + x0, C.Dc, C.hc + C.Dc * Math.tan(C.leve)).sub(V);
-      const rot = (v: THREE.Vector3) => {
-        v.applyAxisAngle(new THREE.Vector3(0, 0, 1), lacet);
-        const hz = Math.hypot(v.x, v.y);
-        const a = Math.atan2(v.z, hz) + leveG;
-        const r = v.length();
-        const dir = new THREE.Vector2(v.x, v.y).normalize();
-        return v.set(dir.x * Math.cos(a) * r, dir.y * Math.cos(a) * r, Math.sin(a) * r);
-      };
-      cam.position.copy(rot(base)).add(V);
-      cam.lookAt(vise.applyAxisAngle(new THREE.Vector3(0, 0, 1), lacet).add(V));
-      poserLaScene(ctx, scene, cam, W, H);
-      const pied = new THREE.Vector3(Xm, C.Dc, cahot / ppm0).project(cam);
-      return { xv: (pied.x + 1) / 2 * W, yPied: (1 - pied.y) / 2 * H };
-    },
-  };
-}
-
 function peintreRoute(rang: number, o: { local?: boolean; duree?: number; departNom?: string; km?: number } = {}): Peintre {
   const duree = o.duree ?? 8.2;
   const arrivee = lieuDeLEtape(rang);
@@ -1199,7 +944,6 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
     return [A[0] * w[0] + B[0] * w[1] + C[0] * w[2], A[1] * w[0] + B[1] * w[1] + C[1] * w[2],
             A[2] * w[0] + B[2] * w[1] + C[2] * w[2]];
   };
-  const r3 = routeEn3D(rang, o, sD, sT, sA, arrivee, transport, cielB, poids);
 
   return (ctx, W, H, t) => {
     const D = W * 7;
@@ -1213,7 +957,7 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
     // le ciel et le soleil
     const g = ctx.createLinearGradient(0, 0, 0, yH);
     g.addColorStop(0, css(cielH)); g.addColorStop(1, css(cielB));
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, r3 ? H : yH + 2);     // en 3D, la grue decouvre plus de ciel
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, yH + 2);
     const sx = W * 0.8 - X * 0.01, sy = H * ASTRE_Y[m];
     if (m !== 'nuit') {
       const halo = ctx.createRadialGradient(sx, sy, 0, sx, sy, W * (m === 'soir' ? 0.6 : 0.45));
@@ -1221,52 +965,6 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
       ctx.fillStyle = halo; ctx.fillRect(0, 0, W, yH);
       ctx.fillStyle = css(soleil); ctx.beginPath(); ctx.arc(sx, sy, Math.min(W, H) * (m === 'soir' ? 0.06 : 0.045), 0, Math.PI * 2); ctx.fill();
     }
-    // les couleurs du moment : le sol du lieu traverse, et la mer quand le paysage en a une
-    const wC = poids(p(t));
-    const sol = melStyles(wC, s => s.sol);
-    const mer = (sD.loin === 'mer' ? wC[0] : 0) + (sA.loin === 'mer' ? wC[2] : 0);
-    // le vehicule : le modele Tripo de profil, sinon le dessin d'avant
-    const xv2 = W * (transport === 'car' ? 0.42 : 0.36);
-    const ang = X / (14 * k);
-    const vite = Math.min(1, v / 300);
-    const parM = parM0 * (transport === 'velo' ? 2.1 : transport === 'voiture' ? 1.35 : 1);
-    const nomV: NomVehicule = transport === 'velo' ? 'velo' : transport === 'voiture' ? 'voiture' : 'car';
-    const hautM = transport === 'velo' ? 1.75 : transport === 'voiture' ? 1.48 : 3.7;
-    const cahot = Math.sin(t * (transport === 'velo' ? 9 : 19)) * 0.6 * vite;
-    const hP = hautM * parM;
-    // LE CYCLISTE PEDALE (l'auteur, 15/10 : « il ne pedale pas ») : l'image
-    // du tour de pedalier suit l'angle des manivelles, lui-meme lie aux roues
-    const frP = nomV === 'velo' && NB_PEDALE ? (() => {
-      const kV = hP / VELO.h, tours = ((X / (VELO.r * kV)) * 0.55) / (Math.PI * 2);
-      const i = Math.floor((((tours % 1) + 1) % 1) * NB_PEDALE);
-      const fr = veloPedale(i);
-      return fr ? { fr, i, kV } : null;
-    })() : null;
-    /** Le vehicule, son pied en (x, yP) : le cycliste qui pedale, ou l'image Tripo et ses roues. */
-    const dessinerV = (c: CanvasRenderingContext2D, x: number, yP: number): boolean => {
-      if (frP) {
-        const { fr, i, kV } = frP;
-        c.drawImage(fr.im, x - fr.w * kV / 2, yP - fr.h * kV, fr.w * kV, fr.h * kV);
-        animerVelo(c, x, yP, hP, X, -PEDALE_A0 + (Math.PI * 2 * i) / NB_PEDALE, PEDALE_MANIVELLE, PEDALE_PEDALIER ?? VELO.pedalier, true);
-        return true;
-      }
-      if (!poserVehicule(c, nomV, x, yP, hP)) return false;
-      // le cycliste roule : ses roues et son pedalier tournent (l'auteur, 15/10)
-      if (nomV === 'velo') animerVelo(c, x, yP, hP, X);
-      // le car de l'equipe porte le logo BENBEZI sur son flanc
-      const sp = nomV === 'car' ? spriteVehicule('car', 'profil') : null, lg = logoBenbezi();
-      if (sp && lg) {
-        const lv = hP * sp.w / sp.h, ll = lv * 0.3;
-        c.drawImage(lg, x - lv * 0.06 - ll / 2, yP - hP * 0.5 - ll * lg.height / lg.width / 2, ll, ll * lg.height / lg.width);
-      }
-      return true;
-    };
-    // EN 3D (voir routeEn3D) : le paysage et le vehicule dans la scene, a leur profondeur
-    const tailleV: [number, number] = frP ? [Math.max(frP.fr.w, VELO.w) * frP.kV * 1.08, Math.max(frP.fr.h, VELO.h) * frP.kV * 1.04]
-      : (() => { const sp = spriteVehicule(nomV, 'profil'); return [sp ? hP * sp.w / sp.h * 1.04 : hP * 2, hP * 1.04] as [number, number]; })();
-    const en3 = r3 ? r3.rendre(ctx, W, H, t, X, { sol, mer, nuit: m === 'nuit', pM: fenetre(p(t), 0.5, 0.8) },
-      (c, x, yP) => { dessinerV(c, x, yP); }, tailleV, cahot) : null;
-    if (!en3) {
     // des cumulus qui passent lentement
     for (let i = 0; i < 5; i++) {
       const im = cumulus(i * 2 + rang, true);
@@ -1290,9 +988,12 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
     ctx.fillStyle = css(mel(cL, cielB, 0.35)); ctx.fill();
 
     // le sol, et la mer quand le paysage en a une
+    const wC = poids(p(t));
+    const sol = melStyles(wC, s => s.sol);
     const gs = ctx.createLinearGradient(0, yH, 0, H);
     gs.addColorStop(0, css(mel(sol, cielB, 0.25))); gs.addColorStop(1, css(sombre(sol, 0.78)));
     ctx.fillStyle = gs; ctx.fillRect(0, yH, W, H - yH);
+    const mer = (sD.loin === 'mer' ? wC[0] : 0) + (sA.loin === 'mer' ? wC[2] : 0);
     if (mer > 0.01) {
       const gm = ctx.createLinearGradient(0, yH, 0, yH + H * 0.05);
       gm.addColorStop(0, `rgba(80,160,214,${mer})`); gm.addColorStop(1, `rgba(40,120,190,${mer})`);
@@ -1309,7 +1010,6 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
       ctx.stroke();
     }
 
-    }
     // LE STADE S'ANNONCE : au sol apres le vol, ses projecteurs s'allument a
     // l'horizon et balaient le ciel quand on approche
     // (dessines apres l'etalonnage : voir plus bas, « LES LUMIERES »)
@@ -1338,9 +1038,8 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
       }
     };
 
-    let posM: [CanvasImageSource, number, number, number, number] | null = null;
-    if (!en3) {
     // le monument d'arrivee, qui se leve a droite en fin de voyage
+    let posM: [CanvasImageSource, number, number, number, number] | null = null;
     const M = monumentDuLieu(arrivee.cle);
     if (M) {
       const plage = arrivee.cle === 'menole';
@@ -1395,21 +1094,49 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
       }
     }
 
-    }
-    let xv = xv2, yPied = yR1 - H * 0.018 + cahot;
-    if (r3 && en3) { xv = en3.xv; yPied = en3.yPied; }
+    // le vehicule : le modele Tripo de profil, sinon le dessin d'avant
+    const xv = W * (transport === 'car' ? 0.42 : 0.36);
+    const ang = X / (14 * k);
+    const vite = Math.min(1, v / 300);
     traitsDeVitesse(ctx, W, H, yR0 - H * 0.12, yR1, t, vite * (transport === 'velo' ? 0.5 : 1));
+    const parM = parM0 * (transport === 'velo' ? 2.1 : transport === 'voiture' ? 1.35 : 1);
+    const nomV: NomVehicule = transport === 'velo' ? 'velo' : transport === 'voiture' ? 'voiture' : 'car';
+    const hautM = transport === 'velo' ? 1.75 : transport === 'voiture' ? 1.48 : 3.7;
+    const cahot = Math.sin(t * (transport === 'velo' ? 9 : 19)) * 0.6 * vite;
     if (transport === 'velo') {
       for (let i = 0; i < 10; i++) {
         const age = (t * 3 + i / 10) % 1;
         ctx.fillStyle = `rgba(236,214,170,${0.4 * (1 - age) * vite})`;
-        ctx.beginPath(); ctx.arc(xv - 30 * k - age * 60 * k, yPied - 0.007 * H - 3 - age * 10, 3 + age * 6, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(xv - 30 * k - age * 60 * k, yRoue - 3 - age * 10, 3 + age * 6, 0, Math.PI * 2); ctx.fill();
       }
     }
-    if (en3) {
-      // fait : le vehicule est dans la scene 3D
-    } else if (dessinerV(ctx, xv, yPied)) {
-      // fait
+    // LE CYCLISTE PEDALE (l'auteur, 15/10 : « il ne pedale pas ») : l'image
+    // du tour de pedalier suit l'angle des manivelles, lui-meme lie aux roues
+    let pedale = false;
+    if (nomV === 'velo' && NB_PEDALE) {
+      const yP = yR1 - H * 0.018 + cahot, hP = hautM * parM, kV = hP / VELO.h;
+      const tours = ((X / (VELO.r * kV)) * 0.55) / (Math.PI * 2);
+      const i = Math.floor((((tours % 1) + 1) % 1) * NB_PEDALE);
+      const fr = veloPedale(i);
+      if (fr) {
+        ctx.drawImage(fr.im, xv - fr.w * kV / 2, yP - fr.h * kV, fr.w * kV, fr.h * kV);
+        animerVelo(ctx, xv, yP, hP, X, -PEDALE_A0 + (Math.PI * 2 * i) / NB_PEDALE, PEDALE_MANIVELLE,
+                   PEDALE_PEDALIER ?? VELO.pedalier, true);
+        pedale = true;
+      }
+    }
+    if (pedale) {
+      // fait : le cycliste qui pedale
+    } else if (poserVehicule(ctx, nomV, xv, yR1 - H * 0.018 + cahot, hautM * parM)) {
+      // le cycliste roule : ses roues et son pedalier tournent (l'auteur, 15/10)
+      if (nomV === 'velo') animerVelo(ctx, xv, yR1 - H * 0.018 + cahot, hautM * parM, X);
+      // le car de l'equipe porte le logo BENBEZI sur son flanc
+      const sp = nomV === 'car' ? spriteVehicule('car', 'profil') : null, lg = logoBenbezi();
+      if (sp && lg) {
+        const hv = hautM * parM, lv = hv * sp.w / sp.h, ll = lv * 0.3;
+        ctx.drawImage(lg, xv - lv * 0.06 - ll / 2, yR1 - H * 0.018 + cahot - hv * 0.5 - ll * lg.height / lg.width / 2,
+                      ll, ll * lg.height / lg.width);
+      }
     } else if (transport === 'velo') {
       velo(ctx, xv, yRoue, k, ang);
     } else if (transport === 'voiture') {
@@ -1445,149 +1172,13 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
       ctx.drawImage(teinter(im, [236, 196, 140]), mx, my, mw, mh);
       ctx.restore();
     }
-    if (transport !== 'velo') phares(ctx, xv + hautM * parM * (transport === 'car' ? 1.55 : 1.35), yPied - H * 0.022, W * 0.35,
+    if (transport !== 'velo') phares(ctx, xv + hautM * parM * (transport === 'car' ? 1.55 : 1.35), yR1 - H * 0.04, W * 0.35,
                                      m === 'nuit' ? 1 : m === 'soir' ? 0.45 : 0);
     hudVoyage(ctx, W, H, t, duree, rang, depart, arrivee, km * p(t), o.local ? mot(transport) : undefined);
   };
 }
 
 /** En avion : au-dessus de la mer de nuages, puis la descente sur la ville. */
-/** LE VOL EN 3D : la mer de nuages a perte de vue, les quatre nappes de cumulus a leurs
- *  profondeurs (les memes vitesses que le 2D), et a la descente la camera plonge sous les
- *  nuages vers la ville d'arrivee — ses immeubles, son fleuve, son monument. L'avion, ses
- *  trainees et ses feux restent ceux du 2D, par-dessus. */
-type Avion3D = { rendre: (ctx: CanvasRenderingContext2D, W: number, H: number, t: number, X: number, descente: number, nuit: boolean) => void };
-function avionEn3D(rang: number, arrivee: Lieu, cielB: Rgb): Avion3D | null {
-  if (!moteur3D()) return null;
-  let scene: THREE.Scene | null = null, cam: THREE.PerspectiveCamera | null = null, cle = '';
-  let f = 1, leve = 0, ppmP = 1;
-  const Dp = 200, ALT = 0;
-  let mer: THREE.MeshBasicMaterial, nappes: { mat: THREE.MeshBasicMaterial; j: number }[] = [];
-  let ville: THREE.Group, fenetres: THREE.MeshBasicMaterial;
-  const attente: { slot: THREE.Object3D; essai: () => THREE.Mesh | null }[] = [];
-  const NAPPES: [number, number, number, number][] = [[0.05, 0.62, 0.2, 9], [0.18, 0.72, 0.32, 7], [0.5, 0.86, 0.55, 5], [0.9, 1.0, 0.75, 4]];
-  const ZSOL = -2600;                                         // la ville, tres loin sous les nuages
-  const couleur = (c: Rgb) => new THREE.Color().setRGB(c[0] / 255, c[1] / 255, c[2] / 255, THREE.SRGBColorSpace);
-  const construire = (W: number, H: number) => {
-    f = H / (2 * Math.tan(FOV_VOYAGE * Math.PI / 360));
-    leve = Math.atan(0.12 * H / f);
-    ppmP = f / Dp;
-    const Xm = (W * 9) / ppmP;                                 // tout le vol, en metres a la profondeur de l'avion
-    scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(couleur(cielB), Dp * 6, Dp * 60);
-    cam = new THREE.PerspectiveCamera(FOV_VOYAGE, W / H, 1, Dp * 400);
-    cam.up.set(0, 0, 1);
-    const ajoute = <M extends THREE.Object3D>(m: M) => { scene!.add(m); return m; };
-    // LA MER DE NUAGES : un tapis de cumulus peints, jusqu'a l'horizon
-    const tc = document.createElement('canvas'); tc.width = tc.height = 512;
-    const c = tc.getContext('2d')!;
-    c.fillStyle = 'rgb(222,224,238)'; c.fillRect(0, 0, 512, 512);
-    for (let i = 0; i < 160; i++) {
-      const x = alea(i * 3) * 512, y = alea(i * 7) * 512, r = 20 + alea(i * 11) * 60;
-      for (const dx of [-512, 0, 512]) for (const dy of [-512, 0, 512]) {
-        const g = c.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
-        g.addColorStop(0, `rgba(255,255,255,${0.5 + 0.3 * alea(i)})`); g.addColorStop(1, 'rgba(255,255,255,0)');
-        c.fillStyle = g; c.fillRect(x + dx - r, y + dy - r, 2 * r, 2 * r);
-      }
-    }
-    const tm = texture3D(tc); tm.wrapS = tm.wrapT = THREE.RepeatWrapping; tm.repeat.set((Xm + Dp * 200) / 900, Dp * 120 / 900);
-    mer = new THREE.MeshBasicMaterial({ map: tm, transparent: true, depthWrite: false });
-    const zMer = -Dp * Math.tan(Math.atan(0.3 * H / f) - leve) * 3.2;   // sa lisiere sous l'avion, a 70 % de l'ecran
-    const pm = ajoute(new THREE.Mesh(new THREE.PlaneGeometry(Xm + Dp * 200, Dp * 120), mer));
-    pm.position.set(Xm / 2, Dp * 60, zMer);
-    pm.renderOrder = -20;                                       // dessous : les nappes passent devant
-    // LES NAPPES DE CUMULUS : loin, milieu, pres, devant — a la meme vitesse que le 2D
-    NAPPES.forEach(([fp, yy, l, n], j) => {
-      const d = Dp / fp, p = f / d, demi = (W / 2) / p, boucle = W * (1 + l * 1.2) / p, pas = boucle / n;
-      const mat = new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, fog: j < 2 });
-      nappes.push({ mat, j });
-      for (let i = 0, x = -demi - pas; x < Xm + demi + pas; i++, x += pas) {
-        const slot = new THREE.Group(); ajoute(slot);
-        const lx = W * l * (0.8 + 0.4 * alea(i + j * 9)) / p;
-        const ye = yy + 18 * alea(i * 7 + j) / H;
-        const z = -d * Math.tan(Math.atan((ye - 0.5) * H / f) - leve);
-        const xx = x, ii = i;
-        attente.push({ slot, essai: () => {
-          const im = cumulus(ii * 3 + j, true);
-          if (!im) return null;
-          const m = panneau(im, im.naturalWidth, im.naturalHeight, im.naturalWidth / 2, im.naturalHeight * 0.9, lx, j < 2);
-          const mm = m.material as THREE.MeshBasicMaterial;
-          mm.depthWrite = false; mm.alphaTest = 0.02;
-          m.userData.nappe = j;
-          if ((ii + j) % 2 === 1) m.scale.x = -1;
-          m.position.set(xx, d, z);
-          m.renderOrder = j - 10;
-          return m;
-        } });
-      }
-    });
-    // LA VILLE D'ARRIVEE, sous les nuages : des immeubles dans la brume, le fleuve, le monument
-    ville = ajoute(new THREE.Group());
-    const tf = document.createElement('canvas'); tf.width = 64; tf.height = 128;
-    const cf = tf.getContext('2d')!;
-    cf.fillStyle = '#5a6278'; cf.fillRect(0, 0, 64, 128);
-    for (let y = 6; y < 124; y += 9) for (let x = 5; x < 60; x += 9) {
-      cf.fillStyle = alea(x * 31 + y * 7) > 0.55 ? 'rgba(255,236,190,0.9)' : 'rgba(30,36,52,0.9)'; cf.fillRect(x, y, 5, 6);
-    }
-    const tfx = texture3D(tf); tfx.wrapS = tfx.wrapT = THREE.RepeatWrapping;
-    fenetres = new THREE.MeshBasicMaterial({ map: tfx });
-    const cxV = Xm + (W * 0.14) / ppmP;                          // la ville est sous l'arrivee
-    const tours = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1).translate(0, 0, 0.5), fenetres, 600);
-    let n = 0;
-    for (let rr = 0; rr < 22; rr++) for (let k = 0; k < 26; k++) {
-      const x = cxV + (k - 13) * 170 + alea(rr * 37 + k) * 90, y = 1100 + rr * 170 + alea(rr + k * 13) * 60;
-      if (Math.abs(y - 2300) < 200 || (Math.abs(x - cxV - 260) < 260 && Math.abs(y - 1700) < 300)) continue;   // le fleuve, le parvis du monument
-      if (alea(rr * 91 + k * 7) < 0.25) continue;
-      const h = 30 + alea(rr * 17 + k * 3) * (rr < 5 ? 70 : 150), l = 60 + alea(k * 5 + rr) * 60;
-      tours.setMatrixAt(n++, new THREE.Matrix4().compose(new THREE.Vector3(x, y, ZSOL), new THREE.Quaternion(), new THREE.Vector3(l, l * 0.8, h)));
-    }
-    tours.count = n;
-    ville.add(tours);
-    const solV = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), new THREE.MeshBasicMaterial({ color: couleur([62, 74, 60]) }));
-    solV.position.set(cxV, 3500, ZSOL - 1); ville.add(solV);
-    const fleuve = new THREE.Mesh(new THREE.PlaneGeometry(9000, 260), new THREE.MeshBasicMaterial({ color: couleur([70, 110, 160]) }));
-    fleuve.position.set(cxV, 2400, ZSOL + 0.5); ville.add(fleuve);
-    const slotM = new THREE.Group(); ville.add(slotM);
-    attente.push({ slot: slotM, essai: () => {
-      const M = monumentDuLieu(arrivee.cle);
-      if (!M) return null;
-      const m = panneau(M.im, M.w, M.h, M.ax, M.ay, 520 * M.w / M.ay, false);
-      m.position.set(cxV + 260, 1700, ZSOL);
-      return m;
-    } });
-    ville.visible = false;
-    void ALT; void rang;
-  };
-  return {
-    rendre(ctx, W, H, t, X, descente, nuit) {
-      const k = `${W}x${H}`;
-      if (k !== cle) { cle = k; nappes = []; construire(W, H); }
-      if (!scene || !cam) return;
-      for (let i = attente.length - 1; i >= 0; i--) {
-        const m = attente[i].essai();
-        if (m) { attente[i].slot.add(m); attente.splice(i, 1); }
-      }
-      // les nappes s'ecartent et s'effacent a la descente (comme le 2D), la mer de nuages aussi
-      scene.traverse(o => {
-        const j = o.userData.nappe;
-        if (j == null) return;
-        ((o as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = 1 - Math.min(1, descente * (j >= 2 ? 1.7 : 1.1));
-      });
-      mer.opacity = 0.95 * (1 - descente);
-      ville.visible = descente > 0.01;
-      fenetres.color.set(nuit ? 0xffffff : 0xd8dce6);
-      // LA CAMERA file avec l'avion ; a la descente elle plonge sous les nuages et s'incline vers la ville
-      const x = X / ppmP, plonge = descente * descente * (3 - 2 * descente);
-      // a l'arrivee, a trois cents metres au-dessus des toits, le monument droit devant
-      const z = -plonge * (-ZSOL - 320);
-      const tangage = leve - plonge * (leve + 0.1) + Math.sin(t * 0.7) * 0.004;
-      cam.position.set(x, -plonge * 300, z);
-      cam.lookAt(x, 1000, z + 1000 * Math.tan(tangage));
-      poserLaScene(ctx, scene, cam, W, H);
-    },
-  };
-}
-
 function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom?: 'avion' | 'jet'; mode?: string } = {}): Peintre {
   const duree = o.duree ?? 8.6;
   const nomAvion = o.nom ?? 'avion';
@@ -1600,7 +1191,6 @@ function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom
   chargerLesCumulus(true);
   monumentDuLieu(arrivee.cle);
   logoBenbezi();
-  const a3 = avionEn3D(rang, arrivee, cielB);
   return (ctx, W, H, t) => {
     const X = p(t) * W * 9;
     const descente = o.descente === false ? 0 : fenetre(t, duree - 3.4, duree - 1.0);
@@ -1618,13 +1208,11 @@ function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom
       ctx.fillStyle = css(soleil); ctx.beginPath(); ctx.arc(sx, sy, Math.min(W, H) * 0.05, 0, Math.PI * 2); ctx.fill();
     }
 
-    // EN 3D (voir avionEn3D) : les nuages et la ville dans la scene
-    if (a3) a3.rendre(ctx, W, H, t, X, descente, m === 'nuit');
     // la ville d'arrivee, qui monte sous les nuages qui s'ouvrent : les
     // immeubles dans la brume, le monument, un rang plus proche, et le
     // fleuve — la Seine, la Tamise ou l'Hudson
     const monte = (1 - descente) * H * 0.5;
-    if (descente > 0 && !a3) {
+    if (descente > 0) {
       const yS = H * 0.8 + monte;
       const rang_ = (y0: number, larg: number, hmax: number, graine: number, c: Rgb) => {
         ctx.fillStyle = css(c);
@@ -1663,13 +1251,13 @@ function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom
     const nappes: [number, number, number, number][] = [[0.05, 0.62, 0.2, 9], [0.18, 0.72, 0.32, 7], [0.5, 0.86, 0.55, 5], [0.9, 1.0, 0.75, 4]];
     // le dessus de la mer de nuages, sous les cumulus : pas de ciel en bas
     const fond = 1 - descente;
-    if (fond > 0.01 && !a3) {
+    if (fond > 0.01) {
       const gn = ctx.createLinearGradient(0, H * 0.7, 0, H);
       gn.addColorStop(0, 'rgba(236,236,244,0)'); gn.addColorStop(0.35, `rgba(232,232,242,${0.9 * fond})`);
       gn.addColorStop(1, `rgba(214,216,232,${fond})`);
       ctx.fillStyle = gn; ctx.fillRect(0, H * 0.7 + descente * H * 0.6, W, H);
     }
-    if (!a3) nappes.forEach(([f, yy, l, n], j) => {
+    nappes.forEach(([f, yy, l, n], j) => {
       const a = 1 - Math.min(1, descente * (j >= 2 ? 1.7 : 1.1));
       if (a <= 0.02) return;
       ctx.save(); ctx.globalAlpha = a;
@@ -1721,7 +1309,7 @@ function peintreAvion(rang: number, o: { duree?: number; descente?: boolean; nom
     etalonner(ctx, W, H, m);
     if (m === 'nuit' || m === 'soir') {
       if (m === 'nuit') luneEtEtoiles(ctx, W, H, sx, sy, t);
-      if (descente > 0 && !a3) {
+      if (descente > 0) {
         const yS = H * 0.8 + (1 - descente) * H * 0.5;
         ctx.save(); ctx.globalCompositeOperation = 'lighter';
         for (let i = 0; i < 90; i++) {
@@ -1823,164 +1411,6 @@ export function CinematiqueApotheose({ onFin }: { onFin: () => void }) {
   return <Cinematique nom="apotheose" duree={12.5} onFin={onFin} creer={peintreApotheose} />;
 }
 
-/** UNE GALAXIE SPIRALE EN RELIEF : deux bras de poussiere d'etoiles (les points de
- *  pointsDeGalaxie, aux memes couleurs que galaxie()), un coeur dore, a plat dans son plan. */
-function galaxie3D(pts: [number, number, number, number][], R: number, force = 1) {
-  const pos: number[] = [], col: number[] = [];
-  for (const [r, th, , c] of pts) {
-    const a = th + r * 3.4;
-    pos.push(Math.cos(a) * r * R, Math.sin(a) * r * R, (alea(pos.length) - 0.5) * R * 0.06 * (1 - r));
-    const k = c > 0.75 ? [1, 0.75, 0.9] : c > 0.4 ? [0.7, 0.78, 1] : [1, 0.98, 0.94];
-    col.push(k[0], k[1], k[2]);
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-  const tache = document.createElement('canvas'); tache.width = tache.height = 64;
-  const ct = tache.getContext('2d')!;
-  const rg = ct.createRadialGradient(32, 32, 0, 32, 32, 32);
-  rg.addColorStop(0, 'rgba(255,255,255,1)'); rg.addColorStop(0.35, 'rgba(255,255,255,0.5)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
-  ct.fillStyle = rg; ct.fillRect(0, 0, 64, 64);
-  const grp = new THREE.Group();
-  const nuee = new THREE.Points(g, new THREE.PointsMaterial({ size: R * 0.012, map: texture3D(tache), vertexColors: true, transparent: true,
-    depthWrite: false, blending: THREE.AdditiveBlending, opacity: force }));
-  grp.add(nuee);
-  const coeur = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture3D(tache), color: 0xffe8c8, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.8 * force }));
-  coeur.scale.set(R * 0.7, R * 0.7, 1); grp.add(coeur);
-  return grp;
-}
-
-/** UN CHAMP D'ETOILES en profondeur, autour d'un couloir (x, z) : la parallaxe des trois plans du 2D. */
-function etoiles3D(n: number, larg: number, prof0: number, prof1: number, z0: number, z1: number) {
-  // (un generateur a part : alea(a*i+b) pour trois a differents rangeait les etoiles en pointilles)
-  const pos: number[] = [];
-  let g0 = 0x2545f491;
-  const r = () => ((g0 = (Math.imul(g0, 1664525) + 1013904223) >>> 0) / 4294967296);
-  for (let i = 0; i < n; i++) pos.push((r() - 0.5) * larg, prof0 + r() * (prof1 - prof0), z0 + r() * (z1 - z0));
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  return new THREE.Points(g, new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, transparent: true, opacity: 0.85, depthWrite: false }));
-}
-
-/** LA MONTEE VERS L'APOTHEOSE EN 3D : on monte vraiment — la camera s'eleve dans un champ
- *  d'etoiles en profondeur, la Lune puis Saturne passent a leurs places (a gauche, a
- *  droite), eclairees de cote, la nebuleuse d'Orion nous traverse, Sagittarius A* attend
- *  au-dessus, son disque incline. Le noir, la cite qui s'eloigne, la galaxie d'arrivee, la
- *  couronne, la fusee et le texte restent ceux du 2D. */
-type Apotheose3D = { rendre: (ctx: CanvasRenderingContext2D, W: number, H: number, t: number, c: number, v: number) => void };
-function apotheoseEn3D(course: (t: number) => number): Apotheose3D | null {
-  if (!moteur3D()) return null;
-  let scene: THREE.Scene | null = null, cam: THREE.PerspectiveCamera | null = null, cle = '';
-  let S = 1, nebuleuse: THREE.Group, trou: THREE.Group, f = 1;
-  const D0 = 400;                                              // la profondeur des astres
-  const construire = (W: number, H: number) => {
-    f = H / (2 * Math.tan(FOV_VOYAGE * Math.PI / 360));
-    const m = Math.min(W, H), ppm = f / D0, demiH = (H / 2) / ppm;
-    // la course du 2D : un ecran de haut en bas pour la Lune entre 1,6 et 3,8 s
-    S = (2 * demiH + 2 * m * 0.22 / ppm) / Math.max(1e-6, course(3.8) - course(1.6));
-    scene = new THREE.Scene();
-    cam = new THREE.PerspectiveCamera(FOV_VOYAGE, W / H, 1, 20000);
-    cam.up.set(0, 0, 1);
-    const ajoute = <M extends THREE.Object3D>(o: M) => { scene!.add(o); return o; };
-    ajoute(new THREE.AmbientLight(0x404058, 1.2));
-    const soleil = ajoute(new THREE.DirectionalLight(0xfff2e0, 2.4)); soleil.position.set(-1, -0.6, 0.5);
-    const zFin = S * course(12.5) + demiH * 4;
-    ajoute(etoiles3D(1400, 1600, 150, 2500, -demiH * 3, zFin));
-    ajoute(etoiles3D(900, 900, 900, 5000, -demiH * 3, zFin));
-    const zAu = (t: number) => S * course(t);
-    const xA = (fx: number) => (fx - 0.5) * W / ppm;
-    // la Lune, a gauche, criblee de cratères
-    const lune = document.createElement('canvas'); lune.width = 512; lune.height = 256;
-    const cl = lune.getContext('2d')!;
-    cl.fillStyle = '#d8d6d0'; cl.fillRect(0, 0, 512, 256);
-    for (let i = 0; i < 140; i++) {
-      const x = alea(i * 3) * 512, y = alea(i * 7) * 256, r = 2 + alea(i * 11) * alea(i * 13) * 26;
-      cl.fillStyle = `rgba(90,90,100,${0.15 + 0.2 * alea(i)})`; cl.beginPath(); cl.arc(x, y, r, 0, Math.PI * 2); cl.fill();
-      cl.strokeStyle = 'rgba(255,255,255,0.18)'; cl.lineWidth = 1; cl.beginPath(); cl.arc(x - 1, y - 1, r, Math.PI, Math.PI * 1.6); cl.stroke();
-    }
-    const rL = m * 0.22 / ppm;
-    const mL = ajoute(new THREE.Mesh(new THREE.SphereGeometry(rL, 64, 40), new THREE.MeshStandardMaterial({ map: texture3D(lune), roughness: 1 })));
-    mL.position.set(xA(0.22), D0, zAu(2.7)); mL.rotation.x = Math.PI / 2;
-    // Saturne et ses anneaux, a droite
-    const bandes = document.createElement('canvas'); bandes.width = 64; bandes.height = 256;
-    const cb = bandes.getContext('2d')!;
-    for (let y = 0; y < 256; y += 4) { const k = 0.8 + 0.25 * Math.sin(y * 0.11) + 0.08 * alea(y); cb.fillStyle = `rgb(${244 * k | 0},${220 * k | 0},${170 * k | 0})`; cb.fillRect(0, y, 64, 4); }
-    const rS = m * 0.13 / ppm;
-    const sat = ajoute(new THREE.Group()); sat.position.set(xA(0.74), D0, zAu(4.5));
-    const mS = new THREE.Mesh(new THREE.SphereGeometry(rS, 64, 40), new THREE.MeshStandardMaterial({ map: texture3D(bandes), roughness: 0.9 }));
-    mS.rotation.x = Math.PI / 2; sat.add(mS);
-    const an = document.createElement('canvas'); an.width = an.height = 512;
-    const ca = an.getContext('2d')!;
-    for (let r = 120; r < 256; r += 2) {
-      const u = (r - 120) / 136, a = (0.35 + 0.45 * Math.sin(u * 19) * Math.sin(u * 7 + 1)) * (u < 0.08 ? u / 0.08 : 1);
-      ca.strokeStyle = `rgba(${226 - u * 40 | 0},${200 - u * 50 | 0},${150 - u * 40 | 0},${Math.max(0.05, a)})`; ca.lineWidth = 2;
-      ca.beginPath(); ca.arc(256, 256, r, 0, Math.PI * 2); ca.stroke();
-    }
-    const anneaux = new THREE.Mesh(new THREE.RingGeometry(rS * 1.25, rS * 2.3, 128), new THREE.MeshStandardMaterial({ map: texture3D(an), transparent: true, side: THREE.DoubleSide, roughness: 1, depthWrite: false }));
-    const uv = anneaux.geometry.attributes.uv as THREE.BufferAttribute, P = anneaux.geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < uv.count; i++) { uv.setXY(i, 0.5 + P.getX(i) / (rS * 2.3) * 0.5, 0.5 + P.getY(i) / (rS * 2.3) * 0.5); }
-    anneaux.rotation.set(1.25, 0.35, 0); sat.add(anneaux);
-    // la nebuleuse d'Orion : des nuees colorees tout autour du couloir, qu'on traverse
-    nebuleuse = ajoute(new THREE.Group());
-    const tache = document.createElement('canvas'); tache.width = tache.height = 128;
-    const ct = tache.getContext('2d')!;
-    const rg = ct.createRadialGradient(64, 64, 0, 64, 64, 64); rg.addColorStop(0, 'rgba(255,255,255,0.9)'); rg.addColorStop(1, 'rgba(255,255,255,0)');
-    ct.fillStyle = rg; ct.fillRect(0, 0, 128, 128);
-    const tt = texture3D(tache);
-    const teintes = [0xec60aa, 0x785aff, 0x46bee6, 0xff965a];
-    for (let i = 0; i < 46; i++) {
-      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tt, color: teintes[i % 4], transparent: true, opacity: 0.32, blending: THREE.AdditiveBlending, depthWrite: false }));
-      const r = (0.3 + 0.6 * alea(i * 9)) * m / ppm * 1.6;
-      sp.scale.set(r, r, 1);
-      sp.position.set((alea(i * 3) - 0.5) * W / ppm * 2.2, D0 * (0.25 + 1.6 * alea(i * 5)), zAu(5.0) + alea(i * 7) * (zAu(8.2) - zAu(5.0)));
-      nebuleuse.add(sp);
-    }
-    // Sagittarius A* : l'ombre, l'anneau de photons, le disque d'accretion incline
-    trou = ajoute(new THREE.Group());
-    const rb = m * 0.1 / ppm;
-    trou.add(new THREE.Mesh(new THREE.SphereGeometry(rb, 48, 32), new THREE.MeshBasicMaterial({ color: 0x000000 })));
-    const dq = document.createElement('canvas'); dq.width = dq.height = 512;
-    const cd = dq.getContext('2d')!;
-    for (let r = 70; r < 256; r += 1) {
-      const u = (r - 70) / 186, chaud = 1 - u;
-      cd.strokeStyle = `rgba(255,${196 + 59 * chaud | 0},${120 + 130 * chaud | 0},${Math.min(1, (0.08 + 0.5 * chaud * chaud) * (u < 0.05 ? u / 0.05 : 1))})`;
-      cd.lineWidth = 1.5; cd.beginPath(); cd.arc(256, 256, r, 0, Math.PI * 2); cd.stroke();
-    }
-    const disque = new THREE.Mesh(new THREE.RingGeometry(rb * 1.3, rb * 3.5, 128), new THREE.MeshBasicMaterial({ map: texture3D(dq), transparent: true, side: THREE.DoubleSide,
-      blending: THREE.AdditiveBlending, depthWrite: false }));
-    const uv2 = disque.geometry.attributes.uv as THREE.BufferAttribute, P2 = disque.geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < uv2.count; i++) uv2.setXY(i, 0.5 + P2.getX(i) / (rb * 3.5) * 0.5, 0.5 + P2.getY(i) / (rb * 3.5) * 0.5);
-    disque.rotation.set(1.42, 0.1, 0); trou.add(disque);
-    const photons = new THREE.Mesh(new THREE.RingGeometry(rb * 1.0, rb * 1.06, 96), new THREE.MeshBasicMaterial({ color: 0xfff0d6, transparent: true, opacity: 0.85,
-      blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
-    photons.rotation.x = Math.PI / 2; trou.add(photons);
-    const lueur = new THREE.Sprite(new THREE.SpriteMaterial({ map: tt, color: 0xffaa5a, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }));
-    lueur.scale.set(rb * 8, rb * 8, 1); trou.add(lueur);
-    trou.visible = false;
-  };
-  return {
-    rendre(ctx, W, H, t, c, v) {
-      const k = `${W}x${H}`;
-      if (k !== cle) { cle = k; construire(W, H); }
-      if (!scene || !cam) return;
-      const z = S * c;
-      cam.position.set(0, 0, z);
-      cam.lookAt(0, 100, z + Math.sin(t * 0.3) * 0.6);
-      // le trou noir se tient en haut de l'image (a 32 %) et grossit en approchant
-      const tn = fenetre(t, 7.6, 8.4) * (1 - fenetre(t, 9.6, 10.4));
-      trou.visible = tn > 0.01;
-      if (trou.visible) {
-        const d = D0 * (1.6 - 0.5 * fenetre(t, 7.6, 9.6));
-        trou.position.set(0, d, z + d * (0.5 - 0.32) * H / f);
-        trou.scale.setScalar(0.4 + 0.6 * tn);
-        trou.rotation.z = t * 0.05;
-      }
-      nebuleuse.visible = t > 4.5 && t < 8.8;
-      void v;
-      poserLaScene(ctx, scene, cam, W, H);
-    },
-  };
-}
-
 function peintreApotheose(): Peintre {
   const duree = 12.5;
   chargerLesCumulus();
@@ -1993,7 +1423,6 @@ function peintreApotheose(): Peintre {
   const N = 500, cum: number[] = [0];
   for (let i = 0; i < N; i++) cum.push(cum[i] + vit((i / N) * duree) * (duree / N));
   const course = (t: number) => cum[Math.max(0, Math.min(N, Math.round((t / duree) * N)))];
-  const a3 = apotheoseEn3D(course);
 
   return (ctx, W, H, t) => {
     const m = Math.min(W, H);
@@ -2008,10 +1437,8 @@ function peintreApotheose(): Peintre {
     }
     // les etoiles, en trois plans ; elles filent quand on accelere
     const c = course(t), v = vit(t);
-    // EN 3D (apotheoseEn3D) : les etoiles, la Lune, Saturne, Orion et Sgr A* dans la scene
-    if (a3) a3.rendre(ctx, W, H, t, c, v);
     // (des points, a peine etires : des traits longs faisaient une pluie)
-    if (!a3) etoiles.forEach((plan, j) => {
+    etoiles.forEach((plan, j) => {
       const f = 0.4 + j * 0.5;
       ctx.fillStyle = `rgba(255,255,255,${0.45 + j * 0.2})`;
       for (const [x, y, s] of plan) {
@@ -2040,7 +1467,7 @@ function peintreApotheose(): Peintre {
     // la Lune, a gauche
     const passe = (a: number, b: number) => (t - a) / (b - a);   // 0 en haut, 1 en bas
     const uL = passe(1.6, 3.8);
-    if (uL > 0 && uL < 1 && !a3) {
+    if (uL > 0 && uL < 1) {
       const r = m * 0.22, x = W * 0.22, y = -r + uL * (H + 2 * r);
       sphere(ctx, x, y, r, [236, 234, 228], [70, 70, 78]);
       for (let i = 0; i < 9; i++) {
@@ -2051,7 +1478,7 @@ function peintreApotheose(): Peintre {
     }
     // Saturne et ses anneaux, a droite
     const uS = passe(3.4, 5.6);
-    if (uS > 0 && uS < 1 && !a3) {
+    if (uS > 0 && uS < 1) {
       const r = m * 0.13, x = W * 0.74, y = -r * 2 + uS * (H + 4 * r);
       const anneau = (devant: boolean) => {
         ctx.save(); ctx.translate(x, y); ctx.rotate(-0.35);
@@ -2072,7 +1499,7 @@ function peintreApotheose(): Peintre {
     }
     // la nebuleuse d'Orion : on la traverse
     const nb = fenetre(t, 5.0, 5.8) * (1 - fenetre(t, 7.4, 8.2));
-    if (nb > 0 && !a3) {
+    if (nb > 0) {
       ctx.save(); ctx.globalCompositeOperation = 'lighter';
       const teintes = ['236,96,170', '120,90,255', '70,190,230', '255,150,90'];
       for (let i = 0; i < 14; i++) {
@@ -2087,7 +1514,7 @@ function peintreApotheose(): Peintre {
     // vient vers nous ; l'arriere du disque, devie par-dessus l'ombre en un
     // anneau ; l'ombre ; l'anneau de photons ; puis l'avant du disque
     const tn = fenetre(t, 7.6, 8.4) * (1 - fenetre(t, 9.6, 10.4));
-    if (tn > 0 && !a3) {
+    if (tn > 0) {
       const rb = m * (0.08 + 0.04 * fenetre(t, 7.6, 9.6)), x = W * 0.5, y = H * 0.32;
       ctx.save(); ctx.globalAlpha = tn;
       ctx.globalCompositeOperation = 'lighter';
@@ -2178,31 +1605,6 @@ export function CinematiqueSacre({ onFin }: { onFin: () => void }) {
   return <Cinematique nom="sacre" duree={13} onFin={onFin} creer={peintreSacre} />;
 }
 
-/** LE SACRE EN 3D : le ciel de la constellation en profondeur — un champ d'etoiles et la
- *  galaxie spirale en relief, inclinee, qui tourne lentement pendant que la camera avance.
- *  Les portraits des boss, leurs liens, le nom en or et les confettis restent ceux du 2D. */
-function sacreEn3D(pts: [number, number, number, number][]): { rendre: (ctx: CanvasRenderingContext2D, W: number, H: number, t: number) => void } | null {
-  if (!moteur3D()) return null;
-  const scene = new THREE.Scene();
-  const cam = new THREE.PerspectiveCamera(FOV_VOYAGE, 1, 1, 20000);
-  cam.up.set(0, 0, 1);
-  scene.add(etoiles3D(2200, 3000, 200, 6000, -1500, 1500));
-  const gal = galaxie3D(pts, 700, 0.55);   // l'eclat de galaxie(..., 0.55) du 2D : les portraits passent devant
-  gal.position.set(0, 1600, 0); gal.rotation.x = 1.15;
-  scene.add(gal);
-  return {
-    rendre(ctx, W, H, t) {
-      // la galaxie au centre de la constellation (42 % de la hauteur)
-      const f = H / (2 * Math.tan(FOV_VOYAGE * Math.PI / 360));
-      gal.position.z = (0.5 - 0.42) * H / f * 1600;
-      gal.rotation.z = t * 0.06;
-      cam.position.set(Math.sin(t * 0.2) * 30, -t * 22, 0);
-      cam.lookAt(0, 1600, 0);
-      poserLaScene(ctx, scene, cam, W, H);
-    },
-  };
-}
-
 function peintreSacre(): Peintre {
   const boss = ETAPES.map((_, r) => ({ nom: lieuDeLEtape(r).boss, rang: r }))
     .map(b => {
@@ -2219,20 +1621,18 @@ function peintreSacre(): Peintre {
     t0: 7 + alea(i * 9) * 2.5,
   }));
   const etoiles = Array.from({ length: 160 }, (_, i) => [alea(i), alea(i + 500), 0.6 + alea(i + 900) * 1.4]);
-  const s3 = sacreEn3D(pts);
 
   return (ctx, W, H, t) => {
     const m = Math.min(W, H);
     const g = ctx.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.max(W, H) * 0.8);
     g.addColorStop(0, '#2A1650'); g.addColorStop(1, '#05030C');
     ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-    if (s3) s3.rendre(ctx, W, H, t);
-    if (!s3) for (const [x, y, s] of etoiles) {
+    for (const [x, y, s] of etoiles) {
       ctx.fillStyle = `rgba(255,255,255,${0.35 + 0.35 * Math.sin(t * 1.7 + x * 60)})`;
       ctx.fillRect(x * W, y * H, s, s);
     }
     const C: Pt = [W / 2, H * 0.42];
-    if (!s3) galaxie(ctx, C[0], C[1], m * 0.7, t, 0.55, pts);
+    galaxie(ctx, C[0], C[1], m * 0.7, t, 0.55, pts);
 
     // la constellation des boss battus, allumes un a un
     const R = Math.min(W * 0.36, H * 0.29);

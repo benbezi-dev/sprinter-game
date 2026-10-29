@@ -1959,9 +1959,6 @@
     // present dans la version publique : il vient donc avec les ouverts,
     // avant les deux stades du canal de test, comme dans STADES_HORS_SERIE.
     ['Champ-de-Mars', 'Champ-de-Mars'],
-    // Le stade couvert Jesse Owens de Val-de-Reuil, ouvert avec la 3D (29/10) : avec les ouverts, apres le
-    // Champ-de-Mars, comme dans STADES_HORS_SERIE.
-    ['Stade couvert Jesse Owens', 'Jesse Owens Indoor Stadium'],
     // Le stade du defi Aurel Manga — l'evenement de Hurdlers. Ferme pour
     // l'instant, mais deja a la place qu'il aura ouvert : premier des stades
     // du canal de test, juste apres les ouverts, comme dans STADES_HORS_SERIE.
@@ -1981,15 +1978,7 @@
     ['Stade des Trois Soleils', 'Three Suns Stadium'],
     // La piste de lumiere. Meme regle que les Trois Soleils : son nom ne se
     // decide qu'ici, et il ne reprend celui d'aucune piste existante.
-    ['Piste Arc-en-ciel', 'Rainbow Track'],
-    // Le Stade d'Or (Dark Luxury, n° 11 de la planche des styles, 22/10).
-    ["Stade d'Or", 'Golden Stadium'],
-    // Le Stade Neon (cyberpunk, 22/10).
-    ['Stade Néon', 'Neon Stadium'],
-    // La plage (22/10).
-    ['Plage Paradis', 'Paradise Beach'],
-    // Le Palais Royal (23/10).
-    ['Palais Royal', 'Royal Palace']
+    ['Piste Arc-en-ciel', 'Rainbow Track']
   ];
 
   const RACE_SUB = {

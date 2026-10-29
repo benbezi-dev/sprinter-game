@@ -240,13 +240,6 @@ export function obstaclesDe(course, touchees) {
       return pieces;
     },
 
-    /** Pour la course en 3D (course-3d.ts) : les haies, leur hauteur, et celles qui tombent. */
-    haies3D: {
-      positions, hauteur,
-      centre: (T, C, e) => milieuDuCouloir(T, C, e),
-      chute: (e, i, G) => chuteDe(touchees, e, i, G),
-    },
-
     /** Dessiner une piece rendue par `pieces`. */
     dessiner(ctx, api, pc) {
       dessinerHaie(ctx, api, positions[pc.haie], pc.couloir, pc.centre,

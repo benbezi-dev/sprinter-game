@@ -1,8 +1,0 @@
-SPRINTER · mesure de la ville · 25/10/2026 22:36:14 (branche athlète 75c932fd, aperçu ?mesure=1)
-Appareil : Samsung Galaxy Z Flip6 (SM-F741B), Android 16, Chrome 155, branché sur secteur (batterie 28 %)
-images : 1792 en ~30 s · 59.7 i/s en moyenne
-médiane 16.6 ms · 95 % sous 16.7 ms · pire 66.6 ms
-images > 33 ms : 1 · > 50 ms : 1
-puce : ANGLE (Qualcomm, Adreno (TM) 750, OpenGL ES 3.2)
-écran : 720×1586 px · rapport 2 · ombres oui · corps 3D 15
-Parcours : marche, course, vue derrière le joueur (30 s sans les mains).

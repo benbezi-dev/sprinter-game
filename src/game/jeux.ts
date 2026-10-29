@@ -67,11 +67,7 @@ export function jeuDe(cle: unknown): Jeu {
  * « 110 M H ». Le H est celui des tableaux d'affichage, et il se lit dans
  * toutes les langues du jeu.
  */
-/** Les epreuves de la piste couverte (piste-salle.js) : « 200s » se dit « 200 m ». */
-export const EPREUVES_EN_SALLE = ['60', '200s', '400s'] as const;
-const enSalle = (cle: string) => (EPREUVES_EN_SALLE as readonly string[]).includes(cle);
 export function nomCourt(cle: string): string {
-  if (enSalle(cle)) return `${cle.replace('s', '')} M`;
   return estUneCourseDeHaies(cle) ? `${cle.slice(0, -1)} M H` : `${cle} M`;
 }
 
@@ -81,7 +77,7 @@ export function nomCourt(cle: string): string {
  */
 export function nomEnLigne(cle: string | readonly string[]): string {
   const l = Array.isArray(cle) ? cle : [cle as string];
-  return l.map(k => (enSalle(k) ? `${k.replace('s', '')} m` : estUneCourseDeHaies(k) ? `${k.slice(0, -1)} m H` : `${k} m`)).join(' + ');
+  return l.map(k => (estUneCourseDeHaies(k) ? `${k.slice(0, -1)} m H` : `${k} m`)).join(' + ');
 }
 
 // --- les trois epreuves dans la table du moteur ------------------------------

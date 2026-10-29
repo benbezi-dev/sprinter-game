@@ -30,44 +30,6 @@
       // se court a l'heure ou l'on joue, de jour comme de nuit (heure-du-jour.js)
       heure: true
     },
-    // LA HALLE DE VAL-DE-REUIL (stade couvert Jesse Owens ; piste-salle.js) : d'apres les
-    // replays des championnats U18-U20 (assets-sources/piste-couverte-val-de-reuil) — une
-    // piste bleue aux lignes blanches, l'interieur gris du plateau, un toit clair, des
-    // banderoles aux couleurs vives. Aucune marque ni federation sur les panneaux.
-    // Pas d'heure, pas de nuages : on est sous le toit ; le mur suit de pres les gradins.
-    salle: {
-      skyTop: [214, 222, 232], skyBot: [178, 190, 206], stars: 0,
-      grass: [128, 132, 140], grassEdge: [104, 108, 118],
-      trackA: [42, 82, 160], trackB: [34, 70, 140],
-      lane: [246, 248, 252], kerb: [252, 252, 252],
-      tread: [186, 190, 198], riser: [124, 130, 146], roof: [220, 226, 236],
-      barrier: [238, 240, 244],
-      panels: [[26, 44, 96], [214, 44, 122], [72, 172, 222], [240, 240, 246]],
-      crowdLo: [44, 46, 62], crowdHi: [246, 240, 232],
-      accent: [72, 172, 222], dust: [190, 196, 210],
-      horizon: 14
-    },
-    // LE STADE BERNARD AMSALEM, VAL-DE-REUIL (27/10) : la piste exterieure renovee par Polytan,
-    // ses couleurs relevees sur les vues aeriennes (assets-sources/stade-bernard-amsalem-polytan) —
-    // tartan rouge rgb(195, 70, 70), bordure beige rgb(229, 201, 160), lignes blanches. `amsalem` est
-    // lu par la course 3D (amsalem-3d.ts : tribune, halle, aire des sauts, demi-lune, mats, champs).
-    amsalem: {
-      // UN CIEL DE BEAU TEMPS (« ameliore la couleur du ciel pour lui donner un aspect plus de beau temps », l'auteur,
-      // 27/10) : un bleu franc en haut, presque blanc a l'horizon, la brume legere et claire des fins d'ete (course-3d.ts
-      // en tire le degrade et la brume)
-      skyTop: [46, 122, 214], skyBot: [150, 198, 236], stars: 0,
-      grass: [36, 106, 26], grassEdge: [24, 84, 16],
-      trackA: [195, 70, 70], trackB: [195, 70, 70],
-      lane: [246, 242, 234], kerb: [229, 201, 160],
-      tread: [176, 178, 186], riser: [132, 136, 148], roof: [240, 240, 236],
-      barrier: [232, 234, 238],
-      panels: [[195, 70, 70], [229, 201, 160], [85, 195, 239], [60, 152, 118]],
-      crowdLo: [44, 40, 54], crowdHi: [250, 242, 232],
-      accent: [195, 70, 70], dust: [229, 201, 160],
-      tonte: 'long',
-      heure: true,
-      amsalem: true
-    },
     // Le vide, et non une pelouse de nuit : `espace` le peuple d'etoiles, de
     // nebuleuses et de planetes qui defilent sous la piste, et `neon` allume
     // ses deux bords (voir decor-cosmos.js). Le fond est plus noir qu'avant
@@ -291,71 +253,6 @@
     // lumineux qui font le tour de l'enceinte. Ce sont des couleurs ; aucun
     // nom, aucun embleme, aucune typographie n'entre dans ce theme — voir
     // juridique/edition-danube.md.
-    // LE STADE D'OR (Dark Luxury) : noir profond et filets d'or. `luxe` est lu par
-    // la course 3D (course-3d.ts) : piste laquee, nez des gradins dores, pylones
-    // d'or, projecteurs chauds, poussiere doree dans la lumiere.
-    or: {
-      skyTop: [8, 6, 5], skyBot: [28, 21, 13], stars: 0,
-      grass: [12, 10, 9], grassEdge: [22, 18, 13],
-      trackA: [17, 15, 13], trackB: [14, 12, 11],
-      lane: [201, 164, 92], kerb: [226, 189, 110],
-      tread: [24, 21, 18], riser: [15, 13, 11], roof: [10, 9, 8],
-      barrier: [201, 164, 92],
-      panels: [[201, 164, 92], [22, 22, 24], [217, 207, 189], [74, 20, 24]],
-      crowdLo: [14, 13, 15], crowdHi: [217, 207, 189],
-      accent: [226, 189, 110], dust: [120, 96, 60],
-      projecteurs: true, pubsLed: true,
-      luxe: true
-    },
-    // LE STADE NEON (cyberpunk) : `cyber` est lu par la course 3D (course-3d.ts) — piste
-    // mouillee, neons, ville de tours, hologrammes, pluie. Le 2D n'en reprend que les couleurs.
-    cyber: {
-      skyTop: [12, 4, 24], skyBot: [40, 10, 60], stars: 0,
-      grass: [8, 6, 14], grassEdge: [20, 10, 30],
-      trackA: [16, 14, 22], trackB: [12, 10, 18],
-      lane: [0, 229, 255], kerb: [255, 43, 214],
-      tread: [22, 20, 30], riser: [14, 12, 20], roof: [10, 8, 16],
-      barrier: [255, 43, 214],
-      panels: [[255, 43, 214], [0, 229, 255], [140, 60, 255], [255, 220, 30]],
-      crowdLo: [10, 10, 16], crowdHi: [120, 200, 230],
-      accent: [0, 229, 255], dust: [80, 40, 120],
-      neon: [255, 43, 214], neonExt: [255, 43, 214],
-      projecteurs: true, pubsLed: true,
-      cyber: true
-    },
-    // LA PLAGE PARADIS : `plage` est lu par la course 3D (plage-3d.ts) — sable, lagon,
-    // palmiers, yachts BENBEZI, pas de gradins. Le 2D n'en reprend que les couleurs.
-    plage: {
-      skyTop: [70, 120, 220], skyBot: [250, 196, 130], stars: 0,
-      grass: [240, 214, 166], grassEdge: [226, 196, 146],
-      trackA: [204, 86, 60], trackB: [192, 78, 54],
-      lane: [250, 246, 236], kerb: [250, 246, 236],
-      tread: [240, 214, 166], riser: [226, 196, 146], roof: [200, 170, 120],
-      barrier: [250, 246, 236],
-      panels: [[235, 87, 87], [242, 201, 76], [45, 156, 219], [39, 174, 96]],
-      crowdLo: [60, 50, 40], crowdHi: [255, 248, 236],
-      accent: [255, 170, 80], dust: [240, 214, 166],
-      // la plage suit l'heure (22/10) : la nuit, ce sont les yachts qui l'eclairent (plage-3d.ts)
-      heure: true,
-      plage: true
-    },
-    // LE PALAIS ROYAL : `palais` est lu par la course 3D (palais-3d.ts) — galerie de
-    // glaces, marbre, lustres, invites a table. Un interieur : pas d'heure, pas de ciel.
-    palais: {
-      skyTop: [58, 40, 30], skyBot: [150, 112, 70], stars: 0,
-      grass: [236, 226, 206], grassEdge: [214, 198, 170],
-      // LE BLEU DE GLACE DU PREMIER JET, de retour (« reviens sur la couleur de piste d'avant mais
-      // ameliore la qualite et les details », 24/10) : le bleu de Sevres du 23/10 (« manque de force »)
-      // est rendu ; la force vient desormais de la taille du cristal (palais-3d.ts, cristalTaille)
-      trackA: [84, 158, 214], trackB: [126, 190, 232],
-      lane: [236, 190, 86], kerb: [236, 190, 86],
-      tread: [236, 226, 206], riser: [138, 15, 30], roof: [120, 84, 40],
-      barrier: [214, 172, 72],
-      panels: [[138, 15, 30], [214, 172, 72], [30, 40, 90], [236, 226, 206]],
-      crowdLo: [40, 30, 30], crowdHi: [250, 240, 226],
-      accent: [214, 172, 72], dust: [236, 226, 206],
-      palais: true
-    },
     danube: {
       // un stade de nuit : l'heure bleue hors de la nuit (heure-du-jour.js)
       heure: 'nuit',
@@ -554,16 +451,6 @@
       musique: 'defi_aurel'
     },
   };
-  // LE STADE BERNARD AMSALEM, EDITION CHAMPIONNAT DE FRANCE (27/10 : « ce sera le prochain stade pour les championnats de
-  // France, fais-moi quelque chose de sensationnel » ; « tout cela, retirable en edition classique, et tout en edition
-  // championnat de France »). Le meme lieu (`amsalem`), habille (`championnat` : panneaux LED, ecran geant, arche
-  // d'arrivee, mats allumes — amsalem-3d.ts, course-3d.ts) et fige a la finale du soir : un coucher de soleil, sans
-  // `heure` (heure-du-jour.js rend tel quel un theme sans heure). Aucune marque ni federation : les couleurs du jeu.
-  THEMES.amsalemFrance = Object.assign({}, THEMES.amsalem, {
-    skyTop: [58, 84, 168], skyBot: [246, 168, 116],
-    moment: 'soir', heure: false, championnat: true,
-    accent: [247, 138, 60],
-  });
 
   // DU PEPS. Les palettes avaient ete reglees une a une, et toutes tiraient
   // vers le gris : une piste brique, une pelouse olive, des panneaux ternes —
@@ -679,12 +566,7 @@
     && Date.now() < __LANCEMENT_DEFI_MEBA__ + __DUREE_EVENEMENT_MS__;
   for (const stade of K.STADES_HORS_SERIE) {
     if (stade.ouvert || import.meta.env.VITE_CANAL === 'test'
-        || (stade.auLancement && LANCES) || stade.brancheTest) {
-      LEVELS.push(stade);
-      // un stade qui n'est pas a sa place du canal de test y porte son nom (voir `noms`)
-      const N0 = globalThis.SprinterI18N;
-      if (stade.noms && N0 && N0.LEVEL_NAMES) N0.LEVEL_NAMES[LEVELS.length - 1] = stade.noms;
-    }
+        || (stade.auLancement && LANCES)) LEVELS.push(stade);
   }
   if (import.meta.env.VITE_CANAL === 'test') {
     LEVELS[ETAPE_BORD_DE_MER].theme = 'riviera';
@@ -2074,9 +1956,7 @@
     challenge: null,     // defi en cours (voir challenge.ts)
     // Le vrai mode de la course pour le tableau de bord, quand les drapeaux
     // ci-dessus ne le disent pas (vedette, Legende...). Voir contexte-course.ts.
-    etiquette: null,
-    // Les coefficients du corps de l'athlete de la carriere, ou null. Voir buildLevel.
-    reglagesJoueur: null
+    etiquette: null
   };
   // pas de trace ultra-fine : 12,5 relevés par seconde suffisent a rejouer
   // une course de maniere fluide, et gardent la trace assez courte pour
@@ -2190,11 +2070,6 @@
    * 43 s dirait n'importe quoi — on renonce alors, et le stade reste celui de
    * la finale.
    */
-  // LA 3D COURT A L'ECHELLE DES RECORDS DU MONDE, LA 2D GARDE SES TEMPS D'AVANT (l'auteur, 29/10) : plafond, allure
-  // du joueur et conversion des adversaires (sprinter-core.js) ne valent qu'en rendu 3D — `?rendu=2d` (GameCanvas) les ote.
-  const RENDU_3D = (() => { try { return new URLSearchParams(location.search).get('rendu') !== '2d'; } catch (e) { return false; } })();
-  function enTroisD(table, cle) { return RENDU_3D ? table[cle] : undefined; }
-
   function enDessousDuNiveau(R, idx) {
     const s = G.runSplits;
     if (!s || !s.length) return false;
@@ -2202,7 +2077,7 @@
     const precedent = s[s.length - 1];
     const bornes = R.ranges && R.ranges[idx];
     if (precedent == null || !bornes) return false;
-    return precedent > bornes[1] * (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1);
+    return precedent > bornes[1];
   }
 
   // --- mise en place d'une course ------------------------------------
@@ -2384,54 +2259,30 @@
     // Danube lisait `plateau['110h']`, qui n'existe pas, et la construction
     // tombait. On court alors au plateau olympique de l'epreuve, comme un
     // index hors du tableau court au stade olympique.
-    // Une marche de la carriere d'athlete peut porter ses chronos (game/athlete/regles.ts).
-    const impose = G.reglagesJoueur && G.reglagesJoueur.plateau;
-    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
+    const [lo, hi] = (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
     // UN CHRONO FIXE, pour qui en a un. Un athlete reel qu'on vient defier
     // (voir `cibles`, STADES_HORS_SERIE) court le meme temps a chaque
     // tentative : sans cela, « le battre » dependrait du tirage.
     const cibles = (lvl.cibles && lvl.cibles[R.key]) || null;
     G.track = new Track(R);
     G.runners = [];
-    // LE COULOIR TIRE AU SORT SUR L'ANNEAU COUVERT (« le couloir 6 a plus de montee, le couloir 1 un angle
-    // plus serre », l'auteur, 27/10) : chaque couloir s'y court autrement — le joueur n'est plus toujours au 4
-    const monCouloir = G.track.salle ? Math.floor(K.alea() * G.track.lanes) : 3;
-    const record = enTroisD(K.RECORDS_DU_MONDE, R.key) || null;   // (le plafond de l'epreuve, sprinter-core.js)
-    const pl = new Runner('TOI', monCouloir, { isPlayer: true, maxSpeed: R.maxSpeed,
-      best: R.best, total: G.track.total, record, allure: enTroisD(K.ALLURE_DU_JOUEUR, R.key) });
-    pl.cadenceLancee = true;   // (C.CADENCE_LANCEE : les haies l'otent, haies-pas.js)
-    // la piste couverte : la montee et la descente des virages releves (Track.accelPente)
-    if (G.track.salle) { const T = G.track; pl.pente = (s, v) => T.accelPente(s, pl.lane, v); pl.bouscule = bousculade; }
-    // LE CORPS DE L'ATHLETE DE LA CARRIERE (game/athlete/) : ses stats, son
-    // materiel et sa forme reglent sa vitesse de pointe, sa poussee, ce qu'il
-    // perd entre deux appuis et son risque de faux pas. Des coefficients
-    // proches de 1 : c'est toujours la frequence des appuis qui fait la course.
-    // Pose par le mode avant `startOneShot`, retire au retour a l'accueil.
-    if (G.reglagesJoueur) {
-      const rj = G.reglagesJoueur;
-      pl.maxSpeed *= rj.vitesse || 1;
-      pl.coefBoost = rj.boost || 1;
-      pl.coefDrag = rj.drag || 1;
-      pl.coefChute = rj.chute || 1;
-      // et son apparence, choisie a la creation (game/athlete/apparence.ts)
-      if (rj.look) pl.look = rj.look;
-    }
+    const pl = new Runner('TOI', 3, { isPlayer: true, maxSpeed: R.maxSpeed,
+      best: R.best, total: G.track.total });
     G.player = pl; G.runners.push(pl);
     let best = 1e9;
     const names = idx === MONDIAUX ? mondiauxNames() : lvl.names;
-    // l'anneau couvert n'a que six couloirs : cinq adversaires autour du joueur (couloir 4, tire au sort en salle)
-    (G.track.lanes < C.LANE_COUNT ? names.slice(0, G.track.lanes - 1) : names).forEach((n, i) => {
+    names.forEach((n, i) => {
       // Seme pendant un defi : c'est CE tirage qui decide du plateau — qui
       // court a cote de toi, et en combien. Le laisser au hasard rendrait deux
       // defis « identiques » incomparables.
       // Le tirage se fait meme pour un chrono fixe : le sauter decalerait la
       // suite, et les autres couloirs d'un defi seme changeraient de temps.
       const tire = lo + K.alea() * (hi - lo);
-      const t = (cibles && cibles[n] ? cibles[n] : tire) * (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1);
-      const lane = i < monCouloir ? i : i + 1;
+      const t = cibles && cibles[n] ? cibles[n] : tire;
+      const lane = i < 3 ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
-        total: G.track.total, pool: lvl.pool, record });
-      if (r.target < best) { best = r.target; G.champion = n; G.championTime = r.target; }
+        total: G.track.total, pool: lvl.pool });
+      if (t < best) { best = t; G.champion = n; G.championTime = t; }
       G.runners.push(r);
     });
     G.parts = [];
@@ -2801,7 +2652,7 @@
       G.champDirect = true;
       const l = opts.monCouloir;
       // Le couloir peint est l'indice plus un : voir indiceDuCouloir.
-      if (l >= 1 && l <= NL() && G.player) G.player.lane = l - 1;
+      if (l >= 1 && l <= C.LANE_COUNT && G.player) G.player.lane = l - 1;
     }
     // Un seul chemin, a deux comme a huit.
     //
@@ -3862,14 +3713,7 @@
     return G.VW * (G.portrait ? 0.58 : 0.60);
   }
   function originY() {
-    // AU FAUX DEPART, LE JOUEUR DESCEND SOUS LE TEXTE (24/10) : il jaillit des blocs puis se prend la
-    // tete (faux-depart.ts), et la cinematique (FalseStartCut) assombrit la bande du milieu, de 32 a
-    // 68 % de la hauteur. Il y glisse en huit dixiemes de seconde, sans sauter.
-    if (G.state === 'falseout') {
-      const u = Math.min(1, (G.falseOutT || 0) / 0.8);
-      return G.VH * (0.5 + 0.2 * u * u * (3 - 2 * u));
-    }
-    if (G.state === 'race' || G.state === 'count') return G.VH * 0.5;
+    if (G.state === 'race' || G.state === 'count' || G.state === 'falseout') return G.VH * 0.5;
     return G.VH * (G.portrait ? 0.44 : 0.56);
   }
 
@@ -4195,32 +4039,13 @@
    * garde ce qui le distingue — son nom, son couloir, son apparence, et ce
    * qui fait de lui le joueur ou un adversaire en direct.
    */
-  // LES ACCROCHAGES DU 400 M EN SALLE (piste-salle.js, CONTACT ; Track.auContact) : appelee par le joueur
-  // a chaque pas (this), elle cherche un adversaire colle a lui dans le peloton du second tour
-  function bousculade(dt) {
-    const T = G.track;
-    if (!T || !T.salle || !T.salle.rabat || this.finished) return;
-    this.repitContact = Math.max(0, (this.repitContact || 0) - dt);
-    if (this.repitContact > 0) return;
-    for (const o of G.runners) {
-      if (o === this || !T.auContact(this, o)) continue;
-      this.v *= T.salle.contact.garde;
-      this.fallAnim = Math.max(this.fallAnim, 0.35);
-      this.repitContact = T.salle.contact.repit;
-      this.contacts = (this.contacts || 0) + 1;
-      break;
-    }
-  }
   function reposer(r) {
     const R = G.race;
     const neuf = r.isPlayer
       ? new Runner(r.name, r.lane, { isPlayer: true, maxSpeed: R.maxSpeed,
-                                     best: R.best, total: G.track.total, record: enTroisD(K.RECORDS_DU_MONDE, R.key) || null,
-                                     allure: enTroisD(K.ALLURE_DU_JOUEUR, R.key) })
+                                     best: R.best, total: G.track.total })
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
-                                     pool: LEVELS[G.levelIdx].pool, record: enTroisD(K.RECORDS_DU_MONDE, R.key) || null });
-    if (neuf.isPlayer) neuf.cadenceLancee = !r.enHaies;
-    if (neuf.isPlayer && G.track.salle) { const T = G.track; neuf.pente = (s, v) => T.accelPente(s, neuf.lane, v); neuf.bouscule = bousculade; }
+                                     pool: LEVELS[G.levelIdx].pool });
     const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,
                     isGhost: r.isGhost, isLive: r.isLive, repere: r.repere,
                     fictif: r.fictif, cibleFictive: r.cibleFictive };
@@ -4466,11 +4291,7 @@
     const T = G.track;
     if (!T.curved) { out[0] = sm[1]; out[1] = r; return out; }
     if (sm[2] === 1) {
-      if (sm[0] && T.salle) {
-        // l'anneau couvert : ses virages sont allonges (piste-salle.js)
-        const q = T.salle.virage(sm[1], r - T.salle.rayon);
-        out[0] = T.straight + q[0]; out[1] = -q[1];
-      } else if (sm[0]) {
+      if (sm[0]) {
         out[0] = T.straight + r * Math.sin(sm[1]);
         out[1] = -r * Math.cos(sm[1]);
       } else { out[0] = T.straight - sm[1]; out[1] = -r; }
@@ -4507,7 +4328,6 @@
       // Second demi-tour (voir Track.posLap2) : meme rotation de 180
       // degres + translation, mais a partir d'un angle phi deja calcule
       // (comme pour le premier virage) plutot que d'une distance s.
-      if (sm[0] && T.salle) { const q = T.salle.virage(sm[1], r - T.salle.rayon); return [T.straight + q[0], -q[1]]; }
       if (sm[0]) return [T.straight + r * Math.sin(sm[1]), -r * Math.cos(sm[1])];
       return [T.straight - sm[1], -r];
     }
@@ -6679,7 +6499,7 @@
     if (G.track.curved) {
       // Longueur d'arc entre deux echantillons de virage, pour convertir
       // l'espacement demande en nombre d'echantillons.
-      const arc = Math.PI * C.LANE_W * NL() / ARC_STEPS;
+      const arc = Math.PI * C.LANE_W * C.LANE_COUNT / ARC_STEPS;
       const n = Math.max(1, Math.round(pasMetres / Math.max(0.4, arc)));
       for (let i = 0; i < sm.length; i += n) out.push(sm[i]);
       return out;
@@ -7041,7 +6861,7 @@
     // facon (images-pretes.js).
     if (!DEC()) return;
     const vue = T.curved ? WROT * 180 / Math.PI : 0;
-    for (let e = 0; e < NL(); e++) {
+    for (let e = 0; e < C.LANE_COUNT; e++) {
       const q = T.pos(0, e);
       const g2 = ground(q[0], q[1]);
       const cap = capALEcran(q, T.heading(0, e), vue);
@@ -7205,7 +7025,7 @@
     if (th.clouds) drawClouds(ctx);
     const sm = samples();
     const rIn = T.curved ? T.edge(0) : 0;
-    const rOut = T.curved ? T.edge(NL()) : C.LANE_W * NL();
+    const rOut = T.curved ? T.edge(C.LANE_COUNT) : C.LANE_W * C.LANE_COUNT;
     // La patrouille, puis la tour : tracees sur le ciel, avant tout le sol,
     // pour que les rideaux d'arbres lui passent devant le pied.
     const cdm = th.champDeMars && CDM();
@@ -7390,7 +7210,7 @@
       // ordre.
       const affiche = pubDeLaCourse(th), pub = affiche !== null;
       const reperes = pub ? reperesDeDistance(T)
-        .map(m => ptOf(T.markAt(m, NL() - 1), rOut + ECART_REPERES))
+        .map(m => ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES))
         .filter(Boolean) : null;
       // les panneaux hors du cadre ne se tracent pas ; l'alternance des
       // sponsors se compte toujours depuis le debut du trace
@@ -7562,10 +7382,10 @@
     // Le liseret interieur et le bord exterieur, eux, restent francs : ce
     // sont des reperes de course, pas des marques d'usage.
     if (!(cdm && cdm.lignes(ctx, apiCdm(), th, sm, rIn, rOut,
-                            (e) => T.curved ? T.edge(e) : e * C.LANE_W, NL()))) {
+                            (e) => T.curved ? T.edge(e) : e * C.LANE_W, C.LANE_COUNT))) {
       if (th.neon && COS()) COS().neon(ctx, PEINTRE, th, sm, rIn, rOut);
       rail(ctx, smPiste, rIn, rgb(th.kerb), 3);
-      for (let e = 1; e < NL(); e++) {
+      for (let e = 1; e < C.LANE_COUNT; e++) {
         rail(ctx, smPiste, T.curved ? T.edge(e) : e * C.LANE_W, rgba(th.lane, th.ligneUsee || 0.87), 1.6);
       }
       rail(ctx, smPiste, rOut, th.ligneUsee ? rgba(th.lane, th.ligneUsee) : rgb(th.lane), 2.2);
@@ -7602,7 +7422,7 @@
     const markers = reperesDeDistance(T);
 
     for (const m of markers)
-      for (let e = 0; e < NL(); e++)
+      for (let e = 0; e < C.LANE_COUNT; e++)
         tick(m, e, 'rgba(255,255,255,0.90)', m === 0 ? 3 : 1.6);
 
     // Zones de transmission du relais, en jaune comme sur une piste.
@@ -7616,7 +7436,7 @@
     if (T.relay && T.legLength > 0) {
       for (let k = 1; k < T.legs; k++) {
         const z0 = k * T.legLength;
-        for (let e = 0; e < NL(); e++) {
+        for (let e = 0; e < C.LANE_COUNT; e++) {
           tick(z0, e, 'rgba(255,206,0,0.92)', 2.4);
           tick(z0 + C.RELAY_LAUNCH, e, 'rgba(255,206,0,0.92)', 2.4);
           tick(z0 + 20, e, 'rgba(255,206,0,0.45)', 1.4);
@@ -7630,7 +7450,7 @@
     // peinte au sol nulle part. Voir chiffres-piste.js.
     const CH = globalThis.ChiffresPiste;
     if (CH) {
-      for (let e = 0; e < NL(); e++) {
+      for (let e = 0; e < C.LANE_COUNT; e++) {
         const q = ptOf(T.markAt(-1.7, e), lineR(e) + C.LANE_W * 0.5);
         const p = ground(q[0], q[1]);
         if (p[0] < -60 || p[0] > G.VW + 60 || p[1] < -40 || p[1] > G.VH + 40) continue;
@@ -7649,7 +7469,7 @@
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     for (const m of markers) {
-      const q = ptOf(T.markAt(m, NL() - 1), rOut + ECART_REPERES);
+      const q = ptOf(T.markAt(m, C.LANE_COUNT - 1), rOut + ECART_REPERES);
       if (!q) continue;
       const p = ground(q[0], q[1]);
       if (p[0] < -80 || p[0] > G.VW + 80) continue;
@@ -7665,7 +7485,7 @@
     // complet. Elle, au moins, est bien radiale : tous les couloirs y
     // arrivent au meme endroit, c'est la definition d'une ligne d'arrivee.
     const at = (m, r) => T.curved ? T.posAtR(m, r) : [m, r];
-    for (let i = 0; i < NL() * 2; i++) {
+    for (let i = 0; i < C.LANE_COUNT * 2; i++) {
       const rr = rIn + i * C.LANE_W * 0.5;
       ctx.fillStyle = i % 2 ? 'rgb(56,58,72)' : '#fff';
       ctx.beginPath();
@@ -8375,7 +8195,7 @@
       return false;
     }
     return V.dessiner(ctx, chemin, r.squelette || null,
-                      repereDuCoureur(r, headAng, lean, mirror, curved), ax, ay, k, r.look);
+                      repereDuCoureur(r, headAng, lean, mirror, curved), ax, ay, k);
   }
 
   /* ------------------------------------------------- reperes des coureurs */
@@ -8528,14 +8348,13 @@
     while (fin.length > 1 && ctx.measureText(fin + '…').width > largeurMax) fin = fin.slice(0, -1);
     return [lignes[0], fin.trimEnd() + '…'];
   }
-  // `ecran` (course 3D) : le point de l'ecran au-dessus de sa tete, projete par course-3d.ts
-  function drawBulle(ctx, vis, m, ecran) {
+  function drawBulle(ctx, vis, m) {
     const texte = G.presBulle;
     if (!texte || !G.presente || G.state !== 'count') return;
-    const vu = ecran ? null : vis.find(v => v[0] === G.presente);
-    if (!vu && !ecran) return;
-    const r = ecran ? G.presente : vu[0];
-    const x = ecran ? ecran.x : vu[1][0], y = ecran ? ecran.y : vu[1][1];
+    const vu = vis.find(v => v[0] === G.presente);
+    if (!vu) return;
+    const r = vu[0];
+    const x = vu[1][0], y = vu[1][1];
     const u = ui();
     // Lisible sur un telephone tenu en portrait : treize pixels au moins, et
     // la bulle grandit avec le plan qui se resserre, comme l'athlete.
@@ -8562,9 +8381,9 @@
     // pastille « TOI » quand elle est dessinee (memes calculs que
     // drawNomRepere, qui la place).
     const s = m * (r.look.h / C.MODEL_H);
-    let pointe = ecran ? ecran.y : y - s * BULLE_BRAS_LEVES;
+    let pointe = y - s * BULLE_BRAS_LEVES;
     const rep = r.repere;
-    if (!ecran && rep && rep.nom && (rep.moi || !(G.champDirect || G.rejeu || G.echauffementChamp))) {
+    if (rep && rep.nom && (rep.moi || !(G.champDirect || G.rejeu || G.echauffementChamp))) {
       const tNom = Math.max(9, 11 * u);
       const hNom = tNom + 6 * u;
       const hautNom = (G.champDirect || G.rejeu || G.echauffementChamp)
@@ -8851,13 +8670,9 @@
   function theme() {
     return eclaire(themeBrut());
   }
-  /** Le nombre de couloirs de la piste du moment : six sur l'anneau couvert (piste-salle.js). */
-  function NL() { return (G.track && G.track.lanes) || C.LANE_COUNT; }
 
   /** Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. */
   function themeBrut() {
-    // LA PISTE COUVERTE DE VAL-DE-REUIL (piste-salle.js) : sa halle, quel que soit le niveau
-    if (G.race && (G.race.salle || G.race.salleDroite)) return THEMES.salle;
     const lvl = LEVELS[G.levelIdx];
     return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
   }
@@ -8953,8 +8768,6 @@
     r.attitudeW = 0;
   }
   function phaseBlocs(r) {
-    // pendant la presentation, l'echauffement mene la posture (game/echauffement.ts)
-    if (r.echauffe && G.state === 'cut') return;
     const doux = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
     if (!(r.d <= SORTIE_BLOCS + 0.3)) { r.enBloc = 0; r.attitudeW = 0; return; }
     // Elimine au faux depart : la piste est figee, et chacun reste la ou le
@@ -9381,7 +9194,7 @@
     drawFacetFigure(ctx, caps, cx2, cy2, k, false, man.look && man.look.facettes);
   }
 
-  globalThis.SprinterApp = { G, THEMES, fouleDe, eclaire, Audio_, load, save, levelScores,
+  globalThis.SprinterApp = { G, THEMES, Audio_, load, save, levelScores,
     falseStartOut,
     recordTime, recordRun, buildLevel, queueCuts, nextCut, startRun,
     startLevel, continuerCarriere, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
@@ -9405,7 +9218,7 @@
     REC_STEP, goHome,
     CUT_DUREE, CUT_CROISEMENT,
     raceHistory,
-    drawAthletes, drawIcon, drawBulle3D: (ctx, ecran) => drawBulle(ctx, null, 1, ecran), scaleM, originX, originY, rgb, clamp, lerp, mix,
+    drawAthletes, drawIcon, scaleM, originX, originY, rgb, clamp, lerp, mix,
     // Ce qu'il faut pour dessiner un obstacle hors d'une course : l'accueil
     // de Hurdlers montre ses haies, et le passage les y installe.
     apiObstacles,
@@ -9414,8 +9227,6 @@
     // profil, et surtout EN VIRAGE, ou la course elle-meme ne se laisse pas
     // arreter sur l'image qu'on veut regarder.
     personCapsules, drawFacetFigure, niveauDetail, repereDuCoureur,
-    // la posture des blocs, que la course en 3D (game/course-3d.ts) pose elle-meme
-    phaseBlocs,
     // les tenues des starters, pour tools/apercu-starter.html
     LOOK_PROF, LOOK_STARTER,
     CUT_INTRO, CUT_DEFEAT, CUT_CHAMPION, CUT_TAUNT, CUT_ENDING,

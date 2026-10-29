@@ -254,8 +254,6 @@ export function molosseDe(chasse) {
   return {
     /** Ce a quoi le rangement reconnait la bete sur `G.obstacles`. */
     molosse: true,
-    /** La chasse elle-meme : la course 3D (course-3d.ts) y lit ou poser la bete, sans importer le mode. */
-    chasse,
 
     /**
      * Rien a poser sur les coureurs : le molosse ne change pas leur posture.

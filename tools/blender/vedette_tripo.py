@@ -941,9 +941,7 @@ def miroir(h):
     h.data.update()
 
 
-def exporter(h, rig, chemin, peau_jeu, plein=False):
-    """`plein` (23/10, « les assets dans leur plein potentiel, sans compression ») : la
-    texture en PNG, sans meshopt."""
+def exporter(h, rig, chemin, peau_jeu):
     for pb in rig.pose.bones:
         pb.matrix_basis = Matrix.Identity(4)
     bpy.context.view_layer.update()
@@ -965,8 +963,8 @@ def exporter(h, rig, chemin, peau_jeu, plein=False):
                                   use_active_scene=True, export_skins=True, export_animations=False,
                                   export_morph=False, export_yup=True, export_apply=False,
                                   export_attributes=False, export_def_bones=False,
-                                  export_image_format='AUTO' if plein else 'JPEG', export_jpeg_quality=85,
-                                  export_meshopt_compression_enable=not plein)
+                                  export_image_format='JPEG', export_jpeg_quality=85,
+                                  export_meshopt_compression_enable=True)
     finally:
         miroir(h)
         tex.image = peau_portrait

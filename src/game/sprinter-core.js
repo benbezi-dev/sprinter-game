@@ -102,12 +102,6 @@
     // est atteinte.
     DRIVE_END: 15.0,          // fin de la phase de poussee, en metres
     TRANS_END: 40.0,          // corps entierement redresse
-    // LA CADENCE LANCEE DU JOUEUR (« augmente la cadence gestuelle du joueur apres la phase de
-    // transition », l'auteur, 27/10) : passe TRANS_END, ses appuis s'accelerent de 15 % (5,2 a 6 pas
-    // par seconde a pleine vitesse) en dix metres ; la vitesse ne change pas, seule la foulee raccourcit.
-    // Le joueur des courses de sprint seulement (Runner.cadenceLancee) : aux haies, le compte des
-    // appuis entre deux haies est le jeu (haies-pas.js l'ote).
-    CADENCE_LANCEE: 1.15,
     DRIVE_PITCH: 0.62,        // inclinaison du corps a la sortie des blocs
     // LA MECANIQUE DE DEPART, et pourquoi elle ne peut pas venir de la vitesse.
     //
@@ -283,23 +277,6 @@
     MES_N: 0.20,
     RUNOUT: 26.0
   };
-
-  // LES RECORDS DU MONDE MASCULINS, PLAFOND DE CHAQUE EPREUVE (l'auteur, 28/10 : « plafonne les temps des 60 m en
-  // salle, 100 m, 200 m, 400 m, 200 m et 400 m en salle a leurs records du monde respectifs chez les hommes ») :
-  // personne — joueur ni adversaire — ne court plus vite. Verifies le 28/10/2026 : 60 m salle 6,34 (Coleman 2018),
-  // 100 m 9,58 et 200 m 19,19 (Bolt 2009), 400 m 43,03 (van Niekerk 2016), 200 m salle 19,92 (Fredericks 1996),
-  // 400 m salle 44,49 (Morales Williams 2024).
-  const RECORDS_DU_MONDE = { '60': 6.34, '100': 9.58, '200': 19.19, '400': 43.03, '200s': 19.92, '400s': 44.49 };
-  // L'ALLURE DU JOUEUR, part de la vitesse et de la poussee du moteur d'avant (l'auteur, 29/10 : « meme niveau de
-  // difficulte » que pour le chrono le plus rapide faisable dans le jeu public) : la limite de ce moteur — depart et
-  // transition parfaits, cadence sans fin — valait 4,81 / 7,90 / 16,15 / 33,47 / 16,16 / 33,55 s ; ramenee ici
-  // pile sur le record. Le meilleur reel du classement (8,16 s au 100 m) donne desormais ~9,9 s.
-  // Recalculer avec tools/records-du-monde-test.mjs si BOOST, DRAG ou un maxSpeed change.
-  const ALLURE_DU_JOUEUR = { '60': 0.7533, '100': 0.8219, '200': 0.8406, '400': 0.7772, '200s': 0.8082, '400s': 0.752 };
-  // ET LES ADVERSAIRES SUIVENT (l'auteur, 29/10 : « meme conversion ») : les plateaux, chronos fixes et plateaux de
-  // la carriere restent ecrits dans l'echelle d'avant ; leur temps tire est multiplie par ce que l'allure fait au
-  // joueur a 17 appuis/s (x1,19 a x1,21 de 8 a 40 appuis/s au 100 m) — chaque course garde sa difficulte.
-  const CONVERSION_ADVERSAIRES = { '60': 1.287, '100': 1.200, '200': 1.182, '400': 1.281, '200s': 1.225, '400s': 1.320 };
 
   // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
   // est un tour complet de piste (deux virages, deux lignes droites).
@@ -513,24 +490,6 @@
       names: ['Mathis Duval', 'Yanis Moreau', 'Theo Garnier', 'Enzo Delmas',
               'Nolan Vasseur', 'Lucas Morvan', 'Ilyes Barthe'] },
 
-    // LE STADE COUVERT JESSE OWENS, VAL-DE-REUIL (26/10). La piste couverte (piste-salle.js,
-    // salle-3d.ts) : on n'y court que ses epreuves, 60 m, 200 m et 400 m en salle — le menu ne
-    // propose qu'elles quand ce stade est choisi (ModePanels). « Le stade n'apparait pas, la
-    // distance 60 m non plus » (l'auteur, 26/10) : il manquait ici. Le plateau est celui de
-    // l'avant-derniere etape (les France U18-U20 s'y courent).
-    // OUVERT A TOUT LE MONDE AVEC LA 3D (l'auteur, 29/10) : remonte avec les stades ouverts, juste apres
-    // le Champ-de-Mars, pour que son index soit le meme sur les deux canaux (voir le contrat plus haut).
-    { cle: 'salle', name: 'Stade couvert Jesse Owens', theme: 'salle',
-      pool: 'sprint',
-      horsSerie: true,
-      ouvert: true,
-      salle: true,
-      noms: ['Stade couvert Jesse Owens', 'Jesse Owens Indoor Stadium'],
-      foule: 0.8,
-      plateau: { '60': [6.50, 6.65], '200s': [19.54, 20.09], '400s': [43.83, 44.15] },
-      names: ['Hugo Lemaire', 'Yanis Bertin', 'Lucas Ferrand', 'Noam Diallo',
-              'Theo Marchal', 'Ilan Rousseau', 'Sacha Morel'] },
-
     // LE DEFI AUREL MANGA — l'evenement qui annonce Hurdlers.
     //
     // Un 110 m haies contre un vrai hurdleur de l'equipe de France, qui a
@@ -739,104 +698,6 @@
                  '400': [42.80, 43.80], '4x100': [37.30, 38.30] },
       names: ['Nova Prisma', 'Iris Solenne', 'Orion Vega', 'Lumen Arcos',
               'Stella Rivka', 'Cosmo Delaunay', 'Aurore Lys'] },
-
-    // LE STADE D'OR — Dark Luxury (n° 11 de la planche des styles, 22/10).
-    //
-    // Noir profond, filets d'or, lumiere subtile : une piste laquee noire sous
-    // des projecteurs chauds, des gradins de pierre noire cercles d'or. Son
-    // rendu a ete cherche dans Unity (projets/Sprinter-Unity-Halloween,
-    // StadeOr.cs) et valide par l'auteur avant d'entrer ici ; il est fait pour
-    // la course 3D (course-3d.ts, `luxe`), le dessin 2D n'en reprend que les
-    // couleurs.
-    //
-    // FERME, et dernier de la liste pour la meme raison que l'Arc-en-ciel.
-    //
-    // LE PLATEAU EST CELUI D'UNE SOIREE DE GALA : sept coureurs entre 9,50 et
-    // 9,85 au 100 m.
-    { cle: 'or', name: "Stade d'Or", theme: 'or',
-      pool: 'sprint',
-      horsSerie: true,
-      // SUR LA BRANCHE DE TEST FERME 3D, il se choisit quel que soit le canal (« le
-      // stade luxury n'est pas selectionnable dans le test 3D », l'auteur, 22/10).
-      // Hors du canal de test il ne tombe donc pas a l'index de LEVEL_NAMES qui
-      // l'attend : `noms` repose son nom a sa vraie place (sprinter-app.js).
-      noms: ["Stade d'Or", 'Golden Stadium'],
-      foule: 0.92,
-      plateau: { '100': [9.50, 9.85], '200': [19.10, 19.80],
-                 '400': [43.00, 44.00], '4x100': [37.40, 38.40] },
-      names: ['Auguste Varenne', 'Celeste Moreau', 'Leandre Saint-Ange', 'Ines de Valcourt',
-              'Octave Marlowe', 'Margaux Delorme', 'Felix Aurelien'] },
-
-    // LE STADE NEON — cyberpunk (22/10). Une nuit de pluie dans une megapole : piste
-    // noire mouillee, couloirs cyan, bords magenta, une ville de tours tout autour,
-    // des panneaux holographiques. Cherche dans Unity (StadeCyber.cs), valide par
-    // l'auteur, construit pour la course 3D (course-3d.ts, `cyber`). Ferme, dernier
-    // de la liste, choisissable sur la branche de test 3D comme le Stade d'Or.
-    { cle: 'cyber', name: 'Stade Neon', theme: 'cyber',
-      pool: 'sprint',
-      horsSerie: true,
-      noms: ['Stade Néon', 'Neon Stadium'],
-      foule: 0.9,
-      plateau: { '100': [9.45, 9.85], '200': [19.00, 19.80],
-                 '400': [42.90, 44.00], '4x100': [37.30, 38.40] },
-      names: ['Kai Voltaire', 'Nyx Arden', 'Rook Calder', 'Juno Vex',
-              'Axel Marrow', 'Sable Quinn', 'Orin Hale'] },
-
-    // LA PLAGE PARADIS (22/10). « Une piste fondue au sable sur une plage paradisiaque,
-    // pas de gradins : un public debout, d'autres sur une chaise, d'autres sur leurs
-    // bateaux de marque BENBEZI. » Cherchee dans Unity (StadePlage.cs, quatre passes),
-    // validee par l'auteur, construite pour la course 3D (plage-3d.ts). Fermee, derniere
-    // de la liste, choisissable sur la branche de test 3D.
-    { cle: 'plage', name: 'Plage Paradis', theme: 'plage',
-      pool: 'sprint',
-      horsSerie: true,
-      noms: ['Plage Paradis', 'Paradise Beach'],
-      foule: 0.8,
-      plateau: { '100': [9.60, 9.95], '200': [19.30, 20.00],
-                 '400': [43.40, 44.60], '4x100': [37.60, 38.60] },
-      names: ['Kai Moana', 'Leilani Sol', 'Teva Marin', 'Ines Coral',
-              'Malo Riviera', 'Nalu Ferreira', 'Sofia Lagos'] },
-
-    // LE PALAIS ROYAL (23/10). « Un stade a l'interieur d'un chateau : la piste couleur
-    // cristal, pas de gradins, des invites assis sur des chaises, d'autres a table,
-    // d'autres a la mezzanine. » Cherche dans Unity (StadeChateau.cs, Galerie des Glaces,
-    // valide par l'auteur), construit pour la course 3D (palais-3d.ts).
-    { cle: 'palais', name: 'Palais Royal', theme: 'palais',
-      pool: 'sprint',
-      horsSerie: true,
-      noms: ['Palais Royal', 'Royal Palace'],
-      foule: 0.85,
-      plateau: { '100': [9.60, 9.95], '200': [19.30, 20.00],
-                 '400': [43.40, 44.60], '4x100': [37.60, 38.60] },
-      names: ['Louis Beaumont', 'Adele Versant', 'Victor Lisle', 'Margaux Ormel',
-              'Gaspard Roy', 'Clemence Doré', 'Hugo Fontaine'] },
-
-    // LE STADE BERNARD AMSALEM, VAL-DE-REUIL (27/10). La piste exterieure, a cote de la halle
-    // Jesse Owens : 100, 200 et 400 m en 3D (amsalem-3d.ts). « Est-ce que tu l'as aussi ajoute
-    // dans le jeu ? Pour le 100 m, 200 m, 400 m en 3D » (l'auteur, 27/10). Une petite tribune :
-    // un meeting regional, peu de monde.
-    { cle: 'amsalem', name: 'Stade Bernard Amsalem', theme: 'amsalem',
-      pool: 'sprint',
-      horsSerie: true,
-      noms: ['Stade Bernard Amsalem', 'Bernard Amsalem Stadium'],
-      // (« le gradin est place de facon vide », l'auteur, 27/10 : a moitie, la petite tribune paraissait deserte)
-      foule: 0.85,
-      plateau: { '100': [10.40, 10.90], '200': [21.00, 22.20],
-                 '400': [47.00, 49.50], '4x100': [40.50, 42.50] },
-      names: ['Rayan Lefort', 'Mathis Carre', 'Elias Boyer', 'Nolan Petit',
-              'Kylian Masson', 'Adam Guerin', 'Ethan Roche'] },
-
-    // LE STADE BERNARD AMSALEM, EDITION CHAMPIONNAT DE FRANCE (27/10) : le meme stade, habille pour la finale du soir
-    // (THEMES.amsalemFrance) ; l'edition classique, au-dessus, reste nue. Tribune pleine, plateau de finale nationale.
-    { cle: 'amsalem-france', name: 'Stade Bernard Amsalem — Championnat de France', theme: 'amsalemFrance',
-      pool: 'sprint',
-      horsSerie: true,
-      noms: ['Stade Bernard Amsalem — Championnat de France', 'Bernard Amsalem Stadium — French Championship'],
-      foule: 1,
-      plateau: { '100': [10.05, 10.40], '200': [20.30, 21.00],
-                 '400': [45.20, 46.80], '4x100': [39.00, 40.20] },
-      names: ['Rayan Lefort', 'Mathis Carre', 'Elias Boyer', 'Nolan Petit',
-              'Kylian Masson', 'Adam Guerin', 'Ethan Roche'] },
 
   ];
 
@@ -1147,32 +1008,6 @@
       departFrequence: 0.24, departAmple: 0.5, poussee: 1.10
     },
 
-    // ASAFA POWELL (« ajoute la technique de course, gestuelle et biomecanique d'Asafa Powell
-    // comme technique des coureurs », l'auteur, 23/10). RELEVEE COMME `canon` (tools/biomeca),
-    // sur un ralenti x2 de profil du dernier relais du 4 x 100 de Pekin 2008, en pleine vitesse
-    // lancee (de 6,4 a 10 s de la video, cote droit : le gauche, temoin en main, se confondait
-    // avec l'autre jambe a l'appui). 4,80 appuis/s, pres des 4,96 mesures a Osaka 2007. Ce qui
-    // le distingue de `canon` : le genou reste plie a l'appui (-0,65 a -0,95 rad, « pas de
-    // verrouillage », analyse d'Osaka), le talon remonte plus haut sous la fesse (-2,31), le
-    // bras part plus loin derriere (-1,50) et se ferme plus devant (2,18), le buste penche un
-    // peu plus (-0,31 rad). La cheville reste celle de `canon` : au ralenti, ses pieds sont
-    // flous et le releve s'y disperse. Sa foulee (1,26 fois sa taille) est deja celle du jeu.
-    // Ses bras sont gardes pour memoire mais ne servent pas : voir SPRINT.
-    powell: {
-      thigh: catmull([[0, 0.65], [0.79, -0.04], [1.57, -0.45], [2.36, -0.31],
-                      [3.14, 0.28], [3.93, 0.89], [4.71, 1.29], [5.50, 1.10]]),
-      knee: catmull([[0, -0.95], [0.79, -0.65], [1.57, -0.80], [2.36, -1.41],
-                     [3.14, -2.07], [3.93, -2.31], [4.71, -1.52], [5.50, -0.97]]),
-      ankle: catmull([[0, 0.05], [0.79, -0.03], [1.57, -0.56], [2.36, -0.42],
-                      [3.14, -0.37], [3.93, -0.17], [4.71, -0.04], [5.50, 0.00]]),
-      arm: catmull([[0, -0.88], [0.79, -0.07], [1.57, 0.31], [2.36, -0.22],
-                    [3.14, -0.59], [3.93, -0.76], [4.71, -1.50], [5.50, -1.37]]),
-      elbow: catmull([[0, 1.36], [0.79, 1.61], [1.57, 2.18], [2.36, 1.77],
-                      [3.14, 0.74], [3.93, 0.83], [4.71, 1.13], [5.50, 1.21]]),
-      boost: 1.0, armAmp: 1.0, lean: 1.45, bob: 0.92, stride: 0.97,
-      departFrequence: 0.24, departAmple: 0.5, poussee: 1.10
-    },
-
     // Foulee aerienne : suspension longue, genou qui monte haut et retombe
     // lentement, peu d'appuis. Silhouette longiligne qui semble planer.
     glide: {
@@ -1340,38 +1175,8 @@
     }
   }
 
-  // LA MECANIQUE AVANT DU SPRINT (23/10, l'auteur : « le cycle de course du sprinter est en
-  // cycle arriere et pas un cycle avant ; la poulie ne correspond pas au sprinter mais aux
-  // demi-fondeurs et aux coureurs de 400 m a la limite »). Les profils dessines a l'oeil
-  // montaient le genou a 0,8 rad et repliaient le talon tres haut DERRIERE, la cuisse encore
-  // en arriere — une poulie de coureur de tour — et le moteur l'amplifiait encore de 14 a
-  // 26 %. Le seul profil releve sur un vrai sprinteur (`canon`, MediaPipe, tools/biomeca)
-  // court tout devant : genou a 1,30 rad, jambe qui traine a peine (-0,46). En foulee veloce
-  // (100, 200, 4 x 100), les jambes de chaque profil sont donc calees aux trois quarts sur
-  // cette mecanique mesuree, et leur amplification ramenee au tiers ; les bras, le buste, le
-  // rebond et la longueur d'appui gardent le caractere de chacun. Le tour (foulee
-  // academique) garde sa poulie.
-  // DEPUIS LE 23/10, CETTE MECANIQUE EST CELLE D'ASAFA POWELL (`powell`, relevee comme `canon`) :
-  // jambes et buste aux trois quarts sur lui — chaque profil en garde un quart. PAS LES BRAS
-  // (« les mouvements de bras et de jambe ne sont pas synchronises », l'auteur, 24/10) : son bras
-  // releve est celui du cote loin de la camera, cache par le buste quand il passe devant ; melange,
-  // il n'allait plus qu'a 0,21 rad devant pour 1,20 derriere, les mains collees aux hanches.
-  const melangeTable = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
-  const SPRINT = {};
-  const MODELE = GAITS.powell, SUR_LUI = 0.75;
-  for (const k of Object.keys(GAITS)) {
-    const P = GAITS[k];
-    SPRINT[k] = P === MODELE ? P : Object.assign({}, P, {
-      thigh: melangeTable(P.thigh, MODELE.thigh, SUR_LUI),
-      knee: melangeTable(P.knee, MODELE.knee, SUR_LUI),
-      ankle: melangeTable(P.ankle, MODELE.ankle, SUR_LUI),
-      lean: P.lean + (MODELE.lean - P.lean) * SUR_LUI,
-      boost: 1 + (P.boost - 1) * 0.35,
-    });
-  }
   function gaitOf(look) {
-    const T = allure === 'veloce' ? SPRINT : GAITS;
-    return (look && T[look.gait]) || T.base;
+    return (look && GAITS[look.gait]) || GAITS.base;
   }
 
   const ARM_PHASE = armPhaseOf(GAITS.base);
@@ -1745,110 +1550,15 @@
     this.relay = !!race.relay;
     this.legs = race.legs || 0;
     this.legLength = race.legLength || 0;
-    // LA PISTE COUVERTE (piste-salle.js) : un anneau qu'on tourne une ou deux
-    // fois, avec sa propre geometrie (rayon, couloirs, virages releves).
-    this.salle = race.salle || null;
-    if (this.salle) { this.total = race.total; this.fullLap = true; this.curved = true; }
-    // le nombre de couloirs : six sur l'anneau couvert et sur sa ligne droite centrale (le plan
-    // de Val-de-Reuil), huit partout ailleurs
-    this.lanes = this.salle ? this.salle.couloirs : race.salleDroite ? race.couloirs : C.LANE_COUNT;
   }
-  // L'anneau couvert, couloir de rayon r : ou en est-on, `s` metres apres le
-  // depart ? On compte depuis l'arrivee (u, metres apres la ligne) : le depart en
-  // quinconce en sort tout seul, chaque couloir parcourant `total`. Meme repere
-  // que la piste exterieure : arrivee en (0, -r), premier virage autour de
-  // l'origine, ligne droite opposee en y = r, second virage autour de (S, 0).
-  // `theta` = angle tourne depuis la ligne (le cap vaut pi - theta), `bend` =
-  // 1 ou 2 dans un virage, 0 en ligne droite, `v` = angle dans le virage ou
-  // abscisse sur la droite.
-  // LES VIRAGES SONT ALLONGES (piste-salle.js : 35 m de ligne droite, 65 m de virage au
-  // couloir 1) : `r` reste la distance a l'axe en ligne droite ; dans un virage, on suit
-  // la parallele au bord interieur a r - rayon metres, `v` est son angle (0 a pi) et
-  // `theta` le cap tourne.
-  //
-  // LE 400 M SE RABAT (piste-salle.js, rabattement) : chaque couloir court dans le sien jusqu'a la sortie
-  // du second virage, rejoint la corde en diagonale sur la ligne droite d'arrivee (`decal` : l'ecart de
-  // rayon deja rattrape), puis fait son dernier tour sur la ligne de mesure du couloir 1.
-  Track.prototype.boucle = function (s, r) {
-    const P = this.salle, d = r - P.rayon;
-    if (P.rabat) {
-      const R = P.rabattement(d, this.total), r1 = P.rayon + R.d1;
-      if (s < R.avant) return this.surBoucle(R.u0 + s - (P.tours || 1) * R.tour, d);
-      if (s < R.avant + R.diag) {
-        const t = (s - R.avant) / R.diag;
-        return { bend: 0, v: t * this.straight, theta: 2 * Math.PI, tours: 0, moitie: 1, decal: t * (r1 - r) };
-      }
-      return Object.assign(this.surBoucle(s - this.total, R.d1), { decal: r1 - r });
-    }
-    return this.surBoucle(s - this.total, d);
-  };
-  // `brut` : metres apres l'arrivee (negatif avant), sur la boucle a d metres du bord interieur
-  Track.prototype.surBoucle = function (brut, d) {
-    const P = this.salle;
-    const S = this.straight, B = P.longueurVirage(d), L = 2 * S + 2 * B;
-    const n = Math.floor(brut / L);
-    let u = brut - n * L;
-    const tours = 2 * Math.PI * (n + (this.salle.tours || 1));
-    if (u < B) { const v = P.phiVirage(u, d); return { bend: 1, v, theta: P.capVirage(v), tours, rem: B - u }; }
-    u -= B;
-    if (u < S) return { bend: 0, v: u, theta: Math.PI, tours, moitie: 0 };
-    u -= S;
-    if (u < B) { const v = P.phiVirage(u, d); return { bend: 2, v, theta: Math.PI + P.capVirage(v), tours, rem: B - u }; }
-    return { bend: 0, v: u - B, theta: 2 * Math.PI, tours, moitie: 1 };
-  };
-  // Le point de la boucle `b` au rayon `r` (r peut differer du couloir : relais, bords peints).
-  Track.prototype.pointDeBoucle = function (b, r) {
-    const S = this.straight;
-    r += b.decal || 0;
-    if (b.bend) { const q = this.salle.virage(b.v, r - this.salle.rayon); return b.bend === 1 ? [-q[0], -q[1]] : [S + q[0], q[1]]; }
-    return b.moitie === 0 ? [b.v, r] : [S - b.v, -r];
-  };
-  // LA PISTE COUVERTE SOUS LE COUREUR (piste-salle.js), a la vitesse v : ce qu'elle lui prend (`perte`,
-  // m/s² negatifs — la montee d'un virage, la force centrifuge que le devers ne porte pas) et ce qu'elle lui
-  // rend (`gain`, la descente). Runner.stepPlayer y applique le rythme du joueur.
-  Track.prototype.accelPente = function (s, lane, v) {
-    const P = this.salle;
-    if (!P || !P.pente) return { perte: 0, gain: 0 };
-    const r = this.radius(lane);
-    const z = (q) => { const b = this.boucle(q, r); return b.bend ? P.hauteur(b.v, r + (b.decal || 0) - P.rayon) : 0; };
-    const g = (z(s + 0.5) - z(s - 0.5));
-    let perte = g > 0 ? -9.81 * g * P.pente.monte : 0;
-    const gain = g < 0 ? -9.81 * g * P.pente.descend : 0;
-    const b = this.boucle(s, r);
-    if (b.bend && v) {
-      const d = r + (b.decal || 0) - P.rayon;
-      perte -= P.serre * Math.max(0, v * v / P.rayonVirage(b.v, d) - 9.81 * P.devers(b.v, d));
-    }
-    return { perte, gain };
-  };
-  // LE PELOTON DU 400 M EN SALLE (piste-salle.js) : la part de la diagonale de rabattement faite (0 avant
-  // la ligne, 1 a la corde), et l'ecart du coureur a la ligne de mesure du couloir 1, en travers.
-  Track.prototype.rabattu = function (s, lane) {
-    const P = this.salle;
-    if (!P || !P.rabat) return 0;
-    const R = P.rabattement(this.radius(lane) - P.rayon, this.total);
-    return Math.min(1, Math.max(0, (s - R.avant) / R.diag));
-  };
-  Track.prototype.enTravers = function (s, lane) {
-    const P = this.salle, k = this.rabattu(s, lane);
-    return (this.radius(lane) - this.radius(0)) * (1 - k) + P.peloton[lane % P.peloton.length] * k;
-  };
-  // Deux coureurs de la piste couverte au contact : rabattus (ou en train de l'etre) et colles l'un a l'autre
-  Track.prototype.auContact = function (a, b) {
-    const P = this.salle;
-    if (!P || !P.rabat || !this.rabattu(a.d, a.lane) || !this.rabattu(b.d, b.lane)) return false;
-    return Math.abs(a.d - b.d) < P.contact.long && Math.abs(this.enTravers(a.d, a.lane) - this.enTravers(b.d, b.lane)) < P.contact.large;
-  };
   // Rayon de la ligne de mesure du couloir (lane compte a partir de zero) :
   // la trajectoire du coureur, pas le milieu du couloir.
   Track.prototype.radius = function (lane) {
-    const P = this.salle;
-    if (P) return lane === 0 ? P.rayon + P.mes1 : P.rayon + lane * P.couloir + P.mesN;
     return lane === 0 ? C.R1 + C.MES_1 : C.R1 + lane * C.LANE_W + C.MES_N;
   };
   // Rayon d'une ligne peinte : edge(0) est la corde, edge(8) le bord
   // exterieur du huitieme couloir.
-  Track.prototype.edge = function (e) { return this.salle ? this.salle.rayon + e * this.salle.couloir : C.R1 + e * C.LANE_W; };
+  Track.prototype.edge = function (e) { return C.R1 + e * C.LANE_W; };
   // Longueur du PREMIER virage, pour un rayon donne — et c'est la que se
   // fabrique le depart en quinconce.
   //
@@ -1864,12 +1574,9 @@
   // couloirs — 200 moins la ligne droite — et c'est l'angle balaye qui
   // diminue vers l'exterieur.
   Track.prototype.bend1 = function (r) {
-    // piste couverte : ce qui reste du premier virage au depart (depart en quinconce)
-    if (this.salle) { const b = this.boucle(0, r); return b.bend === 1 ? b.rem : 0; }
     return this.fullLap ? this.total - 2 * this.straight - Math.PI * r : this.arc;
   };
   Track.prototype.posR = function (v, r, onBend) {
-    if (this.salle && onBend) { const q = this.salle.virage(v, r - this.salle.rayon); return [-q[0], q[1]]; }
     if (this.curved && onBend) return [-r * Math.sin(v), r * Math.cos(v)];
     return [v, this.curved ? r : r];
   };
@@ -1904,7 +1611,6 @@
   // tombe lui aussi sur cette ligne — le tour est parfait, comme sur une
   // vraie piste.
   Track.prototype.posAtR = function (s, r) {
-    if (this.salle) return this.pointDeBoucle(this.boucle(s, r), r);
     const A = this.bend1(r);
     if (this.fullLap && s >= A + this.straight) {
       return this.posLap2(s - A - this.straight, r);
@@ -1942,7 +1648,6 @@
   Track.prototype.posDemi = function (s, lane, dr) {
     if (!dr) return this.pos(s, lane);
     if (!this.curved) return [s, C.LANE_W * (lane + 0.5) + dr];
-    if (this.salle) { const rRef = this.radius(lane); return this.pointDeBoucle(this.boucle(s, rRef), rRef + dr); }
     const rRef = this.radius(lane), r = rRef + dr;
     const A = this.bend1(rRef);
     if (this.fullLap && s >= A + this.straight) {
@@ -1970,7 +1675,6 @@
   // parcourue, qui sur un virage ne sont pas alignes sur le meme rayon.
   Track.prototype.markAt = function (s, lane) {
     if (!this.curved) return [false, s, 0];
-    if (this.salle) { const b = this.boucle(s, this.radius(lane)); return b.bend ? [true, Math.PI - b.v, b.bend - 1] : [false, b.v, b.moitie]; }
     const r = this.radius(lane), A = this.bend1(r), S = this.straight;
     if (this.fullLap && s >= A + S) {
       const s2 = s - A - S, B = Math.PI * r;
@@ -1984,8 +1688,6 @@
   };
   Track.prototype.heading = function (s, lane) {
     if (!this.curved) return 0;
-    // cap continu sur plusieurs tours : pi au depart dans le premier virage, -pi a l'arrivee d'un tour
-    if (this.salle) { const b = this.boucle(s, this.radius(lane)); return Math.PI - b.theta - b.tours; }
     const r = this.radius(lane), A = this.bend1(r);
     if (this.fullLap && s >= A + this.straight) {
       const s2 = s - A - this.straight, B = Math.PI * r;
@@ -2003,8 +1705,7 @@
     const r = this.radius(lane), A = this.bend1(r);
     // Distance restant a courir dans le virage, ou null hors virage.
     let rem = null;
-    if (this.salle) { const b = this.boucle(s, r); rem = b.bend ? b.rem : null; }
-    else if (this.fullLap && s >= A + this.straight) {
+    if (this.fullLap && s >= A + this.straight) {
       const s2 = s - A - this.straight, B = Math.PI * r;
       if (s2 < B) rem = B - s2;
     } else if (s < A) {
@@ -2075,11 +1776,7 @@
     this.transGrade = null; this.transRatio = 0;
     this.boostT = 0; this.boostDrag = 1; this.drivePitch = C.DRIVE_PITCH;
     this.target = opts.target || null;
-    /** Le record du monde de l'epreuve (RECORDS_DU_MONDE) : le temps le plus court permis. `null` : sans plafond. */
-    this.record = opts.record || null;
-    /** ALLURE_DU_JOUEUR : ce qui reste de la vitesse de pointe et de la poussee de chaque appui. 1 : le moteur d'avant. */
-    this.allure = opts.allure || 1;
-    this.maxSpeed = (opts.maxSpeed || 12) * this.allure;
+    this.maxSpeed = opts.maxSpeed || 12;
     this.best = opts.best || 9.1;
     this.total = opts.total || 100;
     /**
@@ -2112,7 +1809,6 @@
   }
 
   Runner.prototype.setPace = function (T) {
-    if (this.record && T < this.record) T = this.record;   // (RECORDS_DU_MONDE : jamais plus vite)
     // v(t) = vmax (1 - e^-t/tau) : montee en vitesse puis allure tenue.
     // Une courbe en S ferait ralentir le coureur jusqu'a l'arret sur la
     // ligne, ce qui donne l'illusion d'etre double au dernier metre.
@@ -2258,11 +1954,8 @@
     // s'efface sur la transition (TRANS_END), ou il retrouve sa foulee.
     const qD = Math.min(1, Math.max(0, ((this.d || 0) - (this.legStart || 0)) / C.TRANS_END));
     const dep = 1 - (P.departFrequence || 0) * (1 - qD) * (1 - qD);
-    // la cadence lancee du joueur (C.CADENCE_LANCEE), de TRANS_END a dix metres plus loin
-    const qL = this.cadenceLancee ? Math.min(1, Math.max(0, ((this.d || 0) - (this.legStart || 0) - C.TRANS_END) / 10)) : 0;
-    const lance = 1 + (C.CADENCE_LANCEE - 1) * qL * qL * (3 - 2 * qL);
     return Math.max(0.85, 4 * leg * P.stride * dep * (this.foulee || 1) *
-                    Math.sin(Math.min(1.15, 0.70 * amp)) / lance);
+                    Math.sin(Math.min(1.15, 0.70 * amp)));
   };
 
   // Inclinaison du corps entier, en radians, d'apres la distance parcourue.
@@ -2381,20 +2074,11 @@
     }
     if (elapsed !== undefined && this.d - this.legStart < this.driveEnd)
       this.pressTimes.push(elapsed);
-    // LA CADENCE DES APPUIS, qui fait l'effort de la posture (voir pose) : une moyenne
-    // glissante de l'ecart entre deux appuis
-    if (elapsed !== undefined) {
-      if (this.dernierAppui != null) {
-        const ecart = Math.max(0.02, elapsed - this.dernierAppui);
-        if (ecart < 0.6) this.ecartAppuis = this.ecartAppuis ? this.ecartAppuis * 0.7 + ecart * 0.3 : ecart;
-      }
-      this.dernierAppui = elapsed;
-    }
     let stumbled = false;
     if (this.lastKey === key) {
       const risk = (C.STUMBLE_BASE +
         C.STUMBLE_SPEED * Math.min(1, this.v / this.maxSpeed)) *
-        C.STUMBLE_INPUT_SCALE * (this.coefChute || 1);
+        C.STUMBLE_INPUT_SCALE;
       if (alea() < risk) {
         this.v *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;
@@ -2402,27 +2086,16 @@
         if (this.d - this.legStart < this.driveEnd) this.stumbledInDrive = true;
         stumbled = true;
       } else {
-        this.v = Math.min(this.plafond(), this.v + C.BOOST * 0.3 * (this.coefBoost || 1) * this.allure);
+        this.v = Math.min(this.maxSpeed, this.v + C.BOOST * 0.3);
       }
     } else {
-      this.v = Math.min(this.plafond(), this.v + C.BOOST * (this.coefBoost || 1) * this.allure);
+      this.v = Math.min(this.maxSpeed, this.v + C.BOOST);
     }
     this.lastKey = key;
     return stumbled;
   };
 
-  // Le plafond d'un appui : la vitesse de pointe — sauf a la piste couverte, ou la descente d'un virage
-  // l'ouvre (`elan`, voir stepPlayer) et ou l'appui ne ramene jamais en arriere une vitesse deja prise.
-  Runner.prototype.plafond = function () { return this.pente ? Math.max(this.maxSpeed + (this.elan || 0), this.v) : this.maxSpeed; };
   Runner.prototype.stepPlayer = function (dt, elapsed) {
-    // L'EFFORT : dix appuis par seconde valent 1 (7,5 le neutre, 0,75) ; sans appui, il retombe
-    if (elapsed !== undefined) {
-      let cible = this.ecartAppuis ? Math.min(1.25, 0.1 / this.ecartAppuis) : 0.75;
-      const depuis = this.dernierAppui == null ? 0 : elapsed - this.dernierAppui;
-      if (depuis > 0.25) cible *= Math.exp(-(depuis - 0.25) * 3);
-      if (this.effort == null) this.effort = 0.75;
-      this.effort += (cible - this.effort) * (1 - Math.exp(-6 * dt));
-    }
     if (this.fallAnim > 0) {
       this.fallAnim = Math.max(0, this.fallAnim - dt / C.FALL_TIME);
     }
@@ -2442,22 +2115,9 @@
       this.v *= Math.exp(-6 * dt);
     } else {
       // le freinage est allege quelques secondes apres une bonne transition
-      const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1) * (this.coefDrag || 1);
+      const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1);
       this.v *= Math.exp(-drag * dt);
     }
-    // la montee et la descente des virages releves (piste couverte : Track.accelPente) — et le rythme y
-    // compte : la cadence tenue (effort 1 a dix appuis par seconde) limite la perte dans la montee, et la
-    // descente ne rend que ce qu'on y tient
-    // LA MONTEE DEMANDE PLUS D'APPUIS, LA DESCENTE REND PLUS A QUI EN DONNE (l'auteur, 27/10) : la perte
-    // fond quand la cadence monte, le gain grandit avec elle — et peut porter au-dela de la vitesse de pointe
-    if (this.pente) {
-      const a = this.pente(this.d, this.v), e = this.effort == null ? 1 : this.effort, rend = Math.max(0, 1.5 * e - 0.5);
-      this.v = Math.max(0, this.v + (a.perte * (1.6 - 0.6 * e) + a.gain * rend) * dt);
-      // la descente ouvre le plafond a qui y appuie : jusqu'a 1,2 m/s de mieux au couloir 6, presque rien au 1
-      this.elan = Math.min(1.2, a.gain * 0.3 * rend);
-    }
-    // les accrochages du 400 m en salle (Track.auContact)
-    if (this.bouscule) this.bouscule(dt);
     const before = this.d;
     this.d += this.v * dt;
     // LE BOUT DE LA ZONE EST UN MUR, PAS UNE LIGNE D'ARRIVEE.
@@ -2481,9 +2141,7 @@
       // Le chrono affiche doit toujours etre le temps reellement couru : le
       // plancher a `this.best` cachait les performances qui le battaient
       // (rendait par exemple un 37 s affiche comme 40,50 s sur le 400 m).
-      // Le plafond du record du monde (RECORDS_DU_MONDE) porte sur le chrono, pas sur la course : retenir le
-      // coureur en route le freinait au depart, ou il va plus vite que le profil du record (0,58 s perdus au 100 m).
-      this.finishTime = this.record ? Math.max(elapsed, this.record) : elapsed;
+      this.finishTime = elapsed;
     }
   };
 
@@ -2514,8 +2172,6 @@
     // rebond — ce qu'on voit d'un sprinteur qui perd sa vitesse.
     if (K) this.fatigue = t <= K.ts ? 0
       : Math.max(0, Math.min(1, (K.pic - this.v) / Math.max(0.01, K.chute)));
-    // l'effort d'un adversaire : franc a la mise en action, qui s'use avec la fatigue
-    this.effort = Math.max(0.3, 0.98 + 0.1 * Math.sin(this.lane * 1.7) - 0.45 * (this.fatigue || 0));
     this.stride += this.v * dt * (Math.PI / this.strideLength());
   };
 
@@ -2936,17 +2592,8 @@
     // monte moins, le rebond s'appuie — la foulee s'alourdit sans changer de
     // rythme, parce que le rythme, lui, suit deja la vitesse qui baisse.
     const lourd = Math.max(0, Math.min(1, r.fatigue || 0));
-    // L'EFFORT (23/10, l'auteur : « je ne vois pas plus d'agressivite si j'appuie plus vite
-    // qu'un autre ... de changement de biomecanique par rapport a l'effort applique »). La
-    // posture ne lisait que la vitesse, qui plafonne : a fond, taper plus vite ne changeait
-    // plus rien au corps. `effort` (Runner.press, la cadence des appuis ; 0,75 = neutre,
-    // jusqu'a 1,25) penche le buste vers l'avant, monte les genoux, arme les bras et tourne
-    // les epaules ; un effort mou redresse le coureur et raccourcit sa gestuelle. Rien
-    // dans les blocs, ni apres la ligne.
-    const ef = r.finished ? 0.75 : Math.max(0, Math.min(1.25, r.effort == null ? 0.75 : r.effort));
-    const ke = (ef - 0.75) * (1 - wBloc) * Math.min(1, sp * 2.5);
     let lean = -(0.05 + 0.16 * sp) * P.lean * (1 - 0.55 * lourd) + 0.035 * lourd
-               - 0.22 * ke + (r.buste || 0);
+               + (r.buste || 0);
     const rot = (x, z, a) => [x * Math.cos(a) - z * Math.sin(a),
                               x * Math.sin(a) + z * Math.cos(a)];
 
@@ -2957,9 +2604,6 @@
     // membre (le bout semblait trainer derriere le haut), ce qui donnait
     // une impression de mouvement disloque plutot que coordonne.
     const LIMB_BOOST = P.boost;
-    // l'effort arme DEVANT (genou, bras) bien plus que derriere : un sprinteur qui force monte
-    // le genou, il ne balaie pas plus loin derriere lui
-    const EF_AV = 1 + 0.34 * ke, EF_AR = 1 + 0.08 * ke;
     // La part de sortie de blocs qu'ajoute le moteur a tout le monde — cuisse
     // lancee, genou haut, bras amples. Un frequenciel en garde moins
     // (P.departAmple) : sa puissance se lit a la cadence, pas a l'enjambee.
@@ -2981,7 +2625,7 @@
       // contenue pour tout le reste (P.arriere) : c'est elle, la puissance
       let th = (gt * (A + C.DRIVE_THIGH * (gt > 0 ? sortieA : sortieP) + C.TRANSIT_AMPL * transit)
                 + C.DRIVE_FRONT * sortieA * devant - 0.20 * lourd * devant) * LIMB_BOOST
-               * (gt < 0 ? (P.arriere || 1) * EF_AR : EF_AV);
+               * (gt < 0 ? (P.arriere || 1) : 1);
       // LE TALON SOUS LA FESSE. Le repli de genou est deja au plus fort a
       // l'arriere du cycle : on l'y accentue pendant la transition, la ou il
       // se voit et ou il veut dire quelque chose — une jambe qui se replie
@@ -2991,7 +2635,7 @@
       const replie = Math.max(0, -gk) / 2.05;     // 1 au talon-fesse du cycle
       let kn = (gk * (0.42 + 0.58 * A + C.DRIVE_KNEE * sortieA
                       + C.TRANSIT_TALON * transit * replie)
-                - C.DRIVE_SHANK * sortieA * devant) * LIMB_BOOST * (gt > 0 ? EF_AV : EF_AR);
+                - C.DRIVE_SHANK * sortieA * devant) * LIMB_BOOST;
       // LA LIGNE DE POUSSEE. La part ARRIERE du cycle tire la cuisse et le
       // genou vers l'axe du corps : les deux du meme facteur, sans quoi on
       // redresserait la cuisse en laissant le tibia casse dessous. Le pied
@@ -3007,10 +2651,9 @@
       return [th, th + kn, th + kn + an];
     }
     function arm(q) {
-      // a l'effort, les bras cognent : plus d'amplitude, de la hanche a la joue
       const ua = gait(P.arm, q) * (0.55 + 0.45 * A + C.DRIVE_ARM * sortieA
                                    + C.TRANSIT_ARM * transit)
-                 * LIMB_BOOST * P.armAmp * (1 + 0.28 * ke);   // les bras, eux, cognent dans les deux sens
+                 * LIMB_BOOST * P.armAmp;
       const ef = gait(P.elbow, q) * (0.62 + 0.38 * A) * LIMB_BOOST;
       return [ua, ua + ef];
     }
@@ -3327,10 +2970,10 @@
     // chaque frappe, et les epaules tournent un peu, une fois a gauche, une
     // fois a droite : un homme qui se motive, pas un metronome
     const wDc = Math.max(0, Math.min(1, r.debout || 0)) * fermeClap;
-    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * (1 + 0.8 * lourd) * (1 + 0.7 * ke) * calme
+    const bob = -0.036 * A * Math.cos(2 * (p - 0.75)) * P.bob * (1 + 0.8 * lourd) * calme
       - 0.025 * wDc;
-    const yawHip = -0.16 * A * Math.sin(p) * (1 + 0.35 * ke) * calme;
-    const yawTop = 0.21 * A * Math.sin(p) * (1 + 0.45 * ke) * calme + 0.08 * wDc * (kClap % 2 ? 1 : -1);
+    const yawHip = -0.16 * A * Math.sin(p) * calme;
+    const yawTop = 0.21 * A * Math.sin(p) * calme + 0.08 * wDc * (kClap % 2 ? 1 : -1);
     const sway = 0.016 * A * Math.sin(p) * calme;
 
     // Gabarit plus athletique qu'un mannequin filiforme : torse et epaules
@@ -3432,10 +3075,8 @@
     // maillage — les memes angles, pris aux memes endroits. Rien n'est calcule
     // deux fois, et le maillage ne peut pas faire un geste que les tubes ne
     // font pas.
-    // (r.squelette3D : un maillage pose sur ce squelette — la course en 3D, game/course-3d.ts, et la ville de la
-    // carriere, game/athlete/ville.ts)
-    const sq = (L.maillage || r.squelette3D) ? (r.squelette = {
-      hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt - 0.12 * ke * calme,   // a l'effort, le menton rentre
+    const sq = L.maillage ? (r.squelette = {
+      hip: hip.slice(), angB, lean, yawHip, yawTop, tete: (r.tete || 0) + teteAt,
       jambes: [], bras: [],
       // (les poings du cri restent fermes, meme quand il sort des claps)
       mains: wCl > 0.5 && wCl > Math.max(wCr, wCh) ? 'plat' : (wB > 0.5 ? 'sol' : 'poing'),
@@ -4073,7 +3714,7 @@
     GAIT, GAITS, gaitOf, gait, catmull, Track, Runner, CLAP,
     FOULEES, FOULEE_DES_EPREUVES, poserLAllure, allureCourante,
     pose, fallShape, alea, semer, desemer, estSeme,
-    ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL, RECORDS_DU_MONDE, ALLURE_DU_JOUEUR, CONVERSION_ADVERSAIRES,
+    ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL,
     VEDETTES
   };
 })(typeof globalThis !== 'undefined' ? globalThis : this);

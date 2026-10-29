@@ -197,5 +197,5 @@ const LIBRE_SUR_LE_CANAL_DE_TEST = true;
 
 /* ------------------------------------------------ le choix de l'onglet */
 
-/** Les carrieres de l'onglet CARRIERE (TitleScreen.tsx) ; `athlete` : game/athlete/. */
-export type ChoixCarriere = 'classique' | 'legende' | 'athlete';
+/** Les deux carrieres de l'onglet CARRIERE (TitleScreen.tsx). */
+export type ChoixCarriere = 'classique' | 'legende';

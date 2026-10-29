@@ -575,20 +575,6 @@ function petales(ctx: CanvasRenderingContext2D, api: any) {
 /** La largeur reelle d'une piece, en metres (manifeste, legende_pieces.py). */
 const largeurDe = (img: string): number => ((manifeste as any)?.pieces?.[img]?.largeur_m as number) || 1;
 
-/** Pour la course 3D (legende-3d.ts) : ce que le lieu pose — son monument, ses objets,
- *  sa guirlande, son premier plan, les dieux qui regardent. */
-export function decorDuLieu3D(lieu: string) {
-  const m = MONUMENT_DU_LIEU(lieu);
-  return { monument: m, culture: CULTURE[m] || null, premierPlan: PREMIER_PLAN[m] || null, dieux: dieuxSpectateurs(lieu) };
-}
-
-/** Une image du decor (cle du manifeste, ou `paris`, `karman`) et sa taille reelle ; null tant
- *  qu'elle n'est pas chargee. */
-export function imageDuDecor(cle: string): { im: CanvasImageSource; w: number; h: number; ax: number; ay: number; largeurM: number } | null {
-  const R = piece(cle);
-  return R ? { im: R.im, w: R.p.w, h: R.p.h, ax: R.p.ax, ay: R.p.ay, largeurM: largeurDe(cle) } : null;
-}
-
 /** Les objets typiques du lieu (CULTURE), pour le bord de route des voyages
  *  (LegendeCinematiques.tsx, 10/10) : l'image chargee et sa taille reelle ;
  *  ceux qui ne sont pas encore la manquent a la liste. */
