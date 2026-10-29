@@ -2341,8 +2341,39 @@ function maillotTripo(m: THREE.MeshStandardMaterial, femme: boolean) {
     t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;   // (les UV du glb : sans retournement)
     textesTripo[n] = t;
   }
-  m.map = textesTripo[n]; m.color.setRGB(1, 1, 1); m.roughness = 0.82; m.needsUpdate = true;
+  m.map = textesTripo[n]; m.color.setRGB(1, 1, 1); m.roughness = 0.82;
+  // LE VRAI LOGO DU CLUB, devant : Tripo en avait deforme le texte. Un carre blanc l'efface, le fichier du club s'y pose
+  // (repere de la pose de repos : z vers la droite du coureur vu de face, y la hauteur)
+  const base = (import.meta as any).env?.BASE_URL || '/';
+  for (const n of ['vrac-logo.png', 'vrac-ville.png']) if (!textesTripo[n]) {
+    const t = new THREE.TextureLoader().load(base + 'modeles/maillots/' + n); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    textesTripo[n] = t;
+  }
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.uniforms.uLogoVRAC = { value: textesTripo['vrac-logo.png'] }; sh.uniforms.uVilleVRAC = { value: textesTripo['vrac-ville.png'] };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vKit; varying vec3 vKitN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = position; vKitN = normal;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vKit; varying vec3 vKitN; uniform sampler2D uLogoVRAC, uVilleVRAC;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+if (vKitN.x > 0.2) {
+  vec2 q = vec2((vKit.z - ${LOGO_DEVANT.z}) / ${LOGO_DEVANT.l}, (vKit.y - ${LOGO_DEVANT.y}) / ${LOGO_DEVANT.h});
+  if (all(greaterThan(q, vec2(-0.08, -0.25))) && all(lessThan(q, vec2(1.08, 1.25)))) diffuseColor.rgb = vec3(0.9);
+  if (all(greaterThan(q, vec2(0.0))) && all(lessThan(q, vec2(1.0)))) { vec4 t = texture2D(uLogoVRAC, q); diffuseColor.rgb = mix(diffuseColor.rgb, t.rgb, t.a); }
+  vec2 v = vec2((vKit.z - ${VILLE_DEVANT.z}) / ${VILLE_DEVANT.l}, (vKit.y - ${VILLE_DEVANT.y}) / ${VILLE_DEVANT.h});
+  if (all(greaterThan(v, vec2(-0.06))) && all(lessThan(v, vec2(1.06)))) diffuseColor.rgb = vec3(0.9);
+  if (all(greaterThan(v, vec2(0.0))) && all(lessThan(v, vec2(1.0)))) diffuseColor.rgb = texture2D(uVilleVRAC, v).rgb;
+}`);
+  };
+  m.customProgramCacheKey = () => 'maillot-tripo';
+  m.needsUpdate = true;
 }
+const LOGO_DEVANT = { z: '0.042', y: '1.222', l: '0.094', h: '0.0349' };
+// (« VAL DE REUIL » et son triangle, decoupes dans le dessin de l'auteur : Tripo en avait abime le D)
+const VILLE_DEVANT = { z: '-0.040', y: '1.212', l: '0.080', h: '0.0513' };
 let logoVRAC: THREE.Texture | null = null;
 const lin = (c: number) => new THREE.Color(c);   // (hex sRGB, range lineaire par three)
 const uVRAC = { blanc: { value: lin(0xf4f6f8) }, vert: { value: lin(0x4cb248) }, bleu: { value: lin(0x1c40c4) } };
