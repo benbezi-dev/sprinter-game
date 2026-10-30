@@ -23,7 +23,7 @@ import {
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
-  soulager, REVEIL, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
+  soulager, REVEIL, boulotFait, BOULOTS_PAR_SEMAINE, paieDu, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
   meetingPossible, meetingDe, DEPLACEMENT_MEETING,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
@@ -842,15 +842,16 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
       </Carte>
 
       <Carte titre={mot('boulots')} icone={Briefcase}>
-        {a.boulot ? <p className="text-xs text-white/60">{mot('boulot_pris')}</p> : (
+        {(
           <div className="grid grid-cols-3 gap-2">
             {BOULOTS.map(b => (
-              <button key={b.id} disabled={!!ev || (!!b.prend && a.faites.includes(b.prend))}
+              <button key={b.id} disabled={!!ev || boulotFait(a, b.id) || (a.boulots?.length || 0) >= BOULOTS_PAR_SEMAINE || (!!b.prend && a.faites.includes(b.prend))}
                       onClick={() => changer(() => { prendreUnBoulot(a, b.id); })}
                       className="rounded-xl border border-white/15 bg-white/5 p-2 text-left disabled:opacity-35 hover:enabled:bg-white/10">
                 <span className="block text-xs font-black">{mot(b.id)}</span>
-                <span className="block text-[10px] text-white/60">+{b.gain} € · {mot('fatigue').toLowerCase()} +{b.fatigue}</span>
-                {b.prend && <span className="block text-[10px] text-amber-300/80">{mot('prend_samedi')}</span>}
+                <span className="block text-[10px] text-white/60">+{paieDu(a, b)} € · {mot('fatigue').toLowerCase()} +{b.fatigue}</span>
+                {boulotFait(a, b.id) ? <span className="block text-[10px] text-white/60">{mot('boulot_pris')}</span>
+                  : b.prend && <span className="block text-[10px] text-amber-300/80">{mot('prend_samedi')}</span>}
               </button>
             ))}
           </div>
@@ -1592,15 +1593,15 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
 
     case 'marche': case 'livraison': case 'babysitting': {
       const b = BOULOTS.find(x => x.id === BOULOT_DU_LIEU[lieu])!;
-      const pris = !!a.boulot;
+      const pris = boulotFait(a, b.id) || (a.boulots?.length || 0) >= BOULOTS_PAR_SEMAINE;
       return (
         <>
         <Actions a={a} lieu={lieu} ev={ev} changer={changer} />
         <Carte titre={mot('boulots')} icone={Briefcase}>
           <span className="text-sm font-black">{mot(b.id)}</span>
-          <span className="text-[11px] text-white/60">{Math.round(DUREE_BOULOT[b.id] / 60)} h · +{b.gain} € · {mot('fatigue').toLowerCase()} +{b.fatigue}{b.prend ? ` · ${mot('prend_samedi')}` : ''}</span>
+          <span className="text-[11px] text-white/60">{Math.round(DUREE_BOULOT[b.id] / 60)} h · +{paieDu(a, b)} € · {mot('fatigue').toLowerCase()} +{b.fatigue}{b.prend ? ` · ${mot('prend_samedi')}` : ''}</span>
           <Bouton plein disabled={pris || ev || (!!b.prend && a.faites.includes(b.prend))} onClick={() => changer(() => { if (prendreUnBoulot(a, b.id)) avancer(a, DUREE_BOULOT[b.id] || 120, { energie: -8 }); })}>
-            {pris ? mot('boulot_pris') : dans(['TRAVAILLER', 'WORK'])}
+            {boulotFait(a, b.id) ? mot('boulot_pris') : pris ? dans(['Deux boulots cette semaine', 'Two jobs this week']) : dans(['TRAVAILLER', 'WORK'])}
           </Bouton>
         </Carte>
         </>

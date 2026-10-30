@@ -65,8 +65,8 @@ export type Athlete = {
   semaine: number;
   /** Les seances deja faites (ou perdues) cette semaine. */
   faites: Jour[];
-  /** Le petit boulot pris cette semaine. */
-  boulot: string | null;
+  /** Les petits boulots faits cette semaine : chacun une fois, deux au plus. */
+  boulots?: string[];
   club: string | null;
   coach: string | null;
   objectif: Objectif | null;
@@ -263,13 +263,16 @@ export const piece = (id: string) => MATERIEL.find(p => p.id === id) || null;
 
 /* ------------------------------------------------------- les petits boulots */
 
-export type Boulot = { id: string; gain: number; fatigue: number; prend: Jour | null };
+/** `adulte` : la paie d'un adulte, qui a un loyer (LOYER) ; deux boulots le paient et laissent de quoi courir. */
+export type Boulot = { id: string; gain: number; adulte: number; fatigue: number; prend: Jour | null };
 
 export const BOULOTS: Boulot[] = [
-  { id: 'babysitting', gain: 30, fatigue: 3, prend: null },
-  { id: 'livraison', gain: 45, fatigue: 12, prend: null },
-  { id: 'marche', gain: 60, fatigue: 8, prend: 'samedi' },
+  { id: 'babysitting', gain: 30, adulte: 70, fatigue: 3, prend: null },
+  { id: 'livraison', gain: 45, adulte: 90, fatigue: 12, prend: null },
+  { id: 'marche', gain: 60, adulte: 110, fatigue: 8, prend: 'samedi' },
 ];
+/** Ce que rapporte ce boulot a cet athlete. */
+export const paieDu = (a: Athlete, b: Boulot) => (etape(a) === 'adulte' ? b.adulte : b.gain);
 
 /* ---------------------------------------------------------- les competitions */
 
@@ -417,7 +420,7 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
     blessure: 0,
     semaine: 1,
     faites: [],
-    boulot: null,
+    boulots: [],
     club: null,
     coach: null,
     objectif: null,
@@ -455,8 +458,7 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
 export function seancePossible(a: Athlete, j: Jour): null | 'faite' | 'blesse' | 'boulot' {
   if (a.blessure > 0) return 'blesse';
   if (a.faites.includes(j)) return 'faite';
-  const b = BOULOTS.find(x => x.id === a.boulot);
-  if (b && b.prend === j) return 'boulot';
+  if (BOULOTS.some(b => b.prend === j && boulotFait(a, b.id))) return 'boulot';
   return null;
 }
 
@@ -517,12 +519,17 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
 
 /* ------------------------------------------------------------ l'argent */
 
+/** Deux boulots par semaine au plus : le dimanche reste aux competitions. */
+export const BOULOTS_PAR_SEMAINE = 2;
+/** Ce boulot est-il deja fait cette semaine ? */
+export const boulotFait = (a: Athlete, id: string) => !!a.boulots?.includes(id);
+
 export function prendreUnBoulot(a: Athlete, id: string): boolean {
   const b = BOULOTS.find(x => x.id === id);
-  if (!b || a.boulot) return false;
+  if (!b || boulotFait(a, id) || (a.boulots?.length || 0) >= BOULOTS_PAR_SEMAINE) return false;
   if (b.prend && a.faites.includes(b.prend)) return false;
-  a.boulot = id;
-  payer(a, b.gain, 'Petit boulot', 'Side job');
+  (a.boulots ||= []).push(id);
+  payer(a, paieDu(a, b), 'Petit boulot', 'Side job');
   a.fatigue = borne(a.fatigue + b.fatigue, 0, 100);
   return true;
 }
@@ -786,7 +793,7 @@ export function finirLaSemaine(a: Athlete) {
   a.osteo = false;
   a.semaine += 1;
   a.faites = [];
-  a.boulot = null;
+  a.boulots = [];
   a.kine = false;
   a.footing = false;
 }
