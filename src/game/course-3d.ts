@@ -1894,6 +1894,9 @@ let gabarit: THREE.Object3D | null = null;
 // vient des physiques (PHYSIQUES).
 const autresCorps: { homme: THREE.Object3D[]; femme: THREE.Object3D[] } = { homme: [], femme: [] };
 let chargement: Promise<void> | null = null;
+// LES POINTES TRIPO (30/10, « genere des pointes d'athletisme sans la marque sur Tripo », puis « applique-les a tous les
+// assets du jeu, tu peux varier les couleurs ») : le modele allege et cale sur chaque pied (scratchpad caler-pointes.py)
+const pointesTripo: { homme: THREE.Object3D | null; femme: THREE.Object3D | null } = { homme: null, femme: null };
 // echelle : un maillage Tripo n'a pas la taille du corps du jeu (Kouassi : 1,82 m au repos
 // contre 1,54) — ramene a lui, il a la taille de son look comme les autres
 type Corps = { m: Modele; mats: Record<string, THREE.MeshStandardMaterial>; echelle?: number; tissu?: Map<THREE.Bone, { a: number; w: number; p: number | null }>; tPrec?: number };
@@ -1944,6 +1947,8 @@ function chargerLeCorps() {
   chargement = l.loadAsync(base + 'modeles/coureur-homme.glb')
     .then(g => { gabarit = g.scene; })
     .catch(() => { /* les tubes restent */ });
+  for (const genre of ['homme', 'femme'] as const)
+    l.loadAsync(base + 'modeles/pointes-' + genre + '.glb').then(g => { pointesTripo[genre] = g.scene; }).catch(() => { /* les anciennes chaussures restent */ });
   for (const [genre, fichier] of [['femme', 'coureur-femme']] as const)
     l.loadAsync(base + 'modeles/' + fichier + '.glb').then(g => { autresCorps[genre].push(g.scene); }).catch(() => { /* un corps de moins */ });
 }
@@ -2257,6 +2262,7 @@ function corpsDe(r: any): Corps | null {
     maillotTripo(mats.debardeur, femme);
     if (mats.dossard) dossardSousLaBande(mats.dossard);
   }
+  chausserTripo(copie, femme, L.shoe);
   // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
   c = { m: modeleDe(copie), mats, echelle: source !== gabarit ? hauteurDe(gabarit) / hauteurDe(source) : undefined };
   monde.add(c.m.racine);
@@ -2370,6 +2376,63 @@ if (vKitN.x > 0.2) {
   };
   m.customProgramCacheKey = () => 'maillot-tripo';
   m.needsUpdate = true;
+}
+// Chaque pointe prend la place de la chaussure du jeu (tige, semelle, plaque, clous, logo, masques) : un maillage
+// accroche au meme os du pied, avec le meme squelette. L'eclair et le talon vert-jaune du modele prennent la couleur de
+// chaussure du coureur ; une couleur trop sombre garde le vert d'origine (sinon l'eclair disparait dans la tige noire).
+const geoPointes = new Map<string, THREE.BufferGeometry>();
+function chausserTripo(copie: THREE.Object3D, femme: boolean, couleur: number[] | undefined) {
+  const src = pointesTripo[femme ? 'femme' : 'homme'];
+  if (!src) return;
+  for (const c of ['l', 'r']) {
+    const tige = copie.getObjectByName('Tige_foot_' + c);
+    let peau: any = null;
+    tige?.traverse((o: any) => { if (!peau && o.isSkinnedMesh) peau = o; });
+    let modele: any = null;
+    src.getObjectByName('pointe_' + c)?.traverse((o: any) => { if (!modele && o.isMesh) modele = o; });
+    if (!peau || !modele) continue;
+    const cle = (femme ? 'f' : 'h') + c;
+    let geo = geoPointes.get(cle);
+    if (!geo) {
+      // l'os qui porte le plus la chaussure du jeu porte toute la pointe
+      const si = peau.geometry.getAttribute('skinIndex'), sw = peau.geometry.getAttribute('skinWeight');
+      const poids = new Map<number, number>();
+      for (let i = 0; i < si.count; i++) for (let k = 0; k < 4; k++) poids.set(si.getComponent(i, k), (poids.get(si.getComponent(i, k)) || 0) + sw.getComponent(i, k));
+      const os = [...poids.entries()].sort((a, b) => b[1] - a[1])[0][0];
+      geo = modele.geometry.clone() as THREE.BufferGeometry;
+      const n = geo.getAttribute('position').count;
+      const idx = new Uint16Array(n * 4), w = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) { idx[i * 4] = os; w[i * 4] = 1; }
+      geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+      geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(w, 4));
+      geoPointes.set(cle, geo);
+    }
+    const m = new THREE.MeshStandardMaterial({ map: modele.material.map, roughness: 0.6, metalness: 0 });
+    const t = couleur ? new THREE.Color().setRGB(couleur[0] / 255, couleur[1] / 255, couleur[2] / 255, THREE.SRGBColorSpace) : null;
+    const teinte = t && t.r * 0.3 + t.g * 0.59 + t.b * 0.11 > 0.04 ? t : null;
+    lisere(m);   // (avant la teinte : lisere remplace onBeforeCompile, la teinte s'y enchaine)
+    if (teinte) {
+      const avant = m.onBeforeCompile;
+      m.onBeforeCompile = (sh, r) => {
+        avant.call(m, sh, r);
+        sh.uniforms.uTeinte = { value: teinte };
+        sh.fragmentShader = sh.fragmentShader
+          .replace('#include <common>', '#include <common>\nuniform vec3 uTeinte;')
+          .replace('#include <map_fragment>', `#include <map_fragment>
+{
+  vec3 c = diffuseColor.rgb; float hi = max(c.r, max(c.g, c.b)), lo = min(c.r, min(c.g, c.b));
+  float vif = smoothstep(0.35, 0.6, hi > 0.0 ? (hi - lo) / hi : 0.0) * step(c.b, c.g * 0.6) * step(c.r, c.g * 1.15);
+  diffuseColor.rgb = mix(c, uTeinte * clamp(hi / 0.7, 0.4, 1.3), vif);
+}`);
+      };
+      m.customProgramCacheKey = () => 'pointe-tripo';
+    }
+    const sm = new THREE.SkinnedMesh(geo, m);
+    sm.name = 'pointe_' + c;
+    sm.bind(peau.skeleton, peau.bindMatrix);
+    tige!.parent!.add(sm);
+    for (const nom of ['Tige', 'Semelle', 'Plaque', 'Clous', 'Logo']) { const o = copie.getObjectByName(nom + '_foot_' + c); if (o) o.visible = false; }
+  }
 }
 const LOGO_DEVANT = { z: '0.042', y: '1.222', l: '0.094', h: '0.0349' };
 // (« VAL DE REUIL » et son triangle, decoupes dans le dessin de l'auteur : Tripo en avait abime le D)
