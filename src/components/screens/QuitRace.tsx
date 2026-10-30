@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { fermerLeTuto as fermerLeTutoSprint } from '@/game/sprint-tuto.js';
 import { fermerLeTuto as fermerLeTutoHaies } from '@/game/haies-tuto.js';
+import { fermerLesDeparts } from '@/game/athlete/departs';
 
 /**
  * Sortie de course, discrete.
@@ -79,7 +80,7 @@ export function QuitRace() {
               <button
                 // en plein tutoriel, le fermer : c'est son demontage qui rend au monde sa vitesse
                 // (sinon la course suivante partait figee, sous l'ecran du tutoriel, 29/10)
-                onClick={() => { fermerLeTutoSprint(); fermerLeTutoHaies(); SprinterApp.goHome(); }}
+                onClick={() => { fermerLeTutoSprint(); fermerLeTutoHaies(); fermerLesDeparts(); SprinterApp.goHome(); }}
                 className="w-full py-2.5 rounded-xl font-bold tracking-widest text-sm
                            text-muted-foreground hover:text-foreground bg-secondary/60
                            hover:bg-secondary transition-colors"
