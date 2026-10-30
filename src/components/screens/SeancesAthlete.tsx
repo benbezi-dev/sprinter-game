@@ -12,6 +12,9 @@ import { cheminDe } from '@/game/athlete/corps-gens';
 import { charger, pret, dessiner } from '@/game/vedette-3d';
 import { POSTURES } from '@/game/athlete/postures';
 import { bonusDeSeance } from '@/game/athlete/gens';
+import { ouvrirLesDeparts } from '@/game/athlete/departs';
+import { sauver as sauverAthlete, demanderReouverture } from '@/game/athlete/carriere';
+import { demarrerSequence, pasDuTuto, rangerLeTuto, figerLaPiste } from '@/game/sprint-tuto.js';
 import { CLUB_PARTENAIRE, logoDuClub } from '@/game/athlete/partenaires';
 
 /* ---------------------------------------------------------------------------
@@ -466,61 +469,6 @@ function JaugeAllure({ v, lo, hi, couleur }: { v: number; lo: number; hi: number
 
 /* ================================================================ les jeux */
 
-/** Departs en blocs : cinq essais au pistolet. */
-function Departs({ fini, couleur, scene }: JeuProps) {
-  const [essai, setEssai] = useState(0);
-  const [ordre, setOrdre] = useState<'marques' | 'prets' | 'pan' | 'vu'>('marques');
-  const [dernier, setDernier] = useState('');
-  const scores = useRef<number[]>([]);
-  const pan = useRef(0), tir = useRef(0), debutEssai = useRef(0), sortie = useRef(-1), faute = useRef(false);
-  const e = scene.current;
-  const remettre = (t: number) => {
-    debutEssai.current = t; tir.current = 1.4 + 1.0 + Math.random() * 1.4; pan.current = 0; sortie.current = -1; faute.current = false;
-    const c = e.corps; c.enBloc = 1; c.prets = 0; c.v = 0; c.drivePitch = 0; c.d = 0; c.debout = 0; e.defile = 0;
-    setOrdre('marques');
-  };
-  useHorloge((t, dt) => {
-    if (essai >= 5) return true;
-    if (!debutEssai.current) remettre(t || 0.001);
-    const el = t - debutEssai.current, c = e.corps;
-    if (ordre === 'marques' && el > 1.4) setOrdre('prets');
-    if (ordre === 'prets') c.prets = Math.min(1, c.prets + dt * 2.2);
-    if (ordre === 'prets' && el > tir.current) { setOrdre('pan'); pan.current = performance.now() / 1000; e.flash = 1; e.couleurFlash = '#FFF6D0'; e.fumee = 1; }
-    if (ordre === 'pan' && performance.now() / 1000 - pan.current > 0.9) partir(performance.now() / 1000);
-    // la sortie des blocs : le corps se deplie, accelere, se redresse
-    if (sortie.current >= 0) {
-      const s = performance.now() / 1000 - sortie.current;
-      c.enBloc = Math.max(0, 1 - s * 4);
-      c.drivePitch = 0.62 * Math.max(0, 1 - s / 1.3);
-      courir(e, Math.min(faute.current ? 3 : 9.5, 2 + s * 7), dt);
-      if (faute.current && s > 0.45) { c.v = 0; c.debout = Math.min(1, (s - 0.45) * 3); }
-    }
-  });
-  const partir = (t: number) => {
-    if (ordre === 'vu' || essai >= 5) return;
-    let s = 0, msg: string;
-    if (ordre !== 'pan') { msg = mot('faux'); faute.current = true; e.flash = 1; e.couleurFlash = '#FF3B3B'; }
-    else {
-      const r = t - pan.current;
-      if (r < 0.1) { msg = `${mot('faux')} · ${r.toFixed(3)} s`; faute.current = true; e.flash = 1; e.couleurFlash = '#FF3B3B'; }
-      else { s = borne((0.35 - r) / 0.22); msg = `${dans(['Réaction', 'Reaction'])} ${r.toFixed(3)} s`; }
-    }
-    // l'athlete part (ou s'arrete net sur un faux depart) : la sortie se compte en temps reel
-    sortie.current = performance.now() / 1000;
-    scores.current.push(s);
-    setDernier(msg); setOrdre('vu');
-    setTimeout(() => {
-      const n = essai + 1; setEssai(n);
-      if (n >= 5) fini(scores.current.reduce((x, y) => x + y, 0) / 5);
-      else debutEssai.current = 0;
-    }, 1500);
-  };
-  const { zone } = useAppuis((_, t) => partir(t));
-  const texte = ordre === 'marques' ? dans(['À vos marques…', 'On your marks…'])
-    : ordre === 'prets' ? dans(['Prêts…', 'Set…']) : ordre === 'pan' ? 'PAN !' : dernier;
-  return { haut: `${dans(['ESSAI', 'ATTEMPT'])} ${Math.min(5, essai + 1)} / 5`, grand: texte, couleur, zone, libelles: [dans(['PARTIR', 'GO']), dans(['PARTIR', 'GO'])] as [string, string] };
-}
-
 /** Vitesse lancee : 3 s d'elan, puis 3 s dans la zone ; la vitesse suit la cadence. */
 function Lancee({ fini, scene }: JeuProps) {
   const c = useCadence();
@@ -820,8 +768,8 @@ function Allure({ fini, couleur, scene, reps, duree, zones }: JeuProps & { reps:
 
 type Rendu = { haut?: React.ReactNode; grand?: React.ReactNode; petit?: React.ReactNode; couleur?: string; zone: (c: Cote) => object; libelles?: [string, string]; extra?: React.ReactNode };
 
-const JEUX: Record<Exercice, { decor: Decor; jeu: (p: JeuProps) => Rendu }> = {
-  departs: { decor: 'piste', jeu: Departs },
+// les departs en blocs n'ont pas de jeu dessine : ils se font sur la piste du jeu (DepartsEnPiste)
+const JEUX: Record<Exclude<Exercice, 'departs'>, { decor: Decor; jeu: (p: JeuProps) => Rendu }> = {
   lancee: { decor: 'piste', jeu: Lancee },
   gammes: { decor: 'piste', jeu: Gammes },
   virage: { decor: 'virage', jeu: Virage },
@@ -834,7 +782,7 @@ const JEUX: Record<Exercice, { decor: Decor; jeu: (p: JeuProps) => Rendu }> = {
 };
 
 /** Le jeu en cours : la scene, le bandeau par-dessus, les zones dessous. */
-function EnJeu({ ex, fini, couleur, scene }: { ex: Exercice } & Omit<JeuProps, 'scene'> & { scene: React.MutableRefObject<EtatScene> }) {
+function EnJeu({ ex, fini, couleur, scene }: { ex: Exclude<Exercice, 'departs'> } & Omit<JeuProps, 'scene'> & { scene: React.MutableRefObject<EtatScene> }) {
   const r = JEUX[ex].jeu({ fini, couleur, scene });
   return (
     <>
@@ -850,9 +798,19 @@ function EnJeu({ ex, fini, couleur, scene }: { ex: Exercice } & Omit<JeuProps, '
 
 /* ================================================================ la seance */
 
-export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete; onFin: () => void; exercice?: Exercice }) {
+export function SeanceJeu(p: { jour: Jour; a: Athlete; onFin: () => void; exercice?: Exercice }) {
   // `exercice` : imposer l'exercice (l'apercu tools/apercu-seances.html) ; sinon, le programme du jour
-  const ex = exercice || exerciceDuJour(a, jour);
+  const ex = p.exercice || exerciceDuJour(p.a, p.jour);
+  return ex === 'departs' ? <VersLaPiste {...p} /> : <SeanceDessinee {...p} ex={ex} />;
+}
+
+/** Les departs : la seance part sur la piste du jeu, et l'ecran de la carriere se referme. */
+function VersLaPiste({ jour, a, onFin }: { jour: Jour; a: Athlete; onFin: () => void }) {
+  useEffect(() => { onFin(); ouvrirLesDeparts(a, jour); }, []);
+  return null;
+}
+
+function SeanceDessinee({ jour, a, onFin, ex }: { jour: Jour; a: Athlete; onFin: () => void; ex: Exclude<Exercice, 'departs'> }) {
   const e = EXOS[ex];
   // le lieu decide du decor : seul, les seances de piste se font au parc
   const decor: Decor = !a.club && JEUX[ex].decor === 'piste' ? 'parc' : JEUX[ex].decor;
@@ -880,8 +838,7 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
   // avant de commencer : l'athlete attend, en place pour l'exercice
   useEffect(() => {
     const s = scene.current, c = s.corps;
-    if (ex === 'departs') { c.enBloc = 1; c.prets = 0; }
-    else if (ex === 'muscu') { c.posture = POSTURES.squat(0); s.barre = 0; }
+    if (ex === 'muscu') { c.posture = POSTURES.squat(0); s.barre = 0; }
     else if (ex === 'gainage') c.posture = POSTURES.gainage();
     else c.debout = 1;
   }, [ex]);
@@ -906,7 +863,7 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
                 <button onClick={() => {
                   // l'attente est finie : le corps quitte sa pose d'attente pour l'exercice
                   const c = scene.current.corps;
-                  if (ex !== 'departs') { c.debout = 0; c.enBloc = 0; }
+                  c.debout = 0; c.enBloc = 0;
                   if (ex !== 'muscu' && ex !== 'gainage') c.posture = { w: 0 };
                   setPhase('jeu');
                 }}
@@ -915,28 +872,99 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
                 </button>
               </>
             )}
-            {phase === 'fini' && res && (
-              <>
-                <span className="font-black font-display text-3xl text-white">{mot('score', { n: Math.round(res.score * 100) })}</span>
-                {res.r?.blessure
-                  ? <span className="text-red-400 font-bold">{res.r.type ? dans(BLESSURES[res.r.type].nom) : mot('blessure_s')} · {a.blessure} {dans(['sem. d’arrêt', 'wk out'])}</span>
-                  : res.r && (
-                    <div className="flex gap-3">
-                      {Object.entries(res.r.gains).map(([k, v]) => (
-                        <span key={k} className="font-black" style={{ color: COULEUR[k as Stat] }}>{mot(k)} +{v}</span>
-                      ))}
-                    </div>
-                  )}
-                {res.r?.gene && <span className="text-amber-300 text-sm font-bold">⚠ {dans(BLESSURES[res.r.gene].gene)}</span>}
-                <button onClick={onFin} className="mt-1 rounded-xl px-8 py-3 font-black tracking-widest text-black" style={{ background: VERT }}>
-                  {mot('continuer')}
-                </button>
-              </>
-            )}
+            {phase === 'fini' && res && <Bilan a={a} res={res} onFin={onFin} />}
           </div>
         </div>
       )}
     </div>,
     document.body,
+  );
+}
+
+/** Le bilan d'une seance : la note, ce qu'elle a rapporte, ou la blessure. */
+function Bilan({ a, res, onFin }: { a: Athlete; res: { score: number; r: ResultatSeance | null }; onFin: () => void }) {
+  return (
+    <>
+      <span className="font-black font-display text-3xl text-white">{mot('score', { n: Math.round(res.score * 100) })}</span>
+      {res.r?.blessure
+        ? <span className="text-red-400 font-bold">{res.r.type ? dans(BLESSURES[res.r.type].nom) : mot('blessure_s')} · {a.blessure} {dans(['sem. d’arrêt', 'wk out'])}</span>
+        : res.r && (
+          <div className="flex gap-3">
+            {Object.entries(res.r.gains).map(([k, v]) => (
+              <span key={k} className="font-black" style={{ color: COULEUR[k as Stat] }}>{mot(k)} +{v}</span>
+            ))}
+          </div>
+        )}
+      {res.r?.gene && <span className="text-amber-300 text-sm font-bold">⚠ {dans(BLESSURES[res.r.gene].gene)}</span>}
+      <button onClick={onFin} className="mt-1 rounded-xl px-8 py-3 font-black tracking-widest text-black" style={{ background: VERT }}>
+        {mot('continuer')}
+      </button>
+    </>
+  );
+}
+
+/* ================================================================ les departs, sur la piste */
+
+const ESSAIS = 5;
+
+/**
+ * Les departs en blocs sur la piste du jeu : la sequence « depart » du tutoriel, le starter
+ * et le pistolet du moteur, le corps de l'athlete. Cinq essais ; la reaction que mesure le
+ * moteur fait la note (0,13 s : parfait ; 0,35 s et plus, ou faux depart : rien).
+ */
+export function DepartsEnPiste({ a, jour, onFin }: { a: Athlete; jour: Jour; onFin: () => void }) {
+  const [essai, setEssai] = useState(0);
+  const [dernier, setDernier] = useState<string | null>(null);
+  const [res, setRes] = useState<{ score: number; r: ResultatSeance | null } | null>(null);
+  const scores = useRef<number[]>([]);
+  const traite = useRef(false);
+
+  const lancer = () => { traite.current = false; setDernier(null); demarrerSequence({ geste: 'depart', tempo: 1, demo: false }); };
+  useEffect(() => {
+    const G = SprinterApp.G as any;
+    G.reglagesJoueur = { look: lookDe(apparenceDe(a), false) };
+    lancer();
+    let raf = 0, minuteur = 0;
+    const pas = () => {
+      const e = pasDuTuto() as { fini: boolean; abandon: boolean; reaction: number | null; fauxDepart: boolean } | null;
+      if (e && e.fini && !traite.current) {
+        traite.current = true;
+        const r = e.reaction;
+        const s = e.fauxDepart || e.abandon || r === null ? 0 : borne((0.35 - r) / 0.22);
+        scores.current.push(s);
+        setDernier(e.fauxDepart ? mot('faux') : r === null ? dans(['Trop tard', 'Too late']) : `${dans(['Réaction', 'Reaction'])} ${r.toFixed(3)} s`);
+        minuteur = window.setTimeout(() => {
+          const n = scores.current.length;
+          setEssai(n);
+          if (n < ESSAIS) { lancer(); return; }
+          figerLaPiste();
+          const score = scores.current.reduce((x, y) => x + y, 0) / ESSAIS;
+          setRes({ score, r: faireLaSeance(a, jour, score, Math.random, bonusDeSeance(a)) });
+          sauverAthlete(a);
+        }, 1500);
+      }
+      raf = requestAnimationFrame(pas);
+    };
+    raf = requestAnimationFrame(pas);
+    // la piste rendue en partant, et le corps de l'athlete retire : rien ne doit le suivre ailleurs
+    return () => { cancelAnimationFrame(raf); clearTimeout(minuteur); rangerLeTuto(); G.reglagesJoueur = null; };
+  }, []);
+
+  return (
+    <div className="fixed inset-0 z-[60] flex flex-col items-center pointer-events-none text-foreground
+                    pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] px-4">
+      {/* sous le bandeau de course et la reaction du jeu, qui tiennent le haut de l'ecran */}
+      <span className="relative mt-[11.5rem] px-3 py-1 rounded-full bg-black/60 text-[10px] font-black tracking-[0.22em]" style={{ color: COULEUR[SEANCES[jour].stat] }}>
+        {mot(jour)} · {dans(EXOS.departs.nom).toUpperCase()}
+      </span>
+      <span className="relative mt-1 text-xs font-black tracking-[0.3em] text-white/80">{dans(['ESSAI', 'ATTEMPT'])} {Math.min(ESSAIS, essai + 1)} / {ESSAIS}</span>
+      {dernier && <span className="relative mt-2 font-black font-display text-2xl text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">{dernier}</span>}
+      {res && (
+        <div className="pointer-events-auto mt-auto w-full max-w-sm rounded-2xl bg-[#0A1410]/95 border border-white/10 p-4 flex flex-col items-center gap-3 text-center">
+          {/* la carriere se rouvre a l'accueil, la ou on l'a laissee */}
+          <Bilan a={a} res={res} onFin={() => { demanderReouverture(); onFin(); }} />
+        </div>
+      )}
+    </div>
   );
 }
