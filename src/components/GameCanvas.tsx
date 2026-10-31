@@ -309,9 +309,11 @@ export function GameCanvas() {
       const accueilSansScene = G.state === 'title' && !placerLaCameraDeLAccueil(SprinterApp);
       // la presentation de l'adversaire (cinematique `intro`) se passe aussi en 3D : la camera
       // y fait le tour du stade avant de plonger vers le depart (course-3d.ts, LE SURVOL)
-      const introCourse = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
+      // ... et les scenettes d'apres course aussi (« les anciennes cartes s'affichent a la place des cartes
+      // 3D », l'auteur, 31/10) : seul le generique de fin garde sa propre scene, la nuit du tour d'honneur
+      const scenette = G.state === 'cut' && G.cut && G.cut.kind !== 'ending';
       const en3D = !!rendu3D && (EPREUVES_3D.has(G.raceKey) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
-        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || introCourse);
+        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || scenette);
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {
         const g = ctx.createLinearGradient(0, 0, 0, G.VH);
