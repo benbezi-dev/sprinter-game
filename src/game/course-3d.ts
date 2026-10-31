@@ -663,7 +663,9 @@ let cameraSalle: ((x: number, y: number, z: number, survol: boolean, cam?: THREE
 function caler(T: any) {
   salleActive = estEnSalle(T, (globalThis as any).SprinterApp?.G?.race);
   if (salleActive) { ({ sx, x0, y0 } = calageSalle(T)); return; }
-  if (!T.curved) { sx = 1; x0 = 0; y0 = 0; }
+  // (en ligne droite aussi, l'arrivee tombe sur le damier : le 110 m haies part 10 m plus tot, sinon sa
+  // derniere haie etait a 4,02 m de la ligne peinte au lieu de 14,02 — l'auteur, 31/10)
+  if (!T.curved) { sx = 1; x0 = DROITE1 - (T.total || 100); y0 = 0; }
   else if (T.fullLap) { sx = -1; x0 = DROITE1; y0 = -R_CORDE; }
   else { sx = 1; x0 = DROITE1 - T.straight; y0 = -R_CORDE; }
 }
