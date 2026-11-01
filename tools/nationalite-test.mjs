@@ -6,25 +6,27 @@
    suivre la grille la plus faible pour collectionner les titres.
 
    Ce test tourne sur une base FACTICE, et c'est deliberе : la regle vit
-   entierement dans `choisirPays` et `oublierPays`, deux fonctions qui lisent
-   une ligne et decident. Les faire tourner contre D1 demanderait un joueur
+   entierement dans `choisirPays`, qui lit une ligne et decide (il n'y a plus
+   de route pour retirer une nationalite). Les faire tourner contre D1 demanderait un joueur
    reel, un appareil reel, et laisserait des ecritures derriere — pour ne rien
    verifier de plus.
 
        node tools/nationalite-test.mjs
 --------------------------------------------------------------------------- */
-import { choisirPays, oublierPays, imposerPays } from '../worker/src/championnats.js';
+import { choisirPays, imposerPays } from '../worker/src/championnats.js';
 
-function fausseBase(ligne) {
+function fausseBase(ligne, inscrit = true) {
   const etat = { ligne, ecrit: [] };
   const db = {
     batch: async () => {},
     prepare(sql) {
       return {
+        async run() { return {}; },   // les CREATE TABLE d'ensureChampTables
         bind(...args) {
           return {
             async first() {
               if (/SELECT pays, source FROM player_pays/.test(sql)) return etat.ligne;
+              if (/FROM players WHERE name_key/.test(sql)) return inscrit ? { ok: 1 } : null;
               return null;
             },
             async run() { etat.ecrit.push({ sql: sql.trim().split('\n')[0], args }); return {}; },
@@ -64,18 +66,6 @@ const dire = (nom, ok, detail) => cas.push({ nom, ok, detail });
   const r = await choisirPays(db, 'toto', 'FR');
   dire('reposer le meme pays', r.ok === true && r.inchange === true && etat.ecrit.length === 0, JSON.stringify(r));
 }
-// 5 · retrait d'une nationalite choisie : refus
-{
-  const { db, etat } = fausseBase({ pays: 'FR', source: 'choix' });
-  const r = await oublierPays(db, 'toto');
-  dire('retrait refuse', r.ok === false && r.erreur === 'nationalite definitive' && etat.ecrit.length === 0, JSON.stringify(r));
-}
-// 6 · retrait d'une detection : accepte
-{
-  const { db, etat } = fausseBase({ pays: 'BE', source: 'geo' });
-  const r = await oublierPays(db, 'toto');
-  dire('retrait d une detection', r.ok === true && etat.ecrit.length === 1, JSON.stringify(r));
-}
 // 7 · code invalide
 {
   const { db } = fausseBase(null);
@@ -95,22 +85,23 @@ const dire = (nom, ok, detail) => cas.push({ nom, ok, detail });
   const r = await imposerPays(db, 'toto', 'FR');
   dire('correction sans changement', r.ok === true && r.inchange === true && etat.ecrit.length === 0, JSON.stringify(r));
 }
-// 10 · elle ne CREE pas une nationalite : choisir a la place de quelqu'un est
-//      exactement ce que le verrou empeche
+// 10 · elle pose la nationalite de qui n'en a jamais declare (de vive voix,
+//      une detection 'geo' a confirmer) — sur un NOM RESERVE seulement
 {
   const { db, etat } = fausseBase(null);
   const r = await imposerPays(db, 'toto', 'MA');
-  dire('correction sur profil vierge refusee',
-       r.erreur === 'ce joueur n a pas declare de nationalite' && etat.ecrit.length === 0, JSON.stringify(r));
+  dire('pose sur profil vierge', r.ok === true && r.cree === true && etat.ecrit.length === 1, JSON.stringify(r));
 }
-// 11 · elle ne remplace pas non plus une simple detection : une ligne 'geo'
-//      n'est pas une declaration, et ecrire par-dessus serait choisir a la
-//      place du joueur
 {
   const { db, etat } = fausseBase({ pays: 'BE', source: 'geo' });
   const r = await imposerPays(db, 'toto', 'MA');
-  dire('correction par-dessus une detection refusee',
-       r.erreur === 'ce joueur n a pas declare de nationalite' && etat.ecrit.length === 0, JSON.stringify(r));
+  dire('pose par-dessus une detection', r.ok === true && r.avant === 'BE' && etat.ecrit.length === 1, JSON.stringify(r));
+}
+// 11 · un nom que personne ne porte : refus, rien d'ecrit
+{
+  const { db, etat } = fausseBase(null, false);
+  const r = await imposerPays(db, 'toto', 'MA');
+  dire('nom non reserve refuse', r.erreur === 'joueur inconnu' && etat.ecrit.length === 0, JSON.stringify(r));
 }
 
 let mal = 0;

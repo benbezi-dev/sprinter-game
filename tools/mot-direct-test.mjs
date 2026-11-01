@@ -39,7 +39,8 @@ const VOIX = Buffer.from('RIFF0000WAVEfmt data').toString('base64');
 
 function client(code, nom, places = 2) {
   const c = { nom, moi: null, depart: null, resultats: [], mots: [] };
-  const q = `name=${encodeURIComponent(nom)}&races=100&level=5&max=${places}`;
+  // l'appareil, comme le jeu : sans lui, la salle compte le nom en anonyme
+  const q = `device=harnais-${String(nom).replace(/[^a-zA-Z0-9]/g, '').slice(0, 50)}&name=${encodeURIComponent(nom)}&races=100&level=5&max=${places}`;
   c.ws = new WebSocket(`${WS}/live/${code}?${q}`);
   c.ouvert = new Promise(res => c.ws.addEventListener('open', res));
   c.ws.addEventListener('message', ev => {

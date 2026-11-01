@@ -32,9 +32,12 @@ console.log('╚═════════════════════�
 // ------------------------------------------------------------ sans code
 console.log('\n── SANS CODE ────────────────────────────────────────────────');
 const relaisFerme = await get('/relay/ranking');
-ok('le relais est ferme', relaisFerme.statut === 403, `HTTP ${relaisFerme.statut}`);
+// Relais et championnats sont ouverts a tous depuis (relaisOuvert et
+// championnatsOuverts, worker/src/index.js) : le canal de test se distingue
+// par sa base, pas par ce qu'il autorise.
+ok('le relais est ouvert a tous', relaisFerme.statut === 200, `HTTP ${relaisFerme.statut}`);
 const champFerme = await get('/champ/pays');
-ok('les championnats sont fermes', champFerme.statut === 403, `HTTP ${champFerme.statut}`);
+ok('les championnats se lisent sans code', champFerme.statut === 200, `HTTP ${champFerme.statut}`);
 const duelsOuverts = await get('/duels');
 ok('le classement des duels reste public', duelsOuverts.statut === 200);
 
@@ -103,9 +106,6 @@ ok('l acces se revoque', rev.statut === 200);
 
 const apres = await post('/test/entrer', { code: CODE });
 ok('le code revoque ne passe plus', apres.statut === 403);
-const relaisApres = await get('/relay/ranking', h);
-ok('le relais se referme aussitot', relaisApres.statut === 403,
-   `HTTP ${relaisApres.statut}`);
 
 const autre = await get('/relay/ranking', { 'X-Sprinter-Test': CODE2 });
 ok('l autre acces continue de fonctionner', autre.statut === 200,

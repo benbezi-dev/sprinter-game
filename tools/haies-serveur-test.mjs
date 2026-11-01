@@ -35,7 +35,10 @@ ok('les ecrans de duel peuvent proposer les haies',
    HAIES_CLES.every(c => DISCIPLINES_SIMPLES.includes(c)));
 ok('un combine de haies se range dans l\'ordre du programme',
    cleDiscipline(['400h', '100h']) === '100h+400h' && estDiscipline('100h+400h'));
-ok('le defi du jour reste au sprint', memes(EPREUVES_DEFI, SPRINT), EPREUVES_DEFI.join(','));
+// Les haies partagent le defi du jour du sprint (voir EPREUVES_DEFI, objectif.js) :
+// meme creneau, meme bareme, meme serie.
+ok('le defi du jour couvre les six epreuves, sprint puis haies',
+   memes(EPREUVES_DEFI, [...SPRINT, ...HAIES_CLES]), EPREUVES_DEFI.join(','));
 
 titre('LA SALLE DU DIRECT NE MELANGE PAS LES JEUX');
 
@@ -89,7 +92,7 @@ const cles = (texte, motif) => {
 {
   const j = lire('src/game/jeux.ts');
   const sp = cles(j, /sprinter: \[([^\]]+)\],\n\s*hurdlers/);
-  const hu = cles(j, /hurdlers: \[([^\]]+)\],\n\};/);
+  const hu = cles(j, /hurdlers: \[([^\]]+)\],\n/);
   ok('les epreuves de chaque jeu sont les memes des deux cotes',
      memes(sp, CLES_DU_JEU.sprinter) && memes(hu, CLES_DU_JEU.hurdlers),
      `${sp} / ${hu}`);

@@ -492,6 +492,9 @@ export class Salle {
     this.coupee = false;
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
+      // le serveur verifie que ce telephone porte bien ce nom : sans cela, il
+      // court en anonyme (ni duel classe, ni piece)
+      device: getDeviceId(),
       races: epreuves.join(','),
       level: String(niveau),
       // Seul le premier arrive fixe la taille ; pour les autres le serveur

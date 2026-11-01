@@ -51,6 +51,12 @@ async function moteurDe(canal) {
   await build({
     entryPoints: [entree], outfile: sortie, bundle: true,
     format: 'esm', platform: 'node', logLevel: 'silent',
+    // La liste du prechargement est un module virtuel que seul Vite fabrique
+    // (vite.config.ts) : vide ici, rien n'est a precharger sous node.
+    plugins: [{ name: 'precharge', setup(b) {
+      b.onResolve({ filter: /^virtual:precharge$/ }, () => ({ path: 'precharge', namespace: 'virtuel' }));
+      b.onLoad({ filter: /.*/, namespace: 'virtuel' }, () => ({ contents: 'export default { ordinaire: [], ultra: [] };', loader: 'js' }));
+    } }],
     define: {
       'import.meta.env.VITE_CANAL': JSON.stringify(canal),
       'import.meta.env.BASE_URL': '"/"',
@@ -81,12 +87,19 @@ function jusquAuSignal(M, attente) {
   let pas = 0;
   // Un soixantieme de seconde par tour, comme la boucle du jeu ; le garde-fou
   // est a trente secondes de jeu, bien au-dela du plus long depart possible.
+  // L'attente du stade et les attitudes d'avant le depart (engine.ts)
+  // precedent le decompte sans faire avancer `countT` : on ne compte que les
+  // tours ou il court.
+  let decompte = 0;
   while (G.state === 'count' && pas < 60 * 30) {
+    const c0 = G.countT;
     M.updateLogic(1 / 60);
-    dit.push(G.depart ? G.depart.dit : 0);
     pas++;
+    if (G.state === 'count' && G.countT === c0) continue;
+    decompte++;
+    dit.push(G.depart ? G.depart.dit : 0);
   }
-  return { entendu, debut, dit, etat: G.state, secondes: pas / 60,
+  return { entendu, debut, dit, etat: G.state, secondes: decompte / 60,
            flash: G.flash, longueur: G.depart ? G.depart.duree : null };
 }
 

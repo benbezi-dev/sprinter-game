@@ -178,8 +178,12 @@ titre('LE PINCEAU EST RENDU EN POINTS CSS, ET REMIS D APLOMB');
   // doit raisonner en points, comme la feuille de style.
   ok('le carton mesure en points CSS', vus[0]?.l === 405 && vus[0]?.h === 720,
      `${vus[0]?.l} x ${vus[0]?.h}`);
-  ok('l echelle de l appareil est appliquee', montage._ctx.echelles.includes(2),
-     montage._ctx.echelles.slice(0, 3).join(', '));
+  // Pixels du film par point CSS : le montage fait la largeur du 2K (1440,
+  // voir cadreDuFilm dans review.ts), pour 405 points visibles.
+  const attendue = montage.width / 405;
+  ok('l echelle de l appareil est appliquee',
+     montage._ctx.echelles.some(e => Math.abs(e - attendue) < 1e-9),
+     `${montage._ctx.echelles.slice(0, 3).join(', ')} au lieu de ${attendue}`);
   // Une echelle qui fuit se remultiplie a chaque image : le carton finirait en
   // un pixel. Voir le `finally` de `tracerLeCarton`.
   ok('le pinceau est remis d aplomb a chaque image', montage._ctx.profondeur === 0,
