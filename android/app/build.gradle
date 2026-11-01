@@ -99,8 +99,9 @@ android {
         // publique, la trace de course posee au pas fixe (les telephones lents
         // ne sont plus refuses pour « depasse 18 m/s »), et la carriere
         // Legende (canal de test seulement).
-        versionCode 13
-        versionName "1.0"
+        // 20 : le 60 m, le 200 et le 400 en salle ; le toit ne couvre plus la ligne droite (vc18 et 19 construits le 31/10).
+        versionCode 20
+        versionName "1.0.3"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
