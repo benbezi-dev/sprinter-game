@@ -59,6 +59,22 @@ export const FORMAT = {
   ],
 };
 
+/**
+ * L'ANNEAU COUVERT N'A QUE SIX COULOIRS (piste-salle.js) : le 200 m et le 400 m en salle se courent
+ * a six par course. Vingt-quatre partants, quatre series, deux demies, une finale ; le 60 m, sur la
+ * ligne droite a huit couloirs, garde le format ordinaire.
+ */
+const FORMAT_ANNEAU = {
+  partants: 24,
+  phases: FORMAT.phases.map(p => ({
+    ...p, parCourse: 6,
+    repechages: { series: 4, demies: 2, finale: 0 }[p.cle],
+  })),
+};
+export function formatDe(epreuve) {
+  return epreuve === '200s' || epreuve === '400s' ? FORMAT_ANNEAU : FORMAT;
+}
+
 /** Les trois echelons, et ce qui remplit leur grille de depart. */
 export const ECHELONS = {
   national: {

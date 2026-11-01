@@ -597,8 +597,10 @@ export class SalleDirecte {
       // Seul le premier arrive decide de la taille : la changer en cours de
       // route ferait entrer ou sortir des gens d'une course deja formee.
       const m = parseInt(url.searchParams.get('max') || String(DEFAUT_JOUEURS), 10);
+      // (l'anneau couvert n'a que six couloirs : le 200 m et le 400 m en salle s'y arretent)
+      const plafond = this.epreuves.some(r => r === '200s' || r === '400s') ? 6 : PLAFOND_JOUEURS;
       this.max = Number.isFinite(m)
-        ? Math.max(PLANCHER_JOUEURS, Math.min(PLAFOND_JOUEURS, m))
+        ? Math.max(PLANCHER_JOUEURS, Math.min(plafond, m))
         : DEFAUT_JOUEURS;
       // Le tournoi aussi se decide a l'ouverture, et seulement a partir de
       // trois couloirs (voir TOURNOI_MIN).
