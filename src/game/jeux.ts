@@ -24,7 +24,7 @@ import { HAIES } from './haies.js';
 import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
 import { allerAu, mondeCourant, type Monde } from './mondes';
-import { HAIES_OUVERTES, SAUTS_OUVERTS, VEDETTES_LANCEES } from './canal';
+import { HAIES_OUVERTES, SAUTS_OUVERTS, VEDETTES_LANCEES, TROIS_D_OUVERTE } from './canal';
 import { habillerLeJoueur, skinPorte, skinGagne, lookDuSkin } from './vestiaire';
 import { VEDETTES, defiPossible, maillageDe } from './vedettes';
 
@@ -32,7 +32,8 @@ export type Jeu = 'sprinter' | 'hurdlers' | 'jumper';
 
 /** Les epreuves de chaque jeu, dans l'ordre ou l'accueil les propose. */
 export const EPREUVES_DU_JEU: Record<Jeu, readonly RaceKey[]> = {
-  sprinter: ['100', '200', '400'],
+  // (epreuvesDuJeu retire la salle tant que la 3D n'est pas ouverte : elle n'existe qu'en 3D)
+  sprinter: ['60', '100', '200', '200s', '400', '400s'],
   hurdlers: ['100h', '110h', '400h'],
   // Jumper n'a pas de course : ses epreuves sont des concours, que son accueil
   // lance lui-meme (screens/Jumper.tsx).
@@ -49,7 +50,7 @@ export const TOUTES_LES_EPREUVES: readonly RaceKey[] = [
  * pas : il vit dans Sprinter, mais sa cle n'a pas a y ramener qui que ce soit.
  */
 const EPREUVES_CONNUES: ReadonlySet<string> = new Set([
-  '100', '200', '400', '100h', '110h', '400h',
+  '60', '100', '200', '200s', '400', '400s', '100h', '110h', '400h',
 ]);
 
 /** L'epreuve se court-elle avec des haies ? */
@@ -70,8 +71,12 @@ export function jeuDe(cle: unknown): Jeu {
 /** Les epreuves de la piste couverte (piste-salle.js) : « 200s » se dit « 200 m ». */
 export const EPREUVES_EN_SALLE = ['60', '200s', '400s'] as const;
 const enSalle = (cle: string) => (EPREUVES_EN_SALLE as readonly string[]).includes(cle);
+const N_SALLE = () => (SprinterApp as any).N?.t?.('lieu_salle') || 'SALLE';
+/** Les epreuves du plein air, pour un stade qui n'est pas la salle. */
+export const EPREUVES_DEHORS = ['100', '200', '400'] as const;
 export function nomCourt(cle: string): string {
-  if (enSalle(cle)) return `${cle.replace('s', '')} M`;
+  // (le 200 et le 400 existent aussi dehors : le bouton doit dire lequel)
+  if (enSalle(cle)) return cle === '60' ? '60 M' : `${cle.replace('s', '')} M ${N_SALLE()}`;
   return estUneCourseDeHaies(cle) ? `${cle.slice(0, -1)} M H` : `${cle} M`;
 }
 
@@ -81,7 +86,7 @@ export function nomCourt(cle: string): string {
  */
 export function nomEnLigne(cle: string | readonly string[]): string {
   const l = Array.isArray(cle) ? cle : [cle as string];
-  return l.map(k => (enSalle(k) ? `${k.replace('s', '')} m` : estUneCourseDeHaies(k) ? `${k.slice(0, -1)} m H` : `${k} m`)).join(' + ');
+  return l.map(k => (k === '60' ? '60 m' : enSalle(k) ? `${k.replace('s', '')} m ${N_SALLE().toLowerCase()}` : estUneCourseDeHaies(k) ? `${k.slice(0, -1)} m H` : `${k} m`)).join(' + ');
 }
 
 // --- les trois epreuves dans la table du moteur ------------------------------
@@ -169,7 +174,7 @@ export function jeuCourant(): Jeu { return courant; }
 
 /** Les epreuves du jeu courant. */
 export function epreuvesDuJeu(jeu: Jeu = courant): readonly RaceKey[] {
-  return EPREUVES_DU_JEU[jeu];
+  return TROIS_D_OUVERTE ? EPREUVES_DU_JEU[jeu] : EPREUVES_DU_JEU[jeu].filter(k => !enSalle(k));
 }
 
 /**

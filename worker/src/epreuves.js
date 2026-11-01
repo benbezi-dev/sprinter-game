@@ -41,6 +41,10 @@ export const EPREUVES = {
   '100': { cle: '100', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m', libelleEn: '100 m' },
   '200': { cle: '200', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '200 m', libelleEn: '200 m' },
   '400': { cle: '400', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m', libelleEn: '400 m' },
+  // La piste couverte (piste-salle.js) : ses chronos ne se melent jamais a ceux du plein air, c'est une autre cle.
+  '60': { cle: '60', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', salle: true, libelle: '60 m', libelleEn: '60 m' },
+  '200s': { cle: '200s', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', salle: true, libelle: '200 m en salle', libelleEn: 'indoor 200 m' },
+  '400s': { cle: '400s', jeu: 'sprinter', direction: PLUS_BAS, pas: 10, unite: 'ms', salle: true, libelle: '400 m en salle', libelleEn: 'indoor 400 m' },
   '100h': { cle: '100h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m haies', libelleEn: '100 m hurdles' },
   '110h': { cle: '110h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '110 m haies', libelleEn: '110 m hurdles' },
   '400h': { cle: '400h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m haies', libelleEn: '400 m hurdles' },

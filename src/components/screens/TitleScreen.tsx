@@ -716,12 +716,12 @@ export function TitleScreen() {
             <div className="sticky bottom-0 z-10 flex flex-col gap-2 pt-2 pb-1 -mx-1 px-1 rounded-2xl bg-black/60 backdrop-blur-md">
             {/* Race Selectors */}
             <div className="flex gap-2">
-              {epreuves.map(k => (
+              {epreuves.filter(k => k === '60' || !k.endsWith('s')).map(k => (
                 <button
                   key={k}
                   onClick={() => handleRaceToggle(k)}
                   className={`flex-1 py-2 md:py-4 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
-                    ${raceKey === k 
+                    ${raceKey === k || raceKey === `${k}s`
                       ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]' 
                       : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
                 >
@@ -729,6 +729,22 @@ export function TitleScreen() {
                 </button>
               ))}
             </div>
+
+            {/* LE 200 ET LE 400 SE COURENT DEHORS OU EN SALLE : deux cles, donc deux records et deux classements */}
+            {epreuves.includes(`${raceKey.replace('s', '')}s` as RaceKey) && (
+              <div className="flex gap-2">
+                {[raceKey.replace('s', ''), `${raceKey.replace('s', '')}s`].map((k, i) => (
+                  <button
+                    key={k}
+                    onClick={() => handleRaceToggle(k as RaceKey)}
+                    className={`flex-1 py-1.5 rounded-lg font-bold tracking-wider transition-all text-xs border
+                      ${raceKey === k ? 'bg-primary/20 text-primary border-primary' : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
+                  >
+                    {N.t(i ? 'lieu_salle' : 'lieu_dehors')}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Start Button */}
             <button 

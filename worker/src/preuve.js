@@ -33,7 +33,7 @@ export const PAS_S = 0.08;
 const DM_PAR_M = 10;
 
 /** Les distances, en metres. */
-const DISTANCE = { '100': 100, '200': 200, '400': 400,
+const DISTANCE = { '100': 100, '200': 200, '400': 400, '60': 60, '200s': 200, '400s': 400,
                    '100h': 100, '110h': 110, '400h': 400 };
 
 /**

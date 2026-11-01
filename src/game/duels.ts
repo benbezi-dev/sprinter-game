@@ -45,7 +45,7 @@ export type Etage = 'departemental' | 'regional' | 'national' | 'elite' | 'legen
  * 400, sans quoi deux ecrans demanderaient deux classements pour la meme
  * course. `cleDiscipline` est le seul endroit ou cette cle se fabrique.
  */
-export const EPREUVES_DUEL = ['100', '200', '400', '100h', '110h', '400h'];
+export const EPREUVES_DUEL = ['60', '100', '200', '200s', '400', '400s', '100h', '110h', '400h'];
 export const DISCIPLINE_DEFAUT = '100';
 
 export function cleDiscipline(epreuves?: string[] | null): string {

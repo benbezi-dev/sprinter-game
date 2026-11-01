@@ -77,7 +77,8 @@ import { decalageDe } from './journal.js';
  * qui passe la sienne au 100 m. Deux classements auraient coupe en deux la
  * serie de celui qui joue aux deux jeux.
  */
-export const EPREUVES_DEFI = [...CLES_DU_JEU.sprinter, ...CLES_DU_JEU.hurdlers];
+// (sans la salle : les applications deja installees ne la courent pas toutes)
+export const EPREUVES_DEFI = [...CLES_DU_JEU.sprinter, ...CLES_DU_JEU.hurdlers].filter(c => !fiche(c).salle);
 
 /**
  * Ce qu'un jeu qui ne dit rien sait courir : Sprinter.

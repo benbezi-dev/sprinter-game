@@ -659,6 +659,11 @@ let salleActive = false;
 // la course lancee, pour le 200 m et le 400 m », l'auteur, 27/10) : comme le font les officiels, des que
 // tout le monde a quitte les blocs ; on les y revoit au depart suivant. Le 60 m garde les siens.
 const blocsSalle: THREE.Object3D[] = [];
+// LE TOIT DES TRIBUNES S'EFFACE SOUS LA CAMERA HAUTE (« la camera filme le dessus du toit dans la
+// derniere ligne droite », stades couverts) : sur un telephone en portrait, en vue 2D, la camera passe au-dessus
+// du toit en porte-a-faux (21 m aux Mondiaux), qui remplissait tout l'ecran. On le cache quand la camera passe au-dessus de lui, hors survol — comme le plafond
+// de la salle (salle-3d.ts). zTop : la hauteur du toit, dans le repere du stade.
+const toitsStade: { obj: THREE.Object3D; zTop: number }[] = [];
 let cameraSalle: ((x: number, y: number, z: number, survol: boolean, cam?: THREE.Camera, vise?: THREE.Vector3) => void) | null = null;
 function caler(T: any) {
   salleActive = estEnSalle(T, (globalThis as any).SprinterApp?.G?.race);
@@ -726,6 +731,7 @@ class Lot {
     this.m.forEach((m, i) => { im.setMatrixAt(i, m); if (this.c[i]) im.setColorAt(i, this.c[i]!); });
     im.frustumCulled = false; im.castShadow = this.ombre; im.receiveShadow = true;
     g.add(im);
+    return im;
   }
 }
 
@@ -762,6 +768,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   if (miroir) { miroir.dispose(); miroir = null; }
   stade = new THREE.Group();
   monde.add(stade);
+  toitsStade.length = 0;
   const W = nCouloirs * LANE_W;
   let alea = 7;
   const hasard = () => ((alea = (alea * 16807) % 2147483647) / 2147483647);
@@ -1403,7 +1410,11 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     boite(lFilet, Mp, LS / 2, yFond, z2 + 0.05, LS, 0.08, 0.08);
   } else {
     boite(lToit, Mp, LS / 2, yFond + 0.2, (z2 + 3.4) / 2, LS, 0.4, z2 + 3.4);  // la facade
-    boite(lToit, Mp, LS / 2, yFond - 9, z2 + 3.4, LS + 2, 20, 0.35);          // le toit en porte-a-faux
+    // le toit en porte-a-faux va dans son propre lot : il s'efface sous la camera haute (voir toitsStade)
+    const lToitPlat = new Lot(cube, lToit.mat, true);
+    boite(lToitPlat, Mp, LS / 2, yFond - 9, z2 + 3.4, LS + 2, 20, 0.35);
+    const imToit = lToitPlat.finir(stade);
+    if (imToit) toitsStade.push({ obj: imToit, zTop: z2 + 3.4 });
     if (luxe) boite(lFilet, Mp, LS / 2, yFond - 19, z2 + 3.4, LS + 2, 0.12, 0.4);
     for (let x = 0; x <= LS; x += 14) boite(lMetal, Mp, x, yFond - 1, z2 + 2, 0.35, 0.35, 3.0);
   }
@@ -2874,6 +2885,8 @@ export function rendre(App: any, dt: number) {
     const tournage = (globalThis as any).__tournage;
     if (tournage?.camera) { tournage.camera(camPos, camVise, vise, G, dt || 0.016, p); survol = survol || !!tournage.survol; }
     camera.position.copy(camPos);
+    // le toit des tribunes s'efface quand la camera le survole (vue 2D), jamais pendant le survol d'avant-course
+    if (toitsStade.length) for (const t of toitsStade) t.obj.visible = survol || camera.position.z < t.zTop - 0.3;
     // (y retourne : voir monde) — l'exterieur ne se montre qu'au survol, camera dehors
     if (salleActive && cameraSalle) cameraSalle(camera.position.x, -camera.position.y, camera.position.z, survol, camera, camVise);
     if (salleActive && blocsSalle.length) {
