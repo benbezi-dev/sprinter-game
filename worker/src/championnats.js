@@ -2073,7 +2073,7 @@ export async function etatEdition(db, id) {
     id: e.id, echelon: e.echelon, zone: e.zone, debut: e.debut,
     // Le lieu ou l'edition se rejoue, s'il est impose (voir LIEUX), sinon
     // `null` : le client garde alors le sien.
-    lieu: lieuDeLEdition(e.echelon, e.zone, rang),
+    lieu: lieuDeLEdition(e.echelon, e.zone, rang, e.epreuve),
     // `null` pour les editions ouvertes avant que la cloture existe, et pour
     // celles qu'on ouvre d'un geste sur le canal de test. C'est exact : elles
     // n'ont pas eu d'heure de cloture annoncee, et l'ecran ne doit pas
@@ -2205,7 +2205,7 @@ export async function clesFictives(db, cles) {
  * repechage possible : un vrai joueur qui court en dessous de 9,05 passe
  * devant, un vrai joueur plus lent ou absent peut rester derriere.
  */
-const FACTEUR_EPREUVE = { '100': 1, '200': 2.08, '400': 4.7 };
+const FACTEUR_EPREUVE = { '100': 1, '200': 2.08, '400': 4.7, '60': 0.7, '200s': 2.16, '400s': 4.85 };
 function hacheFictif(texte) {
   let h = 2166136261;
   for (const ch of texte) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }

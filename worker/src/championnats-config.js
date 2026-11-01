@@ -26,7 +26,9 @@
  * Cette colonne dit seulement sur quelle distance se court l'edition en cours,
  * ce que personne ne savait jusqu'ici.
  */
-export const EPREUVES = ['100', '200', '400'];
+export const EPREUVES = ['100', '200', '400', '60', '200s', '400s'];
+// Les epreuves de la salle se courent au stade couvert Jesse Owens : la piste suit l'epreuve.
+const EPREUVES_EN_SALLE = ['60', '200s', '400s'];
 export const EPREUVE_DEFAUT = '100';
 
 /** Le format d'une competition : combien on part, comment on se qualifie. */
@@ -148,7 +150,8 @@ export const LIEUX = [
 ];
 
 /** Le lieu impose a la `rang`-ieme edition de cet echelon et de cette zone, ou `null`. */
-export function lieuDeLEdition(echelon, zone, rang) {
+export function lieuDeLEdition(echelon, zone, rang, epreuve) {
+  if (EPREUVES_EN_SALLE.includes(String(epreuve))) return 'salle';
   const r = LIEUX.find(l => l.echelon === echelon && l.zone === zone && l.rang === rang);
   return r ? r.lieu : null;
 }

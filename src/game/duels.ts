@@ -57,7 +57,10 @@ export function cleDiscipline(epreuves?: string[] | null): string {
 /** Le libelle d'une discipline : « 100 M », « 100 + 200 M ». */
 export function nomDiscipline(cle: string): string {
   const eps = String(cle || '').split('+').filter(k => EPREUVES_DUEL.includes(k));
-  return (eps.length ? eps : [DISCIPLINE_DEFAUT]).join(' + ') + ' M';
+  const liste = eps.length ? eps : [DISCIPLINE_DEFAUT];
+  // « 200s » se dit « 200 M EN SALLE » ; le 60 m n'existe qu'en salle, il n'a pas a le preciser
+  const salle = liste.some(k => k === '200s' || k === '400s');
+  return liste.map(k => (k === '200s' || k === '400s' ? k.slice(0, -1) : k)).join(' + ') + ' M' + (salle ? ` ${(globalThis as any).SprinterApp?.N?.t?.('lieu_salle') || 'EN SALLE'}` : '');
 }
 
 /** Ma division sur une discipline, telle que le serveur la rend. */
