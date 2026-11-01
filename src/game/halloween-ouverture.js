@@ -25,4 +25,5 @@
    A `false`, tout se referme comme avant : le mode, ses images, sa musique et
    sa bete ne partent que sur le canal de test.
 --------------------------------------------------------------------------- */
-export const HALLOWEEN_PUBLIC = true;
+// false depuis le 1er novembre 2026 : l'edition est close (decision de l'auteur).
+export const HALLOWEEN_PUBLIC = false;
