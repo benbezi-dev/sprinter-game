@@ -65,7 +65,9 @@ function plateforme(): string {
  */
 async function greffon() {
   const m = await import('@capacitor-firebase/messaging');
-  return m.FirebaseMessaging;
+  // Dans un objet : rendu nu par une fonction async, ce proxy Capacitor se fait
+  // demander `.then`, repond « not implemented », et la promesse echoue.
+  return { FM: m.FirebaseMessaging };
 }
 
 let ecouteursPoses = false;
@@ -83,7 +85,7 @@ let ecouteursPoses = false;
  * le defi n'apparaissait qu'au sondage suivant : on est prevenu, on ouvre, et
  * il n'y a rien.
  */
-async function poserEcouteurs(FM: Awaited<ReturnType<typeof greffon>>) {
+async function poserEcouteurs(FM: Awaited<ReturnType<typeof greffon>>['FM']) {
   if (ecouteursPoses) return;
   ecouteursPoses = true;
 
@@ -119,7 +121,7 @@ async function enregistrerJeton(jeton: string): Promise<void> {
 }
 
 async function activerNatif(): Promise<boolean> {
-  const FM = await greffon();
+  const { FM } = await greffon();
 
   let etat = await FM.checkPermissions();
   if (etat.receive !== 'granted' && etat.receive !== 'denied') {
@@ -148,14 +150,14 @@ async function desactiverNatif(): Promise<void> {
     }).catch(() => { /* non bloquant */ });
   }
   try {
-    const FM = await greffon();
+    const { FM } = await greffon();
     await FM.deleteToken();
   } catch { /* rien a supprimer */ }
 }
 
 async function natifActif(): Promise<boolean> {
   try {
-    const FM = await greffon();
+    const { FM } = await greffon();
     const etat = await FM.checkPermissions();
     return etat.receive === 'granted';
   } catch { return false; }
@@ -365,7 +367,7 @@ export type EtatPush = 'accordee' | 'refusee' | 'a-demander' | 'impossible';
 export async function etatPush(): Promise<EtatPush> {
   if (EST_NATIF) {
     try {
-      const FM = await greffon();
+      const { FM } = await greffon();
       const etat = await FM.checkPermissions();
       if (etat.receive === 'granted') return 'accordee';
       if (etat.receive === 'denied') return 'refusee';
@@ -410,7 +412,7 @@ export async function reprendrePush(): Promise<void> {
     return;
   }
   try {
-    const FM = await greffon();
+    const { FM } = await greffon();
     const etat = await FM.checkPermissions();
     if (etat.receive !== 'granted') return;
     await poserEcouteurs(FM);
