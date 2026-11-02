@@ -2452,13 +2452,18 @@
     const T = this.auTapisT;
     if (this.chocTapis != null) {
       const w = T != null ? 1 : Math.max(0, Math.min(1, (this.d - (bout - 1.5)) / 1.5)), f = this.chocTapis / 6.5, g = this.chocGeste;
-      const plie = T == null ? 0 : Math.min(1, Math.max(0, (T - 0.18) / 0.4)) * (0.5 + 0.8 * f);
+      const plie = T == null ? 0 : Math.min(1, Math.max(0, (T - 0.5) / 0.3)) * (0.5 + 0.8 * f);
       this.posture = g === 'dos'
         ? { w, jambes: [[0.25 + plie, -0.2 * plie, -0.1], [0.05 + plie, -0.35 - plie, -0.5]], bras: [[0.7, 1.0], [0.6, 1.1]], buste: 0.1 + 0.3 * f - plie, leve: -0.45 * plie }
         : g === 'epaule'
           ? { w, jambes: [[0.35 + plie, -0.2 * plie, -0.2], [-0.2 + plie, -0.6 - plie, -0.8]], bras: [[1.6, 1.8], [0.3, 1.4]], buste: -0.1 - 0.3 * f - 0.5 * plie, leve: -0.45 * plie }
           : { w, jambes: [[0.35 + plie, -0.2 * plie, -0.2], [-0.25 + plie, -0.7 - plie, -0.9]], bras: [[1.5, 1.7], [1.35, 1.9]], buste: -0.15 - 0.45 * f - 0.5 * plie, leve: -0.45 * plie };
       this.cap = g === 'dos' ? Math.PI * w : g === 'epaule' ? (this.lane % 2 ? 1 : -1) * 1.2 * w : 0;
+      // IL TITUBE, IL NE GLISSE PAS : trois pas pendant le recul, jambes et bras croises, le corps qui roule de l'une a l'autre
+      const pas = T == null ? 0 : Math.sin(Math.min(1, Math.max(0, (T - 0.07) / 0.6)) * Math.PI * 3), a = 0.6 * pas, P = this.posture;
+      P.jambes[0][0] += a; P.jambes[1][0] -= a; P.jambes[pas > 0 ? 0 : 1][1] -= 0.8 * Math.abs(pas);
+      P.bras[0][0] -= a; P.bras[1][0] += a;
+      this.roulis = 0.2 * pas;
     }
     if (T != null) {
       const f = (this.chocTapis || 1.5) / 6.5, e = 0.08 + 0.3 * f, recul = 0.5 + 1.3 * f, x = Math.min(1, Math.max(0, (T - 0.07) / 0.6));
