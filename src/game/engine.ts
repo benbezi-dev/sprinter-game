@@ -1287,7 +1287,7 @@ export function updateLogic(dt: number) {
     
     // (au 60 m en salle, la course se termine contre le tapis, voir Runner.apresLigne)
     const auTapis = !!G.race.salleDroite && G.player.tapis != null;
-    const out = G.player.finished && (auTapis ? G.player.auTapisT >= 2.2 : G.player.d >= G.track.total + C.RUNOUT);
+    const out = G.player.finished && (auTapis ? G.player.auTapisT >= 3.4 : G.player.d >= G.track.total + C.RUNOUT);
     const slow = G.player.finished && G.elapsed >= G.player.finishTime + (auTapis ? 9 : 3);
     // LA MORSURE TERMINE LA COURSE, et il faut le dire ici parce que rien
     // d'autre ne le dirait : un coureur rattrape est gele sur place, il

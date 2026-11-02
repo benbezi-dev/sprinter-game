@@ -2435,7 +2435,7 @@
   Runner.prototype.plafond = function () { return this.pente ? Math.max(this.maxSpeed + (this.elan || 0), this.v) : this.maxSpeed; };
   // LE TAPIS DU 60 M EN SALLE (« les coureurs arrivent tellement vite qu'ils ont besoin du tapis pour freiner »,
   // l'auteur, 2/11) : passe le couloir 6 du 200 m, on freine a peine, on touche le tapis et il arrete net.
-  // PLUS LE CHRONO EST BON, PLUS LE CHOC EST FORT (l'auteur, 2/11) : 6,5 m/s au record (6,34 s), 1,5 m/s a 8,5 s et au-dela.
+  // PLUS LE CHRONO EST BON, PLUS LE CHOC EST FORT (l'auteur, 2/11) : 6,5 m/s au record de l'epreuve (`tapisRecord` : 6,34 s au plat, 7,27 s aux haies), 1,5 m/s a 2,16 s de plus et au-dela.
   // Le chrono et non la vitesse sur la ligne : mesuree, celle-ci ne bouge presque pas de 7,76 s a 7,00 s (9,57 et 9,73 m/s).
   // Ailleurs, la deceleration de toujours (k). `tapis` : metres apres la ligne, pose au depart (startRace).
   Runner.prototype.apresLigne = function (dt, k) {
@@ -2447,33 +2447,35 @@
     const bout = this.total + this.tapis;
     // LE CHOC (Maurice Greene, 6,39 s, Madrid : encore lance, il finit plaque au mur bleu) : de face, de l'epaule ou
     // de dos, au hasard (l'auteur, 2/11). Le geste vient sur le dernier metre et demi ; plus le choc est fort, plus le corps y va.
-    // LE CORPS S'ECRASE PUIS REBONDIT : il enfonce la mousse (`creuxTapis`, salle-3d.ts), repart en arriere et s'affaisse.
+    // LE CORPS ENCAISSE, S'AFFAISSE UN INSTANT, PUIS REVIENT SUR LA PISTE EN TROTTINANT (l'auteur, 2/11) : il enfonce un peu la
+    // mousse (`creuxTapis`, salle-3d.ts), rebondit, plie les jambes, se releve, se retourne et trottine jusqu'a la piste.
     if (this.d >= bout) this.auTapisT = this.auTapisT == null ? 0 : this.auTapisT;
     const T = this.auTapisT;
     if (this.chocTapis != null) {
-      const w = T != null ? 1 : Math.max(0, Math.min(1, (this.d - (bout - 1.5)) / 1.5)), f = this.chocTapis / 6.5, g = this.chocGeste;
-      const plie = T == null ? 0 : Math.min(1, Math.max(0, (T - 0.5) / 0.3)) * (0.5 + 0.8 * f);
+      const seuil = (a, b) => Math.min(1, Math.max(0, (T - a) / (b - a)));
+      const debout = T == null ? 0 : seuil(0.75, 1.1), w = T != null ? 1 - debout : Math.max(0, Math.min(1, (this.d - (bout - 1.5)) / 1.5)), f = this.chocTapis / 6.5, g = this.chocGeste;
+      const plie = T == null ? 0 : seuil(0.12, 0.4) * (1 - seuil(0.7, 1)) * (0.25 + 0.35 * f);
       this.posture = g === 'dos'
-        ? { w, jambes: [[0.25 + plie, -0.2 * plie, -0.1], [0.05 + plie, -0.35 - plie, -0.5]], bras: [[0.7, 1.0], [0.6, 1.1]], buste: 0.1 + 0.3 * f - plie, leve: -0.45 * plie }
+        ? { w, jambes: [[0.25 + plie, -0.2 * plie, -0.1], [0.05 + plie, -0.35 - plie, -0.5]], bras: [[0.7, 1.0], [0.6, 1.1]], buste: 0.05 + 0.15 * f - plie, leve: -0.45 * plie }
         : g === 'epaule'
-          ? { w, jambes: [[0.35 + plie, -0.2 * plie, -0.2], [-0.2 + plie, -0.6 - plie, -0.8]], bras: [[1.6, 1.8], [0.3, 1.4]], buste: -0.1 - 0.3 * f - 0.5 * plie, leve: -0.45 * plie }
-          : { w, jambes: [[0.35 + plie, -0.2 * plie, -0.2], [-0.25 + plie, -0.7 - plie, -0.9]], bras: [[1.5, 1.7], [1.35, 1.9]], buste: -0.15 - 0.45 * f - 0.5 * plie, leve: -0.45 * plie };
-      this.cap = g === 'dos' ? Math.PI * w : g === 'epaule' ? (this.lane % 2 ? 1 : -1) * 1.2 * w : 0;
-      // IL TITUBE, IL NE GLISSE PAS : trois pas pendant le recul, jambes et bras croises, le corps qui roule de l'une a l'autre
-      const pas = T == null ? 0 : Math.sin(Math.min(1, Math.max(0, (T - 0.07) / 0.6)) * Math.PI * 3), a = 0.6 * pas, P = this.posture;
-      P.jambes[0][0] += a; P.jambes[1][0] -= a; P.jambes[pas > 0 ? 0 : 1][1] -= 0.8 * Math.abs(pas);
-      P.bras[0][0] -= a; P.bras[1][0] += a;
-      this.roulis = 0.2 * pas;
+          ? { w, jambes: [[0.35 + plie, -0.2 * plie, -0.2], [-0.2 + plie, -0.6 - plie, -0.8]], bras: [[1.6, 1.8], [0.3, 1.4]], buste: -0.1 - 0.15 * f - 0.5 * plie, leve: -0.45 * plie }
+          : { w, jambes: [[0.35 + plie, -0.2 * plie, -0.2], [-0.25 + plie, -0.7 - plie, -0.9]], bras: [[1.5, 1.7], [1.35, 1.9]], buste: -0.15 - 0.2 * f - 0.5 * plie, leve: -0.45 * plie };
+      const cote = g === 'epaule' && this.lane % 2 === 0 ? -1 : 1, geste = g === 'dos' ? Math.PI : g === 'epaule' ? 1.2 : 0;
+      this.cap = cote * (geste * (T != null ? 1 : w) + (Math.PI - geste) * debout);
     }
     if (T != null) {
-      const f = (this.chocTapis || 1.5) / 6.5, e = 0.08 + 0.3 * f, recul = 0.5 + 1.3 * f, x = Math.min(1, Math.max(0, (T - 0.07) / 0.6));
-      this.d = T < 0.07 ? bout + e * T / 0.07 : bout + e - (e + recul) * x * (2 - x);
-      this.creuxTapis = T < 0.07 ? e * T / 0.07 : e * Math.max(0, 1 - (T - 0.07) / 1.5);
-      this.v = 0; this.auTapisT = T + dt;
+      const f = (this.chocTapis || 1.5) / 6.5, e = 0.05 + 0.15 * f, recul = 0.2 + 0.5 * f, x = Math.min(1, Math.max(0, (T - 0.07) / 0.5));
+      this.creuxTapis = T < 0.07 ? e * T / 0.07 : e * Math.max(0, 1 - (T - 0.07) / 1.2);
+      this.auTapisT = T + dt;
+      if (T < 1) { this.d = T < 0.07 ? bout + e * T / 0.07 : bout + e - (e + recul) * x * (2 - x); this.v = 0; return; }
+      // (assez loin du tapis pour etre de retour sur les couloirs de l'anneau : la fin du couloir 6 est a 23,9 m de la ligne)
+      const arret = this.total + 12;
+      this.v = this.d > arret ? 2.8 : 0;
+      this.d = Math.max(arret, this.d - this.v * dt);
       return;
     }
     if (this.freinTapis == null) {
-      const choc = Math.max(1.5, Math.min(6.5, 1.5 + (8.5 - (this.finishTime || 8.5)) * 5 / 2.16));
+      const rec = this.tapisRecord || 6.34, choc = Math.max(1.5, Math.min(6.5, 1.5 + (rec + 2.16 - (this.finishTime || rec + 2.16)) * 5 / 2.16));
       this.chocTapis = choc;
       this.chocGeste = ['face', 'epaule', 'dos'][Math.floor(Math.random() * 3)];
       this.freinTapis = Math.max(0, (this.v * this.v - choc * choc) / (2 * Math.max(0.1, bout - this.d)));

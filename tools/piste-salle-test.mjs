@@ -80,7 +80,7 @@ for (const cle of ['200s', '400s']) {
     const r = new KC.Runner('T', 0, { total: 60 }); r.finished = true; r.finishTime = chrono; r.d = 60; r.v = v0;
     let vTapis = null;
     for (let t = 0; t < 16; t += 1 / 120) { r.apresLigne(1 / 120, 1.15); if (vTapis == null && r.d >= 85.7) vTapis = r.v; }
-    if (r.d >= 85.7 || r.d < 83.5 || r.v !== 0 || r.creuxTapis !== 0) throw new Error(`tapis : ${chrono} s, fin ${r.d} a ${r.v}`);
+    if (r.d !== 72 || r.v !== 0 || r.creuxTapis !== 0 || Math.abs(Math.abs(r.cap) - Math.PI) > 1e-9) throw new Error(`tapis : ${chrono} s, fin ${r.d} a ${r.v}`);
     return vTapis;
   };
   const [record, bon, lent] = [contact(6.34, 10.8), contact(7.0, 9.7), contact(8.5, 7)];
@@ -88,12 +88,16 @@ for (const cle of ['200s', '400s']) {
   const vus = { face: 0, epaule: 0, dos: 0 };
   for (let i = 0; i < 300; i++) {
     const r = new KC.Runner('T', i % 8, { total: 60 }); r.finished = true; r.finishTime = 7; r.d = 60; r.v = 9.6;
-    for (let t = 0; t < 8; t += 1 / 60) r.apresLigne(1 / 60, 1.15);
+    for (let t = 0; t < 8 && !(r.auTapisT >= 0.5); t += 1 / 60) r.apresLigne(1 / 60, 1.15);
     vus[r.chocGeste]++;
     const cap = Math.abs(r.cap);
     if (r.chocGeste === 'dos' ? Math.abs(cap - Math.PI) > 0.01 : r.chocGeste === 'epaule' ? Math.abs(cap - 1.2) > 0.01 : cap !== 0) throw new Error(`geste ${r.chocGeste} : cap ${r.cap}`);
   }
   if (Object.values(vus).some(n => n < 50)) throw new Error('tirage du choc : ' + JSON.stringify(vus));
+  KC.Runner.prototype.tapisRecord = 7.27;
+  const [hRecord, hLent] = [contact(7.27, 9.5), contact(9.43, 7)];
+  KC.Runner.prototype.tapisRecord = null;
+  if (Math.abs(hRecord - 6.5) > 0.15 || Math.abs(hLent - 1.5) > 0.15) throw new Error(`tapis, haies : ${hRecord} ${hLent}`);
   const a = new KC.Runner('T', 0, { total: 100 }); a.finished = true; a.d = 100; a.v = 10; a.apresLigne(0.1, 1.15);
   if (a.v > 9) throw new Error('le tapis ne vaut qu au 60 m');
   KC.Runner.prototype.tapis = null;

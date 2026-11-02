@@ -2838,8 +2838,9 @@ export function rendre(App: any, dt: number) {
       }
     }
     // (le tapis du 60 m s'enfonce sous ceux qui le frappent)
-    if (salleActive && (G.runners || []).some((r: any) => r.creuxTapis != null)) {
-      const creux = G.runners.filter((r: any) => r.creuxTapis > 0).map((r: any) => ({ y: ouCourt(T, r)[1], p: r.creuxTapis }));
+    const auTapis = G.ghost && (G.runners || []).indexOf(G.ghost.runner) < 0 ? (G.runners || []).concat([G.ghost.runner]) : G.runners || [];
+    if (salleActive && auTapis.some((r: any) => r.creuxTapis != null)) {
+      const creux = auTapis.filter((r: any) => r.creuxTapis > 0).map((r: any) => ({ y: ouCourt(T, r)[1], p: r.creuxTapis }));
       if (creux.length || creuxVu) creuserTapis(creux);
       creuxVu = creux.length > 0;
     }

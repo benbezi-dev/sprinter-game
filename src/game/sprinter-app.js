@@ -2401,6 +2401,7 @@ import { sponsorDeLaCourse } from './panneaux';
     G.track = new Track(R);
     // (la face du tapis est a 26,07 m de la ligne, salle-3d.ts ; le coureur s'y arrete les mains devant)
     K.Runner.prototype.tapis = R.salleDroite && RENDU_3D ? 25.7 : null;
+    K.Runner.prototype.tapisRecord = K.RECORDS_DU_MONDE[R.key] || null;
     G.runners = [];
     // LE COULOIR TIRE AU SORT SUR L'ANNEAU COUVERT (« le couloir 6 a plus de montee, le couloir 1 un angle
     // plus serre », l'auteur, 27/10) : chaque couloir s'y court autrement — le joueur n'est plus toujours au 4
@@ -3528,6 +3529,15 @@ import { sponsorDeLaCourse } from './panneaux';
     const vmax = G.race.maxSpeed * 1.15;
     const L = G.track.total;
     const T = instantLive();
+    // PASSE LA LIGNE, IL VA AU TAPIS DU 60 M CHEZ NOUS AUSSI : plus aucun paquet n'en decide (son rebond n'est pas le notre,
+    // son geste non plus), seul son chrono compte encore
+    if (r.finished && r.tapis != null && r.total === 60 && r.d >= L) {
+      if (g.fin != null && T >= g.fin) r.finishTime = g.fin;
+      r.apresLigne(dt, 1.15);
+      r.stride += r.v * dt * (Math.PI / r.strideLength());
+      r.drivePitch = 0;
+      return;
+    }
     const vise = viseLive(g, T);
     // La pente est prise sur la cible elle-meme, a paquet egal. Elle vaut la
     // vitesse estimee tant qu'on extrapole, zero quand l'extrapolation a

@@ -321,8 +321,8 @@ export function creuserTapis(creux: { y: number; p: number }[]) {
       creuse = Math.max(creuse, k * Math.exp(-q));
       bord = Math.max(bord, k * Math.exp(-Math.pow(Math.sqrt(q) - 1.45, 2) / 0.12));
     }
-    pos.setZ(i, -0.28 * creuse + 0.14 * bord);
-    const l = 1 - 0.78 * creuse + 0.45 * bord;
+    pos.setZ(i, -0.22 * creuse + 0.1 * bord);
+    const l = 1 - 0.6 * creuse + 0.3 * bord;
     teinte.setXYZ(i, l, l, l);
   }
   pos.needsUpdate = true; teinte.needsUpdate = true; geo.computeVertexNormals();

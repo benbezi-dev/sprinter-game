@@ -59,18 +59,15 @@ export function RaceHUD() {
   const record = useRecord(raceKey);
   const recordMs = record.ms;
   /**
-   * UNE SERIE EN DIRECT, UNE FOIS LA LIGNE PASSEE.
+   * LA LIGNE PASSEE, LE CHRONO S'ARRETE (l'auteur, 2/11 : partout, plus seulement en serie en direct).
    *
-   * Le joueur reste sur la piste a regarder les autres finir (voir
-   * engine.ts), et la course continue donc de tourner — `elapsed` compris. Le
-   * chrono du haut est pourtant le SIEN : il se fige sur son temps, comme le
-   * tableau d'un stade sur celui du vainqueur. Sans cela, il affichait 54 s
-   * sous le tableau d'arrivee d'une course gagnee en 8,558.
+   * Le joueur reste sur la piste a regarder les autres finir ou a freiner, et la
+   * course continue donc de tourner — `elapsed` compris. Le chrono du haut est
+   * pourtant le SIEN : il se fige sur son temps, comme le tableau d'un stade.
    */
   const champ = useChampDirect();
-  const directFini = !!SprinterApp.G.champDirect && !!player?.finished
-    && player.finishTime != null;
-  const chronoS: number = directFini ? player.finishTime : elapsed;
+  const chronoS: number = player?.finished && player.finishTime != null ? player.finishTime : elapsed;
+  const directFini = !!SprinterApp.G.champDirect && !!player?.finished && player.finishTime != null;
   const chronoMs = chronoS * 1000;
   // LE CHRONO A L'ENVERS. Une nuit du molosse ne compte pas ce qui a ete
   // couru, elle compte ce qu'il reste : le grand nombre du haut change donc
