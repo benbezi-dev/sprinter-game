@@ -1,6 +1,8 @@
 /* -----------------------------------------------------------------------
    SPRINTER — couche navigateur : rendu, ecrans, tactile, son.
    ----------------------------------------------------------------------- */
+import { sponsorDeLaCourse } from './panneaux';
+
 (function () {
   'use strict';
   const K = globalThis.SprinterCore;
@@ -5074,6 +5076,15 @@
       _teinteTirage = Math.random();
       _affiche = null;
     }
+    // Une campagne en cours prend toute la place du logo, dans ses couleurs :
+    // ni teinte, ni halo, ni eclat, une marque ne se recolore pas.
+    const img = sponsorDeLaCourse(G);
+    if (img) {
+      if (!_affiche || _affiche.img !== img) {
+        _affiche = { pub: { halo: new Image() }, th, rgb: null, h: 0.82, pas: 5.0, img, halo: null, flaque: null, marque: true };
+      }
+      return _affiche;
+    }
     const p = PUBS[Math.floor(_pubTirage * PUBS.length)];
     if (!pubPrete(p)) return null;
     if (!_affiche || _affiche.pub !== p || _affiche.th !== th) {
@@ -7406,7 +7417,7 @@
         const seg = sm.slice(i, i + stp + 1), n = i / stp;
         if (pub && n % 2 === 1) {
           wall(ctx, seg, near, 0.02, 1.05, PUB_FOND, stp);
-          panneauPub(ctx, seg, near, 0.02, 1.05, reperes, affiche, !!th.pubsLed, eclatPubs(th));
+          panneauPub(ctx, seg, near, 0.02, 1.05, reperes, affiche, !!th.pubsLed, affiche.marque ? 0 : eclatPubs(th));
         } else {
           wall(ctx, seg, near, 0.02, 1.05,
                th.panels[(pub ? n >> 1 : n) % th.panels.length], stp);

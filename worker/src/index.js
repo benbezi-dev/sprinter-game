@@ -1,3 +1,4 @@
+import { PANNEAUX, panneauxDuMoment, noterVue, bilanPanneau } from './panneaux.js';
 import {
   recalculerClassement, ETAGES, DIVISIONS, LEGENDE, LP_PAR_PALIER, LP, rangDe,
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
@@ -5668,6 +5669,27 @@ async function servir(request, env, ctx, porteur) {
         ...recents.map(d => sonner(env, d, 'annonce_dispo', canal.test)),
       ]);
       return json({ ok: true, id: r.meta && r.meta.last_row_id, appareils: appareils.length, en_jeu: recents.length });
+    }
+
+    if (url.pathname === '/panneaux' && request.method === 'GET') {
+      return json({ panneaux: panneauxDuMoment(PANNEAUX, Date.now(), canal.test) });
+    }
+
+    if (url.pathname === '/panneaux/vu' && request.method === 'POST') {
+      let body; try { body = await request.json(); } catch { body = {}; }
+      const { id, device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      // seule une campagne en cours se compte : pas de ligne pour un nom invente
+      if (!panneauxDuMoment(PANNEAUX, Date.now(), canal.test).some(p => p.id === id)) {
+        return json({ error: 'panneau inconnu' }, 404);
+      }
+      await noterVue(env.DB, id, device_id, Date.now());
+      return json({ ok: true });
+    }
+
+    if (url.pathname === '/panneaux/bilan' && request.method === 'GET') {
+      if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+      return json(await bilanPanneau(env.DB, url.searchParams.get('id') || ''));
     }
 
     // La derniere annonce, dans la langue demandee. Un mois apres, elle se

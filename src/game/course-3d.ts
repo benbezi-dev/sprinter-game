@@ -31,6 +31,7 @@
 // ?stade=or (habille la course 3D d'un autre stade du jeu, pour le voir sans le
 // canal de test : la liste des stades, elle, ne change pas).
 
+import { sponsorDeLaCourse } from './panneaux';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
@@ -1467,16 +1468,21 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     const w = 512, h = 106, n = Math.floor(t / 6), u = (t % 6) / 6, sorte = n % 3;
     cl.globalCompositeOperation = 'source-over';
     cl.fillStyle = '#050608'; cl.fillRect(0, 0, w, h);
-    if (sorte < 2 && logoPub.complete && logoPub.naturalWidth) {
+    // Une campagne en cours prend la place du logo, sans deformer la marque (1000 x 250).
+    const sponsor = sponsorDeLaCourse((globalThis as any).SprinterApp?.G);
+    const poser = (x: number) => sponsor
+      ? cl.drawImage(sponsor, x + (w - h * 4) / 2, 0, h * 4, h)
+      : cl.drawImage(logoPub, x, 0, w, h);
+    if (sorte < 2 && (sponsor || (logoPub.complete && logoPub.naturalWidth))) {
       if (sorte === 0) {
-        cl.drawImage(logoPub, 0, 0, w, h);
+        poser(0);
         // le reflet qui traverse le panneau
         const x = (u * 1.8 - 0.4) * w, g = cl.createLinearGradient(x - 60, 0, x + 60, 0);
         g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.55)'); g.addColorStop(1, 'rgba(255,255,255,0)');
         cl.globalCompositeOperation = 'lighter'; cl.fillStyle = g; cl.fillRect(0, 0, w, h);
       } else {
         const x = -((u * 3) % 1) * w;
-        cl.drawImage(logoPub, x, 0, w, h); cl.drawImage(logoPub, x + w, 0, w, h);
+        poser(x); poser(x + w);
       }
     } else {
       // l'accroche entre en grandissant, respire, puis s'eteint
