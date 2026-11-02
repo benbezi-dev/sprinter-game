@@ -88,7 +88,7 @@ for (const cle of ['200s', '400s']) {
   const vus = { face: 0, epaule: 0, dos: 0 };
   for (let i = 0; i < 300; i++) {
     const r = new KC.Runner('T', i % 8, { total: 60 }); r.finished = true; r.finishTime = 7; r.d = 60; r.v = 9.6;
-    for (let t = 0; t < 8 && !(r.auTapisT >= 0.5); t += 1 / 60) r.apresLigne(1 / 60, 1.15);
+    for (let t = 0; t < 8 && !(r.auTapisT >= 0.15); t += 1 / 60) r.apresLigne(1 / 60, 1.15);
     vus[r.chocGeste]++;
     const cap = Math.abs(r.cap);
     if (r.chocGeste === 'dos' ? Math.abs(cap - Math.PI) > 0.01 : r.chocGeste === 'epaule' ? Math.abs(cap - 1.2) > 0.01 : cap !== 0) throw new Error(`geste ${r.chocGeste} : cap ${r.cap}`);

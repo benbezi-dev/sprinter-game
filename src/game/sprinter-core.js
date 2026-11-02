@@ -2453,8 +2453,8 @@
     const T = this.auTapisT;
     if (this.chocTapis != null) {
       const seuil = (a, b) => Math.min(1, Math.max(0, (T - a) / (b - a)));
-      const debout = T == null ? 0 : seuil(0.75, 1.1), w = T != null ? 1 - debout : Math.max(0, Math.min(1, (this.d - (bout - 1.5)) / 1.5)), f = this.chocTapis / 6.5, g = this.chocGeste;
-      const plie = T == null ? 0 : seuil(0.12, 0.4) * (1 - seuil(0.7, 1)) * (0.25 + 0.35 * f);
+      const debout = T == null ? 0 : seuil(0.2, 0.5), w = T != null ? 1 - debout : Math.max(0, Math.min(1, (this.d - (bout - 1.5)) / 1.5)), f = this.chocTapis / 6.5, g = this.chocGeste;
+      const plie = T == null ? 0 : seuil(0.05, 0.2) * (1 - seuil(0.2, 0.45)) * (0.25 + 0.35 * f);
       this.posture = g === 'dos'
         ? { w, jambes: [[0.25 + plie, -0.2 * plie, -0.1], [0.05 + plie, -0.35 - plie, -0.5]], bras: [[0.7, 1.0], [0.6, 1.1]], buste: 0.05 + 0.15 * f - plie, leve: -0.45 * plie }
         : g === 'epaule'
@@ -2464,13 +2464,13 @@
       this.cap = cote * (geste * (T != null ? 1 : w) + (Math.PI - geste) * debout);
     }
     if (T != null) {
-      const f = (this.chocTapis || 1.5) / 6.5, e = 0.05 + 0.15 * f, recul = 0.2 + 0.5 * f, x = Math.min(1, Math.max(0, (T - 0.07) / 0.5));
+      const f = (this.chocTapis || 1.5) / 6.5, e = 0.05 + 0.15 * f, recul = 0.2 + 0.5 * f, x = Math.min(1, Math.max(0, (T - 0.07) / 0.28));
       this.creuxTapis = T < 0.07 ? e * T / 0.07 : e * Math.max(0, 1 - (T - 0.07) / 1.2);
       this.auTapisT = T + dt;
-      if (T < 1) { this.d = T < 0.07 ? bout + e * T / 0.07 : bout + e - (e + recul) * x * (2 - x); this.v = 0; return; }
+      if (T < 0.35) { this.d = T < 0.07 ? bout + e * T / 0.07 : bout + e - (e + recul) * x * (2 - x); this.v = 0; return; }
       // (assez loin du tapis pour etre de retour sur les couloirs de l'anneau : la fin du couloir 6 est a 23,9 m de la ligne)
       const arret = this.total + 12;
-      this.v = this.d > arret ? 2.8 : 0;
+      this.v = this.d > arret ? 2.8 * Math.min(1, (T - 0.35) / 0.2 + 0.25) : 0;
       this.d = Math.max(arret, this.d - this.v * dt);
       return;
     }
