@@ -62,7 +62,8 @@ import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { premierLancement, phasePremiersPas, premiereCourseLancee, apresLaPremiereArrivee, premiersPasFaits, nomDejaDemande } from '@/game/premiers-pas';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
-import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, EPREUVES_EN_SALLE, EPREUVES_DEHORS } from '@/game/jeux';
+import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
 import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
@@ -165,6 +166,12 @@ export function TitleScreen() {
   const jeu = useJeu();
   const haies = jeu === 'hurdlers';
   const epreuves = epreuvesDuJeu(jeu);
+  // La salle a son interrupteur, comme dans le one shot : trois distances a la fois.
+  const salleCarriere = jeu === 'sprinter' && epreuves.some(k => estEnSalle(k));
+  const lieuCarriere: Lieu = estEnSalle(raceKey) ? 'salle' : 'dehors';
+  const epreuvesCarriere = (salleCarriere
+    ? (lieuCarriere === 'salle' ? EPREUVES_EN_SALLE : EPREUVES_DEHORS)
+    : epreuves) as readonly RaceKey[];
   const [showTop500, setShowTop500] = useState(false);
   // LA LEGENDE EST IMBRIQUEE DANS LA CARRIERE (l'auteur, 07/10/2026) :
   // ouvrir l'onglet montre d'abord le choix entre les deux, la Legende fermee
@@ -714,37 +721,27 @@ export function TitleScreen() {
                 derouler pour lancer une course. Ils restent en vue, le reste
                 defile dessous. */}
             <div className="sticky bottom-0 z-10 flex flex-col gap-2 pt-2 pb-1 -mx-1 px-1 rounded-2xl bg-black/60 backdrop-blur-md">
-            {/* Race Selectors */}
-            <div className="flex gap-2">
-              {epreuves.filter(k => k === '60' || !k.endsWith('s')).map(k => (
-                <button
-                  key={k}
-                  onClick={() => handleRaceToggle(k)}
-                  className={`flex-1 py-2 md:py-4 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
-                    ${raceKey === k || raceKey === `${k}s`
-                      ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]' 
-                      : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
-                >
-                  {nomCourt(k)}
-                </button>
-              ))}
-            </div>
-
-            {/* LE 200 ET LE 400 SE COURENT DEHORS OU EN SALLE : deux cles, donc deux records et deux classements */}
-            {epreuves.includes(`${raceKey.replace('s', '')}s` as RaceKey) && (
-              <div className="flex gap-2">
-                {[raceKey.replace('s', ''), `${raceKey.replace('s', '')}s`].map((k, i) => (
-                  <button
-                    key={k}
-                    onClick={() => handleRaceToggle(k as RaceKey)}
-                    className={`flex-1 py-1.5 rounded-lg font-bold tracking-wider transition-all text-xs border
-                      ${raceKey === k ? 'bg-primary/20 text-primary border-primary' : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
-                  >
-                    {N.t(i ? 'lieu_salle' : 'lieu_dehors')}
-                  </button>
-                ))}
+            {/* LES EPREUVES, COMME DANS LE ONE SHOT (l'auteur, 02/11) : « les epreuves en salle
+                n'apparaissent pas dans le mode carriere » — le 200 et le 400 en salle n'etaient
+                visibles qu'apres avoir touche le 200 ou le 400. L'interrupteur PLEIN AIR / SALLE
+                les montre d'emblee, sur une ligne de trois (ChoixEpreuves.tsx). */}
+            {salleCarriere && (
+              <div className="flex items-center justify-between gap-2 px-1">
+                <span className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
+                  {N.t('pick_events')}
+                </span>
+                <InterrupteurLieu lieu={lieuCarriere} id="carriere"
+                  onChange={l => handleRaceToggle(equivalente(raceKey, l))} />
               </div>
             )}
+            <LigneEpreuves
+              epreuves={epreuvesCarriere}
+              coche={k => raceKey === k}
+              onToggle={k => handleRaceToggle(k)}
+              fond="bg-card/80"
+              haute
+              unique
+            />
 
             {/* Start Button */}
             <button 

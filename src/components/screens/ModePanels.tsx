@@ -11,8 +11,8 @@ import { RELAIS_OUVERT, TROIS_D_OUVERTE } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import { sonChoix, sonSelection } from '@/game/ui-son';
+import { motion } from 'motion/react';
+import { InterrupteurLieu, LigneEpreuves, equivalente, type Lieu } from './ChoixEpreuves';
 import { Repliable } from './Repliable';
 import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, EPREUVES_EN_SALLE, EPREUVES_DEHORS } from '@/game/jeux';
 import { stadeDebloque, VEDETTES, defiPossible } from '@/game/vedettes';
@@ -33,7 +33,7 @@ export function OneShotPanel() {
   // en salle se court au stade couvert : le one shot part la-bas, et le choix du niveau s'efface.
   const idxSalle = LEVELS.findIndex((l: any) => l.salle);
   const salleOuverte = jeu === 'sprinter' && TROIS_D_OUVERTE && idxSalle >= 0;
-  const [lieu, setLieu] = useState<'dehors' | 'salle'>('dehors');
+  const [lieu, setLieu] = useState<Lieu>('dehors');
   const enSalle = salleOuverte && lieu === 'salle';
   const RACE_KEYS = (jeu === 'sprinter'
     ? (enSalle ? EPREUVES_EN_SALLE : EPREUVES_DEHORS)
@@ -42,19 +42,13 @@ export function OneShotPanel() {
   useEffect(() => { setLieu('dehors'); setPicked([(jeu === 'sprinter' ? EPREUVES_DEHORS : epreuvesDuJeu(jeu))[0] as RaceKey]); }, [jeu]);
   const niveau = enSalle ? idxSalle : level;
 
-  const basculer = (vers: 'dehors' | 'salle') => {
-    if (vers === lieu) return;
-    const de = (vers === 'salle' ? EPREUVES_DEHORS : EPREUVES_EN_SALLE) as readonly string[];
-    const a = (vers === 'salle' ? EPREUVES_EN_SALLE : EPREUVES_DEHORS) as readonly string[];
-    setPicked(p => p.map(k => a[de.indexOf(k)] as RaceKey).filter(Boolean));
+  const basculer = (vers: Lieu) => {
+    setPicked(p => p.map(k => equivalente(k, vers)));
     setLieu(vers);
-    sonChoix();
   };
 
   const toggle = (k: RaceKey) => {
-    const oui = !picked.includes(k);
-    setPicked(p => (oui ? [...p, k] : p.filter(x => x !== k)));
-    sonSelection(oui);
+    setPicked(p => (p.includes(k) ? p.filter(x => x !== k) : [...p, k]));
   };
 
   // Le mode est peu utilise, et le premier obstacle est de comprendre a quoi
@@ -103,62 +97,9 @@ export function OneShotPanel() {
             <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
               {N.t('pick_events')}
             </h3>
-            {salleOuverte && (
-              <div className="relative flex rounded-full bg-black/40 border border-white/10 p-0.5">
-                {(['dehors', 'salle'] as const).map(l => (
-                  <button
-                    key={l}
-                    onClick={() => basculer(l)}
-                    className={`relative px-2.5 py-1 text-[9px] md:text-[10px] font-bold tracking-widest rounded-full transition-colors
-                      ${lieu === l ? 'text-background' : 'text-muted-foreground hover:text-foreground'}`}
-                  >
-                    {lieu === l && (
-                      <motion.span
-                        layoutId="os-lieu"
-                        className="absolute inset-0 rounded-full bg-primary shadow-[0_0_12px_rgb(var(--primaire-rgb)/0.45)]"
-                        transition={{ type: 'spring', stiffness: 520, damping: 34 }}
-                      />
-                    )}
-                    <span className="relative">{l === 'salle' ? N.t('os_salle') : N.t('os_plein_air')}</span>
-                  </button>
-                ))}
-              </div>
-            )}
+            {salleOuverte && <InterrupteurLieu lieu={lieu} onChange={basculer} id="oneshot" />}
           </div>
-          {/* Une seule ligne de trois. En basculant, les distances partent par le haut et les
-              nouvelles arrivent par le bas, l'une apres l'autre : on voit que la ligne a change
-              de lieu sans qu'aucune case ne bouge de place. */}
-          <div className="grid grid-cols-3 gap-2">
-            {RACE_KEYS.map((k, i) => {
-              const oui = picked.includes(k);
-              return (
-                <motion.button
-                  key={i}
-                  onClick={() => toggle(k)}
-                  whileTap={{ scale: 0.93 }}
-                  animate={{ scale: oui ? 1 : 0.98 }}
-                  transition={{ type: 'spring', stiffness: 600, damping: 28 }}
-                  className={`relative overflow-hidden h-10 md:h-12 rounded-xl font-bold tracking-wider border-b-2 text-sm md:text-base transition-colors
-                    ${oui
-                      ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]'
-                      : 'bg-black/30 text-muted-foreground border-transparent hover:bg-white/10'}`}
-                >
-                  <AnimatePresence mode="popLayout" initial={false}>
-                    <motion.span
-                      key={k}
-                      initial={{ y: 18, opacity: 0, filter: 'blur(3px)' }}
-                      animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
-                      exit={{ y: -18, opacity: 0, filter: 'blur(3px)' }}
-                      transition={{ type: 'spring', stiffness: 420, damping: 30, delay: i * 0.04 }}
-                      className="absolute inset-0 flex items-center justify-center"
-                    >
-                      {jeu === 'sprinter' ? `${k.replace('s', '')} M` : nomCourt(k)}
-                    </motion.span>
-                  </AnimatePresence>
-                </motion.button>
-              );
-            })}
-          </div>
+          <LigneEpreuves epreuves={RACE_KEYS} coche={k => picked.includes(k)} onToggle={toggle} />
         </div>
 
         <div>
