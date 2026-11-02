@@ -72,5 +72,33 @@ for (const cle of ['200s', '400s']) {
   ok('400s : pas de contact dans les couloirs du premier tour', !T.auContact({ d: 100, lane: 0 }, { d: 100.2, lane: 1 }));
   ok('200s : jamais de contact', !new Track(COURSES_EN_SALLE['200s']).auContact({ d: 150, lane: 0 }, { d: 150, lane: 1 }));
 }
+// LE TAPIS DU 60 M (2/11/2026) : a toute vitesse d'arrivee, on atteint le tapis encore lance, et on s'y arrete sans le traverser.
+{
+  const KC = globalThis.SprinterCore;
+  KC.Runner.prototype.tapis = 25.7;
+  const contact = (chrono, v0) => {
+    const r = new KC.Runner('T', 0, { total: 60 }); r.finished = true; r.finishTime = chrono; r.d = 60; r.v = v0;
+    let vTapis = null;
+    for (let t = 0; t < 16; t += 1 / 120) { r.apresLigne(1 / 120, 1.15); if (vTapis == null && r.d >= 85.7) vTapis = r.v; }
+    if (r.d >= 85.7 || r.d < 83.5 || r.v !== 0 || r.creuxTapis !== 0) throw new Error(`tapis : ${chrono} s, fin ${r.d} a ${r.v}`);
+    return vTapis;
+  };
+  const [record, bon, lent] = [contact(6.34, 10.8), contact(7.0, 9.7), contact(8.5, 7)];
+  if (Math.abs(record - 6.5) > 0.15 || Math.abs(lent - 1.5) > 0.15 || !(record > bon && bon > lent)) throw new Error(`tapis : ${record} ${bon} ${lent}`);
+  const vus = { face: 0, epaule: 0, dos: 0 };
+  for (let i = 0; i < 300; i++) {
+    const r = new KC.Runner('T', i % 8, { total: 60 }); r.finished = true; r.finishTime = 7; r.d = 60; r.v = 9.6;
+    for (let t = 0; t < 8; t += 1 / 60) r.apresLigne(1 / 60, 1.15);
+    vus[r.chocGeste]++;
+    const cap = Math.abs(r.cap);
+    if (r.chocGeste === 'dos' ? Math.abs(cap - Math.PI) > 0.01 : r.chocGeste === 'epaule' ? Math.abs(cap - 1.2) > 0.01 : cap !== 0) throw new Error(`geste ${r.chocGeste} : cap ${r.cap}`);
+  }
+  if (Object.values(vus).some(n => n < 50)) throw new Error('tirage du choc : ' + JSON.stringify(vus));
+  const a = new KC.Runner('T', 0, { total: 100 }); a.finished = true; a.d = 100; a.v = 10; a.apresLigne(0.1, 1.15);
+  if (a.v > 9) throw new Error('le tapis ne vaut qu au 60 m');
+  KC.Runner.prototype.tapis = null;
+  console.log('tapis du 60 m : OK');
+}
+
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
 process.exit(e ? 1 : 0);

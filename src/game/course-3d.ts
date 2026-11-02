@@ -41,7 +41,7 @@ import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM, OCCULTANTS } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
-import { construireSalle, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, placesDuPublic } from './salle-3d';
+import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -692,6 +692,7 @@ const milieu = (T: any, k: number) => {
 // (l'ecart : piste-salle.js, PELOTON — le moteur y cherche aussi les accrochages)
 const enPeloton = (T: any, lane: number, d: number) =>
   T.salle && T.salle.rabat ? T.rabattu(d, lane) * T.salle.peloton[lane % T.salle.peloton.length] : 0;
+let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
 const ouCourt = (T: any, r: any, d: number = r.d) => {
   const u = Math.min(1, Math.max(0, d / 10)), garde = 1 - u * u * (3 - 2 * u);
   return ici(T.posDemi(d, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r.lane, d)));
@@ -2835,6 +2836,12 @@ export function rendre(App: any, dt: number) {
         voulu.set(c[0] + ex * D + axe * D * 0.3, -(c[1] + ey * D + aye * D * 0.3), 1.6);
         vise.set(c[0], -c[1], 1.0);
       }
+    }
+    // (le tapis du 60 m s'enfonce sous ceux qui le frappent)
+    if (salleActive && (G.runners || []).some((r: any) => r.creuxTapis != null)) {
+      const creux = G.runners.filter((r: any) => r.creuxTapis > 0).map((r: any) => ({ y: ouCourt(T, r)[1], p: r.creuxTapis }));
+      if (creux.length || creuxVu) creuserTapis(creux);
+      creuxVu = creux.length > 0;
     }
     // dans la salle, la camera monte avec le relevement du virage (vise et voulu : _b et _a, y retourne)
     if (salleActive) {

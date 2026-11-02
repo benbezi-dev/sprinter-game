@@ -304,6 +304,29 @@ function murAnneau(r: number, z0: (p: PointTour) => number, z1: (p: PointTour) =
 
 /** Les sieges de la coursive, pour y asseoir le public (placesDuPublic). */
 const sieges3: { x: number; y: number; z: number; face: number }[] = [];
+let toileDuTapis: { geo: THREE.BufferGeometry; base: number } | null = null;
+/**
+ * LE TAPIS S'ENFONCE SOUS CHAQUE COUREUR QUI LE FRAPPE. `creux` : ou (y du stade) et de combien (m). Une cuvette
+ * a hauteur de buste ; a n'appeler que si quelque chose a bouge (toute la toile est recalculee).
+ */
+export function creuserTapis(creux: { y: number; p: number }[]) {
+  if (!toileDuTapis) return;
+  const { geo, base } = toileDuTapis, pos = geo.attributes.position, teinte = geo.attributes.color;
+  for (let i = 0; i < pos.count; i++) {
+    const dz = pos.getY(i) + base - 2.0;
+    let creuse = 0, bord = 0;
+    for (const c of creux) {
+      // (au plus fort des 0,2 m ; une large cuvette, sombre au fond, et la mousse qui gonfle autour)
+      const dy = pos.getX(i) - (c.y + RS), q = dy * dy / 0.85 + dz * dz / 1.2, k = Math.min(1, c.p / 0.2);
+      creuse = Math.max(creuse, k * Math.exp(-q));
+      bord = Math.max(bord, k * Math.exp(-Math.pow(Math.sqrt(q) - 1.45, 2) / 0.12));
+    }
+    pos.setZ(i, -0.28 * creuse + 0.14 * bord);
+    const l = 1 - 0.78 * creuse + 0.45 * bord;
+    teinte.setXYZ(i, l, l, l);
+  }
+  pos.needsUpdate = true; teinte.needsUpdate = true; geo.computeVertexNormals();
+}
 export type ContexteSalle = { stade: THREE.Group; renderer: THREE.WebGLRenderer | null; base: string; nuit?: boolean };
 
 /**
@@ -584,8 +607,9 @@ export function construireSalle(ctx: ContexteSalle) {
     const EP = 0.3, xf = xMur - EP, base = profil(R_MUR - RS), hT = H_COURSIVE - 0.1 - base;
     // (le bleu mesure sur la photo 0661 : rgb(61, 141, 185))
     const mousse = new THREE.MeshStandardMaterial({ color: 0x3d8db9, roughness: 0.9 });
-    const corps = ajouter(new THREE.BoxGeometry(EP, 10, hT), mousse); corps.position.set(xf + EP / 2, -RS, base + hT / 2);
-    const toileTapis = new THREE.MeshStandardMaterial({ roughness: 0.85, map: toile(1024, 460, (c, w, h) => {
+    // (sans sa face avant : c'est la toile, souple, qui s'enfonce au choc ; voir creuserTapis)
+    const corps = ajouter(new THREE.BoxGeometry(EP, 10, hT), [mousse, new THREE.MeshBasicMaterial({ visible: false }), mousse, mousse, mousse, mousse] as any); corps.position.set(xf + EP / 2, -RS, base + hT / 2);
+    const toileTapis = new THREE.MeshStandardMaterial({ roughness: 0.85, vertexColors: true, map: toile(1024, 460, (c, w, h) => {
       c.fillStyle = '#3d8db9'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#ffffff'; c.textAlign = 'center';
       for (let k = 0; k < 3; k++) {
@@ -595,7 +619,9 @@ export function construireSalle(ctx: ContexteSalle) {
         c.beginPath(); c.moveTo(x - 46, 160); c.lineTo(x + 46, 160); c.lineTo(x, 236); c.closePath(); c.fill();
       }
     }) });
-    const face = ajouter(new THREE.PlaneGeometry(10, hT), toileTapis, false);
+    const face = ajouter(new THREE.PlaneGeometry(10, hT, 50, 24), toileTapis, false);
+    face.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(face.geometry.attributes.position.count * 3).fill(1), 3));
+    toileDuTapis = { geo: face.geometry, base: hT / 2 };
     // (face a la piste, vers -x ; retournee comme les fresques du pignon : le monde est en miroir)
     face.position.set(xf - 0.01, -RS, base + hT / 2); face.scale.x = -1;
     face.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(-1, 0, 0)));

@@ -2433,6 +2433,49 @@
   // Le plafond d'un appui : la vitesse de pointe — sauf a la piste couverte, ou la descente d'un virage
   // l'ouvre (`elan`, voir stepPlayer) et ou l'appui ne ramene jamais en arriere une vitesse deja prise.
   Runner.prototype.plafond = function () { return this.pente ? Math.max(this.maxSpeed + (this.elan || 0), this.v) : this.maxSpeed; };
+  // LE TAPIS DU 60 M EN SALLE (« les coureurs arrivent tellement vite qu'ils ont besoin du tapis pour freiner »,
+  // l'auteur, 2/11) : passe le couloir 6 du 200 m, on freine a peine, on touche le tapis et il arrete net.
+  // PLUS LE CHRONO EST BON, PLUS LE CHOC EST FORT (l'auteur, 2/11) : 6,5 m/s au record (6,34 s), 1,5 m/s a 8,5 s et au-dela.
+  // Le chrono et non la vitesse sur la ligne : mesuree, celle-ci ne bouge presque pas de 7,76 s a 7,00 s (9,57 et 9,73 m/s).
+  // Ailleurs, la deceleration de toujours (k). `tapis` : metres apres la ligne, pose au depart (startRace).
+  Runner.prototype.apresLigne = function (dt, k) {
+    if (this.tapis == null || this.total !== 60) {
+      this.v *= Math.exp(-k * dt);
+      this.d += this.v * dt;
+      return;
+    }
+    const bout = this.total + this.tapis;
+    // LE CHOC (Maurice Greene, 6,39 s, Madrid : encore lance, il finit plaque au mur bleu) : de face, de l'epaule ou
+    // de dos, au hasard (l'auteur, 2/11). Le geste vient sur le dernier metre et demi ; plus le choc est fort, plus le corps y va.
+    // LE CORPS S'ECRASE PUIS REBONDIT : il enfonce la mousse (`creuxTapis`, salle-3d.ts), repart en arriere et s'affaisse.
+    if (this.d >= bout) this.auTapisT = this.auTapisT == null ? 0 : this.auTapisT;
+    const T = this.auTapisT;
+    if (this.chocTapis != null) {
+      const w = T != null ? 1 : Math.max(0, Math.min(1, (this.d - (bout - 1.5)) / 1.5)), f = this.chocTapis / 6.5, g = this.chocGeste;
+      const plie = T == null ? 0 : Math.min(1, Math.max(0, (T - 0.18) / 0.4)) * (0.5 + 0.8 * f);
+      this.posture = g === 'dos'
+        ? { w, jambes: [[0.25 + plie, -0.2 * plie, -0.1], [0.05 + plie, -0.35 - plie, -0.5]], bras: [[0.7, 1.0], [0.6, 1.1]], buste: 0.1 + 0.3 * f - plie, leve: -0.45 * plie }
+        : g === 'epaule'
+          ? { w, jambes: [[0.35 + plie, -0.2 * plie, -0.2], [-0.2 + plie, -0.6 - plie, -0.8]], bras: [[1.6, 1.8], [0.3, 1.4]], buste: -0.1 - 0.3 * f - 0.5 * plie, leve: -0.45 * plie }
+          : { w, jambes: [[0.35 + plie, -0.2 * plie, -0.2], [-0.25 + plie, -0.7 - plie, -0.9]], bras: [[1.5, 1.7], [1.35, 1.9]], buste: -0.15 - 0.45 * f - 0.5 * plie, leve: -0.45 * plie };
+      this.cap = g === 'dos' ? Math.PI * w : g === 'epaule' ? (this.lane % 2 ? 1 : -1) * 1.2 * w : 0;
+    }
+    if (T != null) {
+      const f = (this.chocTapis || 1.5) / 6.5, e = 0.08 + 0.3 * f, recul = 0.5 + 1.3 * f, x = Math.min(1, Math.max(0, (T - 0.07) / 0.6));
+      this.d = T < 0.07 ? bout + e * T / 0.07 : bout + e - (e + recul) * x * (2 - x);
+      this.creuxTapis = T < 0.07 ? e * T / 0.07 : e * Math.max(0, 1 - (T - 0.07) / 1.5);
+      this.v = 0; this.auTapisT = T + dt;
+      return;
+    }
+    if (this.freinTapis == null) {
+      const choc = Math.max(1.5, Math.min(6.5, 1.5 + (8.5 - (this.finishTime || 8.5)) * 5 / 2.16));
+      this.chocTapis = choc;
+      this.chocGeste = ['face', 'epaule', 'dos'][Math.floor(Math.random() * 3)];
+      this.freinTapis = Math.max(0, (this.v * this.v - choc * choc) / (2 * Math.max(0.1, bout - this.d)));
+    }
+    this.v = Math.max(0, this.v - this.freinTapis * dt);
+    this.d = Math.min(bout, this.d + this.v * dt);
+  };
   Runner.prototype.stepPlayer = function (dt, elapsed) {
     // L'EFFORT : dix appuis par seconde valent 1 (7,5 le neutre, 0,75) ; sans appui, il retombe
     if (elapsed !== undefined) {
@@ -2450,8 +2493,7 @@
     if (this.finished) {
       // l'horloge des gestes d'apres-course (le clap, voir pose)
       this.gesteT = (this.gesteT || 0) + dt;
-      this.v *= Math.exp(-1.15 * dt);
-      this.d += this.v * dt;
+      this.apresLigne(dt, 1.15);
       this.stride += this.v * dt * (Math.PI / this.strideLength());
       this.drivePitch = 0;
       return;
@@ -2510,8 +2552,7 @@
     this.drivePitch = this.finished ? 0 : this.pitchAt();
     if (this.finished) {
       this.gesteT = (this.gesteT || 0) + dt;
-      this.v *= Math.exp(-1.05 * dt);
-      this.d += this.v * dt;
+      this.apresLigne(dt, 1.05);
       this.stride += this.v * dt * (Math.PI / this.strideLength());
       return;
     }

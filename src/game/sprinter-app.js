@@ -2399,6 +2399,8 @@ import { sponsorDeLaCourse } from './panneaux';
     // tentative : sans cela, « le battre » dependrait du tirage.
     const cibles = (lvl.cibles && lvl.cibles[R.key]) || null;
     G.track = new Track(R);
+    // (la face du tapis est a 26,07 m de la ligne, salle-3d.ts ; le coureur s'y arrete les mains devant)
+    K.Runner.prototype.tapis = R.salleDroite && RENDU_3D ? 25.7 : null;
     G.runners = [];
     // LE COULOIR TIRE AU SORT SUR L'ANNEAU COUVERT (« le couloir 6 a plus de montee, le couloir 1 un angle
     // plus serre », l'auteur, 27/10) : chaque couloir s'y court autrement — le joueur n'est plus toujours au 4
@@ -3698,8 +3700,7 @@ import { sponsorDeLaCourse } from './panneaux';
       // decelerer comme un vrai coureur plutot que de le figer net sur la
       // piste, ce qui se verrait immediatement.
       if (!r.finished) { r.finished = true; r.finishTime = g.time || last * g.step; }
-      r.v *= Math.exp(-1.15 * dt);
-      r.d += r.v * dt;
+      r.apresLigne(dt, 1.15);
       r.stride += r.v * dt * (Math.PI / r.strideLength());
       r.drivePitch = 0;
       return;
