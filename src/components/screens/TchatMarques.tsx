@@ -441,9 +441,9 @@ function lirePlace(): PlaceBulle {
     if (p && (p.cote === 'g' || p.cote === 'd') && typeof p.haut === 'number') return { cote: p.cote, haut: Math.min(1, Math.max(0, p.haut)) };
   } catch { /* stockage refuse */ }
   // AU-DESSUS DES COUREURS, PAS SUR LES EPREUVES (l'auteur, 02/11) : a 0,82 elle tombait
-  // sur la case 400 m de la carriere et du one shot. Au quart de la hauteur, elle flotte a cote des coureurs.
+  // sur la case 400 m de la carriere et du one shot. Pres du haut, elle flotte a cote du titre, meme sur un ecran court.
   // Une place choisie au doigt (gardee dans CLE_BULLE) reste ou le joueur l'a mise.
-  return { cote: 'd', haut: 0.25 };
+  return { cote: 'd', haut: 0.12 };
 }
 
 function BulleTchat({ fr, nonLus, bas, onOuvrir }: { fr: boolean; nonLus: number; bas: number; onOuvrir: () => void }) {

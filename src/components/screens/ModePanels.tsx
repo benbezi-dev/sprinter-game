@@ -78,25 +78,28 @@ export function OneShotPanel() {
   };
 
   return (
-    <div className="flex flex-col gap-3 md:gap-4">
+    <div className="flex flex-col gap-3 md:gap-4 serre:gap-2">
       {tuto && <OneShotTuto onClose={fermerTuto} />}
 
-      <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-4">
-        <button
-          onClick={() => setTuto(true)}
-          className="self-center flex items-center gap-1.5 text-[10px] md:text-xs font-bold
-                     tracking-widest text-muted-foreground hover:text-primary transition-colors"
-        >
-          <GraduationCap className="w-3.5 h-3.5" />
-          {N.t('os_tuto_open')}
-        </button>
-
+      <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 serre:p-3 shadow-2xl flex flex-col gap-4 serre:gap-2.5">
         <div>
           {/* Le titre et l'interrupteur sur la meme ligne : la salle ne coute pas une ligne de plus. */}
           <div className="flex items-center justify-between mb-2 gap-2">
-            <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
-              {N.t('pick_events')}
-            </h3>
+            {/* « A quoi sert ce mode » : une icone a cote du titre plutot qu'une ligne a elle seule
+                (l'auteur, 02/11 : tout doit tenir sans defiler). */}
+            <span className="flex items-center gap-1.5">
+              <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
+                {N.t('pick_events')}
+              </h3>
+              <button
+                onClick={() => setTuto(true)}
+                aria-label={N.t('os_tuto_open')}
+                title={N.t('os_tuto_open')}
+                className="p-1 -m-1 rounded-full text-muted-foreground hover:text-primary transition-colors"
+              >
+                <GraduationCap className="w-3.5 h-3.5" />
+              </button>
+            </span>
             {salleOuverte && <InterrupteurLieu lieu={lieu} onChange={basculer} id="oneshot" />}
           </div>
           <LigneEpreuves epreuves={RACE_KEYS} coche={k => picked.includes(k)} onToggle={toggle} />
@@ -176,7 +179,7 @@ export function OneShotPanel() {
       <button
         onClick={launch}
         disabled={!picked.length}
-        className="w-full py-3 md:py-5 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
+        className="w-full py-3 md:py-5 serre:py-2.5 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
       >
         {N.t('launch_oneshot')}
       </button>

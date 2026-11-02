@@ -254,6 +254,15 @@
    tous les deux, c'est `court:` qui tranche. */
 @custom-variant court (@media (max-height: 620px));
 
+/* LE TELEPHONE DEBOUT, PAS TRES HAUT (l'auteur, 02/11/2026, Galaxy S25 : « il y a du scrollage
+   pour avoir acces aux informations »). Un telephone tenu debout dans un navigateur laisse
+   650 a 760 pixels de haut : l'accueil y resserre le titre, laisse la scene des coureurs se
+   replier (elle ne dessine ses coureurs que s'ils y tiennent, scene-accueil.ts) et rabat les
+   marges, pour que tout le menu tienne sans defiler. Couche, un telephone est encore plus bas :
+   la variante vaut aussi pour lui (largeur bornee, pour laisser les ecrans d'ordinateur tels quels).
+   Ce qui depasse encore est reduit d'un bloc, hooks/use-menu-sans-defiler.ts. */
+@custom-variant serre (@media (max-height: 860px) and (max-width: 1100px));
+
 /* LA LARGEUR DE LECTURE, VUE ET NON MISE EN PAGE.
    La colonne de l'ecran de fin s'arrete a 42rem, sinon les lignes s'etirent
    et le regard perd le debut de la suivante. Mais quand l'ecran se reduit
