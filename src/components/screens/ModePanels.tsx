@@ -14,7 +14,7 @@ import { GraduationCap, Swords } from 'lucide-react';
 import { motion } from 'motion/react';
 import { InterrupteurLieu, LigneEpreuves, equivalente, type Lieu } from './ChoixEpreuves';
 import { Repliable } from './Repliable';
-import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, EPREUVES_EN_SALLE, EPREUVES_DEHORS } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, epreuvesDuLieu } from '@/game/jeux';
 import { stadeDebloque, VEDETTES, defiPossible } from '@/game/vedettes';
 import { mot } from '@/game/vedettes-mots';
 
@@ -32,18 +32,20 @@ export function OneShotPanel() {
   // (100 -> 60, 200 -> 200 salle, 400 -> 400 salle) en gardant les memes cases cochees. Une epreuve
   // en salle se court au stade couvert : le one shot part la-bas, et le choix du niveau s'efface.
   const idxSalle = LEVELS.findIndex((l: any) => l.salle);
-  const salleOuverte = jeu === 'sprinter' && TROIS_D_OUVERTE && idxSalle >= 0;
+  // (Hurdlers aussi depuis le 02/11 : le 60 m haies, femmes et hommes, au meme stade couvert)
+  const salleOuverte = (jeu === 'sprinter' || jeu === 'hurdlers') && TROIS_D_OUVERTE && idxSalle >= 0;
   const [lieu, setLieu] = useState<Lieu>('dehors');
   const enSalle = salleOuverte && lieu === 'salle';
-  const RACE_KEYS = (jeu === 'sprinter'
-    ? (enSalle ? EPREUVES_EN_SALLE : EPREUVES_DEHORS)
-    : epreuvesDuJeu(jeu)) as readonly RaceKey[];
+  const RACE_KEYS = (salleOuverte
+    ? epreuvesDuLieu(jeu, enSalle ? 'salle' : 'dehors')
+    : epreuvesDuJeu(jeu).filter(k => epreuvesDuLieu(jeu, 'dehors').includes(k))) as readonly RaceKey[];
   const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
-  useEffect(() => { setLieu('dehors'); setPicked([(jeu === 'sprinter' ? EPREUVES_DEHORS : epreuvesDuJeu(jeu))[0] as RaceKey]); }, [jeu]);
+  useEffect(() => { setLieu('dehors'); setPicked([epreuvesDuLieu(jeu, 'dehors')[0]]); }, [jeu]);
   const niveau = enSalle ? idxSalle : level;
 
   const basculer = (vers: Lieu) => {
-    setPicked(p => p.map(k => equivalente(k, vers)));
+    // (sans doublon : aux haies, le 110 m H et le 400 m H ont tous deux le 60 m H ♂ en face)
+    setPicked(p => p.map(k => equivalente(k, vers)).filter((k, i, t) => t.indexOf(k) === i));
     setLieu(vers);
   };
 

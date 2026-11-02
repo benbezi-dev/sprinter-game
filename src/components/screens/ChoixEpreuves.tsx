@@ -1,7 +1,7 @@
 import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp } from '@/game/engine';
 import type { RaceKey } from '@/game/leaderboard';
-import { nomCourt, EPREUVES_EN_SALLE, EPREUVES_DEHORS } from '@/game/jeux';
+import { nomCourt, jeuDe, epreuvesDuLieu, TOUTES_EN_SALLE, estUneCourseDeHaies } from '@/game/jeux';
 import { sonChoix, sonSelection } from '@/game/ui-son';
 
 /* LE CHOIX DES EPREUVES, PARTAGE PAR LA CARRIERE ET LE ONE SHOT (l'auteur, 02/11/2026).
@@ -11,12 +11,20 @@ import { sonChoix, sonSelection } from '@/game/ui-son';
 
 export type Lieu = 'dehors' | 'salle';
 
-export const estEnSalle = (k: string) => (EPREUVES_EN_SALLE as readonly string[]).includes(k);
+export const estEnSalle = (k: string) => TOUTES_EN_SALLE.includes(k);
 
-/** L'epreuve d'en face, de l'autre cote de l'interrupteur (100 -> 60, 200s -> 200...). */
+/** Aux haies, l'interrupteur n'a que deux cases en salle : le 400 m H n'a pas de 60 m en face. */
+const EN_FACE_HAIES: Record<string, RaceKey> = {
+  '100h': '60hf', '110h': '60h', '400h': '60h', '60hf': '100h', '60h': '110h',
+};
+
+/** L'epreuve d'en face, de l'autre cote de l'interrupteur (100 -> 60, 200s -> 200, 110 m H -> 60 m H ♂...). */
 export function equivalente(k: string, vers: Lieu): RaceKey {
-  const de = (vers === 'salle' ? EPREUVES_DEHORS : EPREUVES_EN_SALLE) as readonly string[];
-  const a = (vers === 'salle' ? EPREUVES_EN_SALLE : EPREUVES_DEHORS) as readonly string[];
+  if ((vers === 'salle') === estEnSalle(k)) return k as RaceKey;
+  if (estUneCourseDeHaies(k)) return EN_FACE_HAIES[k] || (k as RaceKey);
+  const jeu = jeuDe(k);
+  const de = epreuvesDuLieu(jeu, vers === 'salle' ? 'dehors' : 'salle') as readonly string[];
+  const a = epreuvesDuLieu(jeu, vers);
   const i = de.indexOf(k);
   return (i < 0 ? k : a[i]) as RaceKey;
 }
@@ -87,7 +95,7 @@ export function LigneEpreuves({ epreuves, coche, onToggle, fond = 'bg-black/30',
                 className="absolute inset-0 flex items-center justify-center"
               >
                 {/* l'interrupteur dit deja ou l'on court : la case ne garde que la distance */}
-                {estEnSalle(k) ? `${k.replace('s', '')} M` : nomCourt(k)}
+                {estEnSalle(k) && !estUneCourseDeHaies(k) ? `${k.replace('s', '')} M` : nomCourt(k)}
               </motion.span>
             </AnimatePresence>
           </motion.button>

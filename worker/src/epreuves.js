@@ -48,6 +48,9 @@ export const EPREUVES = {
   '100h': { cle: '100h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '100 m haies', libelleEn: '100 m hurdles' },
   '110h': { cle: '110h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '110 m haies', libelleEn: '110 m hurdles' },
   '400h': { cle: '400h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', libelle: '400 m haies', libelleEn: '400 m hurdles' },
+  // Le 60 m haies en salle (02/11/2026), femmes et hommes : classement, Top 500 et duels a lui, hors objectif du jour.
+  '60hf': { cle: '60hf', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', salle: true, libelle: '60 m haies femmes', libelleEn: "women's 60 m hurdles" },
+  '60h': { cle: '60h', jeu: 'hurdlers', direction: PLUS_BAS, pas: 10, unite: 'ms', salle: true, libelle: '60 m haies hommes', libelleEn: "men's 60 m hurdles" },
 };
 
 /**

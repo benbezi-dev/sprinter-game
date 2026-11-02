@@ -319,7 +319,7 @@ const RATIO_PORTRAIT = 1.6;
  * duree attendue des epreuves du film ; le 100 m garde ses 5 Mbit/s.
  */
 const POIDS_MAX = 15_000_000;
-const SECONDES: Record<string, number> = { '60': 14, '200s': 30, '400s': 58, '100': 20, '200': 30, '400': 58, '4x100': 52, '100h': 24, '110h': 24, '400h': 62 };
+const SECONDES: Record<string, number> = { '60': 14, '200s': 30, '400s': 58, '100': 20, '200': 30, '400': 58, '4x100': 52, '100h': 24, '110h': 24, '400h': 62, '60h': 16, '60hf': 16 };
 function debitDuFilm(): number {
   const G = (globalThis as any).SprinterApp?.G;
   const cles: string[] = (G?.mode === 'oneshot' && Array.isArray(G?.shotRaces) && G.shotRaces.length)

@@ -62,7 +62,7 @@ import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { premierLancement, phasePremiersPas, premiereCourseLancee, apresLaPremiereArrivee, premiersPasFaits, nomDejaDemande } from '@/game/premiers-pas';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
-import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, EPREUVES_EN_SALLE, EPREUVES_DEHORS } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, epreuvesDuLieu } from '@/game/jeux';
 import { useMenuSansDefiler } from '@/hooks/use-menu-sans-defiler';
 import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
 import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
@@ -168,10 +168,10 @@ export function TitleScreen() {
   const haies = jeu === 'hurdlers';
   const epreuves = epreuvesDuJeu(jeu);
   // La salle a son interrupteur, comme dans le one shot : trois distances a la fois.
-  const salleCarriere = jeu === 'sprinter' && epreuves.some(k => estEnSalle(k));
+  const salleCarriere = (jeu === 'sprinter' || jeu === 'hurdlers') && epreuves.some(k => estEnSalle(k));
   const lieuCarriere: Lieu = estEnSalle(raceKey) ? 'salle' : 'dehors';
   const epreuvesCarriere = (salleCarriere
-    ? (lieuCarriere === 'salle' ? EPREUVES_EN_SALLE : EPREUVES_DEHORS)
+    ? epreuvesDuLieu(jeu, lieuCarriere)
     : epreuves) as readonly RaceKey[];
   const [showTop500, setShowTop500] = useState(false);
   // LA LEGENDE EST IMBRIQUEE DANS LA CARRIERE (l'auteur, 07/10/2026) :

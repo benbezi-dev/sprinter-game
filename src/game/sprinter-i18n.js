@@ -1193,6 +1193,8 @@
     disc_100h:       ['100 M HAIES', '100 M HURDLES'],
     disc_110h:       ['110 M HAIES', '110 M HURDLES'],
     disc_400h:       ['400 M HAIES', '400 M HURDLES'],
+    disc_60h:        ['60 M HAIES HOMMES · SALLE', 'MEN’S 60 M HURDLES · INDOOR'],
+    disc_60hf:       ['60 M HAIES FEMMES · SALLE', 'WOMEN’S 60 M HURDLES · INDOOR'],
     disc_longueur:   ['SAUT EN LONGUEUR', 'LONG JUMP'],
     // Hurdlers : ce que la course dit d'une haie, a l'instant ou on la passe.
     // « Trop pres » et « trop loin » plutot que « hache » et « plane » : le

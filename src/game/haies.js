@@ -46,19 +46,31 @@ export const APPUIS = {
   '100h': { premiere: [7, 7], intervalle: [4, 4] },
   '110h': { premiere: [7, 7], intervalle: [4, 4] },
   '400h': { premiere: [21, 23], intervalle: [13, 17] },
+  // LE 60 M HAIES EN SALLE : la premiere haie et l'ecart sont ceux du 110 m
+  // (hommes) et du 100 m (femmes) — memes huit foulees jusqu'a la premiere,
+  // memes trois entre deux. Seul le nombre de haies change : cinq.
+  '60h':  { premiere: [7, 7], intervalle: [4, 4] },
+  '60hf': { premiere: [7, 7], intervalle: [4, 4] },
 };
 
 /**
- * Les records du monde, au 29 aout 2026.
+ * Les records du monde, au 2 novembre 2026 (Zurich, 27 aout 2026 : Masai
+ * Russell 12,09 au 100 m haies, Alison Dos Santos 45,80 au 400 m haies).
+ * En rendu 3D, ils sont aussi le plafond du chrono (sprinter-core.js,
+ * RECORDS_DU_MONDE) : les deux tables doivent dire la meme chose.
  *
  * Ils servent de point d'ancrage au niveau Championnat du monde, et a rien
  * d'autre. Les garder ecrits ici avec leur date evite d'avoir un jour a
  * deviner sur quoi le plateau avait ete cale.
  */
 export const RECORDS = {
-  '100h': { s: 12.12, qui: 'Tobi Amusan', an: 2022 },
+  '100h': { s: 12.09, qui: 'Masai Russell', an: 2026 },
   '110h': { s: 12.80, qui: 'Aries Merritt', an: 2012 },
-  '400h': { s: 45.94, qui: 'Karsten Warholm', an: 2021 },
+  '400h': { s: 45.80, qui: 'Alison Dos Santos', an: 2026 },
+  // En salle (verifies le 02/11/2026) : Grant Holloway, Albuquerque, 16/02/2024 ;
+  // Devynne Charlton, Glasgow, 03/03/2024, egale a Torun le 22/03/2026.
+  '60h':  { s: 7.27, qui: 'Grant Holloway', an: 2024 },
+  '60hf': { s: 7.65, qui: 'Devynne Charlton', an: 2024 },
 };
 
 /**
@@ -132,6 +144,26 @@ export const PLATEAUX = {
     [45.80, 46.10],   // 5 — Jeux mondiaux
     [39.80, 40.30],   // 6 — ZEZE
   ],
+  // LE 60 M HAIES : les plateaux du 110 m (hommes) et du 100 m (femmes), au
+  // rapport que le moteur donne a cadence egale, mesure le 02/11/2026 de 8 a 16
+  // frappes : 0,565 chez les hommes, 0,62 chez les femmes. C'est aussi le
+  // rapport des records (7,27 / 12,80 = 0,568 ; 7,65 / 12,09 = 0,633).
+  '60h': [
+    [9.32, 9.60],   // 1 — scolaire
+    [8.19, 8.76],   // 2 — regional
+    [7.46, 7.74],   // 3 — national
+    [7.23, 7.34],   // 4 — mondial
+    [7.20, 7.29],   // 5 — Jeux mondiaux
+    [6.38, 6.47],   // 6 — ZEZE
+  ],
+  '60hf': [
+    [10.01, 11.07],   // 1 — scolaire
+    [8.80, 10.01],   // 2 — regional
+    [7.35, 8.21],   // 3 — national
+    [7.01, 7.38],   // 4 — mondial
+    [7.01, 7.35],   // 5 — Jeux mondiaux
+    [6.23, 6.63],   // 6 — ZEZE
+  ],
 };
 
 /**
@@ -183,6 +215,31 @@ export const HAIES = {
     haies: { nombre: NB_HAIES, hauteur: 0.914, premiere: 45.00, ecart: 35.00, fin: 40.00 },
     ranges: PLATEAUX['400h'],
   },
+};
+
+/**
+ * LE 60 M HAIES EN SALLE, hommes et femmes (l'auteur, 02/11/2026), au stade
+ * couvert Jesse Owens — la ligne droite centrale du 60 m (piste-salle.js,
+ * `salleDroite`), huit couloirs. Reglement World Athletics :
+ *
+ *   hommes   5 haies de 1,067 m   13,72 + 4 x 9,14 + 9,72 = 60
+ *   femmes   5 haies de 0,838 m   13,00 + 4 x 8,50 + 13,00 = 60
+ *
+ * Le depart, la premiere haie et l'ecart sont ceux du 110 m et du 100 m
+ * haies : c'est la meme course, coupee apres la cinquieme haie. Vitesse de
+ * pointe, foulee et appel en viennent donc tels quels.
+ */
+HAIES['60h'] = {
+  key: '60h', label: '60 M HAIES HOMMES', sub: 'cinq haies, en salle', salleDroite: true, couloirs: 8,
+  arc: 0, straight: 60, maxSpeed: 11.000, best: RECORDS['60h'].s, foulee: 0.86,
+  haies: { nombre: 5, hauteur: 1.067, premiere: 13.72, ecart: 9.14, fin: 9.72 },
+  ranges: PLATEAUX['60h'],
+};
+HAIES['60hf'] = {
+  key: '60hf', label: '60 M HAIES FEMMES', sub: 'cinq haies, en salle', salleDroite: true, couloirs: 8,
+  arc: 0, straight: 60, maxSpeed: 11.000, best: RECORDS['60hf'].s, foulee: 0.82,
+  haies: { nombre: 5, hauteur: 0.838, premiere: 13.00, ecart: 8.50, fin: 13.00 },
+  ranges: PLATEAUX['60hf'],
 };
 
 /** La distance totale d'une course de haies. */

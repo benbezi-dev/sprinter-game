@@ -289,17 +289,25 @@
   // personne — joueur ni adversaire — ne court plus vite. Verifies le 28/10/2026 : 60 m salle 6,34 (Coleman 2018),
   // 100 m 9,58 et 200 m 19,19 (Bolt 2009), 400 m 43,03 (van Niekerk 2016), 200 m salle 19,92 (Fredericks 1996),
   // 400 m salle 44,49 (Morales Williams 2024).
-  const RECORDS_DU_MONDE = { '60': 6.34, '100': 9.58, '200': 19.19, '400': 43.03, '200s': 19.92, '400s': 44.49 };
+  // LES HAIES AUSSI (l'auteur, 02/11 : « calibre comme sur Sprinter ») — verifies le 02/11/2026 : 100 m haies 12,09
+  // (Masai Russell, Zurich, 27/08/2026), 110 m haies 12,80 (Aries Merritt 2012), 400 m haies 45,80 (Alison Dos Santos,
+  // Zurich, 27/08/2026) ; en salle, 60 m haies 7,27 (Grant Holloway 2024) et 7,65 (Devynne Charlton 2024 et 2026).
+  const RECORDS_DU_MONDE = { '60': 6.34, '100': 9.58, '200': 19.19, '400': 43.03, '200s': 19.92, '400s': 44.49,
+                             '100h': 12.09, '110h': 12.80, '400h': 45.80, '60h': 7.27, '60hf': 7.65 };
   // L'ALLURE DU JOUEUR, part de la vitesse et de la poussee du moteur d'avant (l'auteur, 29/10 : « meme niveau de
   // difficulte » que pour le chrono le plus rapide faisable dans le jeu public) : la limite de ce moteur — depart et
   // transition parfaits, cadence sans fin — valait 4,81 / 7,90 / 16,15 / 33,47 / 16,16 / 33,55 s ; ramenee ici
   // pile sur le record. Le meilleur reel du classement (8,16 s au 100 m) donne desormais ~9,9 s.
   // Recalculer avec tools/records-du-monde-test.mjs si BOOST, DRAG ou un maxSpeed change.
-  const ALLURE_DU_JOUEUR = { '60': 0.7533, '100': 0.8219, '200': 0.8406, '400': 0.7772, '200s': 0.8082, '400s': 0.752 };
+  // Aux haies, la limite se mesure appel et ciseau du joueur compris (tools/records-du-monde-test.mjs) : elle bouge
+  // d'un dixieme selon l'instant de la premiere frappe, on vise donc la ligne qui passe au milieu de ce bruit.
+  const ALLURE_DU_JOUEUR = { '60': 0.7533, '100': 0.8219, '200': 0.8406, '400': 0.7772, '200s': 0.8082, '400s': 0.752,
+                             '100h': 0.777, '110h': 0.811, '400h': 0.821, '60h': 0.788, '60hf': 0.734 };
   // ET LES ADVERSAIRES SUIVENT (l'auteur, 29/10 : « meme conversion ») : les plateaux, chronos fixes et plateaux de
   // la carriere restent ecrits dans l'echelle d'avant ; leur temps tire est multiplie par ce que l'allure fait au
   // joueur a 17 appuis/s (x1,19 a x1,21 de 8 a 40 appuis/s au 100 m) — chaque course garde sa difficulte.
-  const CONVERSION_ADVERSAIRES = { '60': 1.287, '100': 1.200, '200': 1.182, '400': 1.281, '200s': 1.225, '400s': 1.320 };
+  const CONVERSION_ADVERSAIRES = { '60': 1.287, '100': 1.200, '200': 1.182, '400': 1.281, '200s': 1.225, '400s': 1.320,
+                                   '100h': 1.282, '110h': 1.234, '400h': 1.220, '60h': 1.272, '60hf': 1.363 };
 
   // Trois epreuves. Le 100 m est le cas particulier sans virage ; le 400 m
   // est un tour complet de piste (deux virages, deux lignes droites).
@@ -530,7 +538,9 @@
       salle: true,
       noms: ['Stade couvert Jesse Owens', 'Jesse Owens Indoor Stadium'],
       foule: 0.8,
-      plateau: { '60': [6.50, 6.65], '200s': [19.54, 20.09], '400s': [43.83, 44.15] },
+      plateau: { '60': [6.50, 6.65], '200s': [19.54, 20.09], '400s': [43.83, 44.15],
+                 // le 60 m haies, hommes et femmes (game/haies.js) : la meme avant-derniere etape
+                 '60h': [7.20, 7.29], '60hf': [7.01, 7.35] },
       names: ['Hugo Lemaire', 'Yanis Bertin', 'Lucas Ferrand', 'Noam Diallo',
               'Theo Marchal', 'Ilan Rousseau', 'Sacha Morel'] },
 
@@ -593,7 +603,7 @@
       plateau: { '100': [9.80, 10.20], '200': [19.80, 20.60],
                  '400': [44.20, 45.40], '4x100': [38.00, 39.00],
                  '100h': [12.00, 12.60], '110h': [12.95, 13.60],
-                 '400h': [42.50, 44.00] },
+                 '400h': [42.50, 44.00], '60h': [7.32, 7.68], '60hf': [7.44, 7.81] },
       cibles: { '110h': { 'Aurel MANGA': 11.80 } },
       names: ['Hugo Lestrade', 'Noa Berthier', 'Samuel Kane', 'Aurel MANGA',
               'Liam Ferrand', 'Yohan Serre', 'Idriss Fofana'] },
@@ -641,7 +651,7 @@
       plateau: { '100': [9.20, 9.60], '200': [18.60, 19.40],
                  '400': [42.80, 43.80], '4x100': [37.20, 38.00],
                  '100h': [12.00, 12.60], '110h': [12.95, 13.60],
-                 '400h': [42.50, 44.00] },
+                 '400h': [42.50, 44.00], '60h': [7.32, 7.68], '60hf': [7.44, 7.81] },
       cibles: { '100': { 'Méba-Mickael ZÉZÉ': 8.39 },
                 '200': { 'Méba-Mickael ZÉZÉ': 17.30 } },
       names: ['Enzo Marchal', 'Kylian Brault', 'Jordan Mensah', 'Méba-Mickael ZÉZÉ',
@@ -683,7 +693,7 @@
       plateau: { '100': [9.80, 10.20], '200': [19.80, 20.60],
                  '400': [44.20, 45.40], '4x100': [38.00, 39.00],
                  '100h': [12.00, 12.60], '110h': [12.95, 13.60],
-                 '400h': [42.50, 44.00] },
+                 '400h': [42.50, 44.00], '60h': [7.32, 7.68], '60hf': [7.44, 7.81] },
       names: ['Bastien Royer', 'Malik Sissoko', 'Thibault Carel', 'Noah Vidal',
               'Ilyes Benali', 'Quentin Morel', 'Axel Durand'] },
 
@@ -2267,7 +2277,10 @@
     const lance = 1 + (C.CADENCE_LANCEE - 1) * qL * qL * (3 - 2 * qL);
     // L'ALLURE 3D (ALLURE_DU_JOUEUR, CONVERSION_ADVERSAIRES) ralentit la course, pas les jambes : la foulee
     // raccourcit d'autant (« plus lourd, moins technique, moins frequent », l'auteur, 29/10 : 6,0 -> 4,9 appuis/s).
-    return Math.max(0.85, 4 * leg * P.stride * dep * (this.foulee || 1) * this.allure *
+    // SAUF AUX HAIES (enHaies, haies-pas.js) : l'intervalle impose ses appuis — quatre entre deux haies du 110 m, le
+    // reglement le compte (haies.js, APPUIS). Une foulee raccourcie de l'allure en mettait un de trop a chaque haie.
+    const parAllure = this.enHaies ? 1 : this.allure;
+    return Math.max(0.85, 4 * leg * P.stride * dep * (this.foulee || 1) * parAllure *
                     Math.sin(Math.min(1.15, 0.70 * amp)) / lance);
   };
 

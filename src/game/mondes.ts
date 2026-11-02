@@ -16,7 +16,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { armerPassage } from './passage';
-import { HAIES_OUVERTES, LONGUEUR_OUVERTE, TRIPLE_OUVERT, HAUTEUR_OUVERTE } from './canal';
+import { HAIES_OUVERTES, LONGUEUR_OUVERTE, TRIPLE_OUVERT, HAUTEUR_OUVERTE, TROIS_D_OUVERTE } from './canal';
 
 export type Monde = 'sprinter' | 'hurdlers' | 'jumper' | 'thrower';
 export type Direction = 'bas' | 'droite' | 'gauche';
@@ -93,6 +93,9 @@ export const MONDES: Record<Monde, DescriptionMonde> = {
       { cle: '100h', nom: 'disc_100h', jouable: HAIES_OUVERTES, cotes: true },
       { cle: '110h', nom: 'disc_110h', jouable: HAIES_OUVERTES, cotes: true },
       { cle: '400h', nom: 'disc_400h', jouable: HAIES_OUVERTES, cotes: true },
+      // le 60 m haies en salle (haies.js), femmes et hommes
+      { cle: '60hf', nom: 'disc_60hf', jouable: HAIES_OUVERTES && TROIS_D_OUVERTE, cotes: true },
+      { cle: '60h', nom: 'disc_60h', jouable: HAIES_OUVERTES && TROIS_D_OUVERTE, cotes: true },
     ],
   },
   jumper: {

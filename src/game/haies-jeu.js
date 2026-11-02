@@ -53,6 +53,9 @@ export const APPEL = {
   // ici qu'elle remplacera Jackson.
   '110h': { avant: 2.09, apres: 1.58 },
   '400h': { avant: 2.15, apres: 1.20 },
+  // le 60 m haies en salle : la haie des hommes est celle du 110 m, celle des femmes celle du 100 m
+  '60h':  { avant: 2.09, apres: 1.58 },
+  '60hf': { avant: 2.00, apres: 1.05 },
 };
 
 /**
@@ -164,7 +167,7 @@ export const AVANCE_CM = 0.38;
  * a la vitesse que l'epreuve autorise, jamais un moyen d'aller plus vite.
  */
 export const PLAFOND_EPREUVE = {
-  '100h': 1, '110h': 1, '400h': 0.895,
+  '100h': 1, '110h': 1, '400h': 0.895, '60h': 1, '60hf': 1,
 };
 
 /**

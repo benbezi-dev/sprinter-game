@@ -13,7 +13,7 @@ const PLAYER_NAME_KEY = 'sprinter_player_name';
  * serveur les range dans les memes tables, le classement, les duels et le
  * direct les traitent de la meme facon.
  */
-export type RaceKey = '60' | '100' | '200' | '200s' | '400' | '400s' | '100h' | '110h' | '400h';
+export type RaceKey = '60' | '100' | '200' | '200s' | '400' | '400s' | '100h' | '110h' | '400h' | '60h' | '60hf';
 
 /**
  * LES EPREUVES QUI ONT UN CLASSEMENT INDIVIDUEL — et le relais n'en est pas.
@@ -39,7 +39,7 @@ export type RaceKey = '60' | '100' | '200' | '200s' | '400' | '400s' | '100h' | 
  * A TENIR D'ACCORD avec ALLOWED_RACES (worker/src/index.js) et EPREUVES
  * (worker/src/epreuves.js).
  */
-const EPREUVES_INDIVIDUELLES: ReadonlySet<string> = new Set<RaceKey>(['60', '100', '200', '200s', '400', '400s', '100h', '110h', '400h']);
+const EPREUVES_INDIVIDUELLES: ReadonlySet<string> = new Set<RaceKey>(['60', '100', '200', '200s', '400', '400s', '100h', '110h', '400h', '60h', '60hf']);
 
 export function estEpreuveIndividuelle(cle: unknown): cle is RaceKey {
   return typeof cle === 'string' && EPREUVES_INDIVIDUELLES.has(cle);

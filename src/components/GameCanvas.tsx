@@ -24,7 +24,7 @@ const RENDU_3D = (() => {
 })();
 // Les epreuves deja faites en 3D, et les nuits du molosse (`nuit-*`, la ruelle de ruelle-3d.ts) ;
 // les autres (relais, concours) restent en 2D. Les haies y sont depuis le 29/10 (« on passe Hurdlers en 3D aussi »).
-const EPREUVES_3D = new Set(['100', '200', '400', '60', '200s', '400s', '100h', '110h', '400h']);
+const EPREUVES_3D = new Set(['100', '200', '400', '60', '200s', '400s', '100h', '110h', '400h', '60h', '60hf']);
 let rendu3D: any = null;
 // LE REPERE DU JOUEUR EN 3D : un chevron jaune et « TOI » au-dessus de sa tete — le seul nom
 // ecrit sur la piste, comme en championnat

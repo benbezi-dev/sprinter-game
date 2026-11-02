@@ -34,7 +34,8 @@ export type Jeu = 'sprinter' | 'hurdlers' | 'jumper';
 export const EPREUVES_DU_JEU: Record<Jeu, readonly RaceKey[]> = {
   // (epreuvesDuJeu retire la salle tant que la 3D n'est pas ouverte : elle n'existe qu'en 3D)
   sprinter: ['60', '100', '200', '200s', '400', '400s'],
-  hurdlers: ['100h', '110h', '400h'],
+  // (le 60 m haies en salle, femmes puis hommes, comme le 100 m H avant le 110 m H)
+  hurdlers: ['100h', '110h', '400h', '60hf', '60h'],
   // Jumper n'a pas de course : ses epreuves sont des concours, que son accueil
   // lance lui-meme (screens/Jumper.tsx).
   jumper: [],
@@ -50,7 +51,7 @@ export const TOUTES_LES_EPREUVES: readonly RaceKey[] = [
  * pas : il vit dans Sprinter, mais sa cle n'a pas a y ramener qui que ce soit.
  */
 const EPREUVES_CONNUES: ReadonlySet<string> = new Set([
-  '60', '100', '200', '200s', '400', '400s', '100h', '110h', '400h',
+  '60', '100', '200', '200s', '400', '400s', '100h', '110h', '400h', '60h', '60hf',
 ]);
 
 /** L'epreuve se court-elle avec des haies ? */
@@ -70,11 +71,25 @@ export function jeuDe(cle: unknown): Jeu {
  */
 /** Les epreuves de la piste couverte (piste-salle.js) : « 200s » se dit « 200 m ». */
 export const EPREUVES_EN_SALLE = ['60', '200s', '400s'] as const;
-const enSalle = (cle: string) => (EPREUVES_EN_SALLE as readonly string[]).includes(cle);
+/** Le 60 m haies en salle (haies.js), femmes et hommes : le meme ordre que dehors, 100 m H puis 110 m H. */
+export const HAIES_EN_SALLE = ['60hf', '60h'] as const;
+/** Les epreuves des haies en plein air. */
+export const HAIES_DEHORS = ['100h', '110h', '400h'] as const;
+/** Toutes les epreuves qui se courent au stade couvert, les deux jeux confondus. */
+export const TOUTES_EN_SALLE: readonly string[] = [...EPREUVES_EN_SALLE, ...HAIES_EN_SALLE];
+const enSalle = (cle: string) => TOUTES_EN_SALLE.includes(cle);
 const N_SALLE = () => (SprinterApp as any).N?.t?.('lieu_salle') || 'SALLE';
 /** Les epreuves du plein air, pour un stade qui n'est pas la salle. */
 export const EPREUVES_DEHORS = ['100', '200', '400'] as const;
+/** Les epreuves d'un jeu, d'un cote ou de l'autre de l'interrupteur PLEIN AIR / SALLE. */
+export function epreuvesDuLieu(jeu: Jeu, lieu: 'dehors' | 'salle'): readonly RaceKey[] {
+  if (jeu === 'hurdlers') return (lieu === 'salle' ? HAIES_EN_SALLE : HAIES_DEHORS) as readonly RaceKey[];
+  return (lieu === 'salle' ? EPREUVES_EN_SALLE : EPREUVES_DEHORS) as readonly RaceKey[];
+}
+/** Le 60 m haies se dit pour qui il se court : ♂ (1,067 m), ♀ (0,838 m). */
+const SEXE_60H: Record<string, string> = { '60h': '♂', '60hf': '♀' };
 export function nomCourt(cle: string): string {
+  if (SEXE_60H[cle]) return `60 M H ${SEXE_60H[cle]}`;
   // (le 200 et le 400 existent aussi dehors : le bouton doit dire lequel)
   if (enSalle(cle)) return cle === '60' ? '60 M' : `${cle.replace('s', '')} M ${N_SALLE()}`;
   return estUneCourseDeHaies(cle) ? `${cle.slice(0, -1)} M H` : `${cle} M`;
@@ -86,7 +101,7 @@ export function nomCourt(cle: string): string {
  */
 export function nomEnLigne(cle: string | readonly string[]): string {
   const l = Array.isArray(cle) ? cle : [cle as string];
-  return l.map(k => (k === '60' ? '60 m' : enSalle(k) ? `${k.replace('s', '')} m ${N_SALLE().toLowerCase()}` : estUneCourseDeHaies(k) ? `${k.slice(0, -1)} m H` : `${k} m`)).join(' + ');
+  return l.map(k => (SEXE_60H[k] ? `60 m H ${SEXE_60H[k]}` : k === '60' ? '60 m' : enSalle(k) ? `${k.replace('s', '')} m ${N_SALLE().toLowerCase()}` : estUneCourseDeHaies(k) ? `${k.slice(0, -1)} m H` : `${k} m`)).join(' + ');
 }
 
 // --- les trois epreuves dans la table du moteur ------------------------------

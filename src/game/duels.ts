@@ -45,7 +45,7 @@ export type Etage = 'departemental' | 'regional' | 'national' | 'elite' | 'legen
  * 400, sans quoi deux ecrans demanderaient deux classements pour la meme
  * course. `cleDiscipline` est le seul endroit ou cette cle se fabrique.
  */
-export const EPREUVES_DUEL = ['60', '100', '200', '200s', '400', '400s', '100h', '110h', '400h'];
+export const EPREUVES_DUEL = ['60', '100', '200', '200s', '400', '400s', '100h', '110h', '400h', '60hf', '60h'];
 export const DISCIPLINE_DEFAUT = '100';
 
 export function cleDiscipline(epreuves?: string[] | null): string {
@@ -59,6 +59,9 @@ export function nomDiscipline(cle: string): string {
   const eps = String(cle || '').split('+').filter(k => EPREUVES_DUEL.includes(k));
   const liste = eps.length ? eps : [DISCIPLINE_DEFAUT];
   // « 200s » se dit « 200 M EN SALLE » ; le 60 m n'existe qu'en salle, il n'a pas a le preciser
+  // les haies : « 110 M H », et le 60 m haies dit pour qui il se court (♂ 1,067 m, ♀ 0,838 m)
+  const haie = (k: string) => (k === '60h' ? '60 M H ♂' : k === '60hf' ? '60 M H ♀' : /^\d+h$/.test(k) ? `${k.slice(0, -1)} M H` : null);
+  if (liste.some(haie)) return liste.map(k => haie(k) || `${k} M`).join(' + ');
   const salle = liste.some(k => k === '200s' || k === '400s');
   return liste.map(k => (k === '200s' || k === '400s' ? k.slice(0, -1) : k)).join(' + ') + ' M' + (salle ? ` ${(globalThis as any).SprinterApp?.N?.t?.('lieu_salle') || 'EN SALLE'}` : '');
 }
