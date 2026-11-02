@@ -11,6 +11,8 @@ import { RELAIS_OUVERT, TROIS_D_OUVERTE } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { sonChoix, sonSelection } from '@/game/ui-son';
 import { Repliable } from './Repliable';
 import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, EPREUVES_EN_SALLE, EPREUVES_DEHORS } from '@/game/jeux';
 import { stadeDebloque, VEDETTES, defiPossible } from '@/game/vedettes';
@@ -24,14 +26,35 @@ export function OneShotPanel() {
   // Les epreuves du jeu courant : le one shot de Hurdlers enchaine des haies.
   const jeu = useJeu();
   const [level, setLevel] = useState(4);
-  // AU STADE COUVERT (la salle de Val-de-Reuil), ses epreuves seulement : 60 m, 200 m et 400 m en salle
-  const enSalle = !!(LEVELS[level] as any)?.salle;
-  const RACE_KEYS = (enSalle ? EPREUVES_EN_SALLE : jeu === 'sprinter' ? EPREUVES_DEHORS : epreuvesDuJeu(jeu)) as readonly RaceKey[];
+  // LA SALLE SE CHOISIT PAR SES EPREUVES (l'auteur, 02/11) : le 60 m, le 200 m et le 400 m en salle
+  // se prennent dans le one shot sans passer par le choix du stade couvert Jesse Owens. Pour tenir
+  // en une ligne, un interrupteur PLEIN AIR / EN SALLE a cote du titre change les trois distances
+  // (100 -> 60, 200 -> 200 salle, 400 -> 400 salle) en gardant les memes cases cochees. Une epreuve
+  // en salle se court au stade couvert : le one shot part la-bas, et le choix du niveau s'efface.
+  const idxSalle = LEVELS.findIndex((l: any) => l.salle);
+  const salleOuverte = jeu === 'sprinter' && TROIS_D_OUVERTE && idxSalle >= 0;
+  const [lieu, setLieu] = useState<'dehors' | 'salle'>('dehors');
+  const enSalle = salleOuverte && lieu === 'salle';
+  const RACE_KEYS = (jeu === 'sprinter'
+    ? (enSalle ? EPREUVES_EN_SALLE : EPREUVES_DEHORS)
+    : epreuvesDuJeu(jeu)) as readonly RaceKey[];
   const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
-  useEffect(() => { setPicked([RACE_KEYS[0]]); }, [jeu, enSalle]);
+  useEffect(() => { setLieu('dehors'); setPicked([(jeu === 'sprinter' ? EPREUVES_DEHORS : epreuvesDuJeu(jeu))[0] as RaceKey]); }, [jeu]);
+  const niveau = enSalle ? idxSalle : level;
+
+  const basculer = (vers: 'dehors' | 'salle') => {
+    if (vers === lieu) return;
+    const de = (vers === 'salle' ? EPREUVES_DEHORS : EPREUVES_EN_SALLE) as readonly string[];
+    const a = (vers === 'salle' ? EPREUVES_EN_SALLE : EPREUVES_DEHORS) as readonly string[];
+    setPicked(p => p.map(k => a[de.indexOf(k)] as RaceKey).filter(Boolean));
+    setLieu(vers);
+    sonChoix();
+  };
 
   const toggle = (k: RaceKey) => {
-    setPicked(p => (p.includes(k) ? p.filter(x => x !== k) : [...p, k]));
+    const oui = !picked.includes(k);
+    setPicked(p => (oui ? [...p, k] : p.filter(x => x !== k)));
+    sonSelection(oui);
   };
 
   // Le mode est peu utilise, et le premier obstacle est de comprendre a quoi
@@ -49,7 +72,7 @@ export function OneShotPanel() {
     // On garde l'ordre 100 / 200 / 400 quel que soit l'ordre des clics :
     // c'est l'ordre d'un vrai programme d'athletisme.
     const races = RACE_KEYS.filter(k => picked.includes(k));
-    SprinterApp.startOneShot(races, { levelIdx: level });
+    SprinterApp.startOneShot(races, { levelIdx: niveau });
   };
 
   const launch = partir;
@@ -75,22 +98,66 @@ export function OneShotPanel() {
         </button>
 
         <div>
-          <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary mb-2">
-            {N.t('pick_events')}
-          </h3>
-          <div className="flex gap-2">
-            {RACE_KEYS.map(k => (
-              <button
-                key={k}
-                onClick={() => toggle(k)}
-                className={`flex-1 py-2 md:py-3 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
-                  ${picked.includes(k)
-                    ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]'
-                    : 'bg-black/30 text-muted-foreground border-transparent hover:bg-white/10'}`}
-              >
-                {nomCourt(k)}
-              </button>
-            ))}
+          {/* Le titre et l'interrupteur sur la meme ligne : la salle ne coute pas une ligne de plus. */}
+          <div className="flex items-center justify-between mb-2 gap-2">
+            <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
+              {N.t('pick_events')}
+            </h3>
+            {salleOuverte && (
+              <div className="relative flex rounded-full bg-black/40 border border-white/10 p-0.5">
+                {(['dehors', 'salle'] as const).map(l => (
+                  <button
+                    key={l}
+                    onClick={() => basculer(l)}
+                    className={`relative px-2.5 py-1 text-[9px] md:text-[10px] font-bold tracking-widest rounded-full transition-colors
+                      ${lieu === l ? 'text-background' : 'text-muted-foreground hover:text-foreground'}`}
+                  >
+                    {lieu === l && (
+                      <motion.span
+                        layoutId="os-lieu"
+                        className="absolute inset-0 rounded-full bg-primary shadow-[0_0_12px_rgb(var(--primaire-rgb)/0.45)]"
+                        transition={{ type: 'spring', stiffness: 520, damping: 34 }}
+                      />
+                    )}
+                    <span className="relative">{l === 'salle' ? N.t('os_salle') : N.t('os_plein_air')}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {/* Une seule ligne de trois. En basculant, les distances partent par le haut et les
+              nouvelles arrivent par le bas, l'une apres l'autre : on voit que la ligne a change
+              de lieu sans qu'aucune case ne bouge de place. */}
+          <div className="grid grid-cols-3 gap-2">
+            {RACE_KEYS.map((k, i) => {
+              const oui = picked.includes(k);
+              return (
+                <motion.button
+                  key={i}
+                  onClick={() => toggle(k)}
+                  whileTap={{ scale: 0.93 }}
+                  animate={{ scale: oui ? 1 : 0.98 }}
+                  transition={{ type: 'spring', stiffness: 600, damping: 28 }}
+                  className={`relative overflow-hidden h-10 md:h-12 rounded-xl font-bold tracking-wider border-b-2 text-sm md:text-base transition-colors
+                    ${oui
+                      ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]'
+                      : 'bg-black/30 text-muted-foreground border-transparent hover:bg-white/10'}`}
+                >
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                      key={k}
+                      initial={{ y: 18, opacity: 0, filter: 'blur(3px)' }}
+                      animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+                      exit={{ y: -18, opacity: 0, filter: 'blur(3px)' }}
+                      transition={{ type: 'spring', stiffness: 420, damping: 30, delay: i * 0.04 }}
+                      className="absolute inset-0 flex items-center justify-center"
+                    >
+                      {jeu === 'sprinter' ? `${k.replace('s', '')} M` : nomCourt(k)}
+                    </motion.span>
+                  </AnimatePresence>
+                </motion.button>
+              );
+            })}
           </div>
         </div>
 
@@ -98,6 +165,16 @@ export function OneShotPanel() {
           <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary mb-2">
             {N.t('pick_level')}
           </h3>
+          {enSalle ? (
+            <motion.div
+              key="salle"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground"
+            >
+              {N.levelName(idxSalle)}
+            </motion.div>
+          ) : (
           <select
             value={level}
             onChange={e => setLevel(Number(e.target.value))}
@@ -134,6 +211,8 @@ export function OneShotPanel() {
                   if (!l.horsSerie || l.evenement || l.legende || (l.reserve && import.meta.env.VITE_CANAL !== 'test')) return null;
                   // (le stade couvert Jesse Owens n'existe qu'en 3D : il attend sa sortie, canal.ts)
                   if (l.avecLa3D && !TROIS_D_OUVERTE) return null;
+                  // la salle ne se choisit plus ici : on y va en prenant une de ses epreuves
+                  if (l.salle) return null;
                   if (stadeDebloque(l)) return (
                     <option key={i} value={i} className="bg-neutral-900">
                       {N.levelName(i)}
@@ -149,6 +228,7 @@ export function OneShotPanel() {
               </optgroup>
             )}
           </select>
+          )}
         </div>
       </div>
 
