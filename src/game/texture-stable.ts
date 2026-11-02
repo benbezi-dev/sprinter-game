@@ -39,12 +39,28 @@ export function textureStable(base: string, nom: NomStable): THREE.Texture {
     const f: Fichier = FICHIERS[nom];
     const toile = document.createElement('canvas'); toile.width = f.l; toile.height = f.h;
     const c = toile.getContext('2d')!;
-    c.fillStyle = `rgb(${f.moy[0]},${f.moy[1]},${f.moy[2]})`; c.fillRect(0, 0, f.l, f.h);
+    const peindre = () => { c.fillStyle = `rgb(${f.moy[0]},${f.moy[1]},${f.moy[2]})`; c.fillRect(0, 0, f.l, f.h); };
+    peindre();
     const s = new THREE.Source(toile);
     source = s;
     sources.set(nom, s);
+    // LA PISTE NOIRE EN MODE FANTOME (« les couleurs de la piste disparaissent lors d'une course mode fantome
+    // 60 m », l'auteur, 02/11) : au telephone, le navigateur peut VIDER une toile 2D pour reprendre de la memoire
+    // (app en arriere-plan, partie longue — la « perte de contexte » des toiles 2D). Vide, elle est noire et
+    // transparente : au premier renvoi vers la carte graphique (contexte WebGL restaure, nouveau reglage de
+    // texture), le tartan sortait NOIR, tout le reste intact. La toile ne sert donc plus qu'en attendant : des
+    // que le fichier arrive, la source lit l'image elle-meme, qu'aucun navigateur ne vide. Et si la toile est
+    // videe avant, on la repeint.
+    let image: HTMLImageElement | null = null;
+    toile.addEventListener('contextrestored', () => { if (!image) { peindre(); s.needsUpdate = true; } });
     // (un fichier absent : la teinte moyenne reste, la course aussi)
-    new THREE.ImageLoader().loadAsync(base + nom).then(img => { c.drawImage(img, 0, 0, f.l, f.h); s.needsUpdate = true; }, () => {});
+    new THREE.ImageLoader().loadAsync(base + nom).then(img => {
+      image = img;
+      // meme taille que la toile : three garde son allocation (voir plus haut) ; sinon, on peint dans la toile
+      if (img.naturalWidth === f.l && img.naturalHeight === f.h) s.data = img;
+      else c.drawImage(img, 0, 0, f.l, f.h);
+      s.needsUpdate = true;
+    }, () => {});
   }
   const t = new THREE.Texture();
   t.source = source;
