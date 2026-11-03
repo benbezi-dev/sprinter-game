@@ -51,6 +51,12 @@
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/couleur_notification" />
 
+        <!-- AdMob (src/game/pub.ts). Identifiant d'application de TEST de
+             Google tant que le compte AdMob n'existe pas. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"

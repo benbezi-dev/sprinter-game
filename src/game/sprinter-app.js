@@ -2001,7 +2001,10 @@ import { sponsorDeLaCourse } from './panneaux';
     // compte les Continue achetes pour elle (le prix monte a chaque fois) ;
     // `runContinues` est ce compte vu d'ici. Une carriere qui en a utilise un
     // ne s'inscrit pas au classement des parcours. Voir game/pieces.ts.
-    runId: '', runContinues: 0,
+    // `runPubs` compte les reprises payees d'une pub (game/pub.ts), a part :
+    // le serveur ne les connait pas, et elles laissent la carriere au
+    // classement (decision du 3/11/2026 : seule la reprise achetee en sort).
+    runId: '', runContinues: 0, runPubs: 0,
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
     // La cinematique qui s'efface par-dessus celle qui commence. Nulle en
     // dehors du seul fondu enchaine du jeu — le sacre vers le generique.
@@ -2590,7 +2593,7 @@ import { sponsorDeLaCourse } from './panneaux';
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.etiquette = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
-    G.runId = nouveauParcours(); G.runContinues = 0;
+    G.runId = nouveauParcours(); G.runContinues = 0; G.runPubs = 0;
     startLevel(0);
   }
   // LA TOUTE PREMIERE COURSE PART SANS CINEMATIQUE (game/premiers-pas.ts) : un
@@ -2613,9 +2616,9 @@ import { sponsorDeLaCourse } from './panneaux';
   // perdue n'entre pas au cumul, comme avant : seul ce qu'on gagne y entre.
   // Le paiement se fait AVANT, cote serveur (game/pieces.ts) ; le moteur ne
   // sait rien des pieces, il compte seulement qu'un Continue a eu lieu.
-  function continuerCarriere() {
+  function continuerCarriere(parPub) {
     if (G.mode !== 'campaign' || G.state !== 'over') return false;
-    G.runContinues += 1;
+    if (parPub) G.runPubs += 1; else G.runContinues += 1;
     startLevel(G.levelIdx);
     return true;
   }
@@ -2746,13 +2749,22 @@ import { sponsorDeLaCourse } from './panneaux';
   // pour celui qui recoit le defi comme pour celui qui le renvoie. Les
   // epreuves restantes comptent pour abandon et le duel est perdu — c'est ce
   // que renvoie le vrai : true si l'on vient bien d'eliminer le joueur.
+  //
+  // EN CARRIERE AUSSI depuis le 3 novembre 2026 : l'etape est perdue, et
+  // l'ecran de defaite (OverScreen) propose pieces, pub ou premiere etape.
+  // Seule la toute premiere course du joueur (premiers-pas) garde le simple
+  // blocage : il n'a encore rien appris du depart.
   function falseStartOut() {
-    if (G.mode !== 'oneshot' || G.falseOut) return false;
+    if (G.falseOut) return false;
+    const carriere = G.mode === 'campaign' && !G.premiereCourse && !G.rejeu;
+    if (G.mode !== 'oneshot' && !carriere) return false;
     G.falseOut = true; G.falseOutT = 0;
     G.player.jumped = true;
-    while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
-    while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
-    G.shotIdx = G.shotRaces.length;
+    if (G.mode === 'oneshot') {
+      while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
+      while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
+      G.shotIdx = G.shotRaces.length;
+    }
     G.flash = 1; G.shake = 1.6; G.falseFlash = 2.4;
     Audio_.cue('dirge');
     G.state = 'falseout';

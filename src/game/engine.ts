@@ -545,8 +545,8 @@ export function padPress(side: 'left' | 'right') {
       return;
     }
     if (!G.player.jumped) {
-      // One-shot et defi : la course ne se rejoue pas, le faux depart elimine.
-      // En carriere il coute seulement un blocage au coup de pistolet.
+      // Le faux depart elimine (one-shot, defi, carriere) ; ou falseStartOut
+      // le refuse (premiere course du joueur), il coute un blocage au pistolet.
       if (SprinterApp.falseStartOut()) { buzz(120); return; }
       G.player.jumped = true;
       G.player.freeze = C.FALSE_START_FREEZE;

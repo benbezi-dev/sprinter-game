@@ -11,7 +11,9 @@ import { ETAPES, type Transport } from '@/game/legende/etapes';
 import {
   commencerLaLegende, lancerLEtape, conclureLEtape, etapeSuivante, rangerLaLegende,
   memoire, lieuDeLEtape, rangEnCours, chronoDuBoss, type Verdict,
+  reprisesDeLaLegende, recalerLesContinues, reprendreLEtape,
 } from '@/game/legende/legende';
+import { Reprises } from './Reprises';
 import { mot, chrono, dans } from '@/game/legende/mots';
 import { GlobeDuVoyage } from './LegendeGlobe';
 import { chargerLaMusiqueDuLieu } from '@/game/legende/musiques';
@@ -401,6 +403,7 @@ export function FinDEtapeLegende() {
   const accueil = () => { rangerLaLegende(); (SprinterApp as any).goHome(); };
   const suivante = () => { if (etapeSuivante()) setAnnonce(true); };
   const recommencer = () => { commencerLaLegende(0); setAnnonce(true); };
+  const reprises = reprisesDeLaLegende();
 
   return (
     <div className="absolute inset-0 z-30 pointer-events-auto flex items-center justify-center
@@ -431,6 +434,13 @@ export function FinDEtapeLegende() {
           </span>
         )}
         {!v.gagne && <span className="text-[11px] text-white/55">{mot('regle_perte')}</span>}
+
+        {/* Reprendre l'etape perdue : pieces ou pub (Reprises.tsx). */}
+        {!v.gagne && reprises && (
+          <Reprises parcours={reprises.id} achetes={reprises.continues} pubs={reprises.pubs}
+            etape={v.lieu.nom} recaler={recalerLesContinues}
+            reprendre={parPub => { reprendreLEtape(parPub); setAnnonce(true); }} />
+        )}
 
         {/* La video de l'etape, au-dessus des boutons : elle se partage comme
             sur les autres ecrans de fin. */}
