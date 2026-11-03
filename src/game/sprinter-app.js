@@ -3544,7 +3544,10 @@ import { sponsorDeLaCourse } from './panneaux';
     const T = instantLive();
     // PASSE LA LIGNE, IL VA AU TAPIS DU 60 M CHEZ NOUS AUSSI : plus aucun paquet n'en decide (son rebond n'est pas le notre,
     // son geste non plus), seul son chrono compte encore
-    if (r.finished && r.tapis != null && r.total === 60 && r.d >= L) {
+    // (des la ligne, sans attendre l'arrivee annoncee par la salle : d'ici la, il suivait les paquets sans geste, puis
+    // restait plante a son point le plus loin — « un adversaire ne recule jamais »)
+    if (r.tapis != null && r.total === 60 && r.d >= L) {
+      if (!r.finished) { r.finished = true; r.finishTime = g.fin != null ? g.fin : (g.time || G.elapsed); }
       if (g.fin != null && T >= g.fin) r.finishTime = g.fin;
       r.apresLigne(dt, 1.15);
       r.stride += r.v * dt * (Math.PI / r.strideLength());
@@ -3715,6 +3718,16 @@ import { sponsorDeLaCourse } from './panneaux';
     // une foulee continue, avec un retard de quelques centiemes — invisible a
     // l'oeil, alors qu'un saut de 40 cm ne l'est pas.
     if (g.live) { avancerLive(g, dt); return; }
+    // AU 60 M EN SALLE, LA TRACE CONTINUE APRES LA LIGNE : le tapis, puis le retour (engine.ts l'enregistre jusqu'a la
+    // fin de la course). Rejouee, elle faisait reculer le fantome, foulee figee dans la pose du choc (« l'adversaire
+    // reste bloque dans une position et recule », l'auteur, 3/11). Passe la ligne, il fait son propre tapis.
+    if (r.tapis != null && r.total === 60 && r.d >= G.track.total) {
+      if (!r.finished) { r.finished = true; r.finishTime = g.time || G.elapsed; }
+      r.apresLigne(dt, 1.15);
+      r.stride += r.v * dt * (Math.PI / r.strideLength());
+      r.drivePitch = 0;
+      return;
+    }
     const tr = g.trace;
     const last = tr.length - 1;
     const x = G.elapsed / g.step;
