@@ -509,6 +509,8 @@ export class Review {
     (globalThis as any).__filmer3D = (t: HTMLCanvasElement) => {
       // trente copies par seconde suffisent : le film n'en prend pas plus
       if (performance.now() - this.copie3DA < 30) return;
+      // une toile vide (fenetre a zero, appli en arriere-plan) leverait dans drawImage, au milieu de la boucle du jeu
+      if (!t.width || !t.height) return;
       const c = this.copie3D || (this.copie3D = document.createElement('canvas'));
       if (c.width !== t.width || c.height !== t.height) { c.width = t.width; c.height = t.height; }
       c.getContext('2d')?.drawImage(t, 0, 0);

@@ -3042,5 +3042,6 @@ export function rendre(App: any, dt: number) {
   // LE FILM D'APRES COURSE (review.ts) recopie l'image 3D ici, juste apres son trace : plus tard
   // dans l'image, le navigateur a deja vide le tampon WebGL et la copie sortait noire
   const filmer = (globalThis as any).__filmer3D;
-  if (filmer) filmer(renderer!.domElement);
+  // (le film ne doit jamais pouvoir arreter la course : une erreur ici remontait dans la boucle du jeu)
+  if (filmer) try { filmer(renderer!.domElement); } catch { /* cette image manquera au film */ }
 }
