@@ -260,8 +260,10 @@
    replier (elle ne dessine ses coureurs que s'ils y tiennent, scene-accueil.ts) et rabat les
    marges, pour que tout le menu tienne sans defiler. Couche, un telephone est encore plus bas :
    la variante vaut aussi pour lui (largeur bornee, pour laisser les ecrans d'ordinateur tels quels).
-   Ce qui depasse encore est reduit d'un bloc, hooks/use-menu-sans-defiler.ts. */
-@custom-variant serre (@media (max-height: 860px) and (max-width: 1100px));
+   Ce qui depasse encore est reduit d'un bloc, hooks/use-menu-sans-defiler.ts.
+   960 et non 860 : dans l'appli, sans barre de navigateur, un telephone donne 880 a 932 px ; il
+   gardait la grande mise en page et le menu entier rapetissait (Galaxy Z Flip6, 02/11/2026). */
+@custom-variant serre (@media (max-height: 960px) and (max-width: 1100px));
 
 /* LA LARGEUR DE LECTURE, VUE ET NON MISE EN PAGE.
    La colonne de l'ecran de fin s'arrete a 42rem, sinon les lignes s'etirent
