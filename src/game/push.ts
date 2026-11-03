@@ -322,6 +322,18 @@ function ecouterWeb() {
   } catch { /* adresse illisible : rien a relayer */ }
 
   if (!('serviceWorker' in navigator)) return;
+  // Meme menage que `viderVolet` cote natif : le jeu installe depuis Chrome
+  // garde sinon sa pastille tant que ses notifications restent dans le volet.
+  const viderVoletWeb = () => {
+    if (document.visibilityState !== 'visible') return;
+    navigator.serviceWorker.ready
+      .then(reg => reg.getNotifications())
+      .then(ns => ns.forEach(n => n.close()))
+      .catch(() => { /* rien a vider */ });
+    (navigator as any).clearAppBadge?.().catch?.(() => { /* non gere */ });
+  };
+  document.addEventListener('visibilitychange', viderVoletWeb);
+  viderVoletWeb();
   navigator.serviceWorker.addEventListener('message', ev => {
     const m = ev.data;
     if (m && m.sprinter === 'courrier' && m.t) signalerCourrier(String(m.t) as Courrier);
