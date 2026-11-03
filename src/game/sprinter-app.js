@@ -2136,7 +2136,8 @@ import { sponsorDeLaCourse } from './panneaux';
     return p < 0 ? null : p + 1;
   }
   function recordRun(t) {
-    const a = G.runs[G.raceKey].concat([Math.round(t * 100) / 100]);
+    // (les tables du depart n'ont que les six epreuves de plein air : la salle et les autres y entrent ici)
+    const a = (G.runs[G.raceKey] || []).concat([Math.round(t * 100) / 100]);
     a.sort((x, y) => x - y); a.length = Math.min(10, a.length);
     G.runs[G.raceKey] = a;
     const p = a.indexOf(Math.round(t * 100) / 100);
@@ -3790,7 +3791,7 @@ import { sponsorDeLaCourse } from './panneaux';
       G.runSplits.push(G.player.finishTime);
       G.runTraces.push(G.recTrace || []);
       G.runTime += G.player.finishTime;
-      G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey], G.levelIdx + 1);
+      G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey] || 0, G.levelIdx + 1);
       if (G.levelIdx + 1 >= NB_ETAPES) {
         // Une carriere reprise par un Continue n'entre pas aux meilleurs
         // parcours : son cumul ne compte que les courses gagnees, la

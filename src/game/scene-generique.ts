@@ -52,6 +52,8 @@ const COULEURS = [
 const VITESSE = 3.0;
 /** Le couloir 8 (compte a partir de zero) : celui qui longe la tribune. */
 const COULOIR = 7;
+/** Le dernier couloir de la piste : l'anneau de la salle n'en a que six. */
+const couloir = (T: any) => Math.min(COULOIR, T.lanes - 1);
 /** Ou le tour commence, au-dela de la ligne d'arrivee. */
 const AU_DELA = 12;
 /** Ou il s'arrete, juste avant la ligne de depart. */
@@ -120,7 +122,7 @@ export function placerLaCameraDuGenerique(A: any): void {
   const course = A.scaleM() / (G.zoomScene || 1) / A.ui();
   const zoom = Math.max(1, ECHELLE / course);
   G.zoomScene = 1 + (zoom - 1) * k;
-  const suivie = cameraPour(A, T.pos(d, COULOIR), cadre(G));
+  const suivie = cameraPour(A, T.pos(d, couloir(T)), cadre(G));
   G.camX = camDepart[0] + (suivie[0] - camDepart[0]) * k;
   G.camY = camDepart[1] + (suivie[1] - camDepart[1]) * k;
 }
@@ -187,7 +189,7 @@ export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void
   if (T && Core) {
     const m = A.scaleM();
     const { d, dans, duree, passe } = trajet(T, ct);
-    const pieds = A.ground(...(T.pos(d, COULOIR) as [number, number]));
+    const pieds = A.ground(...(T.pos(d, couloir(T)) as [number, number]));
 
     // La lumiere qui le suit, couchee sur la piste : un projecteur de poursuite
     // eclaire le sol autour de lui, il ne peint pas l'air.
@@ -211,7 +213,7 @@ export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void
     // Tourne vers la camera : la vue plonge vers les X et les Y decroissants,
     // soit 45 degres une fois le corps retourne (mirror).
     const faceCamera = Math.PI / 4;
-    for (let i = 0; i < Math.min(7, zeze.length); i++) {
+    for (let i = 0; i < Math.min(7, zeze.length, T.lanes); i++) {
       const p = T.pos(T.total + 4, i) as [number, number];
       const g = A.ground(p[0], p[1]);
       if (g[0] < -120 || g[0] > VW + 120 || g[1] < -160 || g[1] > VH + 160) continue;
@@ -239,7 +241,7 @@ export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void
         ? Prem.ombre(ctx, pieds[0], pieds[1], m, man.look.h / Core.C.MODEL_H, man.stride, true, A.theme())
         : undefined,
       dessin: () => A.drawFacetFigure(ctx,
-        A.personCapsules(lui, T.heading(d, COULOIR), 0, true, !!T.curved, A.niveauDetail(kJ)),
+        A.personCapsules(lui, T.heading(d, couloir(T)), 0, true, !!T.curved, A.niveauDetail(kJ)),
         pieds[0], pieds[1], kJ),
     });
 

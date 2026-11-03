@@ -693,7 +693,7 @@ export function TitleScreen() {
                   {N.t('no_run')}
                   {' — '}
                   <span className="text-foreground/90 font-bold uppercase tracking-wide">
-                    {N.t('furthest')} {furthestIci} {N.t('of_six')}
+                    {N.t('furthest')} {furthestIci || 0} {N.t('of_six')}
                   </span>
                 </p>
               ) : (
