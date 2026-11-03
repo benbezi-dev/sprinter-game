@@ -128,12 +128,26 @@ export function placerLaCameraDuGenerique(A: any): void {
 }
 
 /**
+ * LE GENERIQUE DANS LA SALLE JESSE OWENS, EN 3D (« il nous faut le generique dans la salle, avec la cinematique dans
+ * la salle », l'auteur, 3/11) : le joueur lui-meme fait le tour d'honneur dans le stade de la course, au trot et a
+ * rebours, les bras qui saluent. La camera le prend de face (course-3d.ts) ; la nuit et les feux passent par-dessus.
+ */
+export function poserLeTourDHonneur(A: any): void {
+  const G = A.G, cut = G.cut, j = G.player, T = G.track;
+  if (!cut || !j || !T) return;
+  j.d = trajet(T, cut.t).d; j.lane = couloir(T);
+  j.retour = true; j.cap = 0; j.posture = null; j.creuxTapis = null; j.fallAnim = 0;
+  j.v = VITESSE; j.stride = cut.man.stride;
+  j.celebrate = 0.62 + 0.38 * Math.sin(cut.t * 0.9);
+}
+
+/**
  * Dessine le generique. Appelee une fois par image, APRES le monde.
  *
  * `A` est SprinterApp — on passe le module plutot que d'importer le moteur,
  * qui n'est pas un module mais un global pose par sprinter-app.js.
  */
-export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void {
+export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any, en3D = false): void {
   const G = A.G;
   const cut = G.cut;
   if (!cut) return;
@@ -187,8 +201,10 @@ export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void
 
   // ------------------------------------------ le tour d'honneur, sur la piste
   if (T && Core) {
-    const m = A.scaleM();
     const { d, dans, duree, passe } = trajet(T, ct);
+    // EN 3D, LE CHAMPION COURT DANS LE STADE MEME (poserLeTourDHonneur) : ici, seulement la nuit, les feux et le noir
+    if (!en3D) {
+    const m = A.scaleM();
     const pieds = A.ground(...(T.pos(d, couloir(T)) as [number, number]));
 
     // La lumiere qui le suit, couchee sur la piste : un projecteur de poursuite
@@ -253,6 +269,7 @@ export function dessinerLeGenerique(ctx: CanvasRenderingContext2D, A: any): void
     for (const f of figures) f.ombre();
     ctx.restore();
     for (const f of figures) f.dessin();
+    }
 
     // LE NOIR ENTRE DEUX PASSAGES. Arrive au depart, le coureur ne fait pas
     // demi-tour sous nos yeux : l'image s'eteint, et se rallume sur lui a

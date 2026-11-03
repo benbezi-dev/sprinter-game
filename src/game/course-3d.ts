@@ -2796,6 +2796,15 @@ export function rendre(App: any, dt: number) {
       voulu.lerp(_c3.set(p[0] + av * ax + cote * ix, -(p[1] + av * ay + cote * iy), 3.1 + e * 0.04), nb);
       vise.lerp(_d3.set(p[0] - e * 0.3 * ax, -(p[1] - e * 0.3 * ay), 0.8), nb);
     }
+    // LE GENERIQUE DANS LA SALLE (scene-generique.ts, poserLeTourDHonneur) : le champion trotte a rebours, la camera
+    // le precede, de face, un peu cote pelouse et en hauteur — un salut se regarde de face. Elle y glisse depuis le sacre.
+    if (G.state === 'cut' && G.cut && G.cut.kind === 'ending') {
+      // posee SUR la piste, deux couloirs et demi plus a l'interieur : sur la tangente, l'anneau la sortait au virage et le
+      // muret la ramenait contre lui
+      const D = camera.aspect < 1 ? 7 : 6, q = ici(T.pos(Math.max(0, pl.d - D), Math.max(0, (pl.lane | 0) - 2.5)));
+      voulu.set(q[0], -q[1], 2.6);
+      vise.set(p[0], -p[1], 1.1);
+    }
     // LE SURVOL D'AVANT-COURSE (« avant chaque course, un tour de stade pour le presenter
     // pendant qu'on presente l'adversaire ; une camera plongeante qui part du ciel vers le
     // point de depart en douceur », l'auteur, 22/10). Pendant la presentation (cinematique

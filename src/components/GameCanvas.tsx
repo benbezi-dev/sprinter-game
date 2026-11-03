@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { SprinterApp, updateLogic, useGameStore, syncHtmlLang, primeTopNames } from '@/game/engine';
 import { tempoDuMonde } from '@/game/tempo';
-import { dessinerLeGenerique, placerLaCameraDuGenerique } from '@/game/scene-generique';
+import { dessinerLeGenerique, placerLaCameraDuGenerique, poserLeTourDHonneur } from '@/game/scene-generique';
 import { cameraPassage, appliquerCamera } from '@/game/passage';
 import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
@@ -312,8 +312,10 @@ export function GameCanvas() {
       // ... et les scenettes d'apres course aussi (« les anciennes cartes s'affichent a la place des cartes
       // 3D », l'auteur, 31/10) : seul le generique de fin garde sa propre scene, la nuit du tour d'honneur
       const scenette = G.state === 'cut' && G.cut && G.cut.kind !== 'ending';
+      // ... sauf dans la salle Jesse Owens, ou le generique se joue dans la halle en 3D (l'auteur, 3/11 ; poserLeTourDHonneur)
+      const generique3D = G.state === 'cut' && G.cut && G.cut.kind === 'ending' && !!G.race && !!(G.race.salle || G.race.salleDroite);
       const en3D = !!rendu3D && (EPREUVES_3D.has(G.raceKey) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
-        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || scenette);
+        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || scenette || generique3D);
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {
         const g = ctx.createLinearGradient(0, 0, 0, G.VH);
@@ -384,7 +386,7 @@ export function GameCanvas() {
         // personnage d'une scenette sur la piste, le generique sur le tour
         // d'honneur.
         if (G.state === 'cut' && G.cut) {
-          if (G.cut.kind === 'ending') placerLaCameraDuGenerique(SprinterApp);
+          if (G.cut.kind === 'ending') { if (en3D) poserLeTourDHonneur(SprinterApp); else placerLaCameraDuGenerique(SprinterApp); }
           else placerLaCameraDeLaScenette(G.cut);
         }
         // En 3D, la course se dessine dans sa propre toile, sous celle-ci laissee transparente.
@@ -443,11 +445,12 @@ export function GameCanvas() {
           // stade, le tour d'honneur, les feux d'artifice sur la musique. Elle
           // est dessinee ailleurs — trois cents lignes qui n'ont rien a faire
           // au milieu de la boucle.
-          dessinerLeGenerique(ctx, SprinterApp);
+          dessinerLeGenerique(ctx, SprinterApp, en3D);
           // LE FONDU ENCHAINE. Le sacre est dessine par-dessus la nuit qui
           // monte, a l'opacite qui lui reste : les deux scenes se croisent au
           // lieu de se couper, le temps que la musique s'installe.
-          if (G.sortie && G.sortie.a > 0) {
+          // (en 3D, le sacre n'avait pas de dessin 2D : seul son texte s'eteint, CutScreen fige)
+          if (!en3D && G.sortie && G.sortie.a > 0) {
             ctx.save();
             ctx.globalAlpha = G.sortie.a;
             dessinerCinematique(ctx, G.sortie, theme);
