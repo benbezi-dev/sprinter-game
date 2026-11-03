@@ -106,6 +106,18 @@ async function poserEcouteurs(FM: Awaited<ReturnType<typeof greffon>>['FM']) {
   // la nouvelle doit quand meme arriver a l'ecran qui l'attend.
   FM.addListener('notificationReceived', e => relayer(e.notification))
     .catch(() => { /* rien a faire de plus */ });
+
+  // La pastille de l'icone compte les notifications restees dans le volet du
+  // telephone, pas la boite du jeu : sans ce menage, elle restait a « 2 » une
+  // fois tout lu dans le jeu. On vide le volet a chaque retour au premier plan.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') viderVolet(FM);
+  });
+  viderVolet(FM);
+}
+
+function viderVolet(FM: Awaited<ReturnType<typeof greffon>>['FM']) {
+  FM.removeAllDeliveredNotifications().catch(() => { /* rien a vider */ });
 }
 
 async function enregistrerJeton(jeton: string): Promise<void> {
