@@ -113,6 +113,11 @@ présenter le canal de test comme le jeu, §5.2), contre un
 
 ## Refaire, ou refilmer
 
+> **Depuis le 17 octobre 2026, le harnais filme et monte en 2K (1440 × 2560).**
+> Les vingt fichiers ci-dessus, filmés en septembre, restent en 1080 × 1920 :
+> il faut les refilmer pour les avoir en 2K, un agrandissement ne suffit pas.
+> Le cadre se règle dans `harnais/base.mjs` (`L`, `H`) et le suit partout.
+
 Le harnais est dans `harnais/`. Il lui faut trois choses en marche :
 
 ```bash

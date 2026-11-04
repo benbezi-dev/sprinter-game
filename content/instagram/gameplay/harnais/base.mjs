@@ -4,9 +4,11 @@ import { mkdirSync, rmSync, writeFileSync, existsSync, renameSync } from 'node:f
 import { join } from 'node:path';
 
 export const URL_JEU = process.env.URL_JEU || 'http://localhost:5174/';
-export const L = 1080, H = 1920;          // le cadre livre
+// Le cadre livre : 2K (1440 x 2560), le minimum des films promo depuis le
+// 17 octobre 2026. Les rushs de septembre sont en 1080 x 1920.
+export const L = 1440, H = 2560;
 export const PTS_L = 405, PTS_H = 720;    // les points de l'appareil simule
-export const DSF = L / PTS_L;             // 2.6667
+export const DSF = L / PTS_L;             // 3.5556 — le jeu est rendu en 2K vrais
 
 /** Le navigateur, une fois pour toutes. */
 export async function navigateur() {
