@@ -171,10 +171,20 @@ function useVisualViewportHeight() {
     window.addEventListener('orientationchange', () => setTimeout(setHeight, 120));
     // Au retour d'arriere-plan, la hauteur peut avoir change sans evenement.
     window.addEventListener('pageshow', setHeight);
+    // Application iOS (clavier en mode `native`) : a la fermeture du clavier,
+    // le dernier `resize` arrive en retard avec la hauteur du clavier ouvert
+    // (539 au lieu de 874 sur iPhone 17), et aucun autre ne suit. La variable
+    // restait figee : bas de l'ecran noir, touches decalees. On remesure donc
+    // a chaque mouvement du clavier, puis une fois l'animation finie.
+    const apresClavier = () => { setHeight(); setTimeout(setHeight, 350); };
+    window.addEventListener('keyboardDidHide', apresClavier);
+    window.addEventListener('keyboardDidShow', apresClavier);
     return () => {
       rappels.forEach(clearTimeout);
       window.removeEventListener('resize', setHeight);
       window.removeEventListener('pageshow', setHeight);
+      window.removeEventListener('keyboardDidHide', apresClavier);
+      window.removeEventListener('keyboardDidShow', apresClavier);
     };
   }, []);
 }
