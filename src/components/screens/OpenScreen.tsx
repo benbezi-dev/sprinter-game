@@ -22,11 +22,11 @@ export function OpenScreen() {
         <div className="flex gap-1 sm:gap-2 justify-center px-4">
           {word.map((letter, i) => {
             const lt = openT - 1.5 - i * 0.085;
-            // Largeur fixe sur les deux etats (avant/pendant la chute) : sans
-            // ca, chaque lettre passe d'un espace reserve d'1ch a sa largeur
-            // naturelle des qu'elle apparait, ce qui decale ses voisines en
-            // plein rebond et peut faire illusion d'une autre lettre.
-            if (lt <= 0) return <div key={i} className="w-[0.85ch] sm:w-[1ch] text-center opacity-0 text-5xl sm:text-7xl md:text-8xl">{letter}</div>;
+            // Chaque lettre a sa largeur naturelle, la meme avant et pendant la
+            // chute (memes classes, seulement invisible) : rien ne se decale.
+            // La case fixe de 0.85ch collait le N et le T sur telephone (5/11).
+            const lettre = "text-5xl sm:text-7xl md:text-8xl font-black font-display tracking-tighter text-primary";
+            if (lt <= 0) return <div key={i} className={`${lettre} opacity-0`}>{letter}</div>;
 
             const drop = Math.max(0, 1 - lt / 0.42);
             const bounce = Math.sin(Math.min(1, lt / 0.42) * Math.PI) * 12;
@@ -36,7 +36,7 @@ export function OpenScreen() {
               <div
                 key={i}
                 style={{ transform: `translateY(${y}px)` }}
-                className="w-[0.85ch] sm:w-[1ch] text-center text-5xl sm:text-7xl md:text-8xl font-black font-display tracking-tighter text-primary drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]"
+                className={`${lettre} drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]`}
               >
                 {letter}
               </div>
