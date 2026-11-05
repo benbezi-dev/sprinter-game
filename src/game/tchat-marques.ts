@@ -112,7 +112,7 @@ export async function ecrire(texte: string, pour: string | null, prive: boolean)
 export const aLaCleOfficielle = () => !!cleOfficielle() || estAuteurOfficiel(getSavedName() || '');
 
 /** Ecrire au nom de SprinterGame, dans le tchat commun. */
-export async function ecrireOfficiel(texte: string): Promise<{ message: Message } | { refus: Refus; raison?: RaisonFiltre }> {
+export async function ecrireOfficiel(texte: string, pour: string | null = null): Promise<{ message: Message } | { refus: Refus; raison?: RaisonFiltre }> {
   // La cle si ce telephone la porte ; sinon le compte de l'auteur, par son nom
   // reserve sur cet appareil.
   const cle = cleOfficielle();
@@ -123,7 +123,7 @@ export async function ecrireOfficiel(texte: string): Promise<{ message: Message 
     r = await fetch(`${API_BASE}/marques/tchat/officiel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(cle ? { 'X-Sprinter-Tchat': cle } : {}) },
-      body: JSON.stringify({ texte, name, device_id: getDeviceId() }),
+      body: JSON.stringify({ texte, name, device_id: getDeviceId(), ...(pour ? { pour } : {}) }),
     });
   } catch { return { refus: 'reseau' }; }
   const d = await r.json().catch(() => ({}));

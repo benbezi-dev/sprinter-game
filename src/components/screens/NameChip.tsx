@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
@@ -188,6 +188,48 @@ export function NameChip() {
  * Le drapeau, surtout, est definitif : le reclamer reviendrait a le faire
  * choisir au hasard.
  */
+/** Le pays se cherche en tapant son nom (5/11) : la liste se filtre, accents
+ *  et majuscules ignores ; Entree prend le premier. Le menu deroulant natif
+ *  ne se tapait pas au telephone. */
+const plier = (x: string) => x.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+function ChoixPays({ liste, value, onChange, aucun }: {
+  liste: Nation[]; value: string; onChange: (code: string) => void; aucun: string;
+}) {
+  const champ = useRef<HTMLInputElement>(null);
+  const [q, setQ] = useState<string | null>(null);   // null : liste fermee
+  const nom = liste.find(n => n.code === value)?.nom || '';
+  const f = plier(q || '');
+  const trouves = q === null ? [] : liste
+    .filter(n => plier(n.nom).includes(f) || plier(n.code) === f)
+    .sort((a, b) => Number(!plier(a.nom).startsWith(f)) - Number(!plier(b.nom).startsWith(f)));
+  const prendre = (code: string) => { onChange(code); setQ(null); champ.current?.blur(); };
+  return (
+    <>
+      <input ref={champ} value={q ?? nom} placeholder={aucun} aria-label={aucun}
+        autoComplete="off" autoCorrect="off" spellCheck={false} enterKeyHint="done"
+        onFocus={() => setQ('')} onChange={e => setQ(e.target.value)} onBlur={() => setQ(null)}
+        onKeyDown={e => { if (e.key === 'Enter' && trouves[0]) { e.preventDefault(); prendre(trouves[0].code); } }}
+        className="flex-1 min-w-0 bg-transparent py-2 text-sm text-foreground focus:outline-none" />
+      {/* dans le flux, pas en surimpression : la fenetre de bienvenue coupait la liste */}
+      {q !== null && (
+        <ul className="basis-full -mx-2 max-h-52 overflow-y-auto border-t border-white/10">
+          {trouves.map(n => (
+            <li key={n.code}>
+              {/* mousedown retenu : le champ garde le focus jusqu'au clic */}
+              <button type="button" onMouseDown={e => e.preventDefault()} onClick={() => prendre(n.code)}
+                className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-white/10
+                            ${n.code === value ? 'text-primary' : 'text-foreground'}`}>
+                <Drapeau pays={n.code} className="text-base shrink-0" />{n.nom}
+              </button>
+            </li>
+          ))}
+          {!trouves.length && <li className="px-3 py-2 text-xs text-muted-foreground">—</li>}
+        </ul>
+      )}
+    </>
+  );
+}
+
 export function PanneauIdentite({
   onFermer, bienvenue = false, motif, chrono,
 }: {
@@ -673,23 +715,14 @@ export function PanneauIdentite({
                     {demande && demande.statut === 'acceptee' ? (
                       <span className="text-[9px] text-muted-foreground leading-snug">{N.t('pays_dem_fait')}</span>
                     ) : demOuvert ? (
-                      <div className="flex gap-2">
-                        <div className="flex-1 min-w-0 flex items-center gap-2 bg-black/35 border border-white/10
-                                        rounded-xl px-2 focus-within:border-primary/50">
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 bg-black/35 border border-white/10
+                                        rounded-xl px-2 focus-within:border-primary/50 overflow-hidden">
                           {demPays
                             ? <Drapeau pays={demPays} className="text-base shrink-0" />
                             : <Flag className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
-                          <select
-                            value={demPays}
-                            onChange={e => { setDemPays(e.target.value); setDemEtat('repos'); }}
-                            className="flex-1 min-w-0 bg-transparent py-2 text-sm text-foreground
-                                       focus:outline-none appearance-none cursor-pointer"
-                          >
-                            <option value="">{N.t('pays_aucun')}</option>
-                            {nationsListe.filter(n => n.code !== paysFige).map(n => (
-                              <option key={n.code} value={n.code}>{n.nom}</option>
-                            ))}
-                          </select>
+                          <ChoixPays liste={nationsListe.filter(n => n.code !== paysFige)} value={demPays}
+                            onChange={c => { setDemPays(c); setDemEtat('repos'); }} aucun={N.t('pays_aucun')} />
                         </div>
                         <button
                           onClick={envoyerDemande}
@@ -720,23 +753,14 @@ export function PanneauIdentite({
               </>
             ) : (
               <>
-                <div className="flex gap-2">
-                  <div className="flex-1 min-w-0 flex items-center gap-2 bg-black/35 border border-white/10
-                                  rounded-xl px-2 focus-within:border-primary/50">
+                <div className="flex items-start gap-2">
+                  <div className="flex-1 min-w-0 flex flex-wrap items-center gap-x-2 bg-black/35 border border-white/10
+                                  rounded-xl px-2 focus-within:border-primary/50 overflow-hidden">
                     {pays
                       ? <Drapeau pays={pays} className="text-base shrink-0" />
                       : <Flag className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />}
-                    <select
-                      value={pays}
-                      onChange={e => { setPays(e.target.value); setPaysEtat('repos'); }}
-                      className="flex-1 min-w-0 bg-transparent py-2 text-sm text-foreground
-                                 focus:outline-none appearance-none cursor-pointer"
-                    >
-                      <option value="">{N.t('pays_aucun')}</option>
-                      {nationsListe.map(n => (
-                        <option key={n.code} value={n.code}>{n.nom}</option>
-                      ))}
-                    </select>
+                    <ChoixPays liste={nationsListe} value={pays}
+                      onChange={c => { setPays(c); setPaysEtat('repos'); }} aucun={N.t('pays_aucun')} />
                   </div>
                   {/* A la bienvenue, CHOISIR est le bouton du pas, en bas :
                       deux boutons cote a cote pour une seule action, c'est la

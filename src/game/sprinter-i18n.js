@@ -270,7 +270,7 @@
     // a celui qui n'en pose pas.
     pays_title:      ['TA NATIONALITÉ', 'YOUR NATIONALITY'],
     pays_opt:        ['une seule fois', 'once only'],
-    pays_aucun:      ['choisis ton pays', 'pick your country'],
+    pays_aucun:      ['tape le nom de ton pays', 'type your country'],
     // Ce que la nationalite engage, dit AVANT le geste et non apres.
     pays_why:        ['sans choix de ta part, tu cours pour le pays d’où tu te connectes — un choix, lui, ne se change plus',
                       'if you don’t choose, you run for the country you connect from — a choice cannot be changed'],

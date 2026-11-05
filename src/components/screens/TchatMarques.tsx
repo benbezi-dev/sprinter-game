@@ -550,6 +550,15 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
   const [cleJeu, setCleJeu] = useState(() => aLaCleOfficielle());
   const [voixDuJeu, setVoixDuJeu] = useState(true);
   const fin = useRef<HTMLDivElement>(null);
+  const saisie = useRef<HTMLTextAreaElement>(null);
+  const tactile = useMemo(() => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, []);
+  // le champ grandit avec ses lignes, jusqu'a 160 px puis defile
+  useEffect(() => {
+    const el = saisie.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }, [texte]);
   const cleMoi = moi.name.trim().toLowerCase();
 
   const communs = t.messages.filter(m => !m.prive);
@@ -607,7 +616,7 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
     const prive = onglet === 'prives';
     if (prive && !avec) return;
     setEnvoi(true); setErreur(null);
-    const r = enJeu ? await ecrireOfficiel(x) : await ecrire(x, prive ? avec : pour, prive);
+    const r = enJeu ? await ecrireOfficiel(x, pour) : await ecrire(x, prive ? avec : pour, prive);
     setEnvoi(false);
     if ('refus' in r) {
       if (r.refus === 'cle') setCleJeu(false);
@@ -792,14 +801,14 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                                : (fr ? 'TU ÉCRIS SOUS TON NOM' : 'WRITING AS YOURSELF')}
                   </button>
                 )}
-                {onglet === 'tous' && pour && !enJeu && (
+                {onglet === 'tous' && pour && (
                   <span className="self-start flex items-center gap-1 pl-2.5 pr-1 py-0.5 rounded-full bg-primary/20 border border-primary/50 text-[11px]">
                     {fr ? 'pour' : 'to'} <b>{pour}</b>
                     <button onClick={() => setPour(null)} className="p-0.5 rounded-full hover:bg-white/10"><X className="w-3 h-3" /></button>
                   </span>
                 )}
                 <div className="flex items-end gap-1.5">
-                  {onglet === 'tous' && !enJeu && (
+                  {onglet === 'tous' && (
                     <button onClick={() => setChoix('designer')} title={fr ? 'Désigner quelqu’un' : 'Mention someone'}
                             className="p-2.5 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 shrink-0">
                       <AtSign className="w-4 h-4" />
@@ -807,9 +816,11 @@ export function TchatMarques({ fr, moi, deplie, onDeplier, ouvrirSur = 'tous', v
                   )}
                   <div className="flex-1 relative">
                     {/* SprinterGame ecrit sans limite de longueur (17/10) */}
-                    <textarea value={texte} rows={1} maxLength={enJeu ? undefined : MAX}
+                    {/* Entree envoie au clavier physique ; au doigt, elle va a la ligne (5/11) */}
+                    <textarea ref={saisie} value={texte} rows={1} maxLength={enJeu ? undefined : MAX}
+                              enterKeyHint={tactile ? 'enter' : 'send'}
                               onChange={e => setTexte(enJeu ? e.target.value : e.target.value.slice(0, MAX))}
-                              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); envoyer(); } }}
+                              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && !tactile) { e.preventDefault(); envoyer(); } }}
                               placeholder={onglet === 'prives'
                                 ? (fr ? `Message privé à ${avec}` : `Private message to ${avec}`)
                                 : enJeu ? (fr ? 'Message officiel…' : 'Official message…')
