@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
-import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeBuoy, AlertTriangle } from 'lucide-react';
+import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeBuoy, AlertTriangle, ChevronDown } from 'lucide-react';
 import { getSavedName, saveName, NOM_CHANGE } from '@/game/leaderboard';
 import { nomRefuse, NOM_REFUSE } from '@/game/identity';
 import { claimName, linkDevice, savedCode, lierInstagram, instagramDe, lienInstagram,
@@ -210,6 +210,15 @@ function ChoixPays({ liste, value, onChange, aucun }: {
         onFocus={() => setQ('')} onChange={e => setQ(e.target.value)} onBlur={() => setQ(null)}
         onKeyDown={e => { if (e.key === 'Enter' && trouves[0]) { e.preventDefault(); prendre(trouves[0].code); } }}
         className="flex-1 min-w-0 bg-transparent py-2 text-sm text-foreground focus:outline-none" />
+      {/* au choix, le menu deroulant natif (5/11) : invisible sur la fleche, il ouvre la liste du telephone */}
+      <span className="relative shrink-0 w-7 h-7 flex items-center justify-center text-muted-foreground">
+        <ChevronDown className="w-4 h-4" aria-hidden />
+        <select value={value} onChange={e => prendre(e.target.value)} aria-label={aucun}
+          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+          <option value="">{aucun}</option>
+          {liste.map(n => <option key={n.code} value={n.code}>{n.nom}</option>)}
+        </select>
+      </span>
       {/* dans le flux, pas en surimpression : la fenetre de bienvenue coupait la liste */}
       {q !== null && (
         <ul className="basis-full -mx-2 max-h-52 overflow-y-auto border-t border-white/10">
