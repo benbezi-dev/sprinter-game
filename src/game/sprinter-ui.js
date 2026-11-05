@@ -84,9 +84,13 @@
       }
     }
     const word = 'SPRINTER';
-    ctx.font = font(58, 800); ctx.textAlign = 'center';
-    const wch = ctx.measureText('M').width * 0.98;
-    const bx = G.VW / 2 - wch * (word.length - 1) / 2;
+    // Chaque lettre a sa largeur, un ecart fixe entre elles (5/11) : la grille
+    // a la largeur d'un M collait le N et le T sur telephone.
+    ctx.font = font(58, 800); ctx.textAlign = 'left';
+    const larg = [...word].map(c => ctx.measureText(c).width);
+    const ecart = ctx.measureText('M').width * 0.14;
+    const xs = []; let cur = G.VW / 2 - (larg.reduce((a, b) => a + b, 0) + ecart * (word.length - 1)) / 2;
+    for (const w of larg) { xs.push(cur); cur += w + ecart; }
     for (let i = 0; i < word.length; i++) {
       const lt = tm - 1.5 - i * 0.085;
       if (lt <= 0) continue;
@@ -94,9 +98,10 @@
       const bounce = Math.sin(Math.min(1, lt / 0.42) * Math.PI) * S(12);
       const y = G.VH * 0.26 - S(300) * drop * drop + bounce;
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillText(word[i], bx + i * wch + 3, y + 4);
-      ctx.fillStyle = A.GOLD; ctx.fillText(word[i], bx + i * wch, y);
+      ctx.fillText(word[i], xs[i] + 3, y + 4);
+      ctx.fillStyle = A.GOLD; ctx.fillText(word[i], xs[i], y);
     }
+    ctx.textAlign = 'center';
     if (tm > 3.1) {
       ctx.globalAlpha = clamp((tm - 3.1) / 0.7, 0, 1);
       text(t('races'), G.VW / 2, G.VH * 0.40, A.CREAM, 24, 'center');
