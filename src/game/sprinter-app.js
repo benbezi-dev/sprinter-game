@@ -2206,11 +2206,33 @@ import { sponsorDeLaCourse } from './panneaux';
   })();
   function enTroisD(table, cle) { return RENDU_3D ? table[cle] : undefined; }
 
-  // DIFFICULTE RELEVEE (l'auteur, 07/11 : -10 % aux niveaux 1 a 5, -3 % aux ZEZE, toutes epreuves). Les tables
-  // (`ranges`) restent ecrites dans l'echelle d'avant ; on les serre ici, a la lecture. Les ZEZE ne prennent que 3 % :
-  // a -10 % ils passaient sous RECORDS_DU_MONDE, la limite du joueur parfait, et la finale devenait imbattable.
+  // DIFFICULTE RELEVEE (l'auteur, 07/11 : « trop lent », et la salle n'a pas la base du plein air). En 3D, chaque
+  // niveau est le chrono que le joueur fait a une cadence donnee, mesure sur CE moteur et pour CHAQUE epreuve (salle et
+  // haies comprises, chacune sa courbe et son record) : niveau 1 battu a 8 appuis/s, 2 a 10, 3 a 13, 4 a 16, 5 a 19,
+  // ZEZE a 24 ; l'adversaire le plus lent du niveau est le chrono a la cadence du palier d'en dessous (7 / 8,5 / 10,5 /
+  // 13 / 15 / 20). Chronos 3D finaux, en secondes. Aux haies la courbe plafonne vers 15 appuis/s (l'appel commande) :
+  // les niveaux 4 a 6 du 110 m haies et du 60 m haies hommes sont lisses a la main pour garder un ecart entre eux.
+  // Remesurer (tools/records-du-monde-test.mjs, fonctions parfait / haiesJouees) si ALLURE_DU_JOUEUR ou la physique change.
+  const PLATEAUX_3D = {
+    '60':   [[8.57, 10.41], [7.76, 8.31], [7.30, 7.67], [7.05, 7.30], [6.90, 7.12], [6.75, 6.86]],
+    '100':  [[12.56, 14.95], [11.14, 12.03], [10.64, 11.02], [10.39, 10.64], [10.22, 10.45], [10.05, 10.18]],
+    '200':  [[23.75, 27.63], [21.09, 22.59], [20.52, 20.96], [20.21, 20.52], [20.02, 20.30], [19.82, 19.97]],
+    '400':  [[50.27, 57.85], [45.84, 47.58], [45.08, 45.70], [44.64, 45.08], [44.36, 44.77], [44.06, 44.28]],
+    '200s': [[27.35, 32.02], [23.13, 25.77], [21.66, 22.69], [21.19, 21.66], [20.91, 21.31], [20.64, 20.84]],
+    '400s': [[56.64, 65.33], [48.79, 53.55], [47.07, 48.27], [46.43, 47.07], [46.03, 46.60], [45.66, 45.94]],
+    '100h': [[16.04, 18.39], [13.86, 15.33], [12.99, 13.54], [12.79, 12.99], [12.58, 12.79], [12.45, 12.55]],
+    '110h': [[16.64, 19.10], [14.54, 15.20], [14.05, 14.31], [13.45, 14.05], [13.25, 13.45], [13.10, 13.25]],
+    '400h': [[51.69, 56.38], [49.45, 50.86], [48.66, 49.45], [48.22, 48.66], [47.56, 48.22], [47.27, 47.56]],
+    '60h':  [[9.60, 11.00], [8.58, 9.16], [7.95, 8.15], [7.76, 7.95], [7.62, 7.76], [7.40, 7.55]],
+    '60hf': [[10.36, 12.21], [8.82, 9.87], [8.47, 8.79], [8.32, 8.47], [8.11, 8.32], [7.90, 8.11]],
+  };
+  // Le reste (relais, 2D par ?rendu=2d) : les tables d'origine, -10 % aux niveaux 1 a 5 et -3 % aux ZEZE.
+  // shortcut: le relais n'a pas de courbe mesuree (quatre jambes) ; a calibrer comme les autres si on le juge trop lent.
   const DURCI = [0.90, 0.90, 0.90, 0.90, 0.90, 0.97];
   function plateauDuNiveau(R, i) {
+    const p3 = RENDU_3D && PLATEAUX_3D[R.key] && PLATEAUX_3D[R.key][i];
+    // buildLevel multiplie le tirage par CONVERSION_ADVERSAIRES en 3D : on la retire ici pour tomber sur le chrono vise.
+    if (p3) { const c = K.CONVERSION_ADVERSAIRES[R.key] || 1; return [p3[0] / c, p3[1] / c]; }
     const r = R.ranges && R.ranges[i];
     const k = DURCI[i] || 1;
     return r ? [r[0] * k, r[1] * k] : undefined;
