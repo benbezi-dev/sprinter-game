@@ -65,7 +65,7 @@ import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, epreuvesDuLieu } from '@/game/jeux';
 import { useMenuSansDefiler } from '@/hooks/use-menu-sans-defiler';
 import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
-import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
+import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
@@ -78,6 +78,7 @@ let carriereDeLaVisite: ChoixCarriere | null = null;
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { usePassage } from '@/game/passage';
+import { gererConsentement } from '@/game/pub';
 import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronUp, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
@@ -792,6 +793,13 @@ export function TitleScreen() {
            className="py-1 hover:text-white/70 transition-colors">
           {N.t('legal_suppression')}
         </a>
+        {EST_NATIF && (<>
+          <span aria-hidden="true">·</span>
+          <button type="button" onClick={() => { void gererConsentement(); }}
+                  className="py-1 tracking-widest hover:text-white/70 transition-colors">
+            {N.t('legal_pub')}
+          </button>
+        </>)}
       </div>
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :

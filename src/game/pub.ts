@@ -52,6 +52,17 @@ function admob(): Promise<any> {
   return pret;
 }
 
+/** Rouvre le formulaire de consentement de Google (RGPD : le joueur doit pouvoir
+ *  retirer ou changer son choix). Hors EEE, Google n'a rien a montrer : rien ne se passe.
+ *  shortcut: le lien s'affiche dans toute l'appli, pas seulement quand UMP dit REQUIRED ; a affiner si des joueurs hors Europe s'en plaignent */
+export async function gererConsentement(): Promise<void> {
+  if (!EST_NATIF) return;
+  try {
+    const m = await admob();
+    await m.AdMob.showPrivacyOptionsForm();
+  } catch { /* formulaire indisponible : rien a rouvrir */ }
+}
+
 /** Montre la video recompensee. Rend true seulement si elle a ete regardee jusqu'a la recompense. */
 export async function regarderUnePub(): Promise<boolean> {
   if (!EST_NATIF) {
