@@ -5,7 +5,7 @@
 	<!-- AdMob (src/game/pub.ts) : identifiant de TEST de Google tant que le
 	     compte AdMob n'existe pas. -->
 	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<string>ca-app-pub-7083823357804732~8832289006</string>
 	<!-- Firebase ne se presente a Google que lorsqu'on le lui demande : sans
 	     cette cle, le SDK depose un jeton d'inscription des le premier
 	     lancement, avant toute acceptation. Le greffon rallume

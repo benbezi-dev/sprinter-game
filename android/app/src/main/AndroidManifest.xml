@@ -55,7 +55,7 @@
              Google tant que le compte AdMob n'existe pas. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-7083823357804732~7569364133" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

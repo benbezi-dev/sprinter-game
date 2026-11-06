@@ -10,9 +10,10 @@
 // canal de test du site simule une pub pour que le parcours se verifie dans
 // un navigateur.
 //
-// IDENTIFIANTS DE TEST DE GOOGLE tant que le compte AdMob n'existe pas : ils
-// ne rapportent rien et ne risquent rien. Le jour du compte, remplacer
-// UNITE_* ici et APPLICATION_ID dans AndroidManifest.xml / Info.plist.
+// IDENTIFIANTS : les vrais (compte AdMob pub-7083823357804732, 6/11/2026,
+// bloc « Video 2e chance ») en production ; ceux de TEST de Google sur le
+// canal de test et en dev, pour ne jamais cliquer ses propres pubs.
+// APPLICATION_ID vit dans AndroidManifest.xml / Info.plist.
 //
 // CE MODULE NE CASSE JAMAIS LE JEU : pub absente, refusee ou en panne = false,
 // et l'ecran garde ses deux autres sorties.
@@ -21,9 +22,9 @@ import { EST_NATIF, EST_TEST } from './canal';
 
 export const PUBS_PAR_CARRIERE = 1;
 
-const UNITE_ANDROID = 'ca-app-pub-3940256099942544/5224354917';
-const UNITE_IOS = 'ca-app-pub-3940256099942544/1712485313';
-const DE_TEST = true;
+const DE_TEST = EST_TEST || import.meta.env.DEV;
+const UNITE_ANDROID = DE_TEST ? 'ca-app-pub-3940256099942544/5224354917' : 'ca-app-pub-7083823357804732/2214909768';
+const UNITE_IOS = DE_TEST ? 'ca-app-pub-3940256099942544/1712485313' : 'ca-app-pub-7083823357804732/7275664750';
 
 /** Une pub peut-elle se montrer ici ? */
 export function pubPossible(): boolean {
