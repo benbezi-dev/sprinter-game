@@ -4,6 +4,13 @@
 <dict>
 	<!-- AdMob (src/game/pub.ts) : identifiant de TEST de Google tant que le
 	     compte AdMob n'existe pas. -->
+	<key>SKAdNetworkItems</key>
+	<array>
+		<dict>
+			<key>SKAdNetworkIdentifier</key>
+			<string>cstr6suwn9.skadnetwork</string>
+		</dict>
+	</array>
 	<key>GADApplicationIdentifier</key>
 	<string>ca-app-pub-7083823357804732~8832289006</string>
 	<!-- Firebase ne se presente a Google que lorsqu'on le lui demande : sans
