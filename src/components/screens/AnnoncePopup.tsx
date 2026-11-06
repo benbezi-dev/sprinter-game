@@ -86,7 +86,8 @@ export function AnnoncePopup() {
   // Le glissement fait ce que fait la croix du message : il le marque lu.
   useRetour(fermer, ouvert);
 
-  if (!annonce || annonceVue(annonce.id) || !estAuCalme()) return null;
+  // L'ecran de defaite tient sans defiler : la pastille flottante y couvrait le classement.
+  if (!annonce || annonceVue(annonce.id) || !estAuCalme() || SprinterApp.G.state === 'over') return null;
 
   return (
     <>
