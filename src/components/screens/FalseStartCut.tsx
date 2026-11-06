@@ -36,7 +36,10 @@ export function FalseStartCut() {
   const suite = () => {
     if (passe) return;
     setPasse(true);
-    SprinterApp.G.state = 'winall';
+    // En carriere, l'etape est perdue : l'ecran de defaite et ses reprises.
+    const G = SprinterApp.G;
+    if (G.mode === 'campaign') { G.overChoice = 0; G.state = 'over'; return; }
+    G.state = 'winall';
   };
 
   // La sequence dure le temps de la phrase de defaite. On peut la couper,

@@ -2001,7 +2001,10 @@ import { sponsorDeLaCourse } from './panneaux';
     // compte les Continue achetes pour elle (le prix monte a chaque fois) ;
     // `runContinues` est ce compte vu d'ici. Une carriere qui en a utilise un
     // ne s'inscrit pas au classement des parcours. Voir game/pieces.ts.
-    runId: '', runContinues: 0,
+    // `runPubs` compte les reprises payees d'une pub (game/pub.ts), a part :
+    // le serveur ne les connait pas, et elles laissent la carriere au
+    // classement (decision du 3/11/2026 : seule la reprise achetee en sort).
+    runId: '', runContinues: 0, runPubs: 0,
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
     // La cinematique qui s'efface par-dessus celle qui commence. Nulle en
     // dehors du seul fondu enchaine du jeu — le sacre vers le generique.
@@ -2590,7 +2593,7 @@ import { sponsorDeLaCourse } from './panneaux';
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.etiquette = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
-    G.runId = nouveauParcours(); G.runContinues = 0;
+    G.runId = nouveauParcours(); G.runContinues = 0; G.runPubs = 0;
     startLevel(0);
   }
   // LA TOUTE PREMIERE COURSE PART SANS CINEMATIQUE (game/premiers-pas.ts) : un
@@ -2613,9 +2616,9 @@ import { sponsorDeLaCourse } from './panneaux';
   // perdue n'entre pas au cumul, comme avant : seul ce qu'on gagne y entre.
   // Le paiement se fait AVANT, cote serveur (game/pieces.ts) ; le moteur ne
   // sait rien des pieces, il compte seulement qu'un Continue a eu lieu.
-  function continuerCarriere() {
+  function continuerCarriere(parPub) {
     if (G.mode !== 'campaign' || G.state !== 'over') return false;
-    G.runContinues += 1;
+    if (parPub) G.runPubs += 1; else G.runContinues += 1;
     startLevel(G.levelIdx);
     return true;
   }
@@ -2746,13 +2749,22 @@ import { sponsorDeLaCourse } from './panneaux';
   // pour celui qui recoit le defi comme pour celui qui le renvoie. Les
   // epreuves restantes comptent pour abandon et le duel est perdu — c'est ce
   // que renvoie le vrai : true si l'on vient bien d'eliminer le joueur.
+  //
+  // EN CARRIERE AUSSI depuis le 3 novembre 2026 : l'etape est perdue, et
+  // l'ecran de defaite (OverScreen) propose pieces, pub ou premiere etape.
+  // Seule la toute premiere course du joueur (premiers-pas) garde le simple
+  // blocage : il n'a encore rien appris du depart.
   function falseStartOut() {
-    if (G.mode !== 'oneshot' || G.falseOut) return false;
+    if (G.falseOut) return false;
+    const carriere = G.mode === 'campaign' && !G.premiereCourse && !G.rejeu;
+    if (G.mode !== 'oneshot' && !carriere) return false;
     G.falseOut = true; G.falseOutT = 0;
     G.player.jumped = true;
-    while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
-    while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
-    G.shotIdx = G.shotRaces.length;
+    if (G.mode === 'oneshot') {
+      while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
+      while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
+      G.shotIdx = G.shotRaces.length;
+    }
     G.flash = 1; G.shake = 1.6; G.falseFlash = 2.4;
     Audio_.cue('dirge');
     G.state = 'falseout';
@@ -3532,7 +3544,10 @@ import { sponsorDeLaCourse } from './panneaux';
     const T = instantLive();
     // PASSE LA LIGNE, IL VA AU TAPIS DU 60 M CHEZ NOUS AUSSI : plus aucun paquet n'en decide (son rebond n'est pas le notre,
     // son geste non plus), seul son chrono compte encore
-    if (r.finished && r.tapis != null && r.total === 60 && r.d >= L) {
+    // (des la ligne, sans attendre l'arrivee annoncee par la salle : d'ici la, il suivait les paquets sans geste, puis
+    // restait plante a son point le plus loin — « un adversaire ne recule jamais »)
+    if (r.tapis != null && r.total === 60 && r.d >= L) {
+      if (!r.finished) { r.finished = true; r.finishTime = g.fin != null ? g.fin : (g.time || G.elapsed); }
       if (g.fin != null && T >= g.fin) r.finishTime = g.fin;
       r.apresLigne(dt, 1.15);
       r.stride += r.v * dt * (Math.PI / r.strideLength());
@@ -3703,6 +3718,16 @@ import { sponsorDeLaCourse } from './panneaux';
     // une foulee continue, avec un retard de quelques centiemes — invisible a
     // l'oeil, alors qu'un saut de 40 cm ne l'est pas.
     if (g.live) { avancerLive(g, dt); return; }
+    // AU 60 M EN SALLE, LA TRACE CONTINUE APRES LA LIGNE : le tapis, puis le retour (engine.ts l'enregistre jusqu'a la
+    // fin de la course). Rejouee, elle faisait reculer le fantome, foulee figee dans la pose du choc (« l'adversaire
+    // reste bloque dans une position et recule », l'auteur, 3/11). Passe la ligne, il fait son propre tapis.
+    if (r.tapis != null && r.total === 60 && r.d >= G.track.total) {
+      if (!r.finished) { r.finished = true; r.finishTime = g.time || G.elapsed; }
+      r.apresLigne(dt, 1.15);
+      r.stride += r.v * dt * (Math.PI / r.strideLength());
+      r.drivePitch = 0;
+      return;
+    }
     const tr = g.trace;
     const last = tr.length - 1;
     const x = G.elapsed / g.step;

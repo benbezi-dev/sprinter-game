@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
-import { Coins } from 'lucide-react';
-import { rafraichirPieces, usePieces, coutDuContinue, acheterContinue } from '@/game/pieces';
+import { usePieces } from '@/game/pieces';
+import { Reprises, repriseOfferte } from './Reprises';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
 
@@ -18,40 +18,17 @@ export function OverScreen() {
   // `ReviewVideo` ne s'affiche que s'il y a un film a proposer.
   const film = useFilmDeLaCourse();
 
-  // LE CONTINUE. Seulement en carriere : un one shot n'a pas d'etape ou
-  // reprendre. Le prix vient du serveur et monte a chaque Continue de la
-  // meme carriere ; quand il n'y en a plus, il ne reste que « repartir de
-  // zero », comme avant.
-  //
-  // L'OFFRE SE MONTRE MEME SANS LES MOYENS (decision du 6 octobre 2026). Le
-  // bouton reste la, grise, avec son prix et ce qu'il manque : le joueur
-  // apprend que la defaite peut s'acheter, et c'est la que viendra l'achat de
-  // pieces en argent reel — ce jour-la, le bouton grise ouvrira la boutique.
-  // Sans identifiant de carriere (une course qui n'est pas partie de
-  // startRun), le serveur n'a rien a quoi rattacher l'achat : pas d'offre.
+  // LES REPRISES (pieces et pub, voir Reprises.tsx). Seulement en carriere :
+  // un one shot n'a pas d'etape ou reprendre. Sans identifiant de carriere
+  // (une course qui n'est pas partie de startRun), rien a reprendre.
   const enCarriere = SprinterApp.G.mode === 'campaign' && !!SprinterApp.G.runId;
   const pieces = usePieces();
-  const [achat, setAchat] = useState<'libre' | 'envoi' | 'reseau' | 'solde' | 'epuise' | 'nom'>('libre');
-  useEffect(() => { if (enCarriere) rafraichirPieces(); }, [enCarriere]);
-  const cout = enCarriere ? coutDuContinue(pieces, SprinterApp.G.runContinues || 0) : null;
-  const peutPayer = cout != null && pieces != null && pieces.reserve && pieces.solde >= cout;
-  const manque = cout != null && pieces ? Math.max(0, cout - (pieces.reserve ? pieces.solde : 0)) : 0;
+  const offerte = enCarriere && repriseOfferte(pieces, {
+    parcours: SprinterApp.G.runId, achetes: SprinterApp.G.runContinues || 0, pubs: SprinterApp.G.runPubs || 0,
+  });
 
-  const handleContinue = async (relance = false) => {
-    if (cout == null || achat === 'envoi') return;
-    setAchat('envoi');
-    const r = await acheterContinue(SprinterApp.G.runId, SprinterApp.G.runContinues || 0);
-    if (r.ok) { SprinterApp.continuerCarriere(); return; }
-    // Le serveur compte autrement (un Continue paye dont la reponse s'est
-    // perdue) : on se recale sur son compte et on redemande une fois.
-    if (r.raison === 'desaccord' && typeof r.essai === 'number' && !relance) {
-      SprinterApp.G.runContinues = r.essai;
-      setAchat('libre');
-      return handleContinue(true);
-    }
-    setAchat(r.raison === 'desaccord' ? 'reseau' : r.raison);
-    rafraichirPieces();
-  };
+  // Sorti au faux depart, il n'y a ni place ni classement de cette course.
+  const fauxDepart = !!SprinterApp.G.falseOut;
 
   const startRecap = () => {
     if (!player || player.reaction === null) return N.t('no_start');
@@ -77,7 +54,7 @@ export function OverScreen() {
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-4xl sm:text-5xl md:text-6xl font-black font-display text-destructive tracking-tight uppercase drop-shadow-md">
-              {N.t('place', { o: N.ord(rank, true) })}
+              {fauxDepart ? N.t('false_out') : N.t('place', { o: N.ord(rank, true) })}
             </h1>
             
             <div className="text-sm sm:text-base font-medium text-foreground/80 tracking-wide uppercase">
@@ -90,7 +67,7 @@ export function OverScreen() {
           </div>
 
           {/* Leaderboard Card */}
-          <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl">
+          {!fauxDepart && <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl">
             <div className="flex flex-col gap-1.5 md:gap-2">
               {ranking.map((r, i) => {
                 const isMe = r.isPlayer;
@@ -111,46 +88,18 @@ export function OverScreen() {
                 );
               })}
             </div>
-          </div>
+          </div>}
 
-          {/* Le Continue : reprendre l'etape perdue contre des pieces. Toujours
-              montre tant qu'il en reste un a acheter, grise faute de pieces. */}
-          {enCarriere && pieces && cout != null && (
-            <div className="w-full max-w-md flex flex-col items-center gap-2 mt-2">
-              {pieces.reserve && (
-                <div className="flex items-center gap-1.5 text-amber-300 font-bold text-sm md:text-base">
-                  <Coins className="w-4 h-4" />{N.t('pieces_solde', { n: pieces.solde })}
-                </div>
-              )}
-              <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
-                {N.t('pieces_reprendre', { etape: N.levelName(levelIdx) })}
-              </div>
-              <button onClick={() => handleContinue()} disabled={!peutPayer || achat === 'envoi'}
-                aria-disabled={!peutPayer}
-                className={peutPayer
-                  ? 'w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-amber-400 hover:bg-amber-300 disabled:opacity-60 transition-all border-b-4 border-amber-600 active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2'
-                  : 'w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-amber-300/60 bg-amber-400/10 border-2 border-dashed border-amber-400/40 cursor-not-allowed flex items-center justify-center gap-2'}>
-                {N.t('pieces_continuer', { n: cout })}<Coins className="w-5 h-5 md:w-6 md:h-6" />
-              </button>
-              {!peutPayer && (
-                <div className="flex flex-col items-center gap-0.5 text-center">
-                  <div className="text-xs md:text-sm font-bold text-amber-300/90">
-                    {pieces.reserve ? N.t('pieces_manque', { n: manque }) : N.t('pieces_nom')}
-                  </div>
-                  <div className="text-[11px] md:text-xs text-muted-foreground">{N.t('pieces_gagner')}</div>
-                </div>
-              )}
-              {achat === 'reseau' && <div className="text-xs text-destructive">{N.t('pieces_reseau')}</div>}
-              {achat === 'solde' && <div className="text-xs text-destructive">{N.t('pieces_manque', { n: manque })}</div>}
-              {achat === 'nom' && <div className="text-xs text-destructive">{N.t('pieces_nom')}</div>}
-            </div>
-          )}
-          {enCarriere && pieces && pieces.reserve && cout == null && (
-            <div className="text-xs md:text-sm text-muted-foreground mt-2">{N.t('pieces_epuise')}</div>
+          {/* Les reprises de l'etape perdue : pieces et pub (Reprises.tsx). */}
+          {enCarriere && (
+            <Reprises parcours={SprinterApp.G.runId} achetes={SprinterApp.G.runContinues || 0}
+              pubs={SprinterApp.G.runPubs || 0} etape={N.levelName(levelIdx)}
+              recaler={n => { SprinterApp.G.runContinues = n; }}
+              reprendre={parPub => SprinterApp.continuerCarriere(parPub)} />
           )}
 
           <div className="text-base sm:text-lg md:text-xl font-bold tracking-widest text-foreground uppercase mt-2">
-            {N.t(cout != null ? 'pieces_zero' : 'race_again')}
+            {N.t(offerte ? 'pieces_zero' : 'race_again')}
           </div>
 
           {/* La video de l'etape perdue, sous le Continue : elle se partage,

@@ -2257,7 +2257,9 @@ function corpsDe(r: any): Corps | null {
   // tenue (comme en finale : tout le monde n'a pas la meme), le dossard numerote par-dessus.
   const maillot = rgb(L.jersey || [200, 40, 50]);
   const liste = femme ? TENUES_FEMMES : TENUES;
-  const tenue = liste[Math.abs(hacher(String(r.name || r.lane || ''))) % liste.length];
+  // (un maillot de club se porte en debardeur : c'est la piece qui flotte, LE TISSU)
+  const tenue = L.kit ? (femme ? 'debardeur-culotte' : 'debardeur-short')
+    : liste[Math.abs(hacher(String(r.name || r.lane || ''))) % liste.length];
   const brassiere = tenue.startsWith('brassiere'), culotte = tenue.endsWith('culotte');
   // (une piece : le debardeur reste, le bas prend sa couleur ; la zone peinte du corps avait un bord en dents de scie)
   const bas = tenue === 'une-piece' ? maillot : rgb(L.shorts);
@@ -2269,13 +2271,218 @@ function corpsDe(r: any): Corps | null {
   // sous la brassiere le ventre est nu ; sous la culotte, le haut des cuisses
   mats.ventre?.color.copy(brassiere ? rgb(L.skin) : maillot);
   mats.shortbas?.color.copy(culotte ? rgb(L.skin) : bas);
-  if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; }
+  if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
+  if (L.kit === 'vrac' && mats.debardeur) {
+    maillotTripo(mats.debardeur, femme);
+    if (mats.dossard) dossardSousLaBande(mats.dossard);
+  }
   // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
   c = { m: modeleDe(copie), mats, echelle: source !== gabarit ? hauteurDe(gabarit) / hauteurDe(source) : undefined };
   monde.add(c.m.racine);
   corps.set(r, c);
   return c;
+}
+
+// LE MAILLOT DU VAL-DE-REUIL ATHLETIQUE CLUB (29/10, game/vestiaire.ts MAILLOTS ; d'apres deux photos de l'auteur, sans
+// les sponsors) : haut blanc, bas bleu roi, col en V et emmanchures bleus ; devant, le petit logo ; dans le dos, le grand
+// logo, la bande verte et ses hachures ; sur les flancs, un panneau vert raye borde de blanc. Peint sur le DEBARDEUR, la piece qui flotte (LE TISSU) : il bouge en course comme les autres. Le motif
+// se lit sur la pose de repos du maillage (`position`, avant le squelette) : il suit le tissu au lieu de glisser
+// dessus. Reperes mesures sur coureur-homme/femme.glb : debardeur de 0,87 a 1,415 m, le devant vers +x.
+// Un grain de maille, un rien de lumiere rasante : un maillot, pas une peinture.
+// LE COL ET LES EMMANCHURES (« au niveau du col ca va pas », l'auteur, 29/10) : le liseré bleu du vrai maillot suit les
+// bords du debardeur. Ils se trouvent une fois par maillage : les aretes qui n'ont qu'un triangle, une fois soudees les
+// coutures des UV ; chaque sommet garde sa distance au bord le plus proche (`aBord`, en metres). L'ourlet du bas n'en
+// est pas : il reste bleu comme le bas du maillot.
+function bordsDuDebardeur(g: THREE.BufferGeometry) {
+  if (g.getAttribute('aBord')) return;
+  const pos = g.getAttribute('position'), n = pos.count;
+  const ids = new Map<string, number>(), soude = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    const k = `${Math.round(pos.getX(i) * 2000)},${Math.round(pos.getY(i) * 2000)},${Math.round(pos.getZ(i) * 2000)}`;
+    let id = ids.get(k); if (id === undefined) { id = ids.size; ids.set(k, id); } soude[i] = id;
+  }
+  const tri = g.index ? g.index.array : Array.from({ length: n }, (_, i) => i);
+  const aretes = new Map<string, number>();
+  for (let t = 0; t + 2 < tri.length; t += 3) for (let e = 0; e < 3; e++) {
+    const a = soude[tri[t + e]], b = soude[tri[t + (e + 1) % 3]];
+    const k = a < b ? `${a}_${b}` : `${b}_${a}`; aretes.set(k, (aretes.get(k) || 0) + 1);
+  }
+  const auBord = new Set<number>();
+  for (const [k, c] of aretes) if (c === 1) for (const v of k.split('_')) auBord.add(+v);
+  const bords: number[] = [];
+  for (let i = 0; i < n; i++) if (auBord.has(soude[i]) && pos.getY(i) > 1.0) bords.push(pos.getX(i), pos.getY(i), pos.getZ(i));
+  const d = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    let m = 0.1;
+    for (let j = 0; j < bords.length; j += 3) {
+      const dx = x - bords[j], dy = y - bords[j + 1], dz = z - bords[j + 2], q = dx * dx + dy * dy + dz * dz;
+      if (q < m * m) m = Math.sqrt(q);
+    }
+    d[i] = m;
+  }
+  g.setAttribute('aBord', new THREE.BufferAttribute(d, 1));
+}
+// LE DOSSARD DU DOS A L'ENDROIT : les deux dossards partagent une texture, ecrite a l'envers pour celui du devant
+// (le maillage est en miroir) ; celui du dos se lisait donc en miroir (« SPRINTER » et le numero, 29/10)
+function dossardALEndroit(m: THREE.MeshStandardMaterial) {
+  if ((m as any).__aLEndroit) return;
+  (m as any).__aLEndroit = true;
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <uv_vertex>', '#include <uv_vertex>\n#ifdef USE_MAP\nif (position.x < 0.0) vMapUv.x = 1.0 - vMapUv.x;\n#endif');
+  };
+  m.customProgramCacheKey = () => 'dossard';
+  m.needsUpdate = true;
+}
+// LE DOSSARD SOUS LA BANDE (les photos du club : la bande verte et ses hachures se voient au-dessus du dossard) : avec
+// ce maillot, le dossard descend de 6 cm, sur un devant presque plat a cet endroit (1,01 a 1,22 m, mesure).
+function dossardSousLaBande(m: THREE.MeshStandardMaterial) {
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    // (celui du devant seulement : celui du dos, plus bas, ressortait sous l'ourlet)
+    sh.vertexShader = sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nif (position.x > 0.0) transformed.y -= 0.06;');
+  };
+  m.customProgramCacheKey = () => 'dossard-vrac';
+  m.needsUpdate = true;
+}
+// LE MAILLOT TRIPO (29-30/10 : « fait ce maillot via Tripo pour le jeu », d'apres la face et le dos dessines par l'auteur) :
+// le modele Tripo, cale sur le debardeur, y est CUIT dans ses UV (scratchpad cuire-maillot.py, Blender) — une image par
+// corps. Le debardeur garde ainsi son squelette, ses os de tissu et les physiques : le maillot bouge comme avant.
+const textesTripo: Record<string, THREE.Texture> = {};
+function maillotTripo(m: THREE.MeshStandardMaterial, femme: boolean) {
+  const n = femme ? 'vrac-femme' : 'vrac-homme';
+  if (!textesTripo[n]) {
+    const base = (import.meta as any).env?.BASE_URL || '/';
+    const t = new THREE.TextureLoader().load(base + 'modeles/maillots/' + n + '.jpg');
+    t.flipY = false; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;   // (les UV du glb : sans retournement)
+    textesTripo[n] = t;
+  }
+  m.map = textesTripo[n]; m.color.setRGB(1, 1, 1); m.roughness = 0.82;
+  // LE VRAI LOGO DU CLUB, devant : Tripo en avait deforme le texte. Un carre blanc l'efface, le fichier du club s'y pose
+  // (repere de la pose de repos : z vers la droite du coureur vu de face, y la hauteur)
+  const base = (import.meta as any).env?.BASE_URL || '/';
+  for (const n of ['vrac-logo.png', 'vrac-ville.png']) if (!textesTripo[n]) {
+    const t = new THREE.TextureLoader().load(base + 'modeles/maillots/' + n); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+    textesTripo[n] = t;
+  }
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.uniforms.uLogoVRAC = { value: textesTripo['vrac-logo.png'] }; sh.uniforms.uVilleVRAC = { value: textesTripo['vrac-ville.png'] };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vKit; varying vec3 vKitN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = position; vKitN = normal;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vKit; varying vec3 vKitN; uniform sampler2D uLogoVRAC, uVilleVRAC;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+if (vKitN.x > 0.2) {
+  vec2 q = vec2((vKit.z - ${LOGO_DEVANT.z}) / ${LOGO_DEVANT.l}, (vKit.y - ${LOGO_DEVANT.y}) / ${LOGO_DEVANT.h});
+  if (all(greaterThan(q, vec2(-0.08, -0.25))) && all(lessThan(q, vec2(1.08, 1.25)))) diffuseColor.rgb = vec3(0.9);
+  if (all(greaterThan(q, vec2(0.0))) && all(lessThan(q, vec2(1.0)))) { vec4 t = texture2D(uLogoVRAC, q); diffuseColor.rgb = mix(diffuseColor.rgb, t.rgb, t.a); }
+  vec2 v = vec2((vKit.z - ${VILLE_DEVANT.z}) / ${VILLE_DEVANT.l}, (vKit.y - ${VILLE_DEVANT.y}) / ${VILLE_DEVANT.h});
+  if (all(greaterThan(v, vec2(-0.06))) && all(lessThan(v, vec2(1.06)))) diffuseColor.rgb = vec3(0.9);
+  if (all(greaterThan(v, vec2(0.0))) && all(lessThan(v, vec2(1.0)))) diffuseColor.rgb = texture2D(uVilleVRAC, v).rgb;
+}`);
+  };
+  m.customProgramCacheKey = () => 'maillot-tripo';
+  m.needsUpdate = true;
+}
+const LOGO_DEVANT = { z: '0.042', y: '1.222', l: '0.094', h: '0.0349' };
+// (« VAL DE REUIL » et son triangle, decoupes dans le dessin de l'auteur : Tripo en avait abime le D)
+const VILLE_DEVANT = { z: '-0.040', y: '1.212', l: '0.080', h: '0.0513' };
+let logoVRAC: THREE.Texture | null = null;
+const lin = (c: number) => new THREE.Color(c);   // (hex sRGB, range lineaire par three)
+const uVRAC = { blanc: { value: lin(0xf4f6f8) }, vert: { value: lin(0x4cb248) }, bleu: { value: lin(0x1c40c4) } };
+// LE COL EN V, MOINS PROFOND (« le col est trop bas », « le col est en V mais tu l'as fait trop bas », l'auteur, 29/10) :
+// le debardeur du jeu est echancre jusqu'a 1,29 m ; le V du club a sa pointe a 1,312 m et remonte vers la base du cou
+// (1,36 m chez l'homme, 1,35 chez la femme, mesure). Le haut de la poitrine se peint donc sur la PEAU, dans l'echancrure
+// seulement (au-dessus de 1,28 m), sous la ligne du V, avec son liseré : `peau` ne garde que ce col.
+// (« la partie entouree existe des deux cotes, supprime-les » : l'ancien V depassait sous la jonction des bretelles ;
+//  le col se nettoie et se borde jusqu'a 9 cm du milieu, sur la bretelle comme sur la peau)
+const COL_VRAC = 'float yCol = 1.312 + 0.62 * abs(vKit.z); bool dansLeCol = vKit.x > 0.02 && abs(vKit.z) < 0.09 && vKit.y > 1.25 && vKit.y < yCol;';
+function maillotDuClub(m: THREE.MeshStandardMaterial, peau = false) {
+  if (!logoVRAC) {
+    const base = (import.meta as any).env?.BASE_URL || '/';
+    logoVRAC = new THREE.TextureLoader().load(base + 'modeles/maillots/vrac-logo.png');
+    logoVRAC.colorSpace = THREE.SRGBColorSpace; logoVRAC.anisotropy = 4;
+  }
+  if (!peau) { m.color.setRGB(1, 1, 1); m.roughness = 0.82; }
+  const avant = m.onBeforeCompile;   // (le lisere s'y pose deja)
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.uniforms.uLogoVRAC = { value: logoVRAC };
+    sh.uniforms.uBlancVRAC = uVRAC.blanc; sh.uniforms.uVertVRAC = uVRAC.vert; sh.uniforms.uBleuVRAC = uVRAC.bleu;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float aBord; varying float vBord; varying vec3 vKit; varying vec3 vKitN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvKit = position; vKitN = normal; vBord = aBord;');
+    sh.fragmentShader = (peau ? '#define PEAU_VRAC\n' : '') + sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vBord; varying vec3 vKit; varying vec3 vKitN;\nuniform sampler2D uLogoVRAC; uniform vec3 uBlancVRAC, uVertVRAC, uBleuVRAC;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+bool sansOmbreVRAC = false, enversVRAC = false;
+{
+  ${COL_VRAC}
+#ifdef PEAU_VRAC
+  // (et toute la peau de l'ancien V, jusqu'a la bande : celui des coureuses descendait jusque-la, et ses bords
+  // percaient le tissu en lignes sombres, 29/10)
+  if (dansLeCol || (vKit.x > 0.02 && abs(vKit.z) < 0.11 && vKit.y > 1.10 && vKit.y < yCol)) {
+  sansOmbreVRAC = true;   // (dans la fente, l'ombre du tissu la noircissait : elle prend la lumiere du tissu)
+#endif
+  float y = vKit.y, z = vKit.z, nz = abs(vKitN.z);
+  bool devant = vKitN.x > 0.15, dos = vKitN.x < -0.15;
+  // le haut blanc, le bas bleu roi
+  vec3 kc = y > 1.215 ? uBlancVRAC : uBleuVRAC;
+  // DEVANT ET DANS LE DOS (les photos du club) : la bande verte, et ses hachures en biais sous elle, du cote droit du
+  // coureur — a gauche quand on le regarde de face, a droite de dos
+  float h = 1.185 - y;
+  if (y > 1.185 && y <= 1.215) kc = uVertVRAC;
+  if (dos && h > 0.0 && h < 0.075 && z > -0.02 && z < 0.11 && fract((h - z) * 34.0) < 0.42) kc = uVertVRAC;
+  if (devant && h > 0.0 && h < 0.06 && z > -0.11 && z < 0.0 && fract((h + z) * 34.0) < 0.42) kc = uVertVRAC;
+  if (dos) {
+    vec2 uv = vec2((0.095 - z) / 0.19, (y - 1.252) / 0.070);
+    if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 t = texture2D(uLogoVRAC, uv); kc = mix(kc, t.rgb, t.a); }
+  }
+  // LES FLANCS (les photos de profil) : un panneau vert uni sous la bande, de l'aisselle a l'ourlet, qui s'evase vers
+  // le bas en mordant sur le devant et le dos, borde d'un filet blanc
+  // (« la bande verte sur le cote est beaucoup trop importante », l'auteur, 29/10 : une bande etroite sur la couture)
+  float evase = clamp((1.185 - y) * 0.35, 0.0, 0.05);
+  if (y < 1.185 && nz > 0.935 - evase) kc = nz > 0.955 - evase ? uVertVRAC : uBlancVRAC;
+  // LE DEVANT, comme sur la photo : le logo du club cote gauche du coureur (sans les logos des partenaires, l'auteur, 29/10)
+  if (devant) {
+    vec2 uv = vec2((z - 0.034) / 0.072, (y - 1.252) / 0.027);
+    if (uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0) { vec4 t = texture2D(uLogoVRAC, uv); kc = mix(kc, t.rgb, t.a); }
+  }
+  // le liseré bleu du col et des emmanchures (bordsDuDebardeur), un peu plus d'un centimetre
+  // (le bord du V, recouvert par le col rond, n'a plus de liseré ; le col rond a le sien)
+#ifndef PEAU_VRAC
+  // (ni sur les bords de l'ancien V, qui chez les coureuses descend jusqu'a la bande : ils tracaient des lignes sur la poitrine)
+  bool ancienV = vKit.x > 0.02 && abs(vKit.z) < 0.125 && vKit.y > 1.10 && vKit.y < yCol;
+  if (vBord < 0.013 && !dansLeCol && !ancienV) kc = uBleuVRAC;
+  // (l'envers du tissu, qui se retourne au bord de l'ancien V : sans lumiere il tracait des lignes noires)
+  enversVRAC = !gl_FrontFacing && ancienV;
+  sansOmbreVRAC = ancienV;
+#endif
+  // (sur la position, pas la normale : au bord du tissu elle tourne, et l'ancien V gardait son liseré)
+  // (le V ne se trace que sur la peau, dans l'echancrure : il s'arrete au bord de la bretelle, dont le liseré prend le relais)
+#ifdef PEAU_VRAC
+  if (dansLeCol && yCol - y < 0.012) kc = uBleuVRAC;
+#endif
+  float maille = 0.96 + 0.04 * sin(vKit.y * 900.0) * sin(vKit.z * 900.0 + vKit.x * 600.0);
+  diffuseColor.rgb = kc * maille;
+#ifdef PEAU_VRAC
+  }
+#endif
+}`);
+    if (!peau) sh.fragmentShader = sh.fragmentShader.replace('#include <emissivemap_fragment>',
+      '#include <emissivemap_fragment>\nif (enversVRAC) totalEmissiveRadiance += diffuseColor.rgb * 0.75;');
+    sh.fragmentShader = sh.fragmentShader.replace('#include <lights_fragment_begin>',
+      THREE.ShaderChunk.lights_fragment_begin.split('receiveShadow )').join('receiveShadow && !sansOmbreVRAC )'));
+  };
+  m.customProgramCacheKey = () => (peau ? 'maillot-vrac-col' : 'maillot-vrac');
+  m.needsUpdate = true;
 }
 
 // LES PHYSIQUES (28/10, « fais des corpulences et des physiques differents d'athletes ») : quatre formes dans chaque
@@ -3042,5 +3249,6 @@ export function rendre(App: any, dt: number) {
   // LE FILM D'APRES COURSE (review.ts) recopie l'image 3D ici, juste apres son trace : plus tard
   // dans l'image, le navigateur a deja vide le tampon WebGL et la copie sortait noire
   const filmer = (globalThis as any).__filmer3D;
-  if (filmer) filmer(renderer!.domElement);
+  // (le film ne doit jamais pouvoir arreter la course : une erreur ici remontait dans la boucle du jeu)
+  if (filmer) try { filmer(renderer!.domElement); } catch { /* cette image manquera au film */ }
 }

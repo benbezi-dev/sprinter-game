@@ -62,7 +62,7 @@ const MOTS: Record<string, [string, string]> = {
   suivante:     ['ÉTAPE SUIVANTE', 'NEXT STAGE'],
   recommencer:  ['RECOMMENCER LA LÉGENDE', 'RESTART THE LEGEND'],
   accueil:      ['ACCUEIL', 'HOME'],
-  regle_perte:  ['Une étape perdue, et la Légende repart de la plage.', 'Lose a stage, and the Legend starts again from the beach.'],
+  regle_perte:  ['Une étape perdue : reprends-la, ou la Légende repart de la plage.', 'Lose a stage: resume it, or the Legend starts again from the beach.'],
 };
 
 function langue(): number {

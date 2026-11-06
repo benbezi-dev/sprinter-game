@@ -3058,7 +3058,10 @@ async function servir(request, env, ctx, porteur) {
         const parSonCompte = AUTEURS_OFFICIELS.has(cleAuteur)
           && await nomReserveIci(env.DB, cleAuteur, body.device_id);
         if (!parSonCompte && !estTchatOfficiel(request, env)) return json({ error: 'refuse' }, 403);
-        const r = await posterOfficiel(env.DB, { texte: body.texte });
+        const r = await posterOfficiel(env.DB, { texte: body.texte, pour: typeof body.pour === 'string' ? body.pour : null });
+        if (r.sonner) ctx.waitUntil((async () => {
+          for (const appareil of await appareilsDe(env.DB, [r.sonner])) await sonnerEtPush(env, appareil, 'marques_tchat', canal.test);
+        })());
         return json(r.corps, r.status);
       }
       if (url.pathname.startsWith('/marques/tchat')

@@ -23,9 +23,12 @@
      nom. C'est une donnee derivee de la localisation, liee au joueur, et
      stockee : la taire serait sous-declarer.
 
-  3. Rien ici ne sert au suivi publicitaire. Pas de regie, pas de mesure
-     d'audience, pas de revente — d'ou `NSPrivacyTracking` a faux et une liste
-     de domaines vide.
+  3. Le code du jeu ne fait aucun suivi publicitaire : pas de mesure
+     d'audience, pas de revente, et l'ATT n'est jamais demande — d'ou
+     `NSPrivacyTracking` a faux et une liste de domaines vide. La video
+     recompensee (src/game/pub.ts) passe par le SDK Google Mobile Ads, qui
+     embarque son propre manifeste et y declare ce qu'il collecte ; c'est la
+     section « Publicite » de confidentialite.html.
 -->
 <plist version="1.0">
 <dict>

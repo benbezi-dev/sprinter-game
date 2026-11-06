@@ -101,6 +101,9 @@
     pieces_nom:        ['Réserve ton nom pour gagner des pièces', 'Claim your name to earn coins'],
     pieces_reseau:     ['Serveur injoignable, réessaie', 'Server unreachable, try again'],
     pieces_zero:       ['OU REPARTIR DE ZÉRO ?', 'OR START OVER?'],
+    pub_continuer:     ['REGARDER UNE PUB · CONTINUER', 'WATCH AN AD · CONTINUE'],
+    pub_charge:        ['PUB EN COURS…', 'LOADING AD…'],
+    pub_rate:          ['Pas de pub pour l’instant, réessaie', 'No ad right now, try again'],
     pieces_hors_rang:  ['Carrière reprise : hors classement des parcours', 'Resumed career: not in the career ranking'],
     next_stage:   ['ÉTAPE {n}', 'STAGE {n}'],
     home:         ['ACCUEIL', 'HOME'],
@@ -267,7 +270,7 @@
     // a celui qui n'en pose pas.
     pays_title:      ['TA NATIONALITÉ', 'YOUR NATIONALITY'],
     pays_opt:        ['une seule fois', 'once only'],
-    pays_aucun:      ['choisis ton pays', 'pick your country'],
+    pays_aucun:      ['tape le nom de ton pays', 'type your country'],
     // Ce que la nationalite engage, dit AVANT le geste et non apres.
     pays_why:        ['sans choix de ta part, tu cours pour le pays d’où tu te connectes — un choix, lui, ne se change plus',
                       'if you don’t choose, you run for the country you connect from — a choice cannot be changed'],
