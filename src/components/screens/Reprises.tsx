@@ -76,7 +76,7 @@ export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }:
       {/* Le Continue : reprendre l'etape perdue contre des pieces. Toujours
           montre tant qu'il en reste un a acheter, grise faute de pieces. */}
       {pieces && cout != null && (
-        <div className="w-full max-w-md flex flex-col items-center gap-2 mt-2">
+        <div className="w-full max-w-md flex flex-col items-center gap-1.5">
           {pieces.reserve && (
             <div className="flex items-center gap-1.5 text-primary font-bold text-sm md:text-base">
               <Coins className="w-4 h-4" />{N.t('pieces_solde', { n: pieces.solde })}
@@ -88,8 +88,8 @@ export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }:
           <button onClick={() => handleContinue()} disabled={!peutPayer || achat === 'envoi'}
             aria-disabled={!peutPayer}
             className={peutPayer
-              ? 'w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary-foreground bg-primary hover:brightness-110 disabled:opacity-60 transition-all border-b-4 border-black/30 active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2'
-              : 'w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary/60 bg-primary/10 border-2 border-dashed border-primary/40 cursor-not-allowed flex items-center justify-center gap-2'}>
+              ? 'w-full py-2.5 md:py-4 [@media(max-height:720px)]:py-2 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary-foreground bg-primary hover:brightness-110 disabled:opacity-60 transition-all border-b-4 border-black/30 active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2'
+              : 'w-full py-2.5 md:py-4 [@media(max-height:720px)]:py-2 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary/60 bg-primary/10 border-2 border-dashed border-primary/40 cursor-not-allowed flex items-center justify-center gap-2'}>
             {N.t('pieces_continuer', { n: cout })}<Coins className="w-5 h-5 md:w-6 md:h-6" />
           </button>
           {!peutPayer && (
@@ -97,7 +97,7 @@ export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }:
               <div className="text-xs md:text-sm font-bold text-primary/90">
                 {pieces.reserve ? N.t('pieces_manque', { n: manque }) : N.t('pieces_nom')}
               </div>
-              <div className="text-[11px] md:text-xs text-muted-foreground">{N.t('pieces_gagner')}</div>
+              <div className="text-[11px] md:text-xs text-muted-foreground [@media(max-height:720px)]:hidden">{N.t('pieces_gagner')}</div>
             </div>
           )}
           {achat === 'reseau' && <div className="text-xs text-destructive">{N.t('pieces_reseau')}</div>}
@@ -108,12 +108,12 @@ export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }:
       {pubOfferte && (
         <div className="w-full max-w-md flex flex-col items-center gap-1">
           {!(pieces && cout != null) && (
-            <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest mt-2">
+            <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
               {N.t('pieces_reprendre', { etape: etape })}
             </div>
           )}
           <button onClick={handlePub} disabled={pub === 'envoi'}
-            className="w-full py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
+            className="w-full py-2.5 md:py-4 [@media(max-height:720px)]:py-2 rounded-xl font-black font-display text-sm sm:text-xl md:text-2xl whitespace-nowrap tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
             {N.t(pub === 'envoi' ? 'pub_charge' : 'pub_continuer')}<Clapperboard className="w-5 h-5 md:w-6 md:h-6" />
           </button>
           {pub === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}</div>}

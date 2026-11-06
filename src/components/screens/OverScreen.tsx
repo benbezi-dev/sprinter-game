@@ -50,14 +50,14 @@ export function OverScreen() {
   return (
     <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div {...MONTEE} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+        <motion.div {...MONTEE} className="flex flex-col items-center max-w-2xl w-full py-1 md:py-8 gap-2.5 md:gap-6 [@media(max-height:720px)]:gap-1.5">
           
-          <div className="flex flex-col items-center text-center gap-1 md:gap-2">
-            <h1 className="text-4xl sm:text-5xl md:text-6xl font-black font-display text-destructive tracking-tight uppercase drop-shadow-md">
+          <div className="flex flex-col items-center text-center gap-0.5 md:gap-2">
+            <h1 className="text-3xl sm:text-4xl md:text-6xl [@media(max-height:720px)]:text-2xl font-black font-display text-destructive tracking-tight uppercase drop-shadow-md">
               {fauxDepart ? N.t('false_out') : N.t('place', { o: N.ord(rank, true) })}
             </h1>
             
-            <div className="text-sm sm:text-base font-medium text-foreground/80 tracking-wide uppercase">
+            <div className="text-xs sm:text-base font-medium text-foreground/80 tracking-wide uppercase">
               {N.levelName(levelIdx)} &mdash; {player?.finishTime ? `${player.finishTime.toFixed(2)} s` : N.t('unfinished')}
             </div>
             
@@ -67,8 +67,8 @@ export function OverScreen() {
           </div>
 
           {/* Leaderboard Card */}
-          {!fauxDepart && <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl">
-            <div className="flex flex-col gap-1.5 md:gap-2">
+          {!fauxDepart && <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-2 sm:p-3 md:p-6 shadow-2xl">
+            <div className="flex flex-col gap-1 md:gap-2 [@media(max-height:720px)]:gap-0.5">
               {ranking.map((r, i) => {
                 const isMe = r.isPlayer;
                 const mc = i === 0 ? 'text-primary' : i === 1 ? 'text-slate-300' : i === 2 ? 'text-amber-600' : 'text-muted-foreground';
@@ -76,7 +76,7 @@ export function OverScreen() {
                 const tc = r.finishTime ? 'text-foreground' : 'text-destructive';
                 
                 return (
-                  <div key={i} className={`flex items-center justify-between px-3 py-2 md:px-4 md:py-3 rounded-xl border ${isMe ? 'bg-destructive/20 border-destructive/50' : 'border-white/5 bg-black/20'}`}>
+                  <div key={i} className={`flex items-center justify-between px-3 py-1 md:px-4 md:py-3 [@media(max-height:720px)]:py-0.5 rounded-xl border ${isMe ? 'bg-destructive/20 border-destructive/50' : 'border-white/5 bg-black/20'}`}>
                     <div className="flex items-center gap-2 md:gap-4 overflow-hidden pr-2">
                       <span className={`font-bold w-6 md:w-8 shrink-0 text-sm md:text-base ${mc}`}>{N.ord(i + 1)}</span>
                       <span className={`font-bold tracking-wide truncate text-sm md:text-base ${nc}`}>{isMe ? N.t('you') : r.name}</span>
@@ -98,7 +98,7 @@ export function OverScreen() {
               reprendre={parPub => SprinterApp.continuerCarriere(parPub)} />
           )}
 
-          <div className="text-base sm:text-lg md:text-xl font-bold tracking-widest text-foreground uppercase mt-2">
+          <div className="text-sm sm:text-lg md:text-xl font-bold tracking-widest text-foreground uppercase">
             {N.t(offerte ? 'pieces_zero' : 'race_again')}
           </div>
 
@@ -110,10 +110,10 @@ export function OverScreen() {
 
           {/* Actions */}
           <div className="flex gap-3 md:gap-4 w-full max-w-md">
-            <button onClick={handleRetry} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1">
+            <button onClick={handleRetry} className="flex-1 py-2.5 md:py-4 [@media(max-height:720px)]:py-2 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-emerald-400 hover:bg-emerald-300 transition-all border-b-4 border-emerald-600 active:border-b-0 active:translate-y-1">
               {N.t('yes').toUpperCase()}
             </button>
-            <button onClick={handleHome} className="flex-1 py-3 md:py-4 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-destructive hover:bg-red-400 transition-all border-b-4 border-red-700 active:border-b-0 active:translate-y-1">
+            <button onClick={handleHome} className="flex-1 py-2.5 md:py-4 [@media(max-height:720px)]:py-2 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-background bg-destructive hover:bg-red-400 transition-all border-b-4 border-red-700 active:border-b-0 active:translate-y-1">
               {N.t('no').toUpperCase()}
             </button>
           </div>
