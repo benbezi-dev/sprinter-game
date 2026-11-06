@@ -2206,12 +2206,22 @@ import { sponsorDeLaCourse } from './panneaux';
   })();
   function enTroisD(table, cle) { return RENDU_3D ? table[cle] : undefined; }
 
+  // DIFFICULTE RELEVEE (l'auteur, 07/11 : -10 % aux niveaux 1 a 5, -3 % aux ZEZE, toutes epreuves). Les tables
+  // (`ranges`) restent ecrites dans l'echelle d'avant ; on les serre ici, a la lecture. Les ZEZE ne prennent que 3 % :
+  // a -10 % ils passaient sous RECORDS_DU_MONDE, la limite du joueur parfait, et la finale devenait imbattable.
+  const DURCI = [0.90, 0.90, 0.90, 0.90, 0.90, 0.97];
+  function plateauDuNiveau(R, i) {
+    const r = R.ranges && R.ranges[i];
+    const k = DURCI[i] || 1;
+    return r ? [r[0] * k, r[1] * k] : undefined;
+  }
+
   function enDessousDuNiveau(R, idx) {
     const s = G.runSplits;
     if (!s || !s.length) return false;
     if (G.mode === 'oneshot' && G.shotRaces[G.shotIdx - 1] !== G.raceKey) return false;
     const precedent = s[s.length - 1];
-    const bornes = R.ranges && R.ranges[idx];
+    const bornes = plateauDuNiveau(R, idx);
     if (precedent == null || !bornes) return false;
     return precedent > bornes[1] * (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1);
   }
@@ -2397,7 +2407,7 @@ import { sponsorDeLaCourse } from './panneaux';
     // index hors du tableau court au stade olympique.
     // Une marche de la carriere d'athlete peut porter ses chronos (game/athlete/regles.ts).
     const impose = G.reglagesJoueur && G.reglagesJoueur.plateau;
-    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
+    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || plateauDuNiveau(R, idx) || plateauDuNiveau(R, MONDIAUX);
     // UN CHRONO FIXE, pour qui en a un. Un athlete reel qu'on vient defier
     // (voir `cibles`, STADES_HORS_SERIE) court le meme temps a chaque
     // tentative : sans cela, « le battre » dependrait du tirage.
