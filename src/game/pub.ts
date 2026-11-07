@@ -52,6 +52,15 @@ function admob(): Promise<any> {
   return pret;
 }
 
+/** LE CONSENTEMENT AU DEMARRAGE, PAS AU MOMENT DE LA PUB (l'auteur, 7/11/2026 :
+ *  « propose cette fenetre au debut du jeu »). Appele une fois au lancement de
+ *  l'appli : le formulaire RGPD de Google s'ouvre alors, s'il le faut, et le
+ *  bouton « Regarder une pub » ne le rouvre plus. Sur le site : rien. */
+export function preparerLaPub(): void {
+  if (!EST_NATIF) return;
+  admob().catch(() => { /* la pub reessaiera a la demande */ });
+}
+
 /** Rouvre le formulaire de consentement de Google (RGPD : le joueur doit pouvoir
  *  retirer ou changer son choix). Hors EEE, Google n'a rien a montrer : rien ne se passe.
  *  shortcut: le lien s'affiche dans toute l'appli, pas seulement quand UMP dit REQUIRED ; a affiner si des joueurs hors Europe s'en plaignent */
