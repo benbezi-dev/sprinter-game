@@ -2227,10 +2227,10 @@ import { sponsorDeLaCourse } from './panneaux';
     '400h': [[51.69, 56.38], [49.45, 50.86], [48.66, 49.45], [48.22, 48.66], [47.56, 48.22], [47.27, 47.56]],
     '60h':  [[9.60, 11.00], [8.58, 9.16], [7.95, 8.15], [7.76, 7.95], [7.62, 7.76], [7.40, 7.55]],
     '60hf': [[10.36, 12.21], [8.82, 9.87], [8.47, 8.79], [8.32, 8.47], [8.11, 8.32], [7.90, 8.11]],
-    // Le relais, mesure avec tools/relais-simulation.mjs (quatre relayeurs a la meme cadence, meilleurs placement et
-    // depart, passages parfaits). Le joueur y court sans ALLURE_DU_JOUEUR, d'ou des temps sous le record reel (36,84).
-    // Les passages plafonnent le haut : ZEZE (au-dela de 20 appuis/s) est estime, la simulation n'a pas tenu a 24.
-    '4x100': [[40.22, 45.34], [33.89, 37.90], [33.05, 33.65], [32.61, 33.05], [32.29, 32.61], [32.00, 32.27]],
+    // Le relais, mesure avec tools/relais-simulation.mjs (quatre relayeurs a la meme cadence, allure du 100 m comme en
+    // jeu, meilleurs placement et depart, passages parfaits). Les passages plafonnent le haut ; la simulation n'a pas
+    // tenu au-dela de 20 appuis/s : ZEZE est estime juste sous les 39,22 s de 20 appuis/s.
+    '4x100': [[48.37, 54.75], [40.90, 45.70], [39.96, 40.29], [39.50, 39.96], [39.25, 39.50], [38.95, 39.22]],
   };
   // Le reste (2D par ?rendu=2d) : les tables d'origine, -10 % aux niveaux 1 a 5 et -3 % aux ZEZE.
   const DURCI = [0.90, 0.90, 0.90, 0.90, 0.90, 0.97];
