@@ -227,7 +227,7 @@ export function RaceHUD() {
       {HALLOWEEN_OUVERT && isRace && <HalloweenHUD />}
       
       {/* Top HUD Bar */}
-      <div className="absolute top-0 left-0 w-full bg-card/80 landscape:bg-transparent backdrop-blur-md landscape:backdrop-blur-none border-b-2 landscape:border-b-0 border-primary/50 landscape:shadow-none text-foreground flex flex-row flex-wrap landscape:flex-nowrap justify-between items-center px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 sm:py-3 shadow-lg gap-y-2">
+      <div className="absolute top-0 left-0 w-full bg-card/80 landscape:bg-transparent backdrop-blur-md landscape:backdrop-blur-none border-b-2 landscape:border-b-0 border-primary/50 landscape:shadow-none text-foreground flex flex-row flex-wrap landscape:flex-nowrap justify-between items-center px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pb-2 sm:pt-[max(env(safe-area-inset-top),0.75rem)] sm:pb-3 shadow-lg gap-y-2">
         <div className="flex justify-between w-1/2 landscape:w-auto landscape:flex-1 items-center gap-2 sm:gap-4 order-1 min-w-0">
           <div className="flex-1 min-w-0 font-bold text-muted-foreground text-[10px] sm:text-xs md:text-sm tracking-widest uppercase truncate landscape:drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
             {course ? (course.titre || course.sousTitre) : N.levelName(levelIdx)}
