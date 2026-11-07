@@ -1,21 +1,12 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# Le pont et ses entrees JavaScript restent accessibles apres optimisation.
+-keep class com.getcapacitor.Bridge { *; }
+-keepattributes RuntimeVisibleAnnotations,AnnotationDefault
+-keepclassmembers class * {
+    @android.webkit.JavascriptInterface <methods>;
+}
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
-
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
-
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Capacitor fournit deja les regles consumer pour les classes @CapacitorPlugin,
+# les constructeurs, @PluginMethod, @PermissionCallback et @ActivityCallback.
+# AdMob, UMP et Firebase fournissent leurs regles dans leurs AAR/JAR : Gradle
+# les fusionne automatiquement, y compris les registrars Firebase.
+# Les services FCM sont conserves via le manifeste fusionne.
