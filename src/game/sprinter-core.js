@@ -302,7 +302,10 @@
   // Aux haies, la limite se mesure appel et ciseau du joueur compris (tools/records-du-monde-test.mjs) : elle bouge
   // d'un dixieme selon l'instant de la premiere frappe, on vise donc la ligne qui passe au milieu de ce bruit.
   const ALLURE_DU_JOUEUR = { '60': 0.7533, '100': 0.8219, '200': 0.8406, '400': 0.7772, '200s': 0.8082, '400s': 0.752,
-                             '100h': 0.777, '110h': 0.811, '400h': 0.821, '60h': 0.788, '60hf': 0.734 };
+                             '100h': 0.777, '110h': 0.811, '400h': 0.821, '60h': 0.788, '60hf': 0.734,
+                             // le relais (l'auteur, 07/11 : « comme sur les autres courses ») : l'allure du 100 m, un relayeur sprinte ;
+                             // a 20 appuis/s il finit a +6,5 % du record (36,84), le 100 m a +6,3 % du sien.
+                             '4x100': 0.8219 };
   // ET LES ADVERSAIRES SUIVENT (l'auteur, 29/10 : « meme conversion ») : les plateaux, chronos fixes et plateaux de
   // la carriere restent ecrits dans l'echelle d'avant ; leur temps tire est multiplie par ce que l'allure fait au
   // joueur a 17 appuis/s (x1,19 a x1,21 de 8 a 40 appuis/s au 100 m) — chaque course garde sa difficulte.

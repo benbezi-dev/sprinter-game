@@ -6,6 +6,7 @@ import { usePieces } from '@/game/pieces';
 import { Reprises, repriseOfferte } from './Reprises';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
+import { TenirDansLEcran } from '@/components/TenirDansLEcran';
 
 export function OverScreen() {
   const levelIdx = useGameStore(s => s.levelIdx);
@@ -48,9 +49,8 @@ export function OverScreen() {
   const rank = ranking.indexOf(player) + 1;
 
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] [@media(max-height:780px)]:pt-[max(env(safe-area-inset-top),0.5rem)] [@media(max-height:780px)]:pb-[max(env(safe-area-inset-bottom),0.5rem)]">
-      <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div {...MONTEE} className="flex flex-col items-center max-w-2xl w-full py-1 md:py-8 gap-2.5 md:gap-6 [@media(max-height:780px)]:gap-1.5">
+    <TenirDansLEcran className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] [@media(max-height:780px)]:pt-[max(env(safe-area-inset-top),0.5rem)] [@media(max-height:780px)]:pb-[max(env(safe-area-inset-bottom),0.5rem)] overflow-x-hidden">
+        <motion.div {...MONTEE} className="flex flex-col items-center max-w-md w-full py-1 md:py-8 gap-2.5 md:gap-6 [@media(max-height:780px)]:gap-1.5">
           
           <div className="flex flex-col items-center text-center gap-0.5 md:gap-2">
             <h1 className="text-3xl sm:text-4xl md:text-6xl [@media(max-height:780px)]:text-2xl font-black font-display text-destructive tracking-tight uppercase drop-shadow-md">
@@ -119,7 +119,6 @@ export function OverScreen() {
           </div>
 
         </motion.div>
-      </div>
-    </div>
+    </TenirDansLEcran>
   );
 }

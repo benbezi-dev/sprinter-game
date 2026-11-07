@@ -267,7 +267,7 @@ export function FinDuDefi() {
       {/* COUCHE, EN DEUX COLONNES : le verdict et les boutons a gauche, le
           tableau a droite. En une colonne, les huit lignes poussaient REJOUER
           sous le bord de l'ecran. */}
-      <div className="m-auto w-full max-w-[420px] flex flex-col gap-3 court:gap-2
+      <div className="m-auto w-full max-w-md flex flex-col gap-3 court:gap-2
                       court:landscape:max-w-[800px] court:landscape:grid court:landscape:grid-cols-2
                       court:landscape:gap-x-6 court:landscape:items-center">
         <div className="text-center flex flex-col items-center gap-1

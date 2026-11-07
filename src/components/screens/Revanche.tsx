@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { MONTEE, RESSORT, SURGISSEMENT } from '@/lib/mouvement';
 import { Timer, Trophy, RotateCcw, Lightbulb, Check, Play } from 'lucide-react';
+import { TenirDansLEcran } from '@/components/TenirDansLEcran';
 import {
   useObjectif, soumettreCourse, relancerObjectif, quitterObjectif,
   minutesRestantes, fenetreFinie, s2, type Resultat, type Objectif,
@@ -143,12 +144,7 @@ export function Revanche() {
   const bonus = res?.avantBonus ?? Math.max(0, ECHECS_AVANT_CONSEIL - s.courses);
 
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto bg-black/85 backdrop-blur-sm
-                    overflow-y-auto px-[max(env(safe-area-inset-left),1rem)]
-                    pr-[max(env(safe-area-inset-right),1rem)]
-                    pt-[max(env(safe-area-inset-top),1rem)]
-                    pb-[max(env(safe-area-inset-bottom),1rem)]">
-      <div className="min-h-full flex flex-col items-center justify-center w-full">
+    <TenirDansLEcran className="w-full h-full flex flex-col pointer-events-auto bg-black/85 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] overflow-x-hidden">
         <motion.div {...MONTEE}
           className="flex flex-col items-center max-w-md w-full gap-4 py-6">
 
@@ -259,8 +255,7 @@ export function Revanche() {
             {N.t('obj_quitter')}
           </button>
         </motion.div>
-      </div>
-    </div>
+    </TenirDansLEcran>
   );
 }
 /**

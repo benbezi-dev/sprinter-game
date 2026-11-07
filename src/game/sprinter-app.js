@@ -2094,6 +2094,19 @@ import { sponsorDeLaCourse } from './panneaux';
       if (d.scores) G.scores = d.scores;
       if (d.runs) G.runs = Object.assign(G.runs, d.runs);
       if (d.furthest) G.furthest = Object.assign(G.furthest, d.furthest);
+      // LES CHRONOS DE RELAIS D'AVANT L'ALLURE (l'auteur, 07/11 : « retire les chronos et les records sur 4x100 ») :
+      // jusqu'au 07/11 le relais se courait sans ALLURE_DU_JOUEUR, ~32 s, hors d'atteinte depuis. Une fois par appareil.
+      if (!d.relaisAllure) {
+        Object.keys(G.scores).forEach(k => { if (k.indexOf('4x100:') === 0) delete G.scores[k]; });
+        delete G.runs['4x100'];
+        try {
+          const h = JSON.parse(localStorage.getItem(HIST) || '[]');
+          // (1794011132000 : fin du deploiement de l'allure du relais, 07/11/2026 00:25 UTC)
+          localStorage.setItem(HIST, JSON.stringify(h.filter(e => !(e && e.r === '4x100' && e.d < 1794011132000))));
+        } catch (e) { /* historique illisible : rien a retirer */ }
+        G.relaisAllure = true;
+        save();
+      }
       N.setLang(d.lang || N.detect());
     } catch (e) { N.setLang(N.detect()); }
   }
@@ -2101,6 +2114,7 @@ import { sponsorDeLaCourse } from './panneaux';
     try {
       localStorage.setItem(SAVE, JSON.stringify({
         scores: G.scores, runs: G.runs, furthest: G.furthest,
+        relaisAllure: !!G.relaisAllure,
         lang: N.getLang()
       }));
     } catch (e) { }
@@ -2206,12 +2220,49 @@ import { sponsorDeLaCourse } from './panneaux';
   })();
   function enTroisD(table, cle) { return RENDU_3D ? table[cle] : undefined; }
 
+  // DIFFICULTE RELEVEE (l'auteur, 07/11 : « trop lent », et la salle n'a pas la base du plein air). En 3D, chaque
+  // niveau est le chrono que le joueur fait a une cadence donnee, mesure sur CE moteur et pour CHAQUE epreuve (salle et
+  // haies comprises, chacune sa courbe et son record) : niveau 1 battu a 8 appuis/s, 2 a 10, 3 a 13, 4 a 16, 5 a 19,
+  // ZEZE a 24 ; l'adversaire le plus lent du niveau est le chrono a la cadence du palier d'en dessous (7 / 8,5 / 10,5 /
+  // 13 / 15 / 20). Chronos 3D finaux, en secondes. Aux haies la courbe plafonne vers 15 appuis/s (l'appel commande) :
+  // les niveaux 4 a 6 du 110 m haies et du 60 m haies hommes sont lisses a la main pour garder un ecart entre eux.
+  // RETOUCHE DE L'AUTEUR (07/11) : niveaux 1, 3, 5 et ZEZE du 60, 100, 200, 400 et 400 m salle donnes a la main ; le
+  // niveau 4 est pose entre le 3 et le 5. Le 200 m salle et les haies gardent la mesure.
+  // Remesurer (tools/records-du-monde-test.mjs, fonctions parfait / haiesJouees) si ALLURE_DU_JOUEUR ou la physique change.
+  const PLATEAUX_3D = {
+    '60':   [[8.57, 10.41], [7.76, 8.31], [7.30, 7.67], [7.12, 7.30], [6.99, 7.12], [6.89, 6.99]],
+    '100':  [[12.56, 14.95], [11.14, 12.03], [10.64, 11.02], [10.45, 10.64], [10.35, 10.45], [10.05, 10.30]],
+    '200':  [[23.75, 27.63], [21.09, 22.59], [20.52, 20.96], [20.40, 20.52], [20.20, 20.40], [19.90, 20.20]],
+    '400':  [[50.27, 57.85], [45.84, 47.58], [45.70, 45.90], [45.50, 45.75], [45.30, 45.60], [45.00, 45.20]],
+    '200s': [[27.35, 32.02], [23.13, 25.77], [21.66, 22.69], [21.19, 21.66], [20.91, 21.31], [20.64, 20.84]],
+    '400s': [[56.64, 65.33], [48.79, 53.55], [47.60, 48.27], [47.45, 47.75], [47.20, 47.60], [46.90, 47.20]],
+    '100h': [[16.04, 18.39], [13.86, 15.33], [12.99, 13.54], [12.79, 12.99], [12.58, 12.79], [12.45, 12.55]],
+    '110h': [[16.64, 19.10], [14.54, 15.20], [14.05, 14.31], [13.45, 14.05], [13.25, 13.45], [13.10, 13.25]],
+    '400h': [[51.69, 56.38], [49.45, 50.86], [48.66, 49.45], [48.22, 48.66], [47.56, 48.22], [47.27, 47.56]],
+    '60h':  [[9.60, 11.00], [8.58, 9.16], [7.95, 8.15], [7.76, 7.95], [7.62, 7.76], [7.40, 7.55]],
+    '60hf': [[10.36, 12.21], [8.82, 9.87], [8.47, 8.79], [8.32, 8.47], [8.11, 8.32], [7.90, 8.11]],
+    // Le relais, mesure avec tools/relais-simulation.mjs (quatre relayeurs a la meme cadence, allure du 100 m comme en
+    // jeu, meilleurs placement et depart, passages parfaits). Les passages plafonnent le haut ; la simulation n'a pas
+    // tenu au-dela de 20 appuis/s : ZEZE est estime juste sous les 39,22 s de 20 appuis/s.
+    '4x100': [[48.37, 54.75], [40.90, 45.70], [39.96, 40.29], [39.50, 39.96], [39.25, 39.50], [38.95, 39.22]],
+  };
+  // Le reste (2D par ?rendu=2d) : les tables d'origine, -10 % aux niveaux 1 a 5 et -3 % aux ZEZE.
+  const DURCI = [0.90, 0.90, 0.90, 0.90, 0.90, 0.97];
+  function plateauDuNiveau(R, i) {
+    const p3 = RENDU_3D && PLATEAUX_3D[R.key] && PLATEAUX_3D[R.key][i];
+    // buildLevel multiplie le tirage par CONVERSION_ADVERSAIRES en 3D : on la retire ici pour tomber sur le chrono vise.
+    if (p3) { const c = K.CONVERSION_ADVERSAIRES[R.key] || 1; return [p3[0] / c, p3[1] / c]; }
+    const r = R.ranges && R.ranges[i];
+    const k = DURCI[i] || 1;
+    return r ? [r[0] * k, r[1] * k] : undefined;
+  }
+
   function enDessousDuNiveau(R, idx) {
     const s = G.runSplits;
     if (!s || !s.length) return false;
     if (G.mode === 'oneshot' && G.shotRaces[G.shotIdx - 1] !== G.raceKey) return false;
     const precedent = s[s.length - 1];
-    const bornes = R.ranges && R.ranges[idx];
+    const bornes = plateauDuNiveau(R, idx);
     if (precedent == null || !bornes) return false;
     return precedent > bornes[1] * (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1);
   }
@@ -2397,7 +2448,7 @@ import { sponsorDeLaCourse } from './panneaux';
     // index hors du tableau court au stade olympique.
     // Une marche de la carriere d'athlete peut porter ses chronos (game/athlete/regles.ts).
     const impose = G.reglagesJoueur && G.reglagesJoueur.plateau;
-    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
+    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || plateauDuNiveau(R, idx) || plateauDuNiveau(R, MONDIAUX);
     // UN CHRONO FIXE, pour qui en a un. Un athlete reel qu'on vient defier
     // (voir `cibles`, STADES_HORS_SERIE) court le meme temps a chaque
     // tentative : sans cela, « le battre » dependrait du tirage.

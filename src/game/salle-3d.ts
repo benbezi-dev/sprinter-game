@@ -383,7 +383,9 @@ export function construireSalle(ctx: ContexteSalle) {
   const tartan = (rgb: number[], base: THREE.MeshStandardMaterial) => {
     if (exporter) return base;
     const m = new THREE.MeshStandardMaterial({
-      color: new THREE.Color().setRGB(rgb[0] / 255 / 0.82, rgb[1] / 255 / 0.82, rgb[2] / 255 / 0.82, THREE.SRGBColorSpace),
+      // La texture multiplie en lineaire : compenser sa moyenne apres la conversion sRGB.
+      color: new THREE.Color().setRGB(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255, THREE.SRGBColorSpace).multiplyScalar(1 / 0.82),
+      toneMapped: false, // Garder les teintes du tartan sans la desaturation d'ACES.
       map: photo('tartan.jpg', 0.32, false), normalMap: photo('tartan-relief.jpg', 0.32, false), normalScale: new THREE.Vector2(1, 1),
       roughnessMap: photo('tartan-rugosite.jpg', 0.32, false), roughness: 1, metalness: 0,
     });

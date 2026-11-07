@@ -7,7 +7,7 @@ import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
 import { ChampPanel } from './ChampPanel';
 import { RelaisPanel } from './RelaisPanel';
-import { RELAIS_OUVERT, TROIS_D_OUVERTE } from '@/game/canal';
+import { RELAIS_OUVERT, TROIS_D_OUVERTE, lieuParDefaut } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
@@ -34,13 +34,16 @@ export function OneShotPanel() {
   const idxSalle = LEVELS.findIndex((l: any) => l.salle);
   // (Hurdlers aussi depuis le 02/11 : le 60 m haies, femmes et hommes, au meme stade couvert)
   const salleOuverte = (jeu === 'sprinter' || jeu === 'hurdlers') && TROIS_D_OUVERTE && idxSalle >= 0;
-  const [lieu, setLieu] = useState<Lieu>('dehors');
+  const [lieu, setLieu] = useState<Lieu>(lieuParDefaut);
   const enSalle = salleOuverte && lieu === 'salle';
   const RACE_KEYS = (salleOuverte
     ? epreuvesDuLieu(jeu, enSalle ? 'salle' : 'dehors')
     : epreuvesDuJeu(jeu).filter(k => epreuvesDuLieu(jeu, 'dehors').includes(k))) as readonly RaceKey[];
   const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
-  useEffect(() => { setLieu('dehors'); setPicked([epreuvesDuLieu(jeu, 'dehors')[0]]); }, [jeu]);
+  useEffect(() => {
+    const l = salleOuverte ? lieuParDefaut() : 'dehors';
+    setLieu(l); setPicked([epreuvesDuLieu(jeu, l)[0]]);
+  }, [jeu]);
   const niveau = enSalle ? idxSalle : level;
 
   const basculer = (vers: Lieu) => {
