@@ -101,7 +101,7 @@ android {
         // Legende (canal de test seulement).
         // 20 : le 60 m, le 200 et le 400 en salle ; le toit ne couvre plus la ligne droite (vc18 et 19 construits le 31/10).
         // 21 : la carriere en salle ne fige plus a la derniere arrivee, son generique se joue dans la salle Jesse Owens en 3D.
-        versionCode 26
+        versionCode 27
         versionName "1.0.9"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
