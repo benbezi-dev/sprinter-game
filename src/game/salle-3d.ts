@@ -482,6 +482,7 @@ export function construireSalle(ctx: ContexteSalle) {
     m.scale.x = -1;   // le monde est en miroir (course-3d.ts) : le chiffre se lit a l'endroit
   };
   for (let k = 0; k < NC_DROITE; k++) numero(k + 1, DEPART_60 - 1.4, yD + (k + 0.5) * CW_DROITE, 0.95);
+  for (let k = 0; k < NC_DROITE; k++) numero(k + 1, ARRIVEE_60 - 1.4, yD + (k + 0.5) * CW_DROITE, 0.95); // et avant l'arrivee du 60 m (l'auteur, 7/11)
   for (let k = 0; k < NC; k++) numero(k + 1, -1.2, (k + 0.5) * CW, 0.75);
   for (const total of [200, 400]) for (let k = 1; k < NC; k++) {
     const rm = RS + k * CW + SALLE.mesN;
