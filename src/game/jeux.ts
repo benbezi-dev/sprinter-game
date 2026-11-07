@@ -24,7 +24,7 @@ import { HAIES } from './haies.js';
 import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
 import { allerAu, mondeCourant, type Monde } from './mondes';
-import { HAIES_OUVERTES, SAUTS_OUVERTS, VEDETTES_LANCEES, TROIS_D_OUVERTE } from './canal';
+import { HAIES_OUVERTES, SAUTS_OUVERTS, VEDETTES_LANCEES, TROIS_D_OUVERTE, lieuParDefaut } from './canal';
 import { habillerLeJoueur, skinPorte, skinGagne, lookDuSkin } from './vestiaire';
 import { VEDETTES, defiPossible, maillageDe } from './vedettes';
 
@@ -225,7 +225,7 @@ export function changerDeJeu(jeu: Jeu, construire = true) {
   } else if (!construire) {
     if (G.raceKey && jeuDe(G.raceKey) === jeu) derniere[jeu] = G.raceKey;
   } else {
-    const cle = derniere[jeu] || EPREUVES_DU_JEU[jeu][0];
+    const cle = derniere[jeu] || epreuvesDuLieu(jeu, lieuParDefaut())[0];
     G.raceKey = cle;
     G.race = SprinterCore.RACES[cle];
     SprinterApp.buildLevel(0);

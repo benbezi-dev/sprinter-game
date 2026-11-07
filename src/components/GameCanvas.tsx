@@ -7,7 +7,7 @@ import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
 import { jeuCourant } from '@/game/jeux';
 import { cameraPour } from '@/game/cadrage';
-import { POUSSEE_OUVERTE, RENDU_3D } from '@/game/canal';
+import { POUSSEE_OUVERTE, RENDU_3D, lieuParDefaut } from '@/game/canal';
 import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
@@ -213,6 +213,8 @@ export function GameCanvas() {
     
     // Initial game state setup if needed
     if (SprinterApp.G.state === 'open' && !SprinterApp.G.track) {
+      // la carriere ouvre sur le 60 m en salle jusqu'en mars 2027 (canal.ts, lieuParDefaut) ; la salle n'existe qu'en 3D
+      if (RENDU_3D && lieuParDefaut() === 'salle' && SprinterApp.G.raceKey === '100' && SprinterApp.RACES['60']) SprinterApp.G.raceKey = '60';
       SprinterApp.G.race = SprinterApp.RACES[SprinterApp.G.raceKey];
       SprinterApp.buildLevel(0);
     }
