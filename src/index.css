@@ -273,7 +273,8 @@
    l'echelle, et l'on retrouverait les bandes vides qu'on vient d'enlever.
    `--tenir` porte l'echelle du moment ; la borne suit, et c'est bien 42rem
    qu'on voit. Sans elle — et donc partout ailleurs — la valeur ne bouge. */
-.largeur-tenue { max-width: calc(42rem / var(--tenir, 1)); }
+/* 28rem depuis le 07/11 : la largeur des boutons, celle de tous les ecrans de fin. */
+.largeur-tenue { max-width: calc(28rem / var(--tenir, 1)); }
 
 /* L'ecran de fin de course, quand la hauteur manque.
    Il empile huit panneaux — resultat du duel, chronos, TOP 500, defi, image,

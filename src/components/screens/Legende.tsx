@@ -22,6 +22,7 @@ import { CinematiqueVoyage, CinematiqueApotheose, CinematiqueSacre } from './Leg
 import { PORTRAITS, TEINTES } from './legende-commun';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
+import { TenirDansLEcran } from '@/components/TenirDansLEcran';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE LEGENDE — les ecrans du mode
@@ -406,8 +407,8 @@ export function FinDEtapeLegende() {
   const reprises = reprisesDeLaLegende();
 
   return (
-    <div className="absolute inset-0 z-30 pointer-events-auto flex items-center justify-center
-                    bg-[rgba(8,5,16,0.88)] px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
+    <>
+      <TenirDansLEcran className="absolute inset-0 z-30 pointer-events-auto overflow-y-auto overflow-x-hidden bg-[rgba(8,5,16,0.88)] px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <motion.div {...PANNEAU} className="w-full max-w-md flex flex-col items-center gap-3 text-center">
         <span className="text-[10px] font-bold tracking-[0.28em]" style={{ color: teinte }}>
           {mot('etape', { n: v.rang + 1 })} · {v.lieu.nom.toUpperCase()}
@@ -468,10 +469,11 @@ export function FinDEtapeLegende() {
           </button>
         </div>
       </motion.div>
-      {sacre && <CinematiqueSacre onFin={() => setSacre(false)} />}
-      <AnimatePresence>
-        {annonce && <Affiche onPartir={() => { setAnnonce(false); lancerLEtape(); }} onFermer={() => { setAnnonce(false); accueil(); }} />}
-      </AnimatePresence>
-    </div>
+      </TenirDansLEcran>
+    {sacre && <CinematiqueSacre onFin={() => setSacre(false)} />}
+    <AnimatePresence>
+      {annonce && <Affiche onPartir={() => { setAnnonce(false); lancerLEtape(); }} onFermer={() => { setAnnonce(false); accueil(); }} />}
+    </AnimatePresence>
+    </>
   );
 }
