@@ -224,11 +224,14 @@ for (const f of FICHIERS) {
   ok(`${f} ne nomme rien de reel`, touches.length === 0, touches.join(', '));
 }
 
-// Le theme lui-meme : des couleurs, et rien qui ressemble a un logo.
+// Le theme lui-meme : des couleurs, et rien qui ressemble a un logo. On lit
+// son CODE, comme pour les fichiers ci-dessus : le commentaire de `pubsLed`
+// parle des panneaux du sponsor, au sens generique, et il ne part pas chez le
+// joueur. Une cle `logo:` ou une valeur qui nomme un sponsor, elles, si.
 const app = lire('src/game/sprinter-app.js');
 const theme = app.slice(app.indexOf('    danube: {'));
 ok('le theme du Danube ne porte que des couleurs et des drapeaux de rendu',
-   !/logo|embleme|emblem|sponsor|marque/i.test(theme.slice(0, theme.indexOf('\n    }'))));
+   !/logo|embleme|emblem|sponsor|marque/i.test(sansCommentaires(theme.slice(0, theme.indexOf('\n    }')))));
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
 process.exit(e ? 1 : 0);

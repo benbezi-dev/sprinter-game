@@ -20,6 +20,7 @@ import { build } from 'esbuild';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { doublurePrecharge } from './doublure-precharge.mjs';
 import { avantDepart } from '../worker/src/depart.js';
 
 let e = 0;
@@ -49,7 +50,7 @@ async function moteurDe(canal) {
   const sortie = join(dossier, 'paquet.mjs');
   writeFileSync(entree, `export * from '${join(process.cwd(), 'src/game/engine.ts')}';`);
   await build({
-    entryPoints: [entree], outfile: sortie, bundle: true,
+    entryPoints: [entree], outfile: sortie, bundle: true, plugins: [doublurePrecharge],
     format: 'esm', platform: 'node', logLevel: 'silent',
     define: {
       'import.meta.env.VITE_CANAL': JSON.stringify(canal),
