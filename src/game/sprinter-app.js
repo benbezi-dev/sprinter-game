@@ -2094,6 +2094,19 @@ import { sponsorDeLaCourse } from './panneaux';
       if (d.scores) G.scores = d.scores;
       if (d.runs) G.runs = Object.assign(G.runs, d.runs);
       if (d.furthest) G.furthest = Object.assign(G.furthest, d.furthest);
+      // LES CHRONOS DE RELAIS D'AVANT L'ALLURE (l'auteur, 07/11 : « retire les chronos et les records sur 4x100 ») :
+      // jusqu'au 07/11 le relais se courait sans ALLURE_DU_JOUEUR, ~32 s, hors d'atteinte depuis. Une fois par appareil.
+      if (!d.relaisAllure) {
+        Object.keys(G.scores).forEach(k => { if (k.indexOf('4x100:') === 0) delete G.scores[k]; });
+        delete G.runs['4x100'];
+        try {
+          const h = JSON.parse(localStorage.getItem(HIST) || '[]');
+          // (1794011132000 : fin du deploiement de l'allure du relais, 07/11/2026 00:25 UTC)
+          localStorage.setItem(HIST, JSON.stringify(h.filter(e => !(e && e.r === '4x100' && e.d < 1794011132000))));
+        } catch (e) { /* historique illisible : rien a retirer */ }
+        G.relaisAllure = true;
+        save();
+      }
       N.setLang(d.lang || N.detect());
     } catch (e) { N.setLang(N.detect()); }
   }
@@ -2101,6 +2114,7 @@ import { sponsorDeLaCourse } from './panneaux';
     try {
       localStorage.setItem(SAVE, JSON.stringify({
         scores: G.scores, runs: G.runs, furthest: G.furthest,
+        relaisAllure: !!G.relaisAllure,
         lang: N.getLang()
       }));
     } catch (e) { }
