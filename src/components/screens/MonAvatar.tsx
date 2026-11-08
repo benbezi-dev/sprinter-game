@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { UserRound } from 'lucide-react';
 import { SprinterApp, SprinterCore, SprinterI18N } from '@/game/engine';
+import { POSTURES } from '@/game/athlete/postures';
 import { useVestiaire, choisirAvatar, PEAUX, COIFFURES, CHEVEUX, type Avatar } from '@/game/vestiaire';
 
 const dans = (t: [string, string]) => t[SprinterI18N.index()];
@@ -20,7 +21,7 @@ function Apercu({ av }: { av: Avatar | null }) {
     cv.width = Math.round(haut * 0.7 * dpr); cv.height = Math.round(haut * dpr);
     const c = cv.getContext('2d')!;
     // PLAYER_LOOK porte deja l'avatar (vestiaire.ts) : une copie, pour ne rien laisser au dessin
-    const corps = { look: { ...SprinterCore.PLAYER_LOOK }, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0 } as any;
+    const corps = { look: { ...SprinterCore.PLAYER_LOOK }, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0, posture: POSTURES.debout() } as any; // debout, pas en pleine foulee
     let id = 0;
     const tic = (t: number) => {
       c.clearRect(0, 0, cv.width, cv.height);
