@@ -55,8 +55,8 @@ export function BanderoleEpreuves() {
   return (
     <motion.div {...MONTEE}
       className="w-full rounded-2xl border-2 border-primary/60 bg-card px-3 py-2.5 flex flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-white/90 truncate">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-white/90 whitespace-nowrap">
           {fr ? 'Championnat de France · 19/12' : 'French Championship · 19/12'}
         </span>
         <span className="text-[9px] font-bold tracking-[0.1em] uppercase text-primary whitespace-nowrap">
