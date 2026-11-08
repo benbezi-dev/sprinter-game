@@ -701,7 +701,39 @@ function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: 
   const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
   return t;
 }
-function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void) {
+/**
+ * L'EXTINCTION DE LA SALLE, avant la presentation d'une serie (l'auteur, 8/11) : quatre secondes. Les plafonniers
+ * s'eteignent en trois rangees, chacune avec son clignotement (0,8 s, 1,4 s, 2 s) ; puis les neons s'allument comme
+ * de vrais tubes, en hesitant (2,6 a 3,4 s) — les couloirs, les fleches, les logos, le tapis. Elle part au premier
+ * moment d'avant-course (la cinematique d'intro ou le decompte) et ne revient jamais en arriere : la salle reste noire.
+ */
+const DUREE_EXTINCTION = 4;
+function lExtinction(eteindre: (lumiere: number, neons: number) => void, eclairer: (k: number) => void) {
+  const RANGEES = [0.8, 1.4, 2.0];
+  const ALLUMAGE: [number, number][] = [[2.6, 0.6], [2.7, 0], [2.8, 1], [2.95, 0.2], [3.05, 1], [3.3, 0.7], [3.4, 1]];
+  let debut = -1, fini = false;
+  return (t: number) => {
+    if (fini) return;
+    const G = (globalThis as any).SprinterApp?.G;
+    const avant = !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
+    if (debut < 0) { if (!avant) return; debut = t; }
+    const e = t - debut;
+    // la lumiere : un tiers de moins a chaque rangee, et 0,18 s de clignotement au moment ou elle tombe
+    let lumiere = 1;
+    for (let i = 0; i < RANGEES.length; i++) {
+      const f = e - RANGEES[i];
+      if (f < 0) break;
+      const avantR = 1 - i / RANGEES.length, apres = 1 - (i + 1) / RANGEES.length;
+      lumiere = f < 0.18 && Math.floor(f / 0.045) % 2 === 0 ? avantR : apres;
+    }
+    let neons = 0;
+    for (const [a, v] of ALLUMAGE) if (e >= a) neons = v;
+    eteindre(lumiere, neons); eclairer(lumiere);
+    if (e > DUREE_EXTINCTION) fini = true;
+  };
+}
+
+function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0) {
   const n = T.lanes || nCouloirs, cw = (T.salle && T.salle.couloir) || LANE_W;
   type Couloir = { nom: THREE.Mesh; mat: THREE.MeshBasicMaterial; trace: THREE.Mesh; tmat: THREE.MeshBasicMaterial; ecrit: string };
   const couloirs: Couloir[] = [];
@@ -749,7 +781,7 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
     const avant = !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
     if (!avant) { debut = -1; presente = -1; for (let k = 0; k < n; k++) { couloirs[k].mat.opacity = couloirs[k].tmat.opacity = 0; fleches?.(k, 1); } return; }
     if (debut < 0) debut = t;
-    const e = t - debut, i = Math.floor(e / PRES_PAS), dans = e - i * PRES_PAS;
+    const e = t - debut - retard, i = e < 0 ? -1 : Math.floor(e / PRES_PAS), dans = e - i * PRES_PAS;
     const ordre = (G.runners || []).slice().sort((a: any, b: any) => (a.lane | 0) - (b.lane | 0));
     const lui = ordre[i];
     // prototype : le pistolet attend la fin de la presentation (le vrai championnat suspend countT, voir engine.ts)
@@ -986,21 +1018,40 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // LA SALLE : sous le toit — ni ciel, ni pelouse, ni gradins du stade ; sa propre lumiere, de jour ou de nuit
     // (le theme `salle` ne suit pas l'heure : on lit le moment du joueur, ?heure= compris)
     const nuitSalle = (globalThis as any).SprinterHeure?.moment((globalThis as any).SprinterApp?.G) === 'nuit';
-    // LA FINALE DANS LE NOIR (Championnat de France du 19/12) : ?finale=1 pour l'essayer
-    const finaleNoire = Q.get('finale') === '1';
-    const SL = finaleNoire ? SALLE_FINALE : nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
-    scene.background = new THREE.Color(SL.fond);
-    scene.fog = new THREE.Fog(SL.brume, 110, 320);
-    hemi.color.set(SL.hemiCiel); hemi.groundColor.set(SL.hemiSol); hemi.intensity = SL.hemi;
-    soleil.color.set(SL.soleilCouleur); soleil.intensity = SL.soleil;
+    // LA COMPETITION DANS LE NOIR (Championnat de France du 19/12 ; l'auteur, 8/11 : « toute la competition se deroulera
+    // dans le noir ; une animation pour passer de la salle classique a la salle dans le noir pour chaque serie, ensuite
+    // on garde la salle dans le noir pour les demies et la finale »). En attendant le branchement au championnat :
+    // ?serie=1 (la salle allumee s'eteint avant la presentation), ?finale=1 (demies et finale : deja dans le noir).
+    const tourChamp: 'serie' | 'noir' | null = Q.get('finale') === '1' ? 'noir' : Q.get('serie') === '1' ? 'serie' : null;
+    const finaleNoire = tourChamp !== null;
+    const SL0 = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
+    scene.background = new THREE.Color(SL0.fond);
+    scene.fog = new THREE.Fog(SL0.brume, 110, 320);
     soleilDecal.set(-6, 10, 40);
-    uFoule.uLum.value = finaleNoire ? 0.32 : 1; uLisere.value = 0;
+    uLisere.value = 0;
+    /** La lumiere de la salle, de 1 (allumee, SL0) a 0 (eteinte, SALLE_FINALE) : le ciel, la brume, les lumieres, le public. */
+    const _c0 = new THREE.Color(), _c1 = new THREE.Color();
+    const eclairerSalle = (k: number) => {
+      const melange = (a: number, b: number, c: THREE.Color) => c.copy(_c0.set(b)).lerp(_c1.set(a), k);
+      melange(SL0.fond, SALLE_FINALE.fond, scene.background as THREE.Color);
+      melange(SL0.brume, SALLE_FINALE.brume, (scene.fog as THREE.Fog).color);
+      melange(SL0.hemiCiel, SALLE_FINALE.hemiCiel, hemi.color); melange(SL0.hemiSol, SALLE_FINALE.hemiSol, hemi.groundColor);
+      melange(SL0.soleilCouleur, SALLE_FINALE.soleilCouleur, soleil.color);
+      hemi.intensity = SALLE_FINALE.hemi + (SL0.hemi - SALLE_FINALE.hemi) * k;
+      soleil.intensity = SALLE_FINALE.soleil + (SL0.soleil - SALLE_FINALE.soleil) * k;
+      uFoule.uLum.value = 0.32 + 0.68 * k;
+    };
+    eclairerSalle(tourChamp === 'noir' ? 0 : 1);
     if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
     envCorps = envPalais;
     eclairerLesCorps();
     const base = (import.meta as any).env?.BASE_URL || '/';
     const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle, finale: finaleNoire, droite: !T.curved });
     pubAnim.push(salle.animer); cameraSalle = salle.camera;
+    if (tourChamp) {
+      salle.eteindre(tourChamp === 'noir' ? 0 : 1, tourChamp === 'noir' ? 1 : 0);
+      if (tourChamp === 'serie') pubAnim.push(lExtinction(salle.eteindre, eclairerSalle));
+    }
     // L'ECRAN GEANT DE LA SALLE (l'auteur, 8/11) : le film de promotion quinze secondes, puis six secondes de la
     // campagne en cours (panneaux.ts) ou, sans campagne, du logo BENBEZI balaye d'un reflet ; en boucle
     {
@@ -1057,7 +1108,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       blocsSalle.push(...salle.interieur.children.slice(n0));
     }
     finaleVue = finaleNoire;
-    if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches));
+    // (en serie, la presentation attend la fin de l'extinction)
+    if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches, tourChamp === 'serie' ? DUREE_EXTINCTION : 0));
     return;
   }
   if (espace) espaceAutour(th, hasard);
