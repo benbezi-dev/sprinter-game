@@ -712,7 +712,7 @@ const milieu = (T: any, k: number) => {
 // Le joueur : « TOI », en or. Au pistolet, plus rien sur la piste — on court dans le noir, lignes allumees.
 const PRES_PAS = 3;
 /** La finale : le couloir presente (-1 : aucun) et le point ou s'ecrit son nom — la camera le cadre. */
-let finaleVue = false, presente = -1, finActive = false;
+let finaleVue = false, presente = -1, finActive = false, presenteTexte = '';
 const presenteOu = new THREE.Vector3(), finCam = new THREE.Vector3(), finVise = new THREE.Vector3();
 function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: number, h: number) => void) {
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
@@ -769,6 +769,24 @@ const sonDeSalle = {
       g.gain.exponentialRampToValueAtTime(a, t + 1.8); g.gain.setValueAtTime(a, t + 2.3); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
       n.connect(f).connect(g).connect(A.sortie); n.start(t);
     }
+  },
+  /** L'ovation d'un nom : des applaudissements serres (un bruit haché) et la clameur qui monte, plus fort pour toi. */
+  ovation(moi = false) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.02, d = 2.4, f = moi ? 1.5 : 1;
+    const n = this.bruit(ctx, d), ch = (n.buffer as AudioBuffer).getChannelData(0), sr = ctx.sampleRate;
+    // des centaines de mains : chaque claquement, 4 ms de bruit, place au hasard (plus dense au milieu)
+    for (let i = 0; i < ch.length; i++) ch[i] *= 0.15;
+    for (let c = 0; c < 900 * d; c++) {
+      const u = Math.random(), at = (u * u * (3 - 2 * u)) * (ch.length - 200) | 0, a = 0.4 + Math.random() * 0.6;
+      for (let j = 0; j < 180; j++) ch[at + j] += (Math.random() * 2 - 1) * a * Math.exp(-j / 30);
+    }
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09 * f, t + 0.25); g.gain.setValueAtTime(0.09 * f, t + 1.2); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    n.connect(hp).connect(g).connect(A.sortie); n.start(t);
+    const cl = this.bruit(ctx, d), bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 650; bp.Q.value = 0.9;
+    const gc = this.enveloppe(ctx, t, 0.12 * f, 0.4, d - 0.4); cl.connect(bp).connect(gc).connect(A.sortie); cl.start(t);
   },
   /** Un tube neon qui s'amorce : un ping, puis le bourdon du ballast. */
   neon(dur = 0.12) {
@@ -847,6 +865,53 @@ function lesLampesDuPublic(groupe: THREE.Group, pos: number[], hasard: () => num
     geo.attributes.color.needsUpdate = true;
   };
 }
+/**
+ * LES PROJECTEURS DE POURSUITE (l'auteur, 9/11 : « une atmosphere de grande competition ») : deux faisceaux tombent du
+ * toit, de part et d'autre de la piste, sur le nom qui s'ecrit (presenteOu) et le suivent de couloir en couloir ; une
+ * tache de lumiere au sol. Ils s'eteignent quand la presentation finit. Cones additifs, aucune vraie lumiere (cout nul
+ * pour les matieres).
+ */
+function lesPoursuites(groupe: THREE.Group) {
+  const degrade = peinte(4, 64, (c, w, h) => {
+    const g = c.createLinearGradient(0, 0, 0, h);   // (haut du dessin = v 1 = le sommet du cone, la source)
+    g.addColorStop(0, 'rgba(235,245,255,0.8)'); g.addColorStop(0.3, 'rgba(210,228,255,0.3)'); g.addColorStop(0.85, 'rgba(190,215,255,0.08)'); g.addColorStop(1, 'rgba(190,215,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  });
+  const tache = peinte(64, 64, (c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(255,252,245,0.9)'); g.addColorStop(0.3, 'rgba(240,244,255,0.45)'); g.addColorStop(0.65, 'rgba(210,225,255,0.12)'); g.addColorStop(1, 'rgba(200,220,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  });
+  const geo = new THREE.ConeGeometry(1, 1, 28, 1, true); geo.translate(0, -0.5, 0);   // le sommet a l'origine, la base en -y
+  const bas = new THREE.Vector3(0, -1, 0), dir = new THREE.Vector3(), cible = new THREE.Vector3(), vise = new THREE.Vector3();
+  const faisceaux = [-1, 1].map(cote => {
+    const mat = new THREE.MeshBasicMaterial({ map: degrade, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    const m = new THREE.Mesh(geo, mat); m.renderOrder = 5; m.frustumCulled = false; m.visible = false; groupe.add(m);
+    return { cote, m, mat };
+  });
+  const matT = new THREE.MeshBasicMaterial({ map: tache, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+  matT.polygonOffset = true; matT.polygonOffsetFactor = -8; matT.polygonOffsetUnits = -16;
+  const sol = new THREE.Mesh(new THREE.CircleGeometry(3, 32), matT); sol.renderOrder = 3; sol.visible = false; groupe.add(sol);
+  let k = 0, vu = -1, pret = false;
+  return (t: number) => {
+    const dt = vu < 0 ? 0 : Math.min(0.1, t - vu); vu = t;
+    k += ((presente >= 0 ? 1 : 0) - k) * Math.min(1, dt * 3);
+    const allume = k > 0.01;
+    for (const f of faisceaux) f.m.visible = allume;
+    sol.visible = allume;
+    if (!allume) { pret = false; return; }
+    cible.set(presenteOu.x, presenteOu.y, zSol(presenteOu.x, presenteOu.y));
+    if (!pret) { vise.copy(cible); pret = true; } else vise.lerp(cible, Math.min(1, dt * 4));   // le faisceau glisse vers le nom
+    for (const f of faisceaux) {
+      const src = new THREE.Vector3(vise.x - 8, vise.y + f.cote * 16, vise.z + H_TOIT_SALLE);
+      dir.subVectors(vise, src); const L = dir.length();
+      f.m.position.copy(src); f.m.quaternion.setFromUnitVectors(bas, dir.normalize()); f.m.scale.set(2.2, L, 2.2);
+      f.mat.opacity = 0.32 * k * (0.92 + 0.08 * Math.sin(t * 9 + f.cote));
+    }
+    sol.position.set(vise.x, vise.y, vise.z + 0.03); matT.opacity = 0.7 * k;
+  };
+}
+const H_TOIT_SALLE = 11.5;   // (sous la charpente de la salle, H_TOIT = 12,5 m dans salle-3d.ts)
 function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0) {
   const n = T.lanes || nCouloirs, cw = (T.salle && T.salle.couloir) || LANE_W;
   type Couloir = { nom: THREE.Mesh; mat: THREE.MeshBasicMaterial; trace: THREE.Mesh; tmat: THREE.MeshBasicMaterial; ecrit: string };
@@ -920,7 +985,10 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
     const lui = ordre[i];
     // prototype : le pistolet attend la fin de la presentation (le vrai championnat suspend countT, voir engine.ts)
     const avD = G.avantDepart; if (G.state === 'count' && avD?.attitudes) avD.reste = Math.max(avD.reste, ordre.length * PRES_PAS + 0.5 - e);
+    const avantP = presente;
     presente = lui ? (lui.lane | 0) : -1;
+    presenteTexte = lui ? (lui.isPlayer ? 'TOI' : String(lui.name || '').toUpperCase()) : '';
+    if (presente >= 0 && presente !== avantP) sonDeSalle.ovation(!!lui?.isPlayer);   // le public salue chaque nom
     if (lui) { const q = ici(T.posDemi(D_NOM, presente, milieu(T, presente))); presenteOu.set(q[0], q[1], 0); }
     for (let k = 0; k < n; k++) {
       const c = couloirs[k], r = lui && (lui.lane | 0) === k ? lui : null;
@@ -1201,6 +1269,30 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       let imageE = -1;
       pubAnim.push(t => {
         if (film.paused) film.play().catch(() => {});
+        // PENDANT LA PRESENTATION, l'ecran montre l'athlete presente, comme a la television (l'auteur, 9/11 : « une
+        // atmosphere de grande competition ») : son couloir, son nom (TOI pour le joueur), le titre de l'epreuve
+        if (finaleVue && presente >= 0) {
+          matG.map = tE;
+          const img = Math.floor(t * 30); if (img === imageE) return; imageE = img;
+          const w = 1024, h = 512, moi = presenteTexte === 'TOI';
+          ce.globalCompositeOperation = 'source-over';
+          const fond = ce.createLinearGradient(0, 0, w, h); fond.addColorStop(0, '#020616'); fond.addColorStop(1, '#0a1640');
+          ce.fillStyle = fond; ce.fillRect(0, 0, w, h);
+          ce.fillStyle = moi ? '#ffd34a' : '#3d7bff'; ce.fillRect(0, 0, 230, h);
+          ce.textAlign = 'center'; ce.textBaseline = 'middle'; ce.fillStyle = '#04050a';
+          ce.font = '900 44px Outfit, system-ui, sans-serif'; ce.fillText('COULOIR', 115, 150, 196);
+          ce.font = '900 230px Outfit, system-ui, sans-serif'; ce.fillText(String(presente + 1), 115, 315);
+          ce.textAlign = 'left'; ce.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
+          ce.font = '900 110px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 250, w - 300);
+          ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 38px Outfit, system-ui, sans-serif';
+          ce.fillText('CHAMPIONNAT DE FRANCE · SALLE', 274, 360, w - 300);
+          // le liseré qui balaie l'ecran
+          const x = ((t % 3) / 3 * 1.6 - 0.3) * w, g = ce.createLinearGradient(x - 90, 0, x + 90, 0);
+          g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.12)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+          ce.globalCompositeOperation = 'lighter'; ce.fillStyle = g; ce.fillRect(0, 0, w, h);
+          tE.needsUpdate = true;
+          return;
+        }
         const cycle = t % 21;
         if (cycle < 15 && film.readyState >= 2) { matG.map = tFilm; return; }
         matG.map = tE;
@@ -1246,6 +1338,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }
     finaleVue = finaleNoire;
     // (en serie, la presentation attend la fin de l'extinction)
+    if (finaleNoire) pubAnim.push(lesPoursuites(salle.interieur));
     if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches, tourChamp === 'serie' ? DUREE_EXTINCTION : 0));
     // UNE SEULE PASSE POUR LES LUMIERES ADDITIVES (mesure du 8/11 : la salle noire perdait la moitie de ses images) :
     // three dessine une matiere transparente double face en deux passes, dos puis face, en la marquant a recompiler
