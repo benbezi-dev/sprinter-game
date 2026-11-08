@@ -2049,6 +2049,25 @@ transformed += normalize(objectNormal) * ${e.toFixed(4)};`);
   m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -2;
 }
 
+// LE CUISSARD MONTE SOUS LE NOMBRIL (« le cuissard est trop bas au niveau du haut du ventre », l'auteur, 08/11 soir) :
+// sa zone peinte s'arrete aux hanches (0,92 m sur la coureuse), et sous une brassiere tout le ventre restait nu. Le
+// bas du ventre prend la couleur du bas jusqu'a `haut` (metres, position de repos : la limite suit le corps).
+function ceintureHaute(m: THREE.MeshStandardMaterial, couleur: THREE.Color, haut: number) {
+  const avant = m.onBeforeCompile;
+  const uBas = { value: couleur.clone() }, uHaut = { value: haut };
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.uniforms.uCeintureBas = uBas; sh.uniforms.uCeintureHaut = uHaut;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vHautRepos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHautRepos = position.y;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vHautRepos; uniform vec3 uCeintureBas; uniform float uCeintureHaut;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\nif (vHautRepos < uCeintureHaut) diffuseColor.rgb = uCeintureBas;');
+  };
+  m.customProgramCacheKey = () => 'ceinture';
+}
+
 function lisere(m: THREE.MeshStandardMaterial) {
   eclairerCorps(m);
   m.onBeforeCompile = (sh) => {
@@ -2316,6 +2335,12 @@ function corpsDe(r: any): Corps | null {
   void culotte;
   mats.ventre?.color.copy(brassiere ? rgb(L.skin) : maillot);
   mats.shortbas?.color.copy(bas);
+  if (brassiere && mats.ventre) {
+    // le haut actuel de la zone du short, sur ce corps (homme et femme n'ont pas la meme taille), plus cinq centimetres
+    let hautShort = 0;
+    copie.traverse((o: any) => { if (o.isMesh && o.material === mats.short) { o.geometry.computeBoundingBox(); hautShort = Math.max(hautShort, o.geometry.boundingBox.max.y); } });
+    if (hautShort > 0) ceintureHaute(mats.ventre, bas, hautShort + 0.05);
+  }
   if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
   if (L.kit === 'vrac' && mats.debardeur) {
