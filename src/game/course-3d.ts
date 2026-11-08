@@ -2351,7 +2351,12 @@ function corpsDe(r: any): Corps | null {
   if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
   if (L.kit === 'vrac' && mats.debardeur) {
-    maillotTripo(mats.debardeur, femme);
+    // Le maillot cuit de Tripo (maillotTripo) est cuit dans les UV de l'ANCIEN debardeur : sur les corps Tripo (e972645),
+    // ces UV tombent sur le noir de l'image (100 % des sommets, mesure) et le maillot ressortait noir. On repasse au
+    // maillot peint d'apres la position (maillotDuClub), qui ne depend pas des UV, en attendant de recuire le Tripo.
+    copie.traverse((o: any) => { if (o.isMesh && o.material === mats.debardeur) bordsDuDebardeur(o.geometry); });
+    maillotDuClub(mats.debardeur);
+    if (mats.peau) maillotDuClub(mats.peau, true);
     if (mats.dossard) dossardSousLaBande(mats.dossard);
   }
   chausserTripo(copie, femme, L.shoe);
