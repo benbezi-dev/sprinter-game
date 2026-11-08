@@ -7,6 +7,7 @@ import {
 } from '@/game/leaderboard';
 import { fetchHistory, localHistory, type Course } from '@/game/history';
 import { IdentityPanel } from './IdentityPanel';
+import { MonAvatar } from './MonAvatar';
 import { HistoriqueDefis } from './HistoriqueDefis';
 import { VEDETTES_LANCEES } from '@/game/canal';
 // LE VESTIAIRE (le panneau SKINS de MES COURSES) : du meme morceau que les
@@ -187,6 +188,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
         ) : cat === 'mine' ? (
           <>
           <IdentityPanel />
+          <MonAvatar />
           {/* Qui nous a defies cette semaine, et de quoi repartir dans
               l'autre sens. Replie : on vient d'abord ici pour ses chronos. */}
           <HistoriqueDefis race={race} onDefier={onClose} />

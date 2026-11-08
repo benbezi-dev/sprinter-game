@@ -1410,11 +1410,14 @@
   // Les etapes locales reunissent un plateau tire au hasard parmi toutes
   // les carnations (rien n'empeche deux ou six coureurs de sortir avec la
   // meme couleur, c'est un vrai tirage). A partir du championnat du monde,
-  // le plateau est exclusivement noir, comme les vraies finales du 100 m.
+  // le plateau reste surtout noir, comme les vraies finales du 100 m, mais
+  // toutes les carnations y entrent (l'auteur, 08/11 : « ajoute plus de
+  // personnes de couleurs differentes ») : les foncees comptent double.
   const SKIN_POOL = {
     divers: ['ebene', 'cacao', 'acajou', 'noisette', 'bronze', 'ambre',
              'miel', 'olive', 'sable', 'clair', 'porcelaine'],
-    sprint: ['ebene'],
+    sprint: ['ebene', 'ebene', 'cacao', 'cacao', 'acajou', 'noisette',
+             'bronze', 'ambre', 'miel', 'olive', 'sable', 'clair', 'porcelaine'],
     namek: ['vert']
   };
   // Un plateau peut imposer sa coiffure.
