@@ -285,6 +285,12 @@ export const REPLI_PAYS_TROP_PETIT = 'attendre';
 export const CLOTURE_JOURS_AVANT = 3;
 
 /**
+ * Deux championnats le meme weekend (duel des epreuves a egalite, 08/11) : la
+ * seconde edition court chaque rendez-vous 45 minutes apres la premiere.
+ */
+export const DECALAGE_PAR_EDITION_MIN = 45;
+
+/**
  * DES COURSES HORS CALENDRIER, POUR UNE EDITION PRECISE.
  *
  * Le 26/09/2026, l'organisateur a ajoute au Championnat de France (HMW36AHQ)

@@ -18,6 +18,8 @@ type Tableau = {
   ouvert: boolean; fin: number;
   epreuves: Record<Epreuve, { voix: number; joueurs: number }>;
   en_tete: Epreuve | null;
+  /** La premiere et toute epreuve a moins de 5 % d'elle : on les court toutes. */
+  retenues?: Epreuve[];
   voix_par_jour: number; mes_voix_du_jour: number;
 };
 
@@ -48,6 +50,8 @@ export function BanderoleEpreuves() {
   }, []);
   if (!t || !t.ouvert) return null;
 
+  const retenues = t.retenues ?? (t.en_tete ? [t.en_tete] : []);
+  const egalite = retenues.length > 1;
   const total = EPREUVES.reduce((s, e) => s + t.epreuves[e].voix, 0);
   const plus = t.mes_voix_du_jour < t.voix_par_jour;
   const courir = (e: Epreuve) => SprinterApp.startOneShot([e] as any, { levelIdx: 4 });
@@ -70,7 +74,7 @@ export function BanderoleEpreuves() {
         {EPREUVES.map(e => {
           const v = t.epreuves[e].voix;
           const part = total ? Math.round((v / total) * 100) : 0;
-          const tete = t.en_tete === e;
+          const tete = retenues.includes(e);
           return (
             <button key={e} onClick={() => courir(e)}
               aria-label={fr ? `Courir le ${NOM[e]} en salle, ${v} voix` : `Run the indoor ${NOM[e]}, ${v} votes`}
@@ -79,7 +83,7 @@ export function BanderoleEpreuves() {
                 initial={{ width: 0 }} animate={{ width: `${part}%` }} transition={{ duration: 0.8, ease: 'easeOut' }} />
               <span className="relative h-full px-3 flex items-center justify-between gap-2">
                 <span className={`font-black text-sm ${tete ? 'text-primary' : ''}`}>
-                  {NOM[e]}{tete ? (fr ? ' · en tête' : ' · leading') : ''}
+                  {NOM[e]}{tete ? (egalite ? (fr ? ' · à égalité' : ' · tied') : (fr ? ' · en tête' : ' · leading')) : ''}
                 </span>
                 <span className="text-xs font-bold tabular-nums text-white/90">
                   {part} % · {fr ? 'COURIR' : 'RUN'} ›
@@ -89,6 +93,11 @@ export function BanderoleEpreuves() {
           );
         })}
       </div>
+      {egalite && (
+        <span className="text-[10px] font-bold text-primary">
+          {fr ? 'Moins de 5 % d’écart : si ça tient, on court les deux le 19/12.' : 'Under 5% apart: if it holds, both are raced on 19/12.'}
+        </span>
+      )}
       <span className="text-[10px] text-white/70">
         {plus
           ? (fr ? `Tes voix aujourd’hui : ${t.mes_voix_du_jour}/${t.voix_par_jour}` : `Your votes today: ${t.mes_voix_du_jour}/${t.voix_par_jour}`)

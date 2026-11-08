@@ -28,7 +28,7 @@ import {
   cloturerAuxHeures,
   prochaineEdition, rangSelection,
   titresDe, continentDe,
-  etatEdition, editionDe, enregistrerCourse, cloturerPhase,
+  etatEdition, editionDe, editionsDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations, fichesDe,
   fluxDirect, recapMondial, tableauNations,
   poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation,
@@ -2463,8 +2463,10 @@ async function servir(request, env, ctx, porteur) {
       // Mon championnat, s'il y en a un. Le jeu n'a que le nom du joueur.
       if (sous === 'mien' && request.method === 'GET') {
         const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
-        const id = key ? await editionDe(env.DB, key) : null;
-        return json({ edition: id });
+        const ids = key ? await editionsDe(env.DB, key) : [];
+        // `edition` reste la principale pour les jeux deja installes ; `editions`
+        // les donne toutes (deux championnats le meme weekend, 08/11).
+        return json({ edition: ids[0] || null, editions: ids });
       }
 
       // L'etat d'une edition : ou elle en est, qui court quoi.

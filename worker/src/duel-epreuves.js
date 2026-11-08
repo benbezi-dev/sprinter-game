@@ -85,20 +85,29 @@ export async function tableauEpreuves(db, { test, deviceId, maintenant = Date.no
     ...fenetreEpreuves(test, maintenant),
     epreuves,
     en_tete: enTete(epreuves),
+    retenues: retenues(epreuves),
     voix_par_jour: VOIX_PAR_JOUR,
     mes_voix_du_jour: mes,
   };
 }
 
+/** Moins de 5 % d'ecart avec la premiere : egalite, l'epreuve est retenue aussi. */
+export const ECART_EGALITE = 0.05;
+
 /**
- * L'epreuve en tete : la plus de voix ; a egalite, la plus de joueurs ; a
- * egalite encore, aucune (null) — l'auteur tranche.
+ * Les epreuves retenues pour le 19/12 : la premiere en voix, et toute autre a
+ * moins de 5 % d'elle (decide par l'auteur le 08/11) — dans ce cas, on court
+ * les deux championnats le meme weekend. Vide tant que personne n'a vote.
  */
+export function retenues(epreuves) {
+  const tri = EPREUVES_DUEL.map(e => ({ e, voix: epreuves[e].voix })).sort((a, b) => b.voix - a.voix);
+  const max = tri[0].voix;
+  if (!max) return [];
+  return tri.filter(x => (max - x.voix) / max < ECART_EGALITE).map(x => x.e);
+}
+
+/** L'epreuve seule en tete, ou null (personne, ou egalite a moins de 5 %). */
 export function enTete(epreuves) {
-  const tri = EPREUVES_DUEL.map(e => ({ e, ...epreuves[e] }))
-    .sort((a, b) => b.voix - a.voix || b.joueurs - a.joueurs);
-  const [a, b] = tri;
-  if (!a.voix) return null;
-  if (b && a.voix === b.voix && a.joueurs === b.joueurs) return null;
-  return a.e;
+  const r = retenues(epreuves);
+  return r.length === 1 ? r[0] : null;
 }

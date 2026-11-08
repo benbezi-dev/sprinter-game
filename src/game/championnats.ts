@@ -349,7 +349,8 @@ async function json<T>(chemin: string): Promise<T | null> {
 
 /** Le championnat ou ce joueur est engage, s'il y en a un. */
 export const monEdition = (nom: string) =>
-  json<{ edition: string | null }>('/champ/mien?name=' + encodeURIComponent(nom));
+  // `editions` : toutes, la principale d'abord (deux championnats le meme weekend, 08/11).
+  json<{ edition: string | null; editions?: string[] }>('/champ/mien?name=' + encodeURIComponent(nom));
 
 /**
  * Le prochain championnat d'un pays — annonce ou en cours.
