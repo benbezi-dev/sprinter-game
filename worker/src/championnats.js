@@ -16,7 +16,7 @@
 import { crediter as crediterPieces, creditDuTitre } from './pieces.js';
 import {
   FORMAT, formatDe, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
-  ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES, DECALAGE_PAR_EDITION_MIN,
+  ANNONCES, EPREUVES, EPREUVE_DEFAUT, epreuveParDefaut, epreuveAutorisee, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES, DECALAGE_PAR_EDITION_MIN,
   TENANT, lieuDeLEdition, PHASES_A_BULLE,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
@@ -1089,8 +1089,9 @@ export async function annoncerEchelon(db, {
   // L'epreuve se valide ici et pas a la porte HTTP : `annoncerCycle` annonce
   // trente pays sans repasser par une requete, et une distance fantaisiste
   // doit etre refusee la aussi.
-  const ep = String(epreuve == null ? EPREUVE_DEFAUT : epreuve);
+  const ep = String(epreuve == null ? epreuveParDefaut(echelon, z) : epreuve);
   if (!EPREUVES.includes(ep)) return { erreur: 'epreuve inconnue', epreuve: ep };
+  if (!epreuveAutorisee(echelon, z, ep)) return { erreur: 'le championnat de France se court en salle (60 m, 200 m, 400 m)', epreuve: ep };
 
   const t = Number(debutSamedi);
   if (!Number.isFinite(t)) return { erreur: 'date de debut invalide' };
@@ -1728,7 +1729,7 @@ export async function rangSelection(db, nameKey) {
   // trace dans un classement, et celui du 100 m ne selectionne personne pour
   // une edition du 400 m. `epreuve` voyage donc avec le rang — l'ecran ne
   // dessine la barre que dans le classement ou elle veut dire quelque chose.
-  const epSelection = (ed && ed.epreuve) || EPREUVE_DEFAUT;
+  const epSelection = (ed && ed.epreuve) || epreuveParDefaut('national', g.pays);
   const { results: tous } = await db.prepare(
     `SELECT d.name_key AS cle, g.source AS source
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key

@@ -31,6 +31,17 @@ export const EPREUVES = ['100', '200', '400', '60', '200s', '400s'];
 const EPREUVES_EN_SALLE = ['60', '200s', '400s'];
 export const EPREUVE_DEFAUT = '100';
 
+/**
+ * Le Championnat de France (auteur, 08/11) ne se qualifie QUE sur les courses en salle
+ * (60 m, 200 m, 400 m en salle) : ni le 100 m, ni aucune course en exterieur.
+ */
+export function epreuveParDefaut(echelon, zone) {
+  return echelon === 'national' && String(zone).toUpperCase() === 'FR' ? EPREUVES_EN_SALLE[0] : EPREUVE_DEFAUT;
+}
+export function epreuveAutorisee(echelon, zone, epreuve) {
+  return !(echelon === 'national' && String(zone).toUpperCase() === 'FR') || EPREUVES_EN_SALLE.includes(String(epreuve));
+}
+
 /** Le format d'une competition : combien on part, comment on se qualifie. */
 export const FORMAT = {
   // 32 partants, quatre series de huit, deux demies de huit, une finale.
