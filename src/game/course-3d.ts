@@ -860,9 +860,10 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
   const LN = 9, D_NOM = 7;                         // le nom : 9 m de long, centre a 7 m des blocs
   for (let k = 0; k < n; k++) {
     const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
-    const nom = new THREE.Mesh(new THREE.PlaneGeometry(LN, cw * 0.9), mat);
+    // (decoupes en tranches : chaque sommet se pose sur la ligne du couloir, le nom epouse le virage — plier)
+    const nom = new THREE.Mesh(new THREE.PlaneGeometry(LN, cw * 0.9, 36, 1), mat);
     const tmat = new THREE.MeshBasicMaterial({ map: degrade, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
-    const trace = new THREE.Mesh(new THREE.PlaneGeometry(1, cw * 0.55), tmat);
+    const trace = new THREE.Mesh(new THREE.PlaneGeometry(1, cw * 0.55, 12, 1), tmat);
     nom.renderOrder = trace.renderOrder = 3;
     // (le tartan et les lignes sont tires vers la camera par polygonOffset : le nom l'est davantage, sinon il passe dessous)
     for (const x of [mat, tmat]) { x.polygonOffset = true; x.polygonOffsetFactor = -8; x.polygonOffsetUnits = -16; }
@@ -870,9 +871,23 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
     couloirs.push({ nom, mat, trace, tmat, ecrit: '' });
   }
   /** Poser un plan a plat dans le couloir k, centre a d metres de la ligne de depart. */
-  const poser = (m: THREE.Mesh, k: number, d: number, tourne = 0) => {
-    const p = ici(T.posDemi(Math.max(0, d), k, milieu(T, k))), a = capIci(T.heading(Math.max(0, d), k));
-    m.position.set(p[0], p[1], zSol(p[0], p[1]) + 0.02); m.rotation.set(0, 0, a + tourne);
+  /**
+   * Plier un plan dans le couloir k, centre a dc metres de la ligne de depart, `sl` fois sa longueur : chaque sommet
+   * suit la ligne du couloir et son cap (« les noms dans les virages ne respectent pas les courbes », l'auteur, 9/11).
+   * `tourne` = PI : retourne d'un demi-tour (le nom se lit depuis la tribune).
+   */
+  const plier = (m: THREE.Mesh, k: number, dc: number, sl = 1, tourne = 0) => {
+    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+    const base: Float32Array = m.userData.base ??= Float32Array.from(pos.array as Float32Array);
+    const sens = Math.cos(tourne), mil = milieu(T, k);
+    for (let i = 0; i < pos.count; i++) {
+      const d = Math.max(0, dc + base[i * 3] * sl * sens), lat = base[i * 3 + 1] * sens;
+      const p = ici(T.posDemi(d, k, mil)), a = capIci(T.heading(d, k));
+      const x = p[0] - Math.sin(a) * lat, y = p[1] + Math.cos(a) * lat;
+      pos.setXYZ(i, x, y, zSol(x, y) + 0.02);
+    }
+    pos.needsUpdate = true; m.geometry.computeBoundingSphere();
+    m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
   };
   const ecrire = (c: Couloir, texte: string, moi: boolean) => {
     if (c.ecrit === texte) return;
@@ -915,13 +930,12 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
       c.mat.opacity = Math.max(0, fondu);
       // le nom prend la place des fleches de lumiere de son couloir, qui reviennent quand il se retire (l'auteur, 8/11)
       fleches?.(k, 1 - Math.max(0, fondu));
-      poser(c.nom, k, D_NOM, Math.PI);   // (le nom se lit depuis la tribune : retourne d'un demi-tour)
+      plier(c.nom, k, D_NOM, 1, Math.PI);   // (le nom se lit depuis la tribune : retourne d'un demi-tour)
       // le fantome : 60 m au chrono annonce (ou 6,9 s), parti 0,4 s apres le nom
       const chrono = +(r.announced || r.chrono || r.pb || 0) || 6.9, d = Math.max(0, (dans - 0.4) * (60 / chrono));
       const lt = Math.min(7, d);
       c.tmat.opacity = d > 0 ? Math.max(0, fondu) : 0;
-      c.trace.scale.x = Math.max(0.01, lt);
-      poser(c.trace, k, d - lt / 2);
+      plier(c.trace, k, d - lt / 2, Math.max(0.01, lt));
     }
   };
 }
@@ -1233,6 +1247,14 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     finaleVue = finaleNoire;
     // (en serie, la presentation attend la fin de l'extinction)
     if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches, tourChamp === 'serie' ? DUREE_EXTINCTION : 0));
+    // UNE SEULE PASSE POUR LES LUMIERES ADDITIVES (mesure du 8/11 : la salle noire perdait la moitie de ses images) :
+    // three dessine une matiere transparente double face en deux passes, dos puis face, en la marquant a recompiler
+    // a chacune — une verification de programme par dessin, pour les neons, les fleches et les noms. En additif,
+    // l'ordre des faces ne change rien a l'image.
+    salle.interieur.traverse((o: any) => {
+      for (const m of [].concat(o.material || []) as THREE.Material[])
+        if (m.transparent && m.side === THREE.DoubleSide && m.blending === THREE.AdditiveBlending) m.forceSinglePass = true;
+    });
     return;
   }
   if (espace) espaceAutour(th, hasard);
