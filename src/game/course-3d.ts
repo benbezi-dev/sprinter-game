@@ -811,6 +811,42 @@ function lExtinction(eteindre: (lumiere: number, neons: number) => void, eclaire
   };
 }
 
+/**
+ * LES LAMPES DES TELEPHONES DANS LES TRIBUNES (l'auteur, 8/11) : pendant la presentation des noms, des points de
+ * lumiere qui scintillent chacun a son rythme, puis a moitie jusqu'a l'arrivee. Un seul objet Points (quelques
+ * centaines de sommets), additif.
+ */
+function lesLampesDuPublic(groupe: THREE.Group, pos: number[], hasard: () => number) {
+  const n = pos.length / 3, geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const coul = new Float32Array(n * 3), phase = new Float32Array(n), vite = new Float32Array(n);
+  for (let i = 0; i < n; i++) { phase[i] = hasard() * 6.28; vite[i] = 0.6 + hasard() * 1.8; }
+  geo.setAttribute('color', new THREE.BufferAttribute(coul, 3));
+  const tache = peinte(32, 32, (c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.18, 'rgba(255,255,255,1)'); g.addColorStop(0.45, 'rgba(220,235,255,0.35)'); g.addColorStop(1, 'rgba(200,220,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  });
+  const mat = new THREE.PointsMaterial({ size: 2.4, map: tache, vertexColors: true, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, toneMapped: false, sizeAttenuation: true });
+  const pts = new THREE.Points(geo, mat); pts.renderOrder = 4; pts.frustumCulled = false;
+  groupe.add(pts);
+  let k = 0, vu = -1;
+  return (t: number) => {
+    const dt = vu < 0 ? 0 : Math.min(0.1, t - vu); vu = t;
+    // pleine lumiere pendant la presentation, a moitie jusqu'a l'arrivee (le plan de course voit les tribunes)
+    const G = (globalThis as any).SprinterApp?.G, st = G?.state;
+    const cible = presente >= 0 ? 1 : st === 'count' || st === 'race' || st === 'falseout' ? 0.5 : 0;
+    k += (cible - k) * Math.min(1, dt * 2.5);
+    pts.visible = k > 0.01;
+    if (!pts.visible) return;
+    for (let i = 0; i < n; i++) {
+      const v = k * (0.55 + 0.45 * Math.sin(t * vite[i] + phase[i]));
+      coul[i * 3] = v * 0.95; coul[i * 3 + 1] = v * 0.97; coul[i * 3 + 2] = v;
+    }
+    geo.attributes.color.needsUpdate = true;
+  };
+}
 function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0) {
   const n = T.lanes || nCouloirs, cw = (T.salle && T.salle.couloir) || LANE_W;
   type Couloir = { nom: THREE.Mesh; mat: THREE.MeshBasicMaterial; trace: THREE.Mesh; tmat: THREE.MeshBasicMaterial; ecrit: string };
@@ -1169,14 +1205,17 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }
     // le public de la salle : les memes cartes que le stade (LE PUBLIC, EN CARTES)
     if (Q.get('foule') !== '0') {
-      const pal = paletteDuPublic(th, false, false), cartes: number[] = [];
+      const pal = paletteDuPublic(th, false, false), cartes: number[] = [], lampes: number[] = [];
       const choix = (t: THREE.Color[]) => t[(hasard() * t.length) | 0];
       for (const p of placesDuPublic(affluence, hasard)) {
+        // dans le noir, quatre spectateurs sur dix levent leur telephone, lampe allumee, a hauteur de tete
+        if (finaleNoire && hasard() < 0.4) lampes.push(p.x, p.y, p.z + (p.debout ? 1.7 : 1.3));
         const u = hasard(), geste = p.debout ? 3 : u < 0.6 ? 0 : u < 0.85 ? 1 : 2;
         cartes.push(p.x, p.y, p.z, p.face, ((hasard() * P_SIL) | 0) * P_GESTES + geste, hasard());
         for (const c of [choix(pal.peaux), choix(pal.coulMaillots), choix(pal.coulCheveux), choix(pal.coulPantalons)]) cartes.push(c.r, c.g, c.b);
       }
       if (cartes.length) { const f = laFoule(cartes); f.userData.sansReflet = true; salle.interieur.add(f); }
+      if (lampes.length) pubAnim.push(lesLampesDuPublic(salle.interieur, lampes, hasard));
     }
     // LES BLOCS DE DEPART (« il n'y a de starting-block sur aucune epreuve », l'auteur, 26/10) : les
     // memes que dehors, au milieu de chaque couloir, la ou le coureur part — a la hauteur du releve
