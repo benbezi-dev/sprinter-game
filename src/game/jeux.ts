@@ -25,7 +25,7 @@ import { armerHaies, rangerHaies } from './haies-course.js';
 import type { RaceKey } from './leaderboard';
 import { allerAu, mondeCourant, type Monde } from './mondes';
 import { HAIES_OUVERTES, SAUTS_OUVERTS, VEDETTES_LANCEES, TROIS_D_OUVERTE, lieuParDefaut } from './canal';
-import { habillerLeJoueur, skinPorte, skinGagne, lookDuSkin } from './vestiaire';
+import { habillerLeJoueur, skinPorte, skinGagne, lookDuSkin, avatarPose } from './vestiaire';
 import { VEDETTES, defiPossible, maillageDe } from './vedettes';
 
 export type Jeu = 'sprinter' | 'hurdlers' | 'jumper';
@@ -162,6 +162,7 @@ G.apresConstruction = () => {
   // plat pour Meba-Mickael Zeze (game/vestiaire.ts). Ici, parce que c'est le
   // seul passage de toutes les courses : carriere, one shot, defi, duel, direct.
   // A vie, et pas seulement pendant la semaine du defi (canal.ts).
+  avatarPose(); // le corps choisi (vestiaire.ts), sur toutes les courses
   if (VEDETTES_LANCEES) habillerLeJoueur(cle);
   if (cle && cle in SprinterCore.RACES && EPREUVES_CONNUES.has(cle)) {
     const jeu = jeuDe(cle);

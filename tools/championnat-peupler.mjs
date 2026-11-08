@@ -128,7 +128,7 @@ if (effacer) {
       // le classement par discipline raconte — le meilleur sprinter du pays
       // n'est pas forcement celui qui tient le tour de piste — et une grille
       // identique aux trois distances ne le montrerait pas.
-      for (const [rang, epreuve] of ['100', '200', '400'].entries()) {
+      for (const [rang, epreuve] of ['100', '200', '400', '60', '200s'].entries()) {
         const force = Math.round(mmr + (hasard() - 0.5) * 260 + (rang - 1) * 40);
         const duels = 3 + Math.floor(hasard() * 22);
         const wins = Math.round(duels * (0.25 + 0.5 * (1 - i / (PAR_PAYS - 1))));

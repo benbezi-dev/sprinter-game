@@ -273,7 +273,7 @@ def bande(a, b, pas):
     return [a + pas * k for k in range(int((b - a) / pas) + 1)]
 
 
-def articulations(h, H):
+def articulations(h, H, entrejambe_au_tronc=False):
     C = Coupes(h)
     J = {}
     pas = 0.005
@@ -292,8 +292,15 @@ def articulations(h, H):
 
     # L'ENTREJAMBE : la plus haute coupe ou la jambe gauche est encore seule
     z = 0.30 * H
-    while z < 0.65 * H and jambe(z + pas) is not None:
-        z += pas
+    if entrejambe_au_tronc:
+        # (tripo_coureur.py, 08/11) sous un short moulant, les replis du tissu font des boucles « de jambe » jusqu'a la
+        # taille : l'entrejambe est alors la premiere coupe dont le tronc traverse le plan median sur 12 % de la taille
+        large = lambda t: t is not None and bornes(t, 0)[1] - bornes(t, 0)[0] > 0.12 * H
+        while z < 0.65 * H and not large(tronc(z + pas)):
+            z += pas
+    else:
+        while z < 0.65 * H and jambe(z + pas) is not None:
+            z += pas
     entrejambe = z
     # LA HANCHE, sous le point le plus en arriere du fessier : la tete du femur
     # et le grand trochanter sont a sa hauteur, ou a peine dessous. Pas aux
@@ -398,7 +405,7 @@ def articulations(h, H):
     return J
 
 
-def doigts(h, J, H):
+def doigts(h, J, H, soudes=False):
     """Les quatre doigts et le pouce de la main gauche, en pose en T (paume en
     bas, pouce vers l'avant) : {nom: [base, jointure, jointure, bout]}."""
     me = h.data
@@ -436,12 +443,27 @@ def doigts(h, J, H):
             fente, quatre = x, sorted(cs, key=len, reverse=True)[:4]
             break
         x += 0.002
-    if fente is None:
-        raise RuntimeError('les doigts ne se separent pas')
-    # de l'avant (-y) vers l'arriere : index, majeur, annulaire, auriculaire
-    quatre.sort(key=lambda c: sum(V[i].y for i in c) / len(c))
     D = {}
-    for nom, c in zip(('index', 'middle', 'ring', 'pinky'), quatre):
+    if fente is None and soudes:
+        # (tripo_coureur.py, 08/11) des doigts colles par Tripo : quatre doigts reguliers sur la largeur de la main,
+        # de la jointure (40 % du poignet au bout) au bout ; le poing de course la plie en moufle
+        bout_x = max(V[i].x for i in main)
+        x0 = P.x + 0.40 * (bout_x - P.x)
+        bord = [V[i] for i in main if abs(V[i].x - x0) < 0.006 and tp != i]
+        y0, y1 = min(v.y for v in bord), max(v.y for v in bord)
+        zc = sum(v.z for v in bord) / len(bord)
+        for k, nom in enumerate(('index', 'middle', 'ring', 'pinky')):
+            y = y0 + (k + 0.5) * (y1 - y0) / 4
+            base, bout = Vector((x0 - 0.012, y, zc)), Vector((bout_x - 0.004, y, zc))
+            L = (bout - base).length; d = (bout - base).normalized()
+            D[nom] = [base, base + d * 0.44 * L, base + d * 0.74 * L, bout]
+        fente = x0
+    elif fente is None:
+        raise RuntimeError('les doigts ne se separent pas')
+    else:
+        # de l'avant (-y) vers l'arriere : index, majeur, annulaire, auriculaire
+        quatre.sort(key=lambda c: sum(V[i].y for i in c) / len(c))
+    for nom, c in zip(('index', 'middle', 'ring', 'pinky'), quatre or []):
         # sa racine : le premier anneau de sommets au-dela de la fente
         x0 = min(V[i].x for i in c)
         racine = [V[i] for i in c if V[i].x < x0 + 0.010]

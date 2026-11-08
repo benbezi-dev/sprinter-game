@@ -52,15 +52,35 @@ export const MAILLOTS: Record<string, { kit: string; jersey: number[]; shorts: n
 const porteAutorise = (cle: unknown, gagnes: string[]) =>
   typeof cle === 'string' && (gagnes.includes(cle) || (RENDU_3D && !!MAILLOTS[cle]));
 
+/**
+ * L'AVATAR (08/11, « ajoute le fait de creer son avatar ») : le corps du coureur du joueur — fille ou garcon, peau,
+ * coiffure, couleur des cheveux. Le maillot reste le sien (or, ou le club) ; un skin gagne le remplace en entier.
+ * Pas la taille : la foulee du joueur se compte sur PLAYER_LOOK.h (Runner.strideLength), la changer changerait le jeu.
+ */
+export type Avatar = { corps: 'm' | 'f'; peau: string; coiffure: string; cheveux: string };
+export const PEAUX = ['ebene', 'cacao', 'acajou', 'noisette', 'bronze', 'ambre', 'miel', 'olive', 'sable', 'clair', 'porcelaine'];
+/** Les coiffures que le moteur sait dessiner (HAIRS, sprinter-core.js). */
+export const COIFFURES = ['crop', 'fade', 'shaved', 'bun', 'ponytail', 'braids', 'flattop'];
+/** HAIR_COLS de sprinter-core.js, qui ne l'exporte pas. */
+export const CHEVEUX: Record<string, number[]> = {
+  noir: [28, 22, 22], brun: [56, 36, 24], chatain: [92, 62, 36],
+  blond: [188, 154, 88], roux: [148, 74, 38], gris: [176, 176, 182],
+};
+const avatarValide = (a: any): a is Avatar => !!a && typeof a === 'object'
+  && (a.corps === 'm' || a.corps === 'f') && PEAUX.includes(a.peau)
+  && COIFFURES.includes(a.coiffure) && Object.prototype.hasOwnProperty.call(CHEVEUX, a.cheveux);
+
 type Etat = {
   /** Les clefs des skins gagnes. */
   gagnes: string[];
   /** Le skin porte, ou null : le maillot du joueur. */
   porte: string | null;
+  /** Le corps choisi, ou null : celui d'origine. */
+  avatar: Avatar | null;
 };
 
 const CLE = 'sprinter_vestiaire';
-const VIDE: Etat = { gagnes: [], porte: null };
+const VIDE: Etat = { gagnes: [], porte: null, avatar: null };
 
 function lire(): Etat {
   try {
@@ -72,7 +92,7 @@ function lire(): Etat {
     // On ne porte que ce qu'on a gagne : une valeur recopiee a la main dans le
     // stockage ne suffit pas a enfiler un skin.
     const porte = porteAutorise(brut.porte, gagnes) ? brut.porte : null;
-    return { gagnes, porte };
+    return { gagnes, porte, avatar: avatarValide(brut.avatar) ? brut.avatar : null };
   } catch {
     return VIDE;
   }
@@ -83,11 +103,26 @@ function lire(): Etat {
 // (canal.ts, DEFI_VEDETTE_OUVERT), ce fichier serait reste dans le paquet
 // public pour la seule lecture du stockage.
 let lu: Etat | null = null;
-const etatCourant = (): Etat => lu || (lu = lire());
+const etatCourant = (): Etat => lu || (lu = poserLAvatar(lire()));
+
+// PLAYER_LOOK est change SUR PLACE, pas remplace : l'accueil, la photo-finish, le rejeu du championnat et le
+// maillot du club le lisent tous directement (sprinter-core.js et ailleurs), et tous doivent montrer le meme corps.
+let origine: any = null;
+function poserLAvatar(e: Etat): Etat {
+  const L = SprinterCore.PLAYER_LOOK;
+  if (!L) return e;
+  origine ||= { build: L.build, skin: L.skin, hair: L.hair, hairCol: L.hairCol };
+  const a = e.avatar;
+  Object.assign(L, a ? { build: a.corps, skin: SprinterCore.SKIN[a.peau], hair: a.coiffure, hairCol: CHEVEUX[a.cheveux] } : origine);
+  return e;
+}
+
+/** Le corps du joueur pose avant la premiere course (game/jeux.ts), meme si le vestiaire n'a jamais ete ouvert. */
+export function avatarPose(): Avatar | null { return etatCourant().avatar; }
 const abonnes = new Set<() => void>();
 
 function ecrire(e: Etat) {
-  lu = e;
+  lu = poserLAvatar(e);
   try { localStorage.setItem(CLE, JSON.stringify(e)); } catch { /* stockage ferme */ }
   // Le coureur a l'ecran change tout de suite : l'accueil de Hurdlers montre
   // sa course, et c'est la qu'on veut voir le skin arriver.
@@ -115,6 +150,12 @@ export function porterSkin(cle: string | null) {
   const etat = etatCourant();
   if (cle !== null && !porteAutorise(cle, etat.gagnes)) return;
   ecrire({ ...etat, porte: cle });
+}
+
+/** Choisir son avatar, ou `null` pour reprendre le corps d'origine. */
+export function choisirAvatar(a: Avatar | null) {
+  if (a !== null && !avatarValide(a)) return;
+  ecrire({ ...etatCourant(), avatar: a });
 }
 
 /** L'apparence d'un skin : celle de l'athlete a qui on l'a gagne. */

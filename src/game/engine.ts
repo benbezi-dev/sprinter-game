@@ -1251,6 +1251,9 @@ export function updateLogic(dt: number) {
       // temps ne sont jamais calculees, la position devient NaN, et
       // l'adversaire disparait de la piste sans une erreur.
       for (const r of G.runners) if (!r.isPlayer && !r.isLive) r.stepAI(step, G.elapsed);
+      // la place a l'arrivee, des la ligne : les trois premiers celebrent (Runner.apresLigne)
+      for (const r of G.runners) if (r.finished && r.place == null && r.finishTime != null)
+        r.place = 1 + G.runners.filter((o: any) => o !== r && o.finished && o.finishTime != null && o.finishTime < r.finishTime).length;
 
       // Enregistre la course pour qu'un adversaire puisse la reaffronter en
       // fantome — et c'est aussi la preuve du chrono, que le serveur juge.
@@ -1288,7 +1291,8 @@ export function updateLogic(dt: number) {
     // (au 60 m en salle, la course se termine contre le tapis, voir Runner.apresLigne)
     const auTapis = !!G.race.salleDroite && G.player.tapis != null;
     const out = G.player.finished && (auTapis ? G.player.auTapisT >= 3.4 : G.player.d >= G.track.total + C.RUNOUT);
-    const slow = G.player.finished && G.elapsed >= G.player.finishTime + (auTapis ? 9 : 3);
+    // (six secondes apres la ligne : le temps de voir le podium celebrer et les autres trottiner, Runner.apresLigne)
+    const slow = G.player.finished && G.elapsed >= G.player.finishTime + (auTapis ? 9 : 6);
     // LA MORSURE TERMINE LA COURSE, et il faut le dire ici parce que rien
     // d'autre ne le dirait : un coureur rattrape est gele sur place, il
     // n'atteindra jamais la ligne, et les deux conditions ci-dessus attendent
