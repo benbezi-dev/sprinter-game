@@ -2446,7 +2446,15 @@
   // Ailleurs, la deceleration de toujours (k). `tapis` : metres apres la ligne, pose au depart (startRace).
   Runner.prototype.apresLigne = function (dt, k) {
     if (this.tapis == null || this.total !== 60) {
-      this.v *= Math.exp(-k * dt);
+      // PERSONNE NE S'ARRETE NET (l'auteur, 08/11 : « les 3 premiers celebrent, les autres trottinent puis marchent,
+      // mais personne ne s'arrete de facon nette »). Un freinage borne jusqu'au trot, quatre secondes de trot, puis le
+      // pas, qui ne s'arrete pas. (`gesteT` : les secondes depuis la ligne, comptees par stepPlayer et stepAI ; `k`
+      // garde l'ecart d'avant entre le joueur et les autres.)
+      const t = this.gesteT || 0, TROT = 3.3, PAS = 1.5;
+      const cible = t < 4 ? TROT : t < 7 ? TROT + (PAS - TROT) * (t - 4) / 3 : PAS;
+      this.v = this.v > cible ? Math.max(cible, this.v - 2.9 * k * dt) : Math.min(cible, this.v + dt);
+      // LES TROIS PREMIERS LEVENT LES BRAS (`place`, posee par engine.ts) des qu'ils ne sprintent plus
+      if (this.place && this.place <= 3 && this.v < 7) this.fete = Math.min(1, (this.fete || 0) + 2 * dt);
       this.d += this.v * dt;
       return;
     }
@@ -3093,7 +3101,7 @@
     const AP = armPhaseOf(P);
     let l = leg(p), rr = leg(p + Math.PI);
     let al = arm(p + AP), ar = arm(p + Math.PI + AP);
-    const cel = r.celebrate || 0;
+    const cel = Math.max(r.celebrate || 0, r.fete || 0);
     if (cel > 0) {
       const ul = 2.55 + 0.22 * Math.sin(p * 0.8);
       const ur = 2.55 + 0.22 * Math.sin(p * 0.8 + 1.1);
