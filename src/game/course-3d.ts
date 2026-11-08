@@ -955,9 +955,10 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
       plier(c.nom, k, D_NOM, 1, Math.PI);   // (le nom se lit depuis la tribune : retourne d'un demi-tour)
       // le fantome : 60 m au chrono annonce (ou 6,9 s), parti 0,4 s apres le nom
       const chrono = +(r.announced || r.chrono || r.pb || 0) || 6.9, d = Math.max(0, (dans - 0.4) * (60 / chrono));
-      const lt = Math.min(7, d);
-      c.tmat.opacity = d > 0 ? Math.max(0, fondu) : 0;
-      plier(c.trace, k, d - lt / 2, Math.max(0.01, lt));
+      // (la trainee nait au bout du nom : additive et blanche, elle fondait les lettres qu'elle traversait)
+      const queue = Math.max(D_NOM + LN / 2, d - 7), lt = d - queue;
+      c.tmat.opacity = lt > 0 ? Math.max(0, fondu) : 0;
+      plier(c.trace, k, queue + Math.max(0, lt) / 2, Math.max(0.01, lt));
     }
   };
 }
