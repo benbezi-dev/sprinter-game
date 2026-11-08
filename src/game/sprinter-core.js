@@ -2453,8 +2453,9 @@
       const t = this.gesteT || 0, TROT = 3.3, PAS = 1.5;
       const cible = t < 4 ? TROT : t < 7 ? TROT + (PAS - TROT) * (t - 4) / 3 : PAS;
       this.v = this.v > cible ? Math.max(cible, this.v - 2.9 * k * dt) : Math.min(cible, this.v + dt);
-      // LES TROIS PREMIERS LEVENT LES BRAS (`place`, posee par engine.ts) des qu'ils ne sprintent plus
-      if (this.place && this.place <= 3 && this.v < 7) this.fete = Math.min(1, (this.fete || 0) + 2 * dt);
+      // SEUL LE VAINQUEUR CELEBRE (l'auteur, 08/11 soir : « seulement le gagnant de la course celebre apres la course » ;
+      // c'etaient les trois premiers) — `place`, posee par engine.ts, des qu'il ne sprinte plus
+      if (this.place === 1 && this.v < 7) this.fete = Math.min(1, (this.fete || 0) + 2 * dt);
       this.d += this.v * dt;
       return;
     }
@@ -3101,12 +3102,24 @@
     const AP = armPhaseOf(P);
     let l = leg(p), rr = leg(p + Math.PI);
     let al = arm(p + AP), ar = arm(p + Math.PI + AP);
-    const cel = Math.max(r.celebrate || 0, r.fete || 0);
+    // les bras leves : les presentations et les cinematiques (`celebrate`) — plus la fete d'apres course
+    const cel = r.celebrate || 0;
     if (cel > 0) {
       const ul = 2.55 + 0.22 * Math.sin(p * 0.8);
       const ur = 2.55 + 0.22 * Math.sin(p * 0.8 + 1.1);
       al = [al[0] * (1 - cel) + ul * cel, al[1] * (1 - cel) + (ul + 0.3) * cel];
       ar = [ar[0] * (1 - cel) + ur * cel, ar[1] * (1 - cel) + (ur + 0.3) * cel];
+    }
+    // LE POING SERRE DU VAINQUEUR (« les bras en l'air sont moches », l'auteur, 08/11 soir ; choisi parmi quatre
+    // gestes) : apres la ligne (`fete`, Runner.apresLigne), le bras droit plie devant lui, l'avant-bras dresse, le
+    // poing pompe un peu plus d'une fois par seconde ; l'autre bras se relache le long du corps.
+    const fete = Math.max(0, (r.fete || 0) - cel);
+    if (fete > 0) {
+      const pompe = 0.5 + 0.5 * Math.sin((r.gesteT || 0) * 7);
+      const ua = 0.75 + 0.35 * pompe;
+      ar = [ar[0] * (1 - fete) + ua * fete, ar[1] * (1 - fete) + (ua + 1.55) * fete];
+      const lache = 0.6 * fete;
+      al = [al[0] * (1 - lache) + 0.1 * lache, al[1] * (1 - lache) + 0.45 * lache];
     }
     // LE CLAP DEVANT LE VISAGE — le geste de Mickael Meba-Zeze (L.clap).
     //

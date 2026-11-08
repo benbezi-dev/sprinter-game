@@ -200,6 +200,8 @@ const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 const BORD_CADRE = 0.82, _joueur = new THREE.Vector3(), _viseCadre = new THREE.Vector3(), _ndc = new THREE.Vector3();
 const _rayon = new THREE.Ray(), _touche = new THREE.Vector3();
 let corrCadre = 0, amsalemActif = false;
+// le stade a-t-il l'anneau complet apres l'arrivee ? (pas le Champ-de-Mars, ni le stade Amsalem : voir virageApres)
+let virageApresLigne = true;
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
 const soleilDecal = new THREE.Vector3(-10, -18, 30), solCam = new THREE.Vector3(), _solVoulu = new THREE.Vector3();
@@ -693,9 +695,22 @@ const milieu = (T: any, k: number) => {
 const enPeloton = (T: any, lane: number, d: number) =>
   T.salle && T.salle.rabat ? T.rabattu(d, lane) * T.salle.peloton[lane % T.salle.peloton.length] : 0;
 let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
+// APRES LA LIGNE, LE VIRAGE, DANS SON COULOIR (« les coureurs deccelerent tout en restant dans leurs couloirs »,
+// l'auteur, 08/11/2026). Au 100 m et au 200 m, le moteur prolonge la piste tout droit apres l'arrivee ; le stade,
+// lui, tourne : passe la ligne, chacun filait droit hors du virage, jusqu'au pied de la tribune — d'autant plus
+// loin qu'il etait arrive tot. A l'image seulement, on suit donc le premier virage (centre (DROITE1, -R_CORDE),
+// comme posLap2 au 400 m), chacun a son rayon. Rend l'angle deja tourne (0 avant la ligne).
+const virageApres = (T: any, lane: number, d: number) => {
+  if (!virageApresLigne || salleActive || T.fullLap || !T.total || d <= T.total) return 0;
+  return (d - T.total) / Math.max(1, ici(T.pos(T.total, lane))[1] + R_CORDE);
+};
 const ouCourt = (T: any, r: any, d: number = r.d) => {
-  const u = Math.min(1, Math.max(0, d / 10)), garde = 1 - u * u * (3 - 2 * u);
-  return ici(T.posDemi(d, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r.lane, d)));
+  const theta = virageApres(T, r.lane, d), dl = theta ? T.total : d;
+  const u = Math.min(1, Math.max(0, dl / 10)), garde = 1 - u * u * (3 - 2 * u);
+  const p = ici(T.posDemi(dl, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r.lane, dl)));
+  if (!theta) return p;
+  const rad = p[1] + R_CORDE;
+  return [p[0] + rad * Math.sin(theta), -R_CORDE + rad * Math.cos(theta)];
 };
 const c3 = (v: number[] | undefined, d: number[]) => {
   const a = v || d;
@@ -794,6 +809,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const cdm = !!th.champDeMars;
   // LE STADE BERNARD AMSALEM (amsalem-3d.ts) : un lieu reel — sa tribune, sa halle, ses mats ; rien du stade generique
   const amsalem = !!th.amsalem;
+  virageApresLigne = !cdm && !amsalem;
   amsalemActif = amsalem;
   // ... son EDITION CHAMPIONNAT DE FRANCE (THEMES.amsalemFrance) : panneaux LED, ecran geant, arche, mats allumes
   const championnat = amsalem && !!th.championnat;
@@ -2014,6 +2030,25 @@ function eclairerCorps(m: THREE.MeshStandardMaterial) {
 function eclairerLesCorps() {
   for (const c of corps.values()) c.m.racine.traverse((o: any) => { if (o.isMesh) for (const m of [].concat(o.material)) eclairerCorps(m); });
 }
+// LES VETEMENTS RESTENT SUR LE CORPS (« les vetements sur les assets ne restent pas », l'auteur, 08/11 soir : ils
+// se decollaient, disparaissaient par moments, des taches noires). Les nouveaux corps Tripo (tripo_coureur.py) portent
+// la tenue en coques a 3-10 mm de la peau, menees par des os de tissu un peu libres, sur un corps plus galbe que
+// muscle encore le jeu (PHYSIQUES, jusqu'a 14 mm) : la peau passait au travers — un short disparu, une brassiere
+// trouee —, et la ou peau et tissu se confondaient, la carte graphique ne savait plus lequel montrer (les taches).
+// A l'image, chaque piece est donc poussee le long de sa normale APRES le squelette (metres, ci-dessous) et gagne les
+// egalites de profondeur contre la peau. Le dossard un cran plus loin, pour rester devant le debardeur.
+const EPAIS_TISSU: Record<string, number> = { brassiere: 0.007, debardeur: 0.009, shortlarge: 0.009, dossard: 0.012 };
+function porterAuDessus(m: THREE.MeshStandardMaterial, e: number) {
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <skinning_vertex>', `#include <skinning_vertex>
+transformed += normalize(objectNormal) * ${e.toFixed(4)};`);
+  };
+  m.customProgramCacheKey = () => 'tissu' + e;
+  m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -2;
+}
+
 function lisere(m: THREE.MeshStandardMaterial) {
   eclairerCorps(m);
   m.onBeforeCompile = (sh) => {
@@ -2232,6 +2267,7 @@ function corpsDe(r: any): Corps | null {
       const n = new THREE.MeshStandardMaterial({ roughness: zone === 'peau' ? 0.55 : zone === 'semelle' || zone === 'plaque' ? 0.45 : 0.7, metalness: 0,
         ...(zone === 'logo' ? { map: m.map, transparent: true, alphaTest: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } : {}) });
       lisere(n);
+      if (EPAIS_TISSU[zone]) porterAuDessus(n, EPAIS_TISSU[zone]);
       mats[zone] = n;
       return n;
     });
@@ -2273,9 +2309,13 @@ function corpsDe(r: any): Corps | null {
   if (mats.brassiere) mats.brassiere.visible = brassiere;
   if (mats.shortlarge) mats.shortlarge.visible = tenue === 'debardeur-short';
   mats.short?.color.copy(bas);
-  // sous la brassiere le ventre est nu ; sous la culotte, le haut des cuisses
+  // sous la brassiere le ventre est nu. LA CULOTTE COUVRE LES FESSES (« les vetements de femme disparaissent et on voit
+  // leurs fesses », l'auteur, 08/11 soir) : peinte sur le corps, elle s'arretait 11,5 cm sous la taille
+  // (coureur_realiste.decouper_tenues), et les corps Tripo, plus galbes, descendent plus bas. Le bas de la zone prend
+  // donc toujours la couleur du bas : une culotte se porte en cuissard court.
+  void culotte;
   mats.ventre?.color.copy(brassiere ? rgb(L.skin) : maillot);
-  mats.shortbas?.color.copy(culotte ? rgb(L.skin) : bas);
+  mats.shortbas?.color.copy(bas);
   if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
   if (L.kit === 'vrac' && mats.debardeur) {
@@ -2595,13 +2635,16 @@ function dossardDe(n: number): THREE.Texture {
 // vent de la course le rabat vers l'arriere, et il claque un peu a haute vitesse. Quelques os par coureur : rien
 // pour un petit telephone.
 // (inertie : la part du mouvement du parent que le tissu refuse de suivre ; borne : son angle maximal)
+// (08/11 soir, « les vetements ne restent pas » : jusqu'a 0,45-0,8 rad, le bas du short pivotait loin de la cuisse et
+//  la jambe ressortait au travers, le debardeur s'ouvrait sur le ventre. Bornes et inertie reduites des deux tiers :
+//  le tissu bouge encore a pleine vitesse, il ne quitte plus le corps.)
 const TISSU: Record<string, { k: number; amort: number; vent: number; claque: number; inertie: number; borne: number }> = {
-  tissu_avant: { k: 60, amort: 9, vent: -0.15, claque: 0.05, inertie: 0.5, borne: 0.4 },      // plaque contre le ventre par le vent
-  tissu_dos: { k: 45, amort: 7, vent: 0.45, claque: 0.10, inertie: 0.6, borne: 0.7 },         // s'ecarte du dos
-  tissu_short_l: { k: 90, amort: 10, vent: 0.18, claque: 0.06, inertie: 0.25, borne: 0.45 }, // suit la cuisse, en retard
-  tissu_short_r: { k: 90, amort: 10, vent: 0.18, claque: 0.06, inertie: 0.25, borne: 0.45 },
-  tissu_dossard: { k: 35, amort: 5, vent: -0.10, claque: 0.12, inertie: 0.8, borne: 0.5 },
-  tissu_dossard_dos: { k: 35, amort: 5, vent: 0.55, claque: 0.16, inertie: 0.8, borne: 0.8 },
+  tissu_avant: { k: 60, amort: 9, vent: -0.06, claque: 0.03, inertie: 0.2, borne: 0.14 },     // plaque contre le ventre par le vent
+  tissu_dos: { k: 45, amort: 7, vent: 0.18, claque: 0.05, inertie: 0.25, borne: 0.24 },       // s'ecarte du dos
+  tissu_short_l: { k: 90, amort: 10, vent: 0.06, claque: 0.03, inertie: 0.08, borne: 0.15 },  // suit la cuisse, en retard
+  tissu_short_r: { k: 90, amort: 10, vent: 0.06, claque: 0.03, inertie: 0.08, borne: 0.15 },
+  tissu_dossard: { k: 35, amort: 5, vent: -0.05, claque: 0.06, inertie: 0.3, borne: 0.2 },
+  tissu_dossard_dos: { k: 35, amort: 5, vent: 0.22, claque: 0.08, inertie: 0.3, borne: 0.3 },
 };
 const _qw = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _ax = new THREE.Vector3(), _dir = new THREE.Vector3(), _bas = new THREE.Vector3();
 const LATERAL_MODELE = new THREE.Vector3(0, 0, -1);   // l'axe y du jeu (le cote), dans le repere du modele (Qi)
@@ -2742,7 +2785,7 @@ function dessinerLesEffets(App: any) {
   aura.visible = true;
   // les copies derriere lui, de plus en plus pales
   if (!poussEchos || !p.squelette) return;
-  const cap = capIci(T.heading(p.d, p.lane)), lean = T.lean(p.d, p.lane, p.v);
+  const cap = capIci(T.heading(p.d, p.lane)) - virageApres(T, p.lane, p.d), lean = T.lean(p.d, p.lane, p.v);
   const k0 = (p.look.h || C.MODEL_H) / C.MODEL_H;
   for (let k = 1; k <= 3; k++) {
     // plus espacees qu'en 2D : vue de dos, des copies serrees se fondent en une tache
@@ -2852,7 +2895,7 @@ export function rendre(App: any, dt: number) {
   for (const r of tous) {
     if (!r || !r.look) continue;
     const p = ouCourt(T, r);
-    const cap = capIci(T.heading(r.d, r.lane)) + (r.retour ? Math.PI : 0) + (r.cap || 0);
+    const cap = capIci(T.heading(r.d, r.lane)) - virageApres(T, r.lane, r.d) + (r.retour ? Math.PI : 0) + (r.cap || 0);
     const k = (r.look.h || C.MODEL_H) / C.MODEL_H;
     const lean = T.lean(r.d, r.lane, r.v) + (r.roulis || 0);
     r.squelette3D = true;
@@ -2917,7 +2960,7 @@ export function rendre(App: any, dt: number) {
     // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
     // il est au milieu de l'image, ses voisins des deux cotes. Dans un virage, elle tourne
     // avec lui. Y retourne : voir `monde`.
-    const h = capIci(T.heading(pl.d, pl.lane));
+    const h = capIci(T.heading(pl.d, pl.lane)) - virageApres(T, pl.lane, pl.d);
     const ax = Math.cos(h), ay = Math.sin(h), ix = Math.sin(h), iy = -Math.cos(h);   // devant, vers la corde
     const voulu = _a.set(p[0] - RECUL * ax + COTE * ix, -(p[1] - RECUL * ay + COTE * iy), HAUT);
     // le point vise prolonge la droite camera -> joueur : il reste au centre de l'image
@@ -3100,7 +3143,7 @@ export function rendre(App: any, dt: number) {
       const crieur = ((G.viseCamera as any)?.cri || criEnCours) ? (G.runners || []).find((r: any) => r.look && r.look.clap && !r.isPlayer) : null;
       const lui = (nom && (G.runners || []).find((r: any) => r.name === nom)) || crieur || G.presente || pl;
       // lui, au centre : le moteur vise en 2D un point de son couloir ; en 3D, c'est son corps
-      const c = ouCourt(T, lui), h = capIci(T.heading(Math.max(0, lui.d || 0), lui.lane | 0));
+      const c = ouCourt(T, lui), h = capIci(T.heading(Math.max(0, lui.d || 0), lui.lane | 0)) - virageApres(T, lui.lane | 0, Math.max(0, lui.d || 0));
       const ex = Math.sin(h), ey = -Math.cos(h), axe = Math.cos(h), aye = Math.sin(h);
       if (crieur && lui === crieur) {
         // SA PRESENTATION : dans son couloir, devant lui et face a lui — ses voisins restent sur les
