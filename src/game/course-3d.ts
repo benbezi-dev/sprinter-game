@@ -41,7 +41,7 @@ import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM, OCCULTANTS } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
-import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, placesDuPublic } from './salle-3d';
+import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, SALLE_FINALE, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -686,6 +686,94 @@ const milieu = (T: any, k: number) => {
   const C = (globalThis as any).SprinterApp?.C;
   return T.curved && C ? LANE_W / 2 - (k ? C.MES_N : C.MES_1) : 0;
 };
+// LA PRESENTATION DE LA FINALE, ECRITE DANS LA PISTE (Championnat de France du 19/12, l'auteur, 7/11 ;
+// la direction : la finale du 100 m de Doha 2019, « en mieux et dans la piste »). Un athlete toutes les
+// 3 s : son nom s'ecrit en lumiere, couche dans son couloir, une trainee fantome part des blocs a la
+// vitesse de son chrono, puis tout se retire (« ils sont la pour la presentation puis se retirent »).
+// Le joueur : « TOI », en or. Au pistolet, plus rien sur la piste — on court dans le noir, lignes allumees.
+const PRES_PAS = 3;
+/** La finale : le couloir presente (-1 : aucun) et le point ou s'ecrit son nom — la camera le cadre. */
+let finaleVue = false, presente = -1, finActive = false;
+const presenteOu = new THREE.Vector3(), finCam = new THREE.Vector3(), finVise = new THREE.Vector3();
+function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: number, h: number) => void) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  peindre(cv.getContext('2d')!, w, h);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void) {
+  const n = T.lanes || nCouloirs, cw = (T.salle && T.salle.couloir) || LANE_W;
+  type Couloir = { nom: THREE.Mesh; mat: THREE.MeshBasicMaterial; trace: THREE.Mesh; tmat: THREE.MeshBasicMaterial; ecrit: string };
+  const couloirs: Couloir[] = [];
+  // la trainee : un degrade (la tete a droite, x = 1), additive
+  const degrade = peinte(256, 16, (c, w, h) => {
+    const g = c.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, 'rgba(90,210,255,0)'); g.addColorStop(0.85, 'rgba(120,225,255,0.55)'); g.addColorStop(1, 'rgba(235,252,255,1)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  });
+  const LN = 9, D_NOM = 7;                         // le nom : 9 m de long, centre a 7 m des blocs
+  for (let k = 0; k < n; k++) {
+    const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    const nom = new THREE.Mesh(new THREE.PlaneGeometry(LN, cw * 0.9), mat);
+    const tmat = new THREE.MeshBasicMaterial({ map: degrade, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    const trace = new THREE.Mesh(new THREE.PlaneGeometry(1, cw * 0.55), tmat);
+    nom.renderOrder = trace.renderOrder = 3;
+    // (le tartan et les lignes sont tires vers la camera par polygonOffset : le nom l'est davantage, sinon il passe dessous)
+    for (const x of [mat, tmat]) { x.polygonOffset = true; x.polygonOffsetFactor = -8; x.polygonOffsetUnits = -16; }
+    groupe.add(nom, trace);
+    couloirs.push({ nom, mat, trace, tmat, ecrit: '' });
+  }
+  /** Poser un plan a plat dans le couloir k, centre a d metres de la ligne de depart. */
+  const poser = (m: THREE.Mesh, k: number, d: number, tourne = 0) => {
+    const p = ici(T.posDemi(Math.max(0, d), k, milieu(T, k))), a = capIci(T.heading(Math.max(0, d), k));
+    m.position.set(p[0], p[1], zSol(p[0], p[1]) + 0.02); m.rotation.set(0, 0, a + tourne);
+  };
+  const ecrire = (c: Couloir, texte: string, moi: boolean) => {
+    if (c.ecrit === texte) return;
+    c.ecrit = texte;
+    c.mat.map?.dispose();
+    // (le monde est en miroir, monde.scale.y = -1 : on ecrit a l'envers pour lire a l'endroit)
+    c.mat.map = peinte(1024, 128, (x, w, h) => {
+      // (le monde est en miroir, monde.scale.y = -1 : on ecrit retourne pour lire a l'endroit)
+      x.translate(0, h); x.scale(1, -1);
+      x.font = '900 104px Outfit, system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.shadowColor = moi ? 'rgba(255,200,60,0.9)' : 'rgba(150,215,255,0.9)'; x.shadowBlur = 22;
+      x.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
+      x.fillText(texte, w / 2, h / 2 + 4, w * 0.94);
+    });
+    c.mat.needsUpdate = true;
+  };
+  let debut = -1;
+  return (t: number) => {
+    const G = (globalThis as any).SprinterApp?.G;
+    const avant = !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
+    if (!avant) { debut = -1; presente = -1; for (let k = 0; k < n; k++) { couloirs[k].mat.opacity = couloirs[k].tmat.opacity = 0; fleches?.(k, 1); } return; }
+    if (debut < 0) debut = t;
+    const e = t - debut, i = Math.floor(e / PRES_PAS), dans = e - i * PRES_PAS;
+    const ordre = (G.runners || []).slice().sort((a: any, b: any) => (a.lane | 0) - (b.lane | 0));
+    const lui = ordre[i];
+    // prototype : le pistolet attend la fin de la presentation (le vrai championnat suspend countT, voir engine.ts)
+    const avD = G.avantDepart; if (G.state === 'count' && avD?.attitudes) avD.reste = Math.max(avD.reste, ordre.length * PRES_PAS + 0.5 - e);
+    presente = lui ? (lui.lane | 0) : -1;
+    if (lui) { const q = ici(T.posDemi(D_NOM, presente, milieu(T, presente))); presenteOu.set(q[0], q[1], 0); }
+    for (let k = 0; k < n; k++) {
+      const c = couloirs[k], r = lui && (lui.lane | 0) === k ? lui : null;
+      if (!r) { c.mat.opacity = c.tmat.opacity = 0; fleches?.(k, 1); continue; }
+      ecrire(c, r.isPlayer ? 'TOI' : String(r.name || '').toUpperCase(), !!r.isPlayer);
+      const fondu = Math.min(1, dans / 0.35, (PRES_PAS - dans) / 0.45);
+      c.mat.opacity = Math.max(0, fondu);
+      // le nom prend la place des fleches de lumiere de son couloir, qui reviennent quand il se retire (l'auteur, 8/11)
+      fleches?.(k, 1 - Math.max(0, fondu));
+      poser(c.nom, k, D_NOM, Math.PI);   // (le nom se lit depuis la tribune : retourne d'un demi-tour)
+      // le fantome : 60 m au chrono annonce (ou 6,9 s), parti 0,4 s apres le nom
+      const chrono = +(r.announced || r.chrono || r.pb || 0) || 6.9, d = Math.max(0, (dans - 0.4) * (60 / chrono));
+      const lt = Math.min(7, d);
+      c.tmat.opacity = d > 0 ? Math.max(0, fondu) : 0;
+      c.trace.scale.x = Math.max(0.01, lt);
+      poser(c.trace, k, d - lt / 2);
+    }
+  };
+}
 // LE PELOTON DU 400 M EN SALLE (piste-salle.js, rabattement) : passe la ligne, le moteur met tout le monde
 // sur la ligne de mesure du couloir 1 — deux coureurs a la meme distance s'y confondraient. A l'image
 // seulement, chacun garde un ecart vers l'exterieur (0 a 1,25 m), pris pendant la diagonale.
@@ -898,19 +986,52 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // LA SALLE : sous le toit — ni ciel, ni pelouse, ni gradins du stade ; sa propre lumiere, de jour ou de nuit
     // (le theme `salle` ne suit pas l'heure : on lit le moment du joueur, ?heure= compris)
     const nuitSalle = (globalThis as any).SprinterHeure?.moment((globalThis as any).SprinterApp?.G) === 'nuit';
-    const SL = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
+    // LA FINALE DANS LE NOIR (Championnat de France du 19/12) : ?finale=1 pour l'essayer
+    const finaleNoire = Q.get('finale') === '1';
+    const SL = finaleNoire ? SALLE_FINALE : nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
     scene.background = new THREE.Color(SL.fond);
     scene.fog = new THREE.Fog(SL.brume, 110, 320);
     hemi.color.set(SL.hemiCiel); hemi.groundColor.set(SL.hemiSol); hemi.intensity = SL.hemi;
     soleil.color.set(SL.soleilCouleur); soleil.intensity = SL.soleil;
     soleilDecal.set(-6, 10, 40);
-    uFoule.uLum.value = 1; uLisere.value = 0;
+    uFoule.uLum.value = finaleNoire ? 0.32 : 1; uLisere.value = 0;
     if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
     envCorps = envPalais;
     eclairerLesCorps();
     const base = (import.meta as any).env?.BASE_URL || '/';
-    const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle });
+    const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle, finale: finaleNoire, droite: !T.curved });
     pubAnim.push(salle.animer); cameraSalle = salle.camera;
+    // L'ECRAN GEANT DE LA SALLE (l'auteur, 8/11) : le film de promotion quinze secondes, puis six secondes de la
+    // campagne en cours (panneaux.ts) ou, sans campagne, du logo BENBEZI balaye d'un reflet ; en boucle
+    {
+      const film = document.createElement('video');
+      film.src = base + (ULTRA ? 'pubs/videos/sprinter-direct.mp4' : 'pubs/videos/sprinter-direct-640.mp4');
+      film.muted = true; film.loop = true; film.playsInline = true; film.preload = 'auto'; film.setAttribute('playsinline', '');
+      videoPub = film;
+      const tFilm = new THREE.VideoTexture(film); tFilm.colorSpace = THREE.SRGBColorSpace;
+      const logo = new Image(); logo.src = base + 'pubs/benbezi-logo-3d-cadre-halo.webp';
+      const toileE = document.createElement('canvas'); toileE.width = 1024; toileE.height = 512;
+      const ce = toileE.getContext('2d')!, tE = new THREE.CanvasTexture(toileE); tE.colorSpace = THREE.SRGBColorSpace;
+      const matG = salle.ecranGeant; matG.map = tE; matG.needsUpdate = true;
+      let imageE = -1;
+      pubAnim.push(t => {
+        if (film.paused) film.play().catch(() => {});
+        const cycle = t % 21;
+        if (cycle < 15 && film.readyState >= 2) { matG.map = tFilm; return; }
+        matG.map = tE;
+        const img = Math.floor(t * 30); if (img === imageE) return; imageE = img;   // (30 images/s suffisent)
+        const w = 1024, h = 512, u = ((cycle - 15 + 6) % 6) / 6;
+        ce.globalCompositeOperation = 'source-over'; ce.fillStyle = '#04050a'; ce.fillRect(0, 0, w, h);
+        const sponsor = sponsorDeLaCourse((globalThis as any).SprinterApp?.G);
+        if (sponsor) ce.drawImage(sponsor, w * 0.06, (h - w * 0.88 / 4) / 2, w * 0.88, w * 0.88 / 4);   // (1000 x 250, sans deformer)
+        else if (logo.complete && logo.naturalWidth) { const lw = w * 0.86, lh = lw * logo.naturalHeight / logo.naturalWidth; ce.drawImage(logo, (w - lw) / 2, (h - lh) / 2, lw, lh); }
+        // le reflet qui traverse l'ecran
+        const x = (u * 1.8 - 0.4) * w, g = ce.createLinearGradient(x - 120, 0, x + 120, 0);
+        g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.18)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        ce.globalCompositeOperation = 'lighter'; ce.fillStyle = g; ce.fillRect(0, 0, w, h);
+        tE.needsUpdate = true;
+      });
+    }
     // le public de la salle : les memes cartes que le stade (LE PUBLIC, EN CARTES)
     if (Q.get('foule') !== '0') {
       const pal = paletteDuPublic(th, false, false), cartes: number[] = [];
@@ -935,6 +1056,8 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       l.finir(salle.interieur);
       blocsSalle.push(...salle.interieur.children.slice(n0));
     }
+    finaleVue = finaleNoire;
+    if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches));
     return;
   }
   if (espace) espaceAutour(th, hasard);
@@ -3116,6 +3239,16 @@ export function rendre(App: any, dt: number) {
         vise.set(c[0], -c[1], 1.0);
       }
     }
+    // LA FINALE : pendant la presentation, la camera cadre le nom qui s'ecrit dans le couloir, de haut et
+    // de cote (la tribune), comme les plans de Doha — mais au ras de la salle
+    if (finaleVue && presente >= 0 && (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro'))) {
+      const h = capIci(T.heading(7, presente)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
+      // en portrait le champ est etroit : plus loin, plus haut, plus en arriere, sinon le nom (9 m) sort du cadre
+      const recul = camera.aspect < 1 ? 9 : 5, cote = camera.aspect < 1 ? 12 : 9, haut = camera.aspect < 1 ? 10 : 6.5;
+      finCam.set(presenteOu.x - ax * recul + ex * cote, -(presenteOu.y - ay * recul + ey * cote), haut);
+      finVise.set(presenteOu.x + ax * 1, -(presenteOu.y + ay * 1), 0);
+      finActive = true;
+    } else finActive = false;
     // (le tapis du 60 m s'enfonce sous ceux qui le frappent)
     const auTapis = G.ghost && (G.runners || []).indexOf(G.ghost.runner) < 0 ? (G.runners || []).concat([G.ghost.runner]) : G.runners || [];
     if (salleActive && auTapis.some((r: any) => r.creuxTapis != null)) {
@@ -3135,7 +3268,7 @@ export function rendre(App: any, dt: number) {
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
     // pas de survol pour la nuit du molosse (« pas de vue aerienne de presentation », l'auteur, 23/10)
-    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue;
+    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue && !(finaleVue && presente >= 0);
     if (!avant && G.state !== 'race' && G.state !== 'falseout') { volLance = false; volPlonge = -1; }
     if (avant && !volLance) { volLance = true; volT = 0; volPlonge = -1; }
     let survol = false;
@@ -3176,6 +3309,8 @@ export function rendre(App: any, dt: number) {
     // LE TOURNAGE (28/10, la video du club de Val-de-Reuil) : un harnais peut poser sa propre camera
     // (globalThis.__tournage.camera(camPos, camVise, vise, G, dt, p) ; reperes du monde, y retourne ; p : le joueur, repere 2D). Rien sans lui.
     const tournage = (globalThis as any).__tournage;
+    // (la finale : ce cadrage passe avant la cinematique de presentation)
+    if (finActive) { camPos.copy(finCam); camVise.copy(finVise); }
     if (tournage?.camera) { tournage.camera(camPos, camVise, vise, G, dt || 0.016, p); survol = survol || !!tournage.survol; }
     camera.position.copy(camPos);
     // le toit des tribunes s'efface quand la camera le survole (vue 2D), jamais pendant le survol d'avant-course
