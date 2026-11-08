@@ -33,7 +33,8 @@ def arguments():
     val = lambda k, d=None: a[a.index(k) + 1] if k in a else d
     return {'source': val('--source'), 'taille': float(val('--taille', '1.66')), 'glb': val('--glb'),
             'tourner': float(val('--tourner', '-90')), 'faces': int(val('--faces', str(FACES))),
-            'etapes': val('--etapes'), 'voxel': float(val('--voxel', '0.0018'))}
+            'etapes': val('--etapes'), 'deltoide': float(val('--deltoide', '0.09')),
+            'passes_deltoide': int(val('--passes-deltoide', '60')), 'voxel': float(val('--voxel', '0.0018'))}
 
 
 def preparer(source, tourner, faces, voxel):
@@ -65,6 +66,36 @@ def preparer(source, tourner, faces, voxel):
     return sortie
 
 
+def remonter_epaule(h, J, H):
+    """LE PIVOT DE L'EPAULE AU CENTRE DE LA TETE DE L'HUMERUS (08/11). vedette_tripo la pose sur l'axe de l'avant-bras
+    prolonge ; les bras de Tripo tombent un peu en T, et ce prolongement la mettait cinq centimetres trop bas (79 % de
+    la taille au lieu de 82) : le bras rabattu pivotait sous le deltoide, qui partait en boule hors du buste. Le pivot
+    passe a 2,7 % de la taille sous le haut de l'epaule, mesure sur la peau a sa verticale."""
+    from mathutils import Vector
+    E = J['epaule']
+    haut = max((v.co.z for v in h.data.vertices if abs(v.co.x - E.x) < 0.008 and abs(v.co.y - E.y) < 0.06), default=None)
+    if haut is None:
+        return
+    z = haut - 0.027 * H
+    print('EPAULE %.3f -> %.3f (haut de l\'epaule %.3f)' % (E.z, max(E.z, z), haut), flush=True)
+    if z > E.z:
+        J['epaule'] = Vector((E.x, E.y, z))
+        J['sternum'] = Vector((J['sternum'].x, J['sternum'].y, z - 0.01 * H))
+
+
+def deplier_deltoides(h, rig, rayon, passes):
+    """LES EPAULES (08/11, l'auteur : « corrige les epaules »). Rabattre les bras de la pose en T tasse la peau du
+    haut du bras : une bosse sur le deltoide, plus large que le buste. Le meme depliage que l'aisselle
+    (vedette_tripo.deplier), centre sur le haut et le dehors de l'epaule, peau et poids ensemble."""
+    if rayon <= 0:
+        return
+    centres = []
+    for cote in ('l', 'r'):
+        S = rig.matrix_world @ rig.data.bones['upperarm_' + cote].head_local
+        centres.append((S.x, S.y * 1.08, S.z - 0.02))
+    print('DELTOIDES : %d sommets deplies' % V['deplier'](h, centres, rayon, passes), flush=True)
+
+
 def tout(A):
     def etape(n):
         print('ETAPE', n, flush=True)
@@ -74,6 +105,7 @@ def tout(A):
     V['M']['scene_neuve']()
     h = V['importer'](src, A['taille'], 'coureur'); etape('importe')
     J = V['articulations'](h, A['taille'], entrejambe_au_tronc=True)
+    remonter_epaule(h, J, A['taille'])
     D = V['doigts'](h, J, A['taille'], soudes=True)
     rig = V['squelette'](J, D, 'Coureur')
     V['ponderer'](h, rig); etape('pondere')
@@ -90,6 +122,7 @@ def tout(A):
     herite = VM['caler'](rig, VC['cibles'](rig, cou=1.0)); etape('cale')
     VC['figer'](h, rig, herite); etape('fige')
     V['deplier_aisselles'](h, rig)
+    deplier_deltoides(h, rig, A['deltoide'], A['passes_deltoide'])
     V['sternum_au_buste'](h, rig)
     GEN['zoner'].__globals__['zone_de_la_face'] = R['zone_du_debardeur']
     GEN['zoner'](h, rig)
