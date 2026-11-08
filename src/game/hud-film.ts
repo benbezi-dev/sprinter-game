@@ -156,14 +156,16 @@ function barreDuHaut(ctx: CanvasRenderingContext2D, l: number, o: any) {
   // atteignable, rouge des qu'il ne l'est plus. Un film qui garderait le nombre
   // mais perdrait sa couleur perdrait la moitie de ce qu'il raconte.
   const recordMs = record(G);
-  const chronoMs = (G.elapsed || 0) * 1000;
+  // (la ligne passee, le chrono s'arrete : comme RaceHUD.tsx)
+  const chronoS = G.player?.finished && G.player.finishTime != null ? G.player.finishTime : G.elapsed || 0;
+  const chronoMs = chronoS * 1000;
   const enCourse = etat === 'race';
   const couleurChrono = !enCourse || recordMs === null ? OR
     : chronoMs <= recordMs ? VERT : ROUGE;
 
   const eChrono = { taille: tChrono, gras: 900, police: CHIFFRES,
                     couleur: couleurChrono, aligne: 'right' as CanvasTextAlign, ombre };
-  const txtChrono = (G.elapsed || 0).toFixed(2);
+  const txtChrono = chronoS.toFixed(2);
   const yChrono = padY + hChrono / 2;
   const lChrono = ecrire(ctx, txtChrono, droite, yChrono, eChrono);
 

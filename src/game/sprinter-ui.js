@@ -176,7 +176,7 @@
     const runs = G.runs[G.raceKey] || [];
     if (!runs.length) {
       plain(t('no_run'), px + pw / 2, py + S(120), A.MUTED, 14, 'center');
-      plain(t('furthest') + G.furthest[G.raceKey] + t('of_six'),
+      plain(t('furthest') + (G.furthest[G.raceKey] || 0) + t('of_six'),
             px + pw / 2, py + S(146), A.CREAM, 15, 'center', 700);
     } else {
       for (let i = 0; i < 10; i++) {
@@ -676,7 +676,7 @@
       // partir avant le signal : pas de prime de reaction, et le
       // coureur reste bloque un court instant au coup de pistolet
       if (!G.player.jumped) {
-        // one-shot et defi : sans reprise possible, le faux depart elimine
+        // one-shot, defi et carriere : le faux depart elimine (voir falseStartOut)
         if (A.falseStartOut()) { buzz(120); return; }
         G.player.jumped = true;
         G.player.freeze = C.FALSE_START_FREEZE;

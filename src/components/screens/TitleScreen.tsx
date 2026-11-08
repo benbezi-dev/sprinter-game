@@ -62,8 +62,10 @@ import { GameTour, tourVu, marquerTourVu } from './GameTour';
 import { premierLancement, phasePremiersPas, premiereCourseLancee, apresLaPremiereArrivee, premiersPasFaits, nomDejaDemande } from '@/game/premiers-pas';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
-import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies } from '@/game/jeux';
-import { APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
+import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, epreuvesDuLieu } from '@/game/jeux';
+import { useMenuSansDefiler } from '@/hooks/use-menu-sans-defiler';
+import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
+import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
@@ -76,6 +78,7 @@ let carriereDeLaVisite: ChoixCarriere | null = null;
 import type { RaceKey } from '@/game/leaderboard';
 import { useGesteMondes } from '@/hooks/use-geste-mondes';
 import { usePassage } from '@/game/passage';
+import { gererConsentement } from '@/game/pub';
 import { accueilPose } from '@/game/scene-accueil';
 import type { Direction } from '@/game/mondes';
 import { ChevronDown, ChevronUp, ChevronLeft as FlecheG, ChevronRight as FlecheD } from 'lucide-react';
@@ -137,7 +140,7 @@ function PiedLiens({ onTour, onTuto, haies }:
     // mt-4 et non mt-3 : le menu au-dessus deborde de 16 px vers le bas
     // (`-mb-4`, pour le halo de COMMENCER). Avec 12 px d'ecart, ses cartes
     // passaient sous les liens — vu en 414 x 736 avec la carte du championnat.
-    <div className="relative z-10 shrink-0 w-full max-w-md mx-auto mt-4
+    <div className="relative z-10 shrink-0 w-full max-w-md mx-auto mt-4 serre:mt-2
                     flex items-center justify-between gap-1">
       {liens.map(({ cle, action }) => (
         <button
@@ -165,6 +168,12 @@ export function TitleScreen() {
   const jeu = useJeu();
   const haies = jeu === 'hurdlers';
   const epreuves = epreuvesDuJeu(jeu);
+  // La salle a son interrupteur, comme dans le one shot : trois distances a la fois.
+  const salleCarriere = (jeu === 'sprinter' || jeu === 'hurdlers') && epreuves.some(k => estEnSalle(k));
+  const lieuCarriere: Lieu = estEnSalle(raceKey) ? 'salle' : 'dehors';
+  const epreuvesCarriere = (salleCarriere
+    ? epreuvesDuLieu(jeu, lieuCarriere)
+    : epreuves) as readonly RaceKey[];
   const [showTop500, setShowTop500] = useState(false);
   // LA LEGENDE EST IMBRIQUEE DANS LA CARRIERE (l'auteur, 07/10/2026) :
   // ouvrir l'onglet montre d'abord le choix entre les deux, la Legende fermee
@@ -353,6 +362,8 @@ export function TitleScreen() {
    * un stade deja immobile.
    */
   const passage = usePassage();
+  // Tout le menu a l'ecran, sans defiler, quelle que soit sa hauteur (hooks/use-menu-sans-defiler.ts)
+  const { cadre: menuCadre, contenu: menuContenu } = useMenuSansDefiler();
   const efface = !!passage && !passage.surPlace;
   // Jumper a son accueil, qui se pose a la place de celui-ci (Mondes.tsx).
   if (jeu === 'jumper') return null;
@@ -367,7 +378,7 @@ export function TitleScreen() {
           page et les fenetres posees par-dessus exceptes. */}
       <div ref={zoneGeste} className="flex-1 min-h-0 flex flex-col">
         {/* Header controls */}
-        <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4">
+        <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4 serre:mb-1">
           <button 
             onClick={() => toggleLang()}
             className="bg-card/80 backdrop-blur-md border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 md:gap-2 hover:bg-white/10 transition-colors"
@@ -418,11 +429,11 @@ export function TitleScreen() {
               titre, la ou la piste traverse deja l'ecran, et le titre reste
               au milieu de sa moitie. */}
           <div className="flex-1 w-full flex flex-col items-center landscape:items-start text-center landscape:text-left">
-            <div className="order-1 landscape:order-2 shrink-0 mt-2 md:mt-0 bg-card/60 backdrop-blur-sm border border-white/10 px-6 py-5 md:px-8 md:py-6 rounded-2xl landscape:w-full max-w-md border-t-white/20">
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black font-display tracking-tight text-primary drop-shadow-md">
+            <div className="order-1 landscape:order-2 shrink-0 mt-2 md:mt-0 serre:mt-0 bg-card/60 backdrop-blur-sm border border-white/10 px-6 py-5 md:px-8 md:py-6 serre:px-5 serre:py-2 rounded-2xl landscape:w-full max-w-md border-t-white/20">
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl serre:text-4xl font-black font-display tracking-tight text-primary drop-shadow-md">
                 {haies ? 'HURDLERS' : 'SPRINTER'}
               </h1>
-              <p className="mt-1 md:mt-2 text-[10px] sm:text-xs md:text-base lg:text-xl font-medium text-foreground/80 tracking-wide uppercase">
+              <p className="mt-1 md:mt-2 serre:mt-0 text-[10px] sm:text-xs md:text-base lg:text-xl serre:text-[10px] font-medium text-foreground/80 tracking-wide uppercase">
                 {tab === 'career'
                   ? (auChoix
                       ? <>{N.getLang() === 'en' ? 'CAREER — PICK YOUR MODE' : 'CARRIÈRE — CHOISIS TON MODE'}</>
@@ -435,7 +446,7 @@ export function TitleScreen() {
               </p>
             </div>
             <div data-accueil-scene aria-hidden
-                 className="order-2 landscape:order-1 w-full max-w-md flex-1 min-h-[84px] landscape:min-h-[96px]" />
+                 className="order-2 landscape:order-1 w-full max-w-md flex-1 min-h-[84px] serre:min-h-0 landscape:min-h-[96px]" />
             <div className="hidden landscape:block order-3 flex-1" />
           </div>
 
@@ -447,10 +458,10 @@ export function TitleScreen() {
               Un fondu pose ici le 26/09 a decoupe au format du menu la
               revelation, le boss et les podiums du championnat (Championnat.tsx
               les ouvre depuis sa carte). */}
-          <div ref={rouleau}
+          <div ref={n => { rouleau.current = n; menuCadre.current = n; }}
                className="flex-initial landscape:flex-1 min-h-0 overflow-y-auto flex flex-col
                           w-[calc(100%+4rem)] max-w-[calc(28rem+4rem)] -mx-8 px-8 -mb-4">
-          <div className="my-auto flex flex-col gap-3 sm:gap-4 md:gap-6 w-full pt-2 pb-6">
+          <div ref={menuContenu} className="my-auto flex flex-col gap-3 sm:gap-4 md:gap-6 serre:gap-2 w-full pt-2 pb-6 serre:pt-1 serre:pb-3">
 
             {/* L'EDITION DU MOMENT, tout en haut de la colonne.
                 Au-dessus du defi du jour parce qu'elle ne dure qu'une
@@ -529,7 +540,7 @@ export function TitleScreen() {
                 Ferme tant que DUELS_OUVERTS vaut false (voir game/duels). */}
             {DUELS_OUVERTS && <button
               onClick={() => setShowDuels(true)}
-              className="w-full px-4 py-3 rounded-2xl bg-black/70 backdrop-blur-md
+              className="w-full px-4 py-3 serre:py-2 rounded-2xl bg-black/70 backdrop-blur-md
                          border border-primary/50 hover:bg-black/85 transition-colors
                          shadow-[0_0_25px_rgb(var(--primaire-rgb)/0.2)]
                          flex items-center justify-between gap-3 text-left"
@@ -648,7 +659,7 @@ export function TitleScreen() {
                 lignes vides — celles des parcours qu'on n'a pas encore courus —
                 ne sont plus dessinees : montrer cinq rangs dont quatre affichent
                 « -- » prend la place de cinq resultats pour n'en donner qu'un. */}
-            <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-3 md:p-5 shadow-2xl flex flex-col gap-2 md:gap-3">
+            <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-3 md:p-5 serre:py-2 shadow-2xl flex flex-col gap-2 md:gap-3 serre:gap-1.5">
               <div className="flex items-center gap-2">
                 <img src={`${BASE}/icons/trophy.png`} alt="" className="w-4 h-4 shrink-0" />
                 {/* Le titre passe a la ligne plutot que de se faire couper :
@@ -683,11 +694,11 @@ export function TitleScreen() {
                   {N.t('no_run')}
                   {' — '}
                   <span className="text-foreground/90 font-bold uppercase tracking-wide">
-                    {N.t('furthest')} {furthestIci} {N.t('of_six')}
+                    {N.t('furthest')} {furthestIci || 0} {N.t('of_six')}
                   </span>
                 </p>
               ) : (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1 serre:[&>*:nth-child(n+4)]:hidden">
                   {currentRuns.slice(0, 5).map((run, i) => (
                     <div key={i} className="flex items-center text-[11px] md:text-sm font-mono
                                             bg-black/20 rounded-md px-2 py-1 md:px-3 md:py-1.5
@@ -713,22 +724,28 @@ export function TitleScreen() {
                 avec les banderoles d'evenement au-dessus, il fallait encore
                 derouler pour lancer une course. Ils restent en vue, le reste
                 defile dessous. */}
-            <div className="sticky bottom-0 z-10 flex flex-col gap-2 pt-2 pb-1 -mx-1 px-1 rounded-2xl bg-black/60 backdrop-blur-md">
-            {/* Race Selectors */}
-            <div className="flex gap-2">
-              {epreuves.map(k => (
-                <button
-                  key={k}
-                  onClick={() => handleRaceToggle(k)}
-                  className={`flex-1 py-2 md:py-4 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
-                    ${raceKey === k 
-                      ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]' 
-                      : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
-                >
-                  {nomCourt(k)}
-                </button>
-              ))}
-            </div>
+            <div className="sticky bottom-0 z-10 flex flex-col gap-2 pt-2 pb-1 -mx-1 px-1 rounded-2xl bg-neutral-950/90 backdrop-blur-md">
+            {/* LES EPREUVES, COMME DANS LE ONE SHOT (l'auteur, 02/11) : « les epreuves en salle
+                n'apparaissent pas dans le mode carriere » — le 200 et le 400 en salle n'etaient
+                visibles qu'apres avoir touche le 200 ou le 400. L'interrupteur PLEIN AIR / SALLE
+                les montre d'emblee, sur une ligne de trois (ChoixEpreuves.tsx). */}
+            {salleCarriere && (
+              <div className="flex items-center justify-between gap-2 px-1">
+                <span className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
+                  {N.t('pick_events')}
+                </span>
+                <InterrupteurLieu lieu={lieuCarriere} id="carriere"
+                  onChange={l => handleRaceToggle(equivalente(raceKey, l))} />
+              </div>
+            )}
+            <LigneEpreuves
+              epreuves={epreuvesCarriere}
+              coche={k => raceKey === k}
+              onToggle={k => handleRaceToggle(k)}
+              fond="bg-card/80"
+              haute
+              unique
+            />
 
             {/* Start Button */}
             <button 
@@ -776,6 +793,13 @@ export function TitleScreen() {
            className="py-1 hover:text-white/70 transition-colors">
           {N.t('legal_suppression')}
         </a>
+        {EST_NATIF && (<>
+          <span aria-hidden="true">·</span>
+          <button type="button" onClick={() => { void gererConsentement(); }}
+                  className="py-1 tracking-widest hover:text-white/70 transition-colors">
+            {N.t('legal_pub')}
+          </button>
+        </>)}
       </div>
 
       {/* A la toute premiere visite on montre le jeu avant de le faire jouer :

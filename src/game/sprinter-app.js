@@ -1,6 +1,8 @@
 /* -----------------------------------------------------------------------
    SPRINTER — couche navigateur : rendu, ecrans, tactile, son.
    ----------------------------------------------------------------------- */
+import { sponsorDeLaCourse } from './panneaux';
+
 (function () {
   'use strict';
   const K = globalThis.SprinterCore;
@@ -1999,7 +2001,10 @@
     // compte les Continue achetes pour elle (le prix monte a chaque fois) ;
     // `runContinues` est ce compte vu d'ici. Une carriere qui en a utilise un
     // ne s'inscrit pas au classement des parcours. Voir game/pieces.ts.
-    runId: '', runContinues: 0,
+    // `runPubs` compte les reprises payees d'une pub (game/pub.ts), a part :
+    // le serveur ne les connait pas, et elles laissent la carriere au
+    // classement (decision du 3/11/2026 : seule la reprise achetee en sort).
+    runId: '', runContinues: 0, runPubs: 0,
     cut: null, cutQueue: [], cutAfter: 'count', skipArm: 0,
     // La cinematique qui s'efface par-dessus celle qui commence. Nulle en
     // dehors du seul fondu enchaine du jeu — le sacre vers le generique.
@@ -2089,6 +2094,19 @@
       if (d.scores) G.scores = d.scores;
       if (d.runs) G.runs = Object.assign(G.runs, d.runs);
       if (d.furthest) G.furthest = Object.assign(G.furthest, d.furthest);
+      // LES CHRONOS DE RELAIS D'AVANT L'ALLURE (l'auteur, 07/11 : « retire les chronos et les records sur 4x100 ») :
+      // jusqu'au 07/11 le relais se courait sans ALLURE_DU_JOUEUR, ~32 s, hors d'atteinte depuis. Une fois par appareil.
+      if (!d.relaisAllure) {
+        Object.keys(G.scores).forEach(k => { if (k.indexOf('4x100:') === 0) delete G.scores[k]; });
+        delete G.runs['4x100'];
+        try {
+          const h = JSON.parse(localStorage.getItem(HIST) || '[]');
+          // (1794011132000 : fin du deploiement de l'allure du relais, 07/11/2026 00:25 UTC)
+          localStorage.setItem(HIST, JSON.stringify(h.filter(e => !(e && e.r === '4x100' && e.d < 1794011132000))));
+        } catch (e) { /* historique illisible : rien a retirer */ }
+        G.relaisAllure = true;
+        save();
+      }
       N.setLang(d.lang || N.detect());
     } catch (e) { N.setLang(N.detect()); }
   }
@@ -2096,6 +2114,7 @@
     try {
       localStorage.setItem(SAVE, JSON.stringify({
         scores: G.scores, runs: G.runs, furthest: G.furthest,
+        relaisAllure: !!G.relaisAllure,
         lang: N.getLang()
       }));
     } catch (e) { }
@@ -2134,7 +2153,8 @@
     return p < 0 ? null : p + 1;
   }
   function recordRun(t) {
-    const a = G.runs[G.raceKey].concat([Math.round(t * 100) / 100]);
+    // (les tables du depart n'ont que les six epreuves de plein air : la salle et les autres y entrent ici)
+    const a = (G.runs[G.raceKey] || []).concat([Math.round(t * 100) / 100]);
     a.sort((x, y) => x - y); a.length = Math.min(10, a.length);
     G.runs[G.raceKey] = a;
     const p = a.indexOf(Math.round(t * 100) / 100);
@@ -2200,12 +2220,49 @@
   })();
   function enTroisD(table, cle) { return RENDU_3D ? table[cle] : undefined; }
 
+  // DIFFICULTE RELEVEE (l'auteur, 07/11 : « trop lent », et la salle n'a pas la base du plein air). En 3D, chaque
+  // niveau est le chrono que le joueur fait a une cadence donnee, mesure sur CE moteur et pour CHAQUE epreuve (salle et
+  // haies comprises, chacune sa courbe et son record) : niveau 1 battu a 8 appuis/s, 2 a 10, 3 a 13, 4 a 16, 5 a 19,
+  // ZEZE a 24 ; l'adversaire le plus lent du niveau est le chrono a la cadence du palier d'en dessous (7 / 8,5 / 10,5 /
+  // 13 / 15 / 20). Chronos 3D finaux, en secondes. Aux haies la courbe plafonne vers 15 appuis/s (l'appel commande) :
+  // les niveaux 4 a 6 du 110 m haies et du 60 m haies hommes sont lisses a la main pour garder un ecart entre eux.
+  // RETOUCHE DE L'AUTEUR (07/11) : niveaux 1, 3, 5 et ZEZE du 60, 100, 200, 400 et 400 m salle donnes a la main ; le
+  // niveau 4 est pose entre le 3 et le 5. Le 200 m salle et les haies gardent la mesure.
+  // Remesurer (tools/records-du-monde-test.mjs, fonctions parfait / haiesJouees) si ALLURE_DU_JOUEUR ou la physique change.
+  const PLATEAUX_3D = {
+    '60':   [[8.57, 10.41], [7.76, 8.31], [7.30, 7.67], [7.12, 7.30], [6.99, 7.12], [6.89, 6.99]],
+    '100':  [[12.56, 14.95], [11.14, 12.03], [10.64, 11.02], [10.45, 10.64], [10.35, 10.45], [10.05, 10.30]],
+    '200':  [[23.75, 27.63], [21.09, 22.59], [20.52, 20.96], [20.40, 20.52], [20.20, 20.40], [19.90, 20.20]],
+    '400':  [[50.27, 57.85], [45.84, 47.58], [45.70, 45.90], [45.50, 45.75], [45.30, 45.60], [45.00, 45.20]],
+    '200s': [[27.35, 32.02], [23.13, 25.77], [21.66, 22.69], [21.19, 21.66], [20.91, 21.31], [20.64, 20.84]],
+    '400s': [[56.64, 65.33], [48.79, 53.55], [47.60, 48.27], [47.45, 47.75], [47.20, 47.60], [46.90, 47.20]],
+    '100h': [[16.04, 18.39], [13.86, 15.33], [12.99, 13.54], [12.79, 12.99], [12.58, 12.79], [12.45, 12.55]],
+    '110h': [[16.64, 19.10], [14.54, 15.20], [14.05, 14.31], [13.45, 14.05], [13.25, 13.45], [13.10, 13.25]],
+    '400h': [[51.69, 56.38], [49.45, 50.86], [48.66, 49.45], [48.22, 48.66], [47.56, 48.22], [47.27, 47.56]],
+    '60h':  [[9.60, 11.00], [8.58, 9.16], [7.95, 8.15], [7.76, 7.95], [7.62, 7.76], [7.40, 7.55]],
+    '60hf': [[10.36, 12.21], [8.82, 9.87], [8.47, 8.79], [8.32, 8.47], [8.11, 8.32], [7.90, 8.11]],
+    // Le relais, mesure avec tools/relais-simulation.mjs (quatre relayeurs a la meme cadence, allure du 100 m comme en
+    // jeu, meilleurs placement et depart, passages parfaits). Les passages plafonnent le haut ; la simulation n'a pas
+    // tenu au-dela de 20 appuis/s : ZEZE est estime juste sous les 39,22 s de 20 appuis/s.
+    '4x100': [[48.37, 54.75], [40.90, 45.70], [39.96, 40.29], [39.50, 39.96], [39.25, 39.50], [38.95, 39.22]],
+  };
+  // Le reste (2D par ?rendu=2d) : les tables d'origine, -10 % aux niveaux 1 a 5 et -3 % aux ZEZE.
+  const DURCI = [0.90, 0.90, 0.90, 0.90, 0.90, 0.97];
+  function plateauDuNiveau(R, i) {
+    const p3 = RENDU_3D && PLATEAUX_3D[R.key] && PLATEAUX_3D[R.key][i];
+    // buildLevel multiplie le tirage par CONVERSION_ADVERSAIRES en 3D : on la retire ici pour tomber sur le chrono vise.
+    if (p3) { const c = K.CONVERSION_ADVERSAIRES[R.key] || 1; return [p3[0] / c, p3[1] / c]; }
+    const r = R.ranges && R.ranges[i];
+    const k = DURCI[i] || 1;
+    return r ? [r[0] * k, r[1] * k] : undefined;
+  }
+
   function enDessousDuNiveau(R, idx) {
     const s = G.runSplits;
     if (!s || !s.length) return false;
     if (G.mode === 'oneshot' && G.shotRaces[G.shotIdx - 1] !== G.raceKey) return false;
     const precedent = s[s.length - 1];
-    const bornes = R.ranges && R.ranges[idx];
+    const bornes = plateauDuNiveau(R, idx);
     if (precedent == null || !bornes) return false;
     return precedent > bornes[1] * (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1);
   }
@@ -2391,12 +2448,15 @@
     // index hors du tableau court au stade olympique.
     // Une marche de la carriere d'athlete peut porter ses chronos (game/athlete/regles.ts).
     const impose = G.reglagesJoueur && G.reglagesJoueur.plateau;
-    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || R.ranges[idx] || R.ranges[MONDIAUX];
+    const [lo, hi] = (impose && impose[R.key]) || (lvl.plateau && lvl.plateau[R.key]) || plateauDuNiveau(R, idx) || plateauDuNiveau(R, MONDIAUX);
     // UN CHRONO FIXE, pour qui en a un. Un athlete reel qu'on vient defier
     // (voir `cibles`, STADES_HORS_SERIE) court le meme temps a chaque
     // tentative : sans cela, « le battre » dependrait du tirage.
     const cibles = (lvl.cibles && lvl.cibles[R.key]) || null;
     G.track = new Track(R);
+    // (la face du tapis est a 26,07 m de la ligne, salle-3d.ts ; le coureur s'y arrete les mains devant)
+    K.Runner.prototype.tapis = R.salleDroite && RENDU_3D ? 25.7 : null;
+    K.Runner.prototype.tapisRecord = K.RECORDS_DU_MONDE[R.key] || null;
     G.runners = [];
     // LE COULOIR TIRE AU SORT SUR L'ANNEAU COUVERT (« le couloir 6 a plus de montee, le couloir 1 un angle
     // plus serre », l'auteur, 27/10) : chaque couloir s'y court autrement — le joueur n'est plus toujours au 4
@@ -2435,7 +2495,7 @@
       const t = (cibles && cibles[n] ? cibles[n] : tire) * (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1);
       const lane = i < monCouloir ? i : i + 1;
       const r = new Runner(n, lane, { target: t, maxSpeed: R.maxSpeed,
-        total: G.track.total, pool: lvl.pool, record });
+        total: G.track.total, pool: lvl.pool, record, allure: 1 / (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1) });
       if (r.target < best) { best = r.target; G.champion = n; G.championTime = r.target; }
       G.runners.push(r);
     });
@@ -2584,7 +2644,7 @@
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.etiquette = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
-    G.runId = nouveauParcours(); G.runContinues = 0;
+    G.runId = nouveauParcours(); G.runContinues = 0; G.runPubs = 0;
     startLevel(0);
   }
   // LA TOUTE PREMIERE COURSE PART SANS CINEMATIQUE (game/premiers-pas.ts) : un
@@ -2607,9 +2667,9 @@
   // perdue n'entre pas au cumul, comme avant : seul ce qu'on gagne y entre.
   // Le paiement se fait AVANT, cote serveur (game/pieces.ts) ; le moteur ne
   // sait rien des pieces, il compte seulement qu'un Continue a eu lieu.
-  function continuerCarriere() {
+  function continuerCarriere(parPub) {
     if (G.mode !== 'campaign' || G.state !== 'over') return false;
-    G.runContinues += 1;
+    if (parPub) G.runPubs += 1; else G.runContinues += 1;
     startLevel(G.levelIdx);
     return true;
   }
@@ -2740,13 +2800,22 @@
   // pour celui qui recoit le defi comme pour celui qui le renvoie. Les
   // epreuves restantes comptent pour abandon et le duel est perdu — c'est ce
   // que renvoie le vrai : true si l'on vient bien d'eliminer le joueur.
+  //
+  // EN CARRIERE AUSSI depuis le 3 novembre 2026 : l'etape est perdue, et
+  // l'ecran de defaite (OverScreen) propose pieces, pub ou premiere etape.
+  // Seule la toute premiere course du joueur (premiers-pas) garde le simple
+  // blocage : il n'a encore rien appris du depart.
   function falseStartOut() {
-    if (G.mode !== 'oneshot' || G.falseOut) return false;
+    if (G.falseOut) return false;
+    const carriere = G.mode === 'campaign' && !G.premiereCourse && !G.rejeu;
+    if (G.mode !== 'oneshot' && !carriere) return false;
     G.falseOut = true; G.falseOutT = 0;
     G.player.jumped = true;
-    while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
-    while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
-    G.shotIdx = G.shotRaces.length;
+    if (G.mode === 'oneshot') {
+      while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
+      while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
+      G.shotIdx = G.shotRaces.length;
+    }
     G.flash = 1; G.shake = 1.6; G.falseFlash = 2.4;
     Audio_.cue('dirge');
     G.state = 'falseout';
@@ -3524,6 +3593,18 @@
     const vmax = G.race.maxSpeed * 1.15;
     const L = G.track.total;
     const T = instantLive();
+    // PASSE LA LIGNE, IL VA AU TAPIS DU 60 M CHEZ NOUS AUSSI : plus aucun paquet n'en decide (son rebond n'est pas le notre,
+    // son geste non plus), seul son chrono compte encore
+    // (des la ligne, sans attendre l'arrivee annoncee par la salle : d'ici la, il suivait les paquets sans geste, puis
+    // restait plante a son point le plus loin — « un adversaire ne recule jamais »)
+    if (r.tapis != null && r.total === 60 && r.d >= L) {
+      if (!r.finished) { r.finished = true; r.finishTime = g.fin != null ? g.fin : (g.time || G.elapsed); }
+      if (g.fin != null && T >= g.fin) r.finishTime = g.fin;
+      r.apresLigne(dt, 1.15);
+      r.stride += r.v * dt * (Math.PI / r.strideLength());
+      r.drivePitch = 0;
+      return;
+    }
     const vise = viseLive(g, T);
     // La pente est prise sur la cible elle-meme, a paquet egal. Elle vaut la
     // vitesse estimee tant qu'on extrapole, zero quand l'extrapolation a
@@ -3688,6 +3769,16 @@
     // une foulee continue, avec un retard de quelques centiemes — invisible a
     // l'oeil, alors qu'un saut de 40 cm ne l'est pas.
     if (g.live) { avancerLive(g, dt); return; }
+    // AU 60 M EN SALLE, LA TRACE CONTINUE APRES LA LIGNE : le tapis, puis le retour (engine.ts l'enregistre jusqu'a la
+    // fin de la course). Rejouee, elle faisait reculer le fantome, foulee figee dans la pose du choc (« l'adversaire
+    // reste bloque dans une position et recule », l'auteur, 3/11). Passe la ligne, il fait son propre tapis.
+    if (r.tapis != null && r.total === 60 && r.d >= G.track.total) {
+      if (!r.finished) { r.finished = true; r.finishTime = g.time || G.elapsed; }
+      r.apresLigne(dt, 1.15);
+      r.stride += r.v * dt * (Math.PI / r.strideLength());
+      r.drivePitch = 0;
+      return;
+    }
     const tr = g.trace;
     const last = tr.length - 1;
     const x = G.elapsed / g.step;
@@ -3696,8 +3787,7 @@
       // decelerer comme un vrai coureur plutot que de le figer net sur la
       // piste, ce qui se verrait immediatement.
       if (!r.finished) { r.finished = true; r.finishTime = g.time || last * g.step; }
-      r.v *= Math.exp(-1.15 * dt);
-      r.d += r.v * dt;
+      r.apresLigne(dt, 1.15);
       r.stride += r.v * dt * (Math.PI / r.strideLength());
       r.drivePitch = 0;
       return;
@@ -3777,7 +3867,7 @@
       G.runSplits.push(G.player.finishTime);
       G.runTraces.push(G.recTrace || []);
       G.runTime += G.player.finishTime;
-      G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey], G.levelIdx + 1);
+      G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey] || 0, G.levelIdx + 1);
       if (G.levelIdx + 1 >= NB_ETAPES) {
         // Une carriere reprise par un Continue n'entre pas aux meilleurs
         // parcours : son cumul ne compte que les courses gagnees, la
@@ -4223,7 +4313,8 @@
                                      best: R.best, total: G.track.total, record: enTroisD(K.RECORDS_DU_MONDE, R.key) || null,
                                      allure: enTroisD(K.ALLURE_DU_JOUEUR, R.key) })
       : new Runner(r.name, r.lane, { maxSpeed: R.maxSpeed, total: G.track.total,
-                                     pool: LEVELS[G.levelIdx].pool, record: enTroisD(K.RECORDS_DU_MONDE, R.key) || null });
+                                     pool: LEVELS[G.levelIdx].pool, record: enTroisD(K.RECORDS_DU_MONDE, R.key) || null,
+                                     allure: 1 / (enTroisD(K.CONVERSION_ADVERSAIRES, R.key) || 1) });
     if (neuf.isPlayer) neuf.cadenceLancee = !r.enHaies;
     if (neuf.isPlayer && G.track.salle) { const T = G.track; neuf.pente = (s, v) => T.accelPente(s, neuf.lane, v); neuf.bouscule = bousculade; }
     const garde = { name: r.name, lane: r.lane, look: r.look, isPlayer: r.isPlayer,
@@ -5072,6 +5163,15 @@
       _pubTirage = Math.random();
       _teinteTirage = Math.random();
       _affiche = null;
+    }
+    // Une campagne en cours prend toute la place du logo, dans ses couleurs :
+    // ni teinte, ni halo, ni eclat, une marque ne se recolore pas.
+    const img = sponsorDeLaCourse(G);
+    if (img) {
+      if (!_affiche || _affiche.img !== img) {
+        _affiche = { pub: { halo: new Image() }, th, rgb: null, h: 0.82, pas: 5.0, img, halo: null, flaque: null, marque: true };
+      }
+      return _affiche;
     }
     const p = PUBS[Math.floor(_pubTirage * PUBS.length)];
     if (!pubPrete(p)) return null;
@@ -7405,7 +7505,7 @@
         const seg = sm.slice(i, i + stp + 1), n = i / stp;
         if (pub && n % 2 === 1) {
           wall(ctx, seg, near, 0.02, 1.05, PUB_FOND, stp);
-          panneauPub(ctx, seg, near, 0.02, 1.05, reperes, affiche, !!th.pubsLed, eclatPubs(th));
+          panneauPub(ctx, seg, near, 0.02, 1.05, reperes, affiche, !!th.pubsLed, affiche.marque ? 0 : eclatPubs(th));
         } else {
           wall(ctx, seg, near, 0.02, 1.05,
                th.panels[(pub ? n >> 1 : n) % th.panels.length], stp);

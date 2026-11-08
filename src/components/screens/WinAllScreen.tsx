@@ -10,6 +10,7 @@ import {
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
+import { TenirDansLEcran } from '@/components/TenirDansLEcran';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -105,9 +106,8 @@ export function WinAllScreen() {
   const handleHome = () => SprinterApp.goHome();
 
   return (
-    <div className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
-      <div className="min-h-full flex flex-col items-center justify-center w-full">
-        <motion.div {...SURGISSEMENT} className="flex flex-col items-center max-w-2xl w-full py-6 md:py-8 gap-4 md:gap-6">
+    <TenirDansLEcran className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] overflow-x-hidden">
+        <motion.div {...SURGISSEMENT} className="flex flex-col items-center max-w-md w-full py-6 md:py-8 gap-4 md:gap-6">
           
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-black font-display text-primary tracking-tighter uppercase drop-shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)]">
@@ -248,7 +248,6 @@ export function WinAllScreen() {
           </div>
 
         </motion.div>
-      </div>
-    </div>
+    </TenirDansLEcran>
   );
 }

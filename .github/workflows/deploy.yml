@@ -43,12 +43,10 @@ jobs:
       # ligne. Aucun evenement n'est retire aujourd'hui ; un prochain qui
       # attendrait sa date se retirerait ici, comme Aurel jusqu'au 03/10.
       #
-      # LA RUELLE DE LA NUIT DU MOLOSSE RESTE EN PRODUCTION (16/10). Elle en
-      # etait retiree ici tant que le mode ne vivait que sur /test ; l'edition
-      # s'ouvre au public (src/game/halloween-ouverture.js), et cette ligne
-      # aurait fait courir les treize nuits sur des paves vides. Les images ne
-      # se telechargent qu'a la demande, nuit par nuit (src/game/chargement.ts) :
-      # un joueur qui n'ouvre pas le mode n'en recoit aucune.
+      # LA NUIT DU MOLOSSE EST CLOSE (01/11) : sa ruelle et sa bete ne vivent plus
+      # que dans la version de test, construite a part juste apres.
+      - name: Retirer l'edition close de la production
+        run: rm -rf dist/halloween dist/modeles/molosse-chien.glb dist/modeles/boss-plein/molosse.glb
 
       # La version de test, dans un sous-dossier du meme site. Un seul
       # deploiement sert les deux : pas de second depot a tenir a jour, et la

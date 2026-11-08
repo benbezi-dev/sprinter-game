@@ -11,7 +11,9 @@ import { ETAPES, type Transport } from '@/game/legende/etapes';
 import {
   commencerLaLegende, lancerLEtape, conclureLEtape, etapeSuivante, rangerLaLegende,
   memoire, lieuDeLEtape, rangEnCours, chronoDuBoss, type Verdict,
+  reprisesDeLaLegende, recalerLesContinues, reprendreLEtape,
 } from '@/game/legende/legende';
+import { Reprises } from './Reprises';
 import { mot, chrono, dans } from '@/game/legende/mots';
 import { GlobeDuVoyage } from './LegendeGlobe';
 import { chargerLaMusiqueDuLieu } from '@/game/legende/musiques';
@@ -20,6 +22,7 @@ import { CinematiqueVoyage, CinematiqueApotheose, CinematiqueSacre } from './Leg
 import { PORTRAITS, TEINTES } from './legende-commun';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
+import { TenirDansLEcran } from '@/components/TenirDansLEcran';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE LEGENDE — les ecrans du mode
@@ -401,10 +404,11 @@ export function FinDEtapeLegende() {
   const accueil = () => { rangerLaLegende(); (SprinterApp as any).goHome(); };
   const suivante = () => { if (etapeSuivante()) setAnnonce(true); };
   const recommencer = () => { commencerLaLegende(0); setAnnonce(true); };
+  const reprises = reprisesDeLaLegende();
 
   return (
-    <div className="absolute inset-0 z-30 pointer-events-auto flex items-center justify-center
-                    bg-[rgba(8,5,16,0.88)] px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
+    <>
+      <TenirDansLEcran className="absolute inset-0 z-30 pointer-events-auto overflow-y-auto overflow-x-hidden bg-[rgba(8,5,16,0.88)] px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <motion.div {...PANNEAU} className="w-full max-w-md flex flex-col items-center gap-3 text-center">
         <span className="text-[10px] font-bold tracking-[0.28em]" style={{ color: teinte }}>
           {mot('etape', { n: v.rang + 1 })} · {v.lieu.nom.toUpperCase()}
@@ -432,6 +436,13 @@ export function FinDEtapeLegende() {
         )}
         {!v.gagne && <span className="text-[11px] text-white/55">{mot('regle_perte')}</span>}
 
+        {/* Reprendre l'etape perdue : pieces ou pub (Reprises.tsx). */}
+        {!v.gagne && reprises && (
+          <Reprises parcours={reprises.id} achetes={reprises.continues} pubs={reprises.pubs}
+            etape={v.lieu.nom} recaler={recalerLesContinues}
+            reprendre={parPub => { reprendreLEtape(parPub); setAnnonce(true); }} />
+        )}
+
         {/* La video de l'etape, au-dessus des boutons : elle se partage comme
             sur les autres ecrans de fin. */}
         <div className="w-full">
@@ -458,10 +469,11 @@ export function FinDEtapeLegende() {
           </button>
         </div>
       </motion.div>
-      {sacre && <CinematiqueSacre onFin={() => setSacre(false)} />}
-      <AnimatePresence>
-        {annonce && <Affiche onPartir={() => { setAnnonce(false); lancerLEtape(); }} onFermer={() => { setAnnonce(false); accueil(); }} />}
-      </AnimatePresence>
-    </div>
+      </TenirDansLEcran>
+    {sacre && <CinematiqueSacre onFin={() => setSacre(false)} />}
+    <AnimatePresence>
+      {annonce && <Affiche onPartir={() => { setAnnonce(false); lancerLEtape(); }} onFermer={() => { setAnnonce(false); accueil(); }} />}
+    </AnimatePresence>
+    </>
   );
 }

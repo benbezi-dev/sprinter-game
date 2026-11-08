@@ -15,7 +15,7 @@
 
 import { crediter as crediterPieces, creditDuTitre } from './pieces.js';
 import {
-  FORMAT, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
+  FORMAT, formatDe, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
   ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
   TENANT, lieuDeLEdition, PHASES_A_BULLE,
 } from './championnats-config.js';
@@ -797,8 +797,8 @@ export async function paysEligibles(db, epreuve = EPREUVE_DEFAUT) {
   ).bind(String(epreuve || EPREUVE_DEFAUT), depuis).all();
   return (results || []).map(r => ({
     pays: r.pays, joueurs: r.n,
-    eligible: r.n >= cfg.minJoueurs,
-    repli: r.n >= cfg.minJoueurs ? null : REPLI_PAYS_TROP_PETIT,
+    eligible: r.n >= Math.min(cfg.minJoueurs, formatDe(epreuve).partants),
+    repli: r.n >= Math.min(cfg.minJoueurs, formatDe(epreuve).partants) ? null : REPLI_PAYS_TROP_PETIT,
   }));
 }
 
@@ -937,7 +937,7 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
                     engagesDe = null) {
   // On lit un peu plus loin que la barre : les trente-deux qui courent, et les
   // suivants qu'on garde pour l'archive de la cloture.
-  const large = FORMAT.partants + SUIVANTS_GARDES;
+  const large = formatDe(epreuve).partants + SUIVANTS_GARDES;
   const ep = String(epreuve || EPREUVE_DEFAUT);
 
   // LE TENANT DU TITRE DE CETTE EDITION, s'il y en a un.
@@ -966,8 +966,8 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
   if (echelon === 'national') {
     const cfg = ECHELONS.national;
     const n = await effectifPays(db, zone, cfg.fenetreActiviteJours, ep);
-    if (n < cfg.minJoueurs) {
-      return { erreur: 'pays trop petit', joueurs: n, requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT };
+    if (n < Math.min(cfg.minJoueurs, formatDe(ep).partants)) {
+      return { erreur: 'pays trop petit', joueurs: n, requis: Math.min(cfg.minJoueurs, formatDe(ep).partants), repli: REPLI_PAYS_TROP_PETIT };
     }
     // Le tenant est exclu du classement pour ne pas y compter deux fois : il
     // occupe une place, il ne doit pas en occuper deux. Trente-et-une places
@@ -979,7 +979,7 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
     const l = await classement(db, {
       pays: zone, exclure, limite: large - exclure.size, maintenant, epreuve: ep, engagesDe,
     });
-    const place = Math.max(0, FORMAT.partants - (bossDOffice ? 1 : 0));
+    const place = Math.max(0, formatDe(ep).partants - (bossDOffice ? 1 : 0));
     const joueurs = [...(bossDOffice ? [bossDOffice] : []), ...l.slice(0, place)];
     return {
       joueurs,
@@ -1034,7 +1034,7 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
   // La barre tombe apres les trente-deux, champions d'office compris : c'est
   // eux qui reduisent le nombre de places ouvertes au repechage, et un
   // reclamant a le droit de le savoir.
-  const place = Math.max(0, FORMAT.partants - dOffice.length);
+  const place = Math.max(0, formatDe(ep).partants - dOffice.length);
   const joueurs = [...dOffice, ...complement.slice(0, place)];
   return {
     joueurs,
@@ -1145,10 +1145,10 @@ export async function annoncerEchelon(db, {
   if (echelon === 'national') {
     const cfg = ECHELONS.national;
     const n = await effectifPays(db, z, cfg.fenetreActiviteJours, ep);
-    if (n < cfg.minJoueurs) {
+    if (n < Math.min(cfg.minJoueurs, formatDe(ep).partants)) {
       return {
         erreur: 'pays trop petit', joueurs: n,
-        requis: cfg.minJoueurs, repli: REPLI_PAYS_TROP_PETIT,
+        requis: Math.min(cfg.minJoueurs, formatDe(ep).partants), repli: REPLI_PAYS_TROP_PETIT,
       };
     }
   }
@@ -1158,7 +1158,7 @@ export async function annoncerEchelon(db, {
   // n'a annoncee. La phase de depart est posee des maintenant pour que rien en
   // aval n'ait a traiter une edition sans phase.
   const id = code();
-  const phase0 = FORMAT.phases[0];
+  const phase0 = formatDe(ep).phases[0];
   await db.prepare(
     `INSERT INTO champ_editions
        (id, echelon, zone, epreuve, debut, cloture, phase, etat, cree_le, engagement)
@@ -1169,11 +1169,11 @@ export async function annoncerEchelon(db, {
   await annoncer(db, {
     edition: id, echelon, zone: z, type: 'annonce',
     titre: echelon === 'mondial' ? 'Championnat du monde' : ECHELONS[echelon].nom + ' ' + nom.avec,
-    texte: ep + ' m. Premier départ samedi. Sélection des '
-         + FORMAT.partants + (engagement
+    texte: nomEpreuve(ep) + '. Premier départ samedi. Sélection des '
+         + formatDe(ep).partants + (engagement
            ? ' meilleurs engagés du classement, à la clôture. Confirme ta participation avant.'
            : ' meilleurs du classement, à la clôture.'),
-    donnees: { epreuve: ep, debut: t, cloture: ferme, partants: FORMAT.partants,
+    donnees: { epreuve: ep, debut: t, cloture: ferme, partants: formatDe(ep).partants,
                engagement: !!engagement },
   });
 
@@ -1208,13 +1208,13 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   if (e.etat !== 'annoncee') return { erreur: 'edition deja cloturee', etat: e.etat };
 
   const ep = e.epreuve || EPREUVE_DEFAUT;
-  const phase0 = FORMAT.phases[0];
+  const phase0 = formatDe(ep).phases[0];
   const nom = nomZone(e.zone, e.echelon);
   const intitule = e.echelon === 'mondial'
     ? 'Championnat du monde' : ECHELONS[e.echelon].nom + ' ' + nom.avec;
 
   const p = await pool(db, e.echelon, e.zone, maintenant, ep, e.engagement ? e.id : null);
-  const manque = !p.erreur && p.joueurs.length < FORMAT.partants;
+  const manque = !p.erreur && p.joueurs.length < formatDe(ep).partants;
 
   // La zone a ete annoncee et ne peut pas tenir sa grille : elle a perdu des
   // joueurs actifs depuis l'annonce, ou ses champions ont expire.
@@ -1239,7 +1239,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
       donnees: {
         raison,
         joueurs: manque ? p.joueurs.length : p.joueurs,
-        requis: manque ? FORMAT.partants : p.requis,
+        requis: manque ? formatDe(ep).partants : p.requis,
         champions: p.champions,
         repli: p.repli,
       },
@@ -1252,7 +1252,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
     return {
       erreur: raison, edition: e.id, annulee: true,
       joueurs: manque ? p.joueurs.length : p.joueurs,
-      requis: manque ? FORMAT.partants : p.requis,
+      requis: manque ? formatDe(ep).partants : p.requis,
       champions: p.champions, repli: p.repli,
     };
   }
@@ -1313,7 +1313,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
     // La distance ouvre la phrase : c'est d'elle qu'on est champion, et le fil
     // d'annonces est le seul endroit ou un joueur lit l'edition en toutes
     // lettres.
-    texte: ep + ' m. ' + FORMAT.partants + ' partants, ' + phase0.courses
+    texte: nomEpreuve(ep) + '. ' + formatDe(ep).partants + ' partants, ' + phase0.courses
          + ' séries. Premier départ samedi.',
     donnees: { partants: joueurs.length, doffice: p.doffice.size, epreuve: ep },
   });
@@ -1543,6 +1543,23 @@ export function calendrierDe(id, debut) {
   });
 }
 
+/**
+ * LA SALLE NOIRE EST SECRETE JUSQU'AU CHAMPIONNAT DE FRANCE EN SALLE (l'auteur, 8/11) : elle s'ouvre a
+ * tous (?serie=1, ?finale=1) des le depart de la premiere serie, pas avant (l'auteur, 8/11). L'heure est celle du
+ * serveur et la date celle de la vraie edition : ni l'horloge du telephone ni l'adresse n'y changent rien.
+ */
+export async function salleNoireOuverte(db, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const { results } = await db.prepare(
+    `SELECT id, debut FROM champ_editions
+      WHERE echelon = 'national' AND zone = 'FR' AND epreuve IN ('60', '200s', '400s') AND etat != 'annulee'`,
+  ).all();
+  return (results || []).some(e => {
+    const s1 = calendrierDe(e.id, e.debut).find(r => r.cle === 'serie-1');
+    return !!s1 && maintenant >= s1.at;
+  });
+}
+
 export async function prochaineEdition(db, zone, echelon = 'national') {
   await ensureChampTables(db);
   const z = String(zone || '').toUpperCase();
@@ -1563,7 +1580,7 @@ export async function prochaineEdition(db, zone, echelon = 'national') {
     epreuve: e.epreuve || EPREUVE_DEFAUT,
     debut: e.debut, cloture: e.cloture, etat: e.etat,
     engagement: !!e.engagement,
-    partants: FORMAT.partants,
+    partants: formatDe(e.epreuve).partants,
     calendrier: calendrierDe(e.id, e.debut),
   };
 }
@@ -1651,7 +1668,7 @@ export async function rangSelection(db, nameKey) {
   if (!g || !g.pays) return { pays: null, raison: 'pays inconnu' };
 
   const ed = await prochaineEdition(db, g.pays, 'national');
-  const places = FORMAT.partants;
+  const places = formatDe(ed && ed.epreuve).partants;
 
   // Le titre et l'epreuve voyagent avec le rang, et l'appel se suffit alors a
   // lui-meme. C'est ce qui permet a la banderole de l'accueil de tenir en UNE
@@ -2060,8 +2077,8 @@ export async function etatEdition(db, id) {
   // format est une regle de competition, et la dupliquer cote client garantit
   // qu'un jour les deux ne diront plus la meme chose.
   const z = nomZone(e.zone, e.echelon);
-  const iPhase = FORMAT.phases.findIndex(p => p.cle === e.phase);
-  const cfg = FORMAT.phases[iPhase] || null;
+  const iPhase = formatDe(e.epreuve).phases.findIndex(p => p.cle === e.phase);
+  const cfg = formatDe(e.epreuve).phases[iPhase] || null;
   // Le rang de l'edition parmi celles de son echelon et de sa zone, a la date
   // de creation — l'identifiant departage deux creations a la meme milliseconde.
   const avant = await db.prepare(
@@ -2073,7 +2090,7 @@ export async function etatEdition(db, id) {
     id: e.id, echelon: e.echelon, zone: e.zone, debut: e.debut,
     // Le lieu ou l'edition se rejoue, s'il est impose (voir LIEUX), sinon
     // `null` : le client garde alors le sien.
-    lieu: lieuDeLEdition(e.echelon, e.zone, rang),
+    lieu: lieuDeLEdition(e.echelon, e.zone, rang, e.epreuve),
     // `null` pour les editions ouvertes avant que la cloture existe, et pour
     // celles qu'on ouvre d'un geste sur le canal de test. C'est exact : elles
     // n'ont pas eu d'heure de cloture annoncee, et l'ecran ne doit pas
@@ -2090,7 +2107,7 @@ export async function etatEdition(db, id) {
     phase: e.phase, etat: e.etat,
     phaseNom: cfg ? cfg.nom : e.phase,
     phaseIndex: iPhase,
-    phases: FORMAT.phases.map(p => ({ cle: p.cle, nom: p.nom, courses: p.courses })),
+    phases: formatDe(e.epreuve).phases.map(p => ({ cle: p.cle, nom: p.nom, courses: p.courses })),
     courses: cfg ? cfg.courses : 0,
     parCourse: cfg ? cfg.parCourse : 0,
     directsParCourse: cfg ? cfg.directsParCourse : 0,
@@ -2205,7 +2222,9 @@ export async function clesFictives(db, cles) {
  * repechage possible : un vrai joueur qui court en dessous de 9,05 passe
  * devant, un vrai joueur plus lent ou absent peut rester derriere.
  */
-const FACTEUR_EPREUVE = { '100': 1, '200': 2.08, '400': 4.7 };
+/** Une epreuve dans une phrase : « 100 m », « 200 m en salle ». */
+const nomEpreuve = (ep) => (ep === '200s' || ep === '400s' ? `${ep.slice(0, -1)} m en salle` : `${ep} m`);
+const FACTEUR_EPREUVE = { '100': 1, '200': 2.08, '400': 4.7, '60': 0.7, '200s': 2.16, '400s': 4.85 };
 function hacheFictif(texte) {
   let h = 2166136261;
   for (const ch of texte) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); }
@@ -2377,7 +2396,7 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
   // on peut donc les annoncer des l'arrivee, ce que la mise en scene demande.
   // Les repeches, eux, se calculent sur les quatre series et attendent la
   // cloture — c'est tout l'ecart entre ce qui se voit et ce qui se devine.
-  const cfgPhase = FORMAT.phases.find(x => x.cle === phase);
+  const cfgPhase = formatDe(epreuveDeLEdition).phases.find(x => x.cle === phase);
   const { results: arrivee } = await db.prepare(
     `SELECT r.name_key AS cle, r.ms, r.motif, p.nom, p.rang_duel AS rang
        FROM champ_resultats r JOIN champ_partants p
@@ -2421,12 +2440,12 @@ export async function enregistrerCourse(db, { edition, phase, course, chronos })
 export async function cloturerPhase(db, edition, { test = false } = {}) {
   await ensureChampTables(db);
   const e = await db.prepare(
-    `SELECT phase, etat, zone, echelon FROM champ_editions WHERE id = ?`).bind(edition).first();
+    `SELECT phase, etat, zone, echelon, epreuve FROM champ_editions WHERE id = ?`).bind(edition).first();
   if (!e) return { erreur: 'edition introuvable' };
   if (e.etat === 'terminee') return { erreur: 'edition terminee' };
 
-  const iPhase = FORMAT.phases.findIndex(p => p.cle === e.phase);
-  const cfg = FORMAT.phases[iPhase];
+  const iPhase = formatDe(e.epreuve).phases.findIndex(p => p.cle === e.phase);
+  const cfg = formatDe(e.epreuve).phases[iPhase];
 
   // On rassemble les chronos, course par course, avec de quoi departager.
   //
@@ -2461,7 +2480,7 @@ export async function cloturerPhase(db, edition, { test = false } = {}) {
   }
 
   // La finale ne qualifie personne : elle sacre.
-  if (iPhase === FORMAT.phases.length - 1) {
+  if (iPhase === formatDe(e.epreuve).phases.length - 1) {
     const p = podium(courses[0], cfg.podium);
     const majPlaces = p.classement.map(r => db.prepare(
       `UPDATE champ_resultats SET place = ? WHERE edition = ? AND phase = ? AND name_key = ?`
@@ -2487,7 +2506,7 @@ export async function cloturerPhase(db, edition, { test = false } = {}) {
     : null;
 
   const q = qualifier(courses, cfg, dOffice);
-  const suivante = FORMAT.phases[iPhase + 1];
+  const suivante = formatDe(e.epreuve).phases[iPhase + 1];
 
   // PRIORITE AUX VRAIS JOUEURS, ET UNE PHASE SUIVANTE PLEINE (26/09).
   //

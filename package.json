@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "tableau": "node suivi/servir.mjs",
     "build:app": "VITE_ENVELOPPE=native vite build --outDir dist-app",
-    "android:sync": "npm run build:app && SPRINTER_WEBDIR=dist-app npx cap sync android",
+    "android:alleger": "cd dist-app && rm -rf halloween decors/halloween-* decors-ultra/halloween-* modeles/stades-ultra/halloween modeles/boss-plein modeles/molosse-chien.glb",
+    "android:sync": "npm run build:app && npm run android:alleger && SPRINTER_WEBDIR=dist-app npx cap sync android",
     "android:ouvrir": "npm run android:sync && npx cap open android",
     "android:aab": "npm run android:sync && cd android && ./gradlew bundleRelease",
     "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease"
@@ -79,6 +80,7 @@
     "zod": "^3.25.76"
   },
   "dependencies": {
+    "@capacitor-community/admob": "^8.2.1",
     "@capacitor-firebase/messaging": "^8.5.1",
     "@capacitor/android": "^8.5.0",
     "@capacitor/app": "^8.1.1",

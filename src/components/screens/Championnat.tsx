@@ -1,3 +1,4 @@
+import { nomCourt, nomEnLigne } from '@/game/jeux';
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { MONTEE, FONDU, SURGISSEMENT, RESSORT } from '@/lib/mouvement';
@@ -230,7 +231,7 @@ function Grille({ e }: { e: Edition }) {
                 lieu={e.lieu}
                 fr={e.echelon === 'national' && e.zone === 'FR'}
                 titre={SprinterApp.N.courseNom(e.phase, course, e.courses, e.phaseNom)}
-                sousTitre={`${SprinterApp.N.titreEdition(e) || e.titre} · ${e.epreuve} M`} />
+                sousTitre={`${SprinterApp.N.titreEdition(e) || e.titre} · ${nomEnLigne(e.epreuve)}`} />
             )}
           </div>
         );
@@ -596,7 +597,7 @@ function Podium({ e, onFerme }: { e: Edition; onFerme: () => void }) {
           {/* Sur l'ecran du sacre, la distance compte autant que la zone :
               c'est d'elle qu'on est champion. */}
           <p className="text-[10px] tracking-[0.3em] text-white/40 uppercase mb-1">
-            {SprinterApp.N.titreEdition(e)} · {e.epreuve} m
+            {SprinterApp.N.titreEdition(e)} · {nomEnLigne(e.epreuve)}
           </p>
           <h2 className="font-display font-black text-3xl tracking-tight flex items-center justify-center gap-2"
               style={{ color: OR }}>
@@ -890,7 +891,7 @@ function PodiumSurLaPiste({ e, onFerme }: { e: Edition; onFerme: () => void }) {
                   transition={{ delay: t(0.35), duration: t(0.4) }}>
           {/* Sur l'ecran du sacre, la distance compte autant que la zone :
               c'est d'elle qu'on est champion. */}
-          {SprinterApp.N.titreEdition(e)} · {e.epreuve} m
+          {SprinterApp.N.titreEdition(e)} · {nomEnLigne(e.epreuve)}
         </motion.p>
 
         {/* Le nom arrive apres les trois marches : il est la conclusion de la
@@ -1330,7 +1331,7 @@ export function Championnat({ edition, onQuitter }: {
                 et on ne recolle pas du texte au milieu d'une phrase faite. */}
             <span className="text-[10px] md:text-xs font-mono font-bold tracking-widest
                              text-foreground/55">
-              {e.epreuve} M
+              {nomCourt(e.epreuve)}
             </span>
           </div>
           {e.etat === 'terminee' && e.champion && (

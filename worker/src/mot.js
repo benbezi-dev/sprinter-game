@@ -80,11 +80,13 @@ export function motPropre(brut) {
 
 /** Le nettoyage de `motPropre`, sans la coupe : le filtre doit voir la vraie
  *  longueur pour pouvoir la refuser au lieu de la tronquer en silence. */
-function nettoyer(brut) {
-  return String(brut || '')
-    .replace(INVISIBLES, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+export function nettoyer(brut, lignes = false) {
+  const plat = (x) => x.replace(INVISIBLES, ' ').replace(/\s+/g, ' ').trim();
+  if (!lignes) return plat(String(brut || ''));
+  // Le tchat garde les sauts de ligne (5/11) : chaque ligne nettoyee, pas
+  // plus d'une ligne vide d'affilee.
+  return String(brut || '').replace(/\r\n?/g, '\n').split('\n').map(plat)
+    .join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /* ---------------------------------------------------------------------------
@@ -242,12 +244,12 @@ const reduire = (s) => s.replace(/([a-z])\1{2,}/g, '$1');
  * `{ ok: false, raison }` avec raison parmi 'vide', 'long', 'lien', 'contact',
  * 'grossier'.
  */
-export function texteRecevable(brut, max) {
+export function texteRecevable(brut, max, lignes = false) {
   if (typeof brut !== 'string') return { ok: false, raison: 'vide' };
   // Un texte qui depasse de tres loin la place n'a pas besoin d'etre lu en
   // entier pour etre refuse : un envoi d'un megaoctet ne doit rien couter.
   if (brut.length > Math.max(4000, max * 20)) return { ok: false, raison: 'long' };
-  const texte = nettoyer(brut);
+  const texte = nettoyer(brut, lignes);
   if (!texte) return { ok: false, raison: 'vide' };
   if (texte.length > max) return { ok: false, raison: 'long' };
 

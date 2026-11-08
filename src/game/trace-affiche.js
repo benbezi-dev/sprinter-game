@@ -32,11 +32,12 @@ export const FORMATS = {
 // chrono francais s'ecrit a la virgule, y compris — et surtout — en 216 px.
 export const s2 = ms => (Number(ms) / 1000).toFixed(2).replace('.', ',');
 export const EPREUVE = r => String(r || '')
+  .replace(/^60h$/, '60 m H ♂').replace(/^60hf$/, '60 m H ♀')
   .replace(/^(\d+)$/, '$1 m')
   .replace(/^(\d+)h$/, '$1 m H');
 
 /** Le jeu d'une epreuve, pour la signature de l'image : les haies sont a Hurdlers. */
-const MARQUE = r => (/^\d+h$/.test(String(r || '')) ? 'Hurdlers' : 'Sprinter');
+const MARQUE = r => (/^\d+hf?$/.test(String(r || '')) ? 'Hurdlers' : 'Sprinter');
 
 /* --------------------------------------------------------------- le dessin */
 

@@ -86,7 +86,8 @@ export function AnnoncePopup() {
   // Le glissement fait ce que fait la croix du message : il le marque lu.
   useRetour(fermer, ouvert);
 
-  if (!annonce || annonceVue(annonce.id) || !estAuCalme()) return null;
+  // Les ecrans de fin tiennent sans defiler : la pastille flottante y couvrait les chronos (07/11).
+  if (!annonce || annonceVue(annonce.id) || !estAuCalme() || ['over', 'winall', 'result', 'falseout'].includes(SprinterApp.G.state)) return null;
 
   return (
     <>

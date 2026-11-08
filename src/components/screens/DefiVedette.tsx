@@ -17,6 +17,7 @@ import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { chargerLaMusiqueDuDefi as musiqueAurel } from '@/game/musique-defi-aurel';
 import { chargerLaMusiqueDuDefi as musiqueMebaSeule, chargerLeCri } from '@/game/musique-defi-meba';
+import { TenirDansLEcran } from '@/components/TenirDansLEcran';
 
 /** Le morceau de Meba-Mickael Zeze, et son cri avant les blocs. */
 const musiqueMeba = () => Promise.all([musiqueMebaSeule(), chargerLeCri()]).then(r => r[0]);
@@ -430,8 +431,7 @@ export function FinDuDefiVedette() {
   const rejouer = () => lancerLeDefi(v, epreuve);
 
   return (
-    <div className="absolute inset-0 z-30 pointer-events-auto flex items-center justify-center
-                    bg-[rgba(8,5,16,0.88)] px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
+    <TenirDansLEcran className="absolute inset-0 z-30 pointer-events-auto overflow-y-auto overflow-x-hidden bg-[rgba(8,5,16,0.88)] px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <motion.div {...PANNEAU} className="w-full max-w-md flex flex-col items-center gap-3 text-center">
         <span className={`font-black font-display text-3xl sm:text-4xl uppercase tracking-tight leading-[0.95]
                           ${verdict.battu ? 'text-white' : 'text-destructive'}`}>
@@ -538,7 +538,7 @@ export function FinDuDefiVedette() {
           </button>
         </div>
       </motion.div>
-    </div>
+    </TenirDansLEcran>
   );
 }
 

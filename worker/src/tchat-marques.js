@@ -72,7 +72,7 @@
    vu (`marques_tchat_lus`) ; la lecture rend cette table a chaque fois.
 --------------------------------------------------------------------------- */
 import { EVENEMENT, inscriptionDe, ensureMarquesTables } from './marques.js';
-import { texteRecevable, TCHAT_MAX } from './mot.js';
+import { texteRecevable, nettoyer, TCHAT_MAX } from './mot.js';
 import { estBanni, listeBloques, motifPropre, ensureModerationTables } from './moderation.js';
 
 export const ECART_MS = 2000;
@@ -233,7 +233,7 @@ export async function poster(db, { auteurKey, auteurName, texte, pour = null, pr
   if (prive && !pourKey) return { status: 400, corps: { error: 'destinataire manquant' }, sonner: null };
   if (pourKey === auteurKey) return { status: 400, corps: { error: 'destinataire invalide' }, sonner: null };
 
-  const lu = texteRecevable(texte, TCHAT_MAX);
+  const lu = texteRecevable(texte, TCHAT_MAX, true);
   if (!lu.ok) return { status: 422, corps: { error: 'texte refuse', raison: lu.raison }, sonner: null };
 
   const trop = await cadence(db, auteurKey, maintenant);
@@ -278,19 +278,28 @@ export async function poster(db, { auteurKey, auteurName, texte, pour = null, pr
  * longueur (17/10, demande de l'auteur), c'est l'auteur qui ecrit — il peut
  * donner un lien vers le site.
  */
-export async function posterOfficiel(db, { texte, maintenant = Date.now() }) {
+export async function posterOfficiel(db, { texte, pour = null, maintenant = Date.now() }) {
   await ensureTchatTables(db);
-  const propre = typeof texte === 'string' ? texte.replace(/\s+/g, ' ').trim() : '';
-  if (!propre) return { status: 422, corps: { error: 'texte refuse', raison: 'vide' } };
+  const propre = nettoyer(texte, true);
+  if (!propre) return { status: 422, corps: { error: 'texte refuse', raison: 'vide' }, sonner: null };
+  // SprinterGame peut designer un joueur (5/11) : tout nom reserve.
+  const pourKey = pour ? cle(pour) : null;
+  let pourName = null;
+  if (pourKey) {
+    if (!(await nomReserve(db, pourKey))) return { status: 404, corps: { error: 'pas dans le duel' }, sonner: null };
+    pourName = await nomDe(db, pourKey);
+  }
   const r = await db.prepare(
-    `INSERT INTO marques_tchat (evenement, quand, auteur_key, auteur_name, camp, prive, texte)
-     VALUES (?, ?, ?, ?, ?, 0, ?)`
-  ).bind(EVENEMENT, maintenant, OFFICIEL.key, OFFICIEL.name, OFFICIEL.camp, propre).run();
+    `INSERT INTO marques_tchat (evenement, quand, auteur_key, auteur_name, camp, pour_key, pour_name, prive, texte)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`
+  ).bind(EVENEMENT, maintenant, OFFICIEL.key, OFFICIEL.name, OFFICIEL.camp, pourKey, pourName, propre).run();
   const id = r && r.meta ? r.meta.last_row_id : r && r.lastInsertRowid != null ? Number(r.lastInsertRowid) : null;
+  const sonner = pourKey && await reserverSonnerie(db, pourKey, 'marques_tchat', maintenant) ? pourKey : null;
   return {
     status: 200,
     corps: { ok: true, message: enLigne({ id, quand: maintenant, auteur_key: OFFICIEL.key, auteur_name: OFFICIEL.name,
-      camp: OFFICIEL.camp, pour_key: null, pour_name: null, prive: 0, texte: propre }, OFFICIEL.key) },
+      camp: OFFICIEL.camp, pour_key: pourKey, pour_name: pourName, prive: 0, texte: propre }, OFFICIEL.key) },
+    sonner,
   };
 }
 

@@ -43,6 +43,7 @@ import { SeanceJeu } from './SeancesAthlete';
 import { nomDuClub, logoDuClub, CLUB_PARTENAIRE } from '@/game/athlete/partenaires';
 import { DEPARTEMENTS, REGIONS, DEPARTEMENT_DEFAUT, regionDe } from '@/game/athlete/departements';
 import { type Soin, etatDeSante, soigner, soinPossible, resteACharge, certificatRequis, EXAMEN } from '@/game/athlete/sante';
+import { TenirDansLEcran } from '@/components/TenirDansLEcran';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE D'ATHLETE — les ecrans du mode
@@ -1752,8 +1753,7 @@ export function FinDeCourseAthlete() {
   const vers: [string, string] = r?.suivant === 'demie' ? ['LA DEMI-FINALE', 'THE SEMI-FINAL'] : ['LA FINALE', 'THE FINAL'];
 
   return (
-    <div className="absolute inset-0 z-30 pointer-events-auto flex items-center justify-center
-                    bg-[rgba(4,10,8,0.9)] px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)]">
+    <TenirDansLEcran className="absolute inset-0 z-30 pointer-events-auto overflow-y-auto overflow-x-hidden bg-[rgba(4,10,8,0.9)] px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]">
       <motion.div {...PANNEAU} className="w-full max-w-md flex flex-col items-center gap-3 text-center">
         {r && (
           <>
@@ -1791,6 +1791,6 @@ export function FinDeCourseAthlete() {
         {r?.suivant && <Bouton plein className="px-8 py-3 mt-2" onClick={tourSuivant}>{dans(['COURIR', 'RUN'])} {dans(vers)}</Bouton>}
         <Bouton plein={!r?.suivant} className="px-8 py-3 mt-2" onClick={retour}>{r?.suivant ? dans(['Renoncer', 'Withdraw']) : mot('retour_carriere')}</Bouton>
       </motion.div>
-    </div>
+    </TenirDansLEcran>
   );
 }

@@ -4,7 +4,9 @@ import '../src/game/sprinter-core.js';
 import assert from 'node:assert/strict';
 const K = globalThis.SprinterCore;
 const R = K.RECORDS_DU_MONDE;
-assert.deepEqual(R, { '60': 6.34, '100': 9.58, '200': 19.19, '400': 43.03, '200s': 19.92, '400s': 44.49 });
+assert.deepEqual(R, { '60': 6.34, '100': 9.58, '200': 19.19, '400': 43.03, '200s': 19.92, '400s': 44.49,
+                      '100h': 12.09, '110h': 12.80, '400h': 45.80, '60h': 7.27, '60hf': 7.65 });
+const HAIES_CLES = ['100h', '110h', '400h', '60h', '60hf'];
 
 function courir(total, record) {
   const j = new K.Runner('TOI', 0, { isPlayer: true, maxSpeed: 40, total, record });
@@ -13,7 +15,8 @@ function courir(total, record) {
   return j.finishTime;
 }
 for (const [cle, rec] of Object.entries(R)) {
-  const total = { '60': 60, '100': 100, '200': 200, '400': 400, '200s': 200, '400s': 400 }[cle];
+  const total = { '60': 60, '100': 100, '200': 200, '400': 400, '200s': 200, '400s': 400,
+                  '100h': 100, '110h': 110, '400h': 400, '60h': 60, '60hf': 60 }[cle];
   const t = courir(total, rec);
   assert.ok(t >= rec - 1 / 120, `${cle} : ${t} sous le record ${rec}`);
   assert.ok(t < rec + 0.05, `${cle} : ${t}, le plafond freine trop (record ${rec})`);
@@ -39,7 +42,7 @@ function parfait(cle, f) {
   }
   return p.finishTime;
 }
-for (const cle of Object.keys(R)) {
+for (const cle of Object.keys(R).filter(c => !HAIES_CLES.includes(c))) {
   const t = parfait(cle, 1000);
   assert.ok(t < R[cle] + 0.03, `${cle} : la limite du jeu donne ${t.toFixed(3)}, loin du record ${R[cle]} (recalculer ALLURE_DU_JOUEUR)`);
   // (29/10/2026) : le record tombe a 39 appuis/s, la cadence du meilleur joueur reel, pas avant 37.
@@ -47,4 +50,38 @@ for (const cle of Object.keys(R)) {
   assert.ok(parfait(cle, 37) > R[cle] + 0.01, `${cle} : 37 appuis/s atteignent deja le record`);
 }
 console.log('allure du joueur : OK (100 m : 39/s ' + parfait('100', 39).toFixed(2) + ' s, limite ' + parfait('100', 1000).toFixed(2) + ' s)');
+// LES HAIES (02/11/2026) : meme regle, appel et ciseau du joueur compris. La limite y depend d'un dixieme de
+// l'instant de la premiere frappe (le pied d'appel tombe plus ou moins bien) : on la prend sur cinq instants et
+// plusieurs cadences, et l'on demande qu'elle tombe a deux dixiemes du record, 39 appuis/s restant au-dessus.
+const { HAIES } = await import('../src/game/haies.js');
+const { CISEAU_VISE } = await import('../src/game/haies-jeu.js');
+const HP = await import('../src/game/haies-pas.js');
+function haiesJouees(cle, f, reaction) {
+  const race = HAIES[cle], T = new K.Track(race);
+  const r = new K.Runner('TOI', 3, { isPlayer: true, maxSpeed: race.maxSpeed, best: race.best, total: T.total,
+    record: null, allure: K.ALLURE_DU_JOUEUR[cle] });   // sans plafond : c'est la limite du jeu qu'on mesure
+  const course = HP.nouvelleCourse(cle, { appelJoueur: true });
+  HP.preparerCoureur(course, r);
+  r.reaction = reaction;
+  const dt = f > 100 ? 1 / 4000 : 1 / 480; let t = 0, prochain = 0, g = true;
+  while (t < 200 && !r.finished) {
+    const vol = HP.ciseauDe(course, r);
+    if (vol && !vol.fait && vol.part >= CISEAU_VISE) HP.relacher(course, r, vol.cote);
+    while (prochain <= t) {
+      const cote = g ? 'left' : 'right';
+      if (!HP.enVol(course) && !HP.appeler(course, r, cote)) r.press(cote, t);
+      g = !g; prochain += 1 / f;
+    }
+    r.stepPlayer(dt, t); t += dt; HP.pas(course, r);
+  }
+  return r.finished ? r.finishTime : Infinity;
+}
+const PHASES = [0.12, 0.135, 0.15, 0.165, 0.18];
+for (const cle of HAIES_CLES) {
+  const brut = (f) => Math.min(...PHASES.map(p => haiesJouees(cle, f, p)));
+  const lim = Math.min(brut(200), brut(500), brut(1000));
+  assert.ok(lim <= R[cle] + 0.2 && lim > R[cle] - 0.25, `${cle} : la limite du jeu donne ${lim.toFixed(3)}, loin du record ${R[cle]} (recalculer ALLURE_DU_JOUEUR)`);
+  assert.ok(brut(39) > R[cle] + 0.1, `${cle} : 39 appuis/s atteignent le record`);
+}
+console.log('haies : OK (110 m haies : 39/s ' + Math.min(...PHASES.map(p => haiesJouees('110h', 39, p))).toFixed(2) + ' s)');
 console.log('records du monde : OK', Object.entries(R).map(([k, v]) => `${k} ${v}`).join(', '));

@@ -33,6 +33,11 @@ type Parcours = {
   rang: number;
   /** Le chrono gagnant de chaque etape deja passee. */
   chronos: number[];
+  /** Nom du parcours aupres du serveur des pieces (8 a 64 caracteres). */
+  id: string;
+  /** Continue achetes en pieces, et pubs regardees, sur ce parcours. */
+  continues: number;
+  pubs: number;
 };
 
 let parcours: Parcours | null = null;
@@ -92,7 +97,28 @@ export function parcoursEnCours(): Readonly<Parcours> | null { return parcours; 
  */
 export function commencerLaLegende(depuis = 0, alea: () => number = Math.random) {
   if (!LEGENDE_OUVERTE) return;
-  parcours = { tirage: tirer(alea), rang: Math.max(0, Math.min(ETAPES.length - 1, depuis)), chronos: [] };
+  parcours = { tirage: tirer(alea), rang: Math.max(0, Math.min(ETAPES.length - 1, depuis)), chronos: [],
+               id: nouveauParcours(), continues: 0, pubs: 0 };
+}
+
+function nouveauParcours(): string {
+  try { if (crypto && crypto.randomUUID) return crypto.randomUUID(); } catch { /* pas de crypto */ }
+  return 'l-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 12);
+}
+
+/**
+ * LES REPRISES DE LA LEGENDE (3 novembre 2026) : comme la carriere classique,
+ * une etape perdue — faux depart compris — se reprend contre des pieces ou une
+ * pub (Reprises.tsx), au lieu de repartir de la plage. Le rang ne bouge pas a
+ * la defaite : relancer l'etape suffit (lancerLEtape).
+ */
+export function reprisesDeLaLegende(): { id: string; continues: number; pubs: number } | null {
+  return parcours ? { id: parcours.id, continues: parcours.continues, pubs: parcours.pubs } : null;
+}
+export function recalerLesContinues(n: number) { if (parcours) parcours.continues = n; }
+export function reprendreLEtape(parPub: boolean) {
+  if (!parcours) return;
+  if (parPub) parcours.pubs += 1; else parcours.continues += 1;
 }
 
 /**

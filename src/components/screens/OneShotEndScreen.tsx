@@ -86,7 +86,7 @@ export function OneShotEndScreen() {
   const { N, RACES } = SprinterApp;
 
   // Ce qui depasse est reduit, pas cache — voir le crochet.
-  const { cadre, contenu, echelle, hauteur, remplir, largeur } = useTenirDansLEcran();
+  const { cadre, contenu, echelle, hauteur, remplir, largeur } = useTenirDansLEcran(0.6, 1);   // 07/11 : plus d'etalement, des ecarts reguliers comme les autres fins
 
   const [name, setName] = useState(getSavedName());
   const [code, setCode] = useState('');
@@ -897,7 +897,7 @@ export function OneShotEndScreen() {
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
-            <h1 className={`text-3xl sm:text-4xl md:text-6xl court:text-xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.35)]
+            <h1 className={`text-3xl sm:text-4xl md:text-[2.75rem] court:text-xl font-black font-display tracking-tight uppercase text-balance drop-shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.35)]
               ${resTournoi
                 ? (sacre ? 'text-primary' : finaliste ? 'text-slate-200'
                    : sortiIci ? 'text-destructive' : 'text-emerald-400')
@@ -1561,7 +1561,7 @@ export function OneShotEndScreen() {
               de perdus a chaque fois. Dedans, elles disent la meme chose au
               meme endroit — c'est deja ce que fait « PRENDRE MA REVANCHE »
               depuis le debut, et personne n'a jamais eu de mal a le lire. */}
-          <div className="flex flex-col gap-2 md:gap-4 court:gap-1.5 w-full max-w-md court:max-w-none court:mt-0
+          <div className="flex flex-col gap-2 md:gap-4 court:gap-1.5 w-full largeur-tenue court:mt-0
                           court:flex-row court:items-start court:[column-span:all] boutons-si-bas">
             {/* PARTAGER MA COURSE — une image, pas un code.
                 Le partage qui vit plus haut envoie du texte : un code a six

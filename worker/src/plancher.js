@@ -30,8 +30,8 @@
    client, et une dependance vers `src/` casserait le deploiement. Le prix est
    qu'un reglage du moteur doit etre reporte ici — d'ou le controle
    `tools/verifier-plancher.mjs`, qui relit sprinter-core.js et compare. */
-export const VMAX_EPREUVE = { '100': 12.435, '200': 12.021, '400': 11.536 };
-export const DISTANCE_M = { '100': 100, '200': 200, '400': 400 };
+export const VMAX_EPREUVE = { '100': 12.435, '200': 12.021, '400': 11.536, '60': 12.435, '200s': 11.9, '400s': 11.45 };
+export const DISTANCE_M = { '100': 100, '200': 200, '400': 400, '60': 60, '200s': 200, '400s': 400 };
 export const TRANS_VMAX_MAX = 1.042;
 
 /** Ce que rend le worker quand un chrono passe sous le plancher. */

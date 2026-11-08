@@ -20,22 +20,26 @@ let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
 const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.length))}`);
 const memes = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const memeEnsemble = (a, b) => !!a && !!b && memes([...a].sort(), [...b].sort());
 
-const SPRINT = ['100', '200', '400'];
-const HAIES_CLES = ['100h', '110h', '400h'];
+// (le 02/11/2026 : la salle — 60, 200s, 400s au sprint, le 60 m haies femmes et hommes aux haies)
+const SPRINT = ['100', '200', '400', '60', '200s', '400s'];
+const HAIES_CLES = ['100h', '110h', '400h', '60hf', '60h'];
+const DEHORS = ['100', '200', '400', '100h', '110h', '400h'];
 
-titre('LE SERVEUR CONNAIT LES SIX EPREUVES');
+titre('LE SERVEUR CONNAIT LES ONZE EPREUVES');
 
-ok('six cles, le sprint puis les haies', memes(CLES, [...SPRINT, ...HAIES_CLES]), CLES.join(','));
-ok('chaque jeu a ses trois epreuves',
-   memes(CLES_DU_JEU.sprinter, SPRINT) && memes(CLES_DU_JEU.hurdlers, HAIES_CLES));
+// (l'ordre des cles entieres — 60, 100, 200, 400 — est celui de JavaScript : on compare des ensembles)
+ok('onze cles, le sprint puis les haies', memeEnsemble(CLES, [...SPRINT, ...HAIES_CLES]) && memes(CLES.slice(-5), HAIES_CLES), CLES.join(','));
+ok('chaque jeu a ses epreuves',
+   memeEnsemble(CLES_DU_JEU.sprinter, SPRINT) && memes(CLES_DU_JEU.hurdlers, HAIES_CLES));
 ok('les haies se gagnent au chrono le plus bas',
    HAIES_CLES.every(c => directionDe(c) === PLUS_BAS && EPREUVES[c].pas === 10));
 ok('les ecrans de duel peuvent proposer les haies',
    HAIES_CLES.every(c => DISCIPLINES_SIMPLES.includes(c)));
 ok('un combine de haies se range dans l\'ordre du programme',
    cleDiscipline(['400h', '100h']) === '100h+400h' && estDiscipline('100h+400h'));
-ok('le defi du jour reste au sprint', memes(EPREUVES_DEFI, SPRINT), EPREUVES_DEFI.join(','));
+ok('le defi du jour reste en plein air', memes(EPREUVES_DEFI, DEHORS), EPREUVES_DEFI.join(','));
 
 titre('LA SALLE DU DIRECT NE MELANGE PAS LES JEUX');
 
@@ -78,22 +82,22 @@ const cles = (texte, motif) => {
 {
   const lb = lire('src/game/leaderboard.ts');
   const type = cles(lb, /export type RaceKey = ([^;]+);/);
-  ok('RaceKey nomme les six epreuves du serveur', memes(type, CLES), String(type));
+  ok('RaceKey nomme les onze epreuves du serveur', memeEnsemble(type, CLES), String(type));
   const indiv = cles(lb, /EPREUVES_INDIVIDUELLES[^=]*= new Set<RaceKey>\(\[([^\]]+)\]/);
-  ok('les six ont un classement individuel cote jeu', memes(indiv, CLES), String(indiv));
+  ok('les onze ont un classement individuel cote jeu', memeEnsemble(indiv, CLES), String(indiv));
 }
 {
   const duel = cles(lire('src/game/duels.ts'), /export const EPREUVES_DUEL = \[([^\]]+)\]/);
-  ok('les combines se rangent dans le meme ordre des deux cotes', memes(duel, CLES), String(duel));
+  ok('le jeu propose en duel les memes epreuves que le serveur', memeEnsemble(duel, CLES), String(duel));
 }
 {
   const j = lire('src/game/jeux.ts');
-  const sp = cles(j, /sprinter: \[([^\]]+)\],\n\s*hurdlers/);
-  const hu = cles(j, /hurdlers: \[([^\]]+)\],\n\};/);
+  const sp = cles(j, /\n\s*sprinter: \[([^\]]+)\],/);
+  const hu = cles(j, /\n\s*hurdlers: \[([^\]]+)\],/);
   ok('les epreuves de chaque jeu sont les memes des deux cotes',
-     memes(sp, CLES_DU_JEU.sprinter) && memes(hu, CLES_DU_JEU.hurdlers),
+     memeEnsemble(sp, CLES_DU_JEU.sprinter) && memeEnsemble(hu, CLES_DU_JEU.hurdlers),
      `${sp} / ${hu}`);
-  ok('les cles de haies sont celles du reglement', memes(Object.keys(HAIES), HAIES_CLES));
+  ok('les cles de haies sont celles du reglement', memeEnsemble(Object.keys(HAIES), HAIES_CLES));
 }
 
 console.log('\n──────────────────────────────────────────────────────────────');

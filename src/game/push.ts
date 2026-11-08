@@ -65,7 +65,9 @@ function plateforme(): string {
  */
 async function greffon() {
   const m = await import('@capacitor-firebase/messaging');
-  return m.FirebaseMessaging;
+  // Dans un objet : rendu nu par une fonction async, ce proxy Capacitor se fait
+  // demander `.then`, repond « not implemented », et la promesse echoue.
+  return { FM: m.FirebaseMessaging };
 }
 
 let ecouteursPoses = false;
@@ -83,7 +85,7 @@ let ecouteursPoses = false;
  * le defi n'apparaissait qu'au sondage suivant : on est prevenu, on ouvre, et
  * il n'y a rien.
  */
-async function poserEcouteurs(FM: Awaited<ReturnType<typeof greffon>>) {
+async function poserEcouteurs(FM: Awaited<ReturnType<typeof greffon>>['FM']) {
   if (ecouteursPoses) return;
   ecouteursPoses = true;
 
@@ -104,6 +106,18 @@ async function poserEcouteurs(FM: Awaited<ReturnType<typeof greffon>>) {
   // la nouvelle doit quand meme arriver a l'ecran qui l'attend.
   FM.addListener('notificationReceived', e => relayer(e.notification))
     .catch(() => { /* rien a faire de plus */ });
+
+  // La pastille de l'icone compte les notifications restees dans le volet du
+  // telephone, pas la boite du jeu : sans ce menage, elle restait a « 2 » une
+  // fois tout lu dans le jeu. On vide le volet a chaque retour au premier plan.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') viderVolet(FM);
+  });
+  viderVolet(FM);
+}
+
+function viderVolet(FM: Awaited<ReturnType<typeof greffon>>['FM']) {
+  FM.removeAllDeliveredNotifications().catch(() => { /* rien a vider */ });
 }
 
 async function enregistrerJeton(jeton: string): Promise<void> {
@@ -119,7 +133,7 @@ async function enregistrerJeton(jeton: string): Promise<void> {
 }
 
 async function activerNatif(): Promise<boolean> {
-  const FM = await greffon();
+  const { FM } = await greffon();
 
   let etat = await FM.checkPermissions();
   if (etat.receive !== 'granted' && etat.receive !== 'denied') {
@@ -148,14 +162,14 @@ async function desactiverNatif(): Promise<void> {
     }).catch(() => { /* non bloquant */ });
   }
   try {
-    const FM = await greffon();
+    const { FM } = await greffon();
     await FM.deleteToken();
   } catch { /* rien a supprimer */ }
 }
 
 async function natifActif(): Promise<boolean> {
   try {
-    const FM = await greffon();
+    const { FM } = await greffon();
     const etat = await FM.checkPermissions();
     return etat.receive === 'granted';
   } catch { return false; }
@@ -308,6 +322,18 @@ function ecouterWeb() {
   } catch { /* adresse illisible : rien a relayer */ }
 
   if (!('serviceWorker' in navigator)) return;
+  // Meme menage que `viderVolet` cote natif : le jeu installe depuis Chrome
+  // garde sinon sa pastille tant que ses notifications restent dans le volet.
+  const viderVoletWeb = () => {
+    if (document.visibilityState !== 'visible') return;
+    navigator.serviceWorker.ready
+      .then(reg => reg.getNotifications())
+      .then(ns => ns.forEach(n => n.close()))
+      .catch(() => { /* rien a vider */ });
+    (navigator as any).clearAppBadge?.().catch?.(() => { /* non gere */ });
+  };
+  document.addEventListener('visibilitychange', viderVoletWeb);
+  viderVoletWeb();
   navigator.serviceWorker.addEventListener('message', ev => {
     const m = ev.data;
     if (m && m.sprinter === 'courrier' && m.t) signalerCourrier(String(m.t) as Courrier);
@@ -365,7 +391,7 @@ export type EtatPush = 'accordee' | 'refusee' | 'a-demander' | 'impossible';
 export async function etatPush(): Promise<EtatPush> {
   if (EST_NATIF) {
     try {
-      const FM = await greffon();
+      const { FM } = await greffon();
       const etat = await FM.checkPermissions();
       if (etat.receive === 'granted') return 'accordee';
       if (etat.receive === 'denied') return 'refusee';
@@ -410,7 +436,7 @@ export async function reprendrePush(): Promise<void> {
     return;
   }
   try {
-    const FM = await greffon();
+    const { FM } = await greffon();
     const etat = await FM.checkPermissions();
     if (etat.receive !== 'granted') return;
     await poserEcouteurs(FM);

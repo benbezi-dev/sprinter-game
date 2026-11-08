@@ -255,11 +255,20 @@ export function libererCoureur(joueur) {
  * la jauge de l'ecran pour la montrer ; les deux ont deja diverge pour avoir
  * recopie la formule.
  */
+/**
+ * LE PLAFOND DE L'EPREUVE POUR CE COUREUR-CI. En rendu 3D, le joueur court a
+ * l'echelle des records du monde (sprinter-core.js, ALLURE_DU_JOUEUR : sa
+ * vitesse de pointe est multipliee par `allure`). Le plafond des haies suit la
+ * meme echelle, sans quoi celui du tour (0,895 de la pointe du moteur d'avant)
+ * passerait au-dessus de la nouvelle pointe et ne briderait plus rien.
+ */
+function pleinDe(course, j) { return plafondPlein(course.cle) * ((j && j.allure) || 1); }
+
 function plafondCourant(course, j) {
   if (!course || !j) return null;
   if (course.enVol || course.reception <= 0) return null;
   if (course.i >= course.positions.length) return null;
-  const plein = plafondPlein(course.cle);
+  const plein = pleinDe(course, j);
   // CELUI DE L'EPREUVE VAUT POUR TOUT LE MONDE, celui de l'intervalle ne se
   // decide que sous l'appel du joueur : la machine ne ciseaute pas, il n'y a
   // rien a juger. Sans cette distinction, la machine courait le tour a la
@@ -322,7 +331,7 @@ export function pas(course, j) {
       // LE PLAFOND DU PROCHAIN INTERVALLE SE DECIDE ICI. C'est la reception qui
       // dit a quelle vitesse on repart — sous celui que l'epreuve autorise, qui
       // est plein sur les courtes et plus bas sur le tour (PLAFOND_EPREUVE).
-      course.plafondBas = plafondPlein(course.cle) * adoucir(PLAFOND_INTERVALLE[jc.note] ?? 1, freinDe(j));
+      course.plafondBas = pleinDe(course, j) * adoucir(PLAFOND_INTERVALLE[jc.note] ?? 1, freinDe(j));
       const ms = course.ciseauPart === null ? null
         : Math.round(course.ciseauPart * course.volCiseau * 1000);
       course.ciseaux.push({ note: jc.note, ms });
@@ -754,5 +763,5 @@ export function ciseauDe(course, j) {
 export function plafondDe(course, j) {
   const plafond = plafondCourant(course, j);
   if (plafond === null) return 1;
-  return Math.min(1, plafond / plafondPlein(course.cle));
+  return Math.min(1, plafond / pleinDe(course, j));
 }

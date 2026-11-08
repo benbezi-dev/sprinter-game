@@ -26,7 +26,9 @@
  * Cette colonne dit seulement sur quelle distance se court l'edition en cours,
  * ce que personne ne savait jusqu'ici.
  */
-export const EPREUVES = ['100', '200', '400'];
+export const EPREUVES = ['100', '200', '400', '60', '200s', '400s'];
+// Les epreuves de la salle se courent au stade couvert Jesse Owens : la piste suit l'epreuve.
+const EPREUVES_EN_SALLE = ['60', '200s', '400s'];
 export const EPREUVE_DEFAUT = '100';
 
 /** Le format d'une competition : combien on part, comment on se qualifie. */
@@ -56,6 +58,22 @@ export const FORMAT = {
     },
   ],
 };
+
+/**
+ * L'ANNEAU COUVERT N'A QUE SIX COULOIRS (piste-salle.js) : le 200 m et le 400 m en salle se courent
+ * a six par course. Vingt-quatre partants, quatre series, deux demies, une finale ; le 60 m, sur la
+ * ligne droite a huit couloirs, garde le format ordinaire.
+ */
+const FORMAT_ANNEAU = {
+  partants: 24,
+  phases: FORMAT.phases.map(p => ({
+    ...p, parCourse: 6,
+    repechages: { series: 4, demies: 2, finale: 0 }[p.cle],
+  })),
+};
+export function formatDe(epreuve) {
+  return epreuve === '200s' || epreuve === '400s' ? FORMAT_ANNEAU : FORMAT;
+}
 
 /** Les trois echelons, et ce qui remplit leur grille de depart. */
 export const ECHELONS = {
@@ -148,7 +166,8 @@ export const LIEUX = [
 ];
 
 /** Le lieu impose a la `rang`-ieme edition de cet echelon et de cette zone, ou `null`. */
-export function lieuDeLEdition(echelon, zone, rang) {
+export function lieuDeLEdition(echelon, zone, rang, epreuve) {
+  if (EPREUVES_EN_SALLE.includes(String(epreuve))) return 'salle';
   const r = LIEUX.find(l => l.echelon === echelon && l.zone === zone && l.rang === rang);
   return r ? r.lieu : null;
 }

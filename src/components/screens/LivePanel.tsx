@@ -185,6 +185,9 @@ export function LivePanel() {
    * les couloirs sont pris, donc cette course-la ne partait jamais.
    */
   const [places, setPlaces] = useState(2);
+  // l'anneau couvert n'a que six couloirs
+  const plafondCouloirs = epreuve === '200s' || epreuve === '400s' ? 6 : COULOIRS[COULOIRS.length - 1];
+  useEffect(() => { setPlaces(p => Math.min(p, plafondCouloirs)); }, [plafondCouloirs]);
   /**
    * Le tournoi a elimination : des manches, le dernier de chacune sort,
    * jusqu'a la finale a deux. De trois a huit couloirs seulement — a deux,
@@ -884,7 +887,7 @@ export function LivePanel() {
             {N.t('live_lanes')}
           </span>
           <div className="grid grid-cols-8 gap-1">
-            {COULOIRS.map(n => (
+            {COULOIRS.filter(n => n <= plafondCouloirs).map(n => (
               <button
                 key={n}
                 onClick={() => setPlaces(n)}

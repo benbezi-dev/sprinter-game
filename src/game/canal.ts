@@ -237,6 +237,10 @@ declare const __LANCEMENT_3D__: number;
  * (hors de Vite — un harnais de tools/ —, la valeur n'existe pas : fermee)
  */
 export const TROIS_D_OUVERTE = EST_TEST || (typeof __LANCEMENT_3D__ === 'number' && Date.now() >= __LANCEMENT_3D__);
+/** SALLE PAR DEFAUT (l'auteur, 07/11/2026) : l'interrupteur PLEIN AIR / SALLE part sur la salle pendant la
+ *  saison en salle, et sur le plein air a partir du 1er mars 2027 (heure de l'appareil). */
+export const lieuParDefaut = (): 'dehors' | 'salle' =>
+  (TROIS_D_OUVERTE && Date.now() < new Date(2027, 2, 1).getTime() ? 'salle' : 'dehors');
 /** Ce joueur court-il en 3D ? L'heure de sortie, et `?rendu=` pour forcer l'un ou l'autre (GameCanvas.tsx, game/vestiaire.ts). */
 export const RENDU_3D = (() => {
   try { const r = new URLSearchParams(location.search).get('rendu'); return r === '3d' || (TROIS_D_OUVERTE && r !== '2d'); }

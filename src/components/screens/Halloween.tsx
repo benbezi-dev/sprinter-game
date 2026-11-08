@@ -4,7 +4,7 @@ import { AnimatePresence, motion, useAnimate } from 'motion/react';
 import { SprinterApp, SprinterI18N, useGameStore } from '@/game/engine';
 import { MONTEE, COURBE, DUREE, useAnimationsReduites } from '@/lib/mouvement';
 import { editionActive, EDITION_HALLOWEEN } from '@/game/edition';
-import { EST_TEST, HALLOWEEN_2026_OUVERT } from '@/game/canal';
+import { EST_TEST, EST_ENVELOPPE, HALLOWEEN_2026_OUVERT } from '@/game/canal';
 import {
   NB_NUITS as CAL_NB, ouvertureDe, instantDOuverture, blocageDe, nuitsJouables,
   maintenant, simuler, jourSimule, sourceDuTemps, decalageDeLAppareil,
@@ -162,7 +162,8 @@ function FilmPlein({ nom, fini }: { nom: string; fini: () => void }) {
   const [muet, poserMuet] = useState(false);
   const [pret, poserPret] = useState(false);
   const langue = SprinterI18N.index() === 0 ? 'fr' : 'en';
-  const base = (import.meta as any).env.BASE_URL || '/';
+  // l'appli ne les embarque pas (Play refuse un paquet de base au-dela de 200 Mo, 29/10) : elle les lit sur le site
+  const base = EST_ENVELOPPE ? 'https://sprinter-game.com/' : ((import.meta as any).env.BASE_URL || '/');
   // LA MUSIQUE DU MENU SE TAIT PENDANT TOUT LE FILM, et revient apres. Un
   // simple Audio_.stop() ne suffisait pas : la boucle du jeu relance le morceau
   // de l'accueil a chaque image (engine.ts), il revenait aussitot sous la voix

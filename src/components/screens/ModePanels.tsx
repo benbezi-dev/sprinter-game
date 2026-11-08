@@ -7,12 +7,14 @@ import { estInstallee, estIOS } from '@/game/pwa';
 import { LivePanel } from './LivePanel';
 import { ChampPanel } from './ChampPanel';
 import { RelaisPanel } from './RelaisPanel';
-import { RELAIS_OUVERT, TROIS_D_OUVERTE } from '@/game/canal';
+import { RELAIS_OUVERT, TROIS_D_OUVERTE, lieuParDefaut } from '@/game/canal';
 import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
+import { motion } from 'motion/react';
+import { InterrupteurLieu, LigneEpreuves, equivalente, type Lieu } from './ChoixEpreuves';
 import { Repliable } from './Repliable';
-import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, EPREUVES_EN_SALLE } from '@/game/jeux';
+import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, epreuvesDuLieu } from '@/game/jeux';
 import { stadeDebloque, VEDETTES, defiPossible } from '@/game/vedettes';
 import { mot } from '@/game/vedettes-mots';
 
@@ -24,11 +26,31 @@ export function OneShotPanel() {
   // Les epreuves du jeu courant : le one shot de Hurdlers enchaine des haies.
   const jeu = useJeu();
   const [level, setLevel] = useState(4);
-  // AU STADE COUVERT (la salle de Val-de-Reuil), ses epreuves seulement : 60 m, 200 m et 400 m en salle
-  const enSalle = !!(LEVELS[level] as any)?.salle;
-  const RACE_KEYS = (enSalle ? EPREUVES_EN_SALLE : epreuvesDuJeu(jeu)) as readonly RaceKey[];
+  // LA SALLE SE CHOISIT PAR SES EPREUVES (l'auteur, 02/11) : le 60 m, le 200 m et le 400 m en salle
+  // se prennent dans le one shot sans passer par le choix du stade couvert Jesse Owens. Pour tenir
+  // en une ligne, un interrupteur PLEIN AIR / EN SALLE a cote du titre change les trois distances
+  // (100 -> 60, 200 -> 200 salle, 400 -> 400 salle) en gardant les memes cases cochees. Une epreuve
+  // en salle se court au stade couvert : le one shot part la-bas, et le choix du niveau s'efface.
+  const idxSalle = LEVELS.findIndex((l: any) => l.salle);
+  // (Hurdlers aussi depuis le 02/11 : le 60 m haies, femmes et hommes, au meme stade couvert)
+  const salleOuverte = (jeu === 'sprinter' || jeu === 'hurdlers') && TROIS_D_OUVERTE && idxSalle >= 0;
+  const [lieu, setLieu] = useState<Lieu>(lieuParDefaut);
+  const enSalle = salleOuverte && lieu === 'salle';
+  const RACE_KEYS = (salleOuverte
+    ? epreuvesDuLieu(jeu, enSalle ? 'salle' : 'dehors')
+    : epreuvesDuJeu(jeu).filter(k => epreuvesDuLieu(jeu, 'dehors').includes(k))) as readonly RaceKey[];
   const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
-  useEffect(() => { setPicked([RACE_KEYS[0]]); }, [jeu, enSalle]);
+  useEffect(() => {
+    const l = salleOuverte ? lieuParDefaut() : 'dehors';
+    setLieu(l); setPicked([epreuvesDuLieu(jeu, l)[0]]);
+  }, [jeu]);
+  const niveau = enSalle ? idxSalle : level;
+
+  const basculer = (vers: Lieu) => {
+    // (sans doublon : aux haies, le 110 m H et le 400 m H ont tous deux le 60 m H ♂ en face)
+    setPicked(p => p.map(k => equivalente(k, vers)).filter((k, i, t) => t.indexOf(k) === i));
+    setLieu(vers);
+  };
 
   const toggle = (k: RaceKey) => {
     setPicked(p => (p.includes(k) ? p.filter(x => x !== k) : [...p, k]));
@@ -49,7 +71,7 @@ export function OneShotPanel() {
     // On garde l'ordre 100 / 200 / 400 quel que soit l'ordre des clics :
     // c'est l'ordre d'un vrai programme d'athletisme.
     const races = RACE_KEYS.filter(k => picked.includes(k));
-    SprinterApp.startOneShot(races, { levelIdx: level });
+    SprinterApp.startOneShot(races, { levelIdx: niveau });
   };
 
   const launch = partir;
@@ -61,43 +83,47 @@ export function OneShotPanel() {
   };
 
   return (
-    <div className="flex flex-col gap-3 md:gap-4">
+    <div className="flex flex-col gap-3 md:gap-4 serre:gap-2">
       {tuto && <OneShotTuto onClose={fermerTuto} />}
 
-      <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-4">
-        <button
-          onClick={() => setTuto(true)}
-          className="self-center flex items-center gap-1.5 text-[10px] md:text-xs font-bold
-                     tracking-widest text-muted-foreground hover:text-primary transition-colors"
-        >
-          <GraduationCap className="w-3.5 h-3.5" />
-          {N.t('os_tuto_open')}
-        </button>
-
+      <div className="bg-card/70 backdrop-blur-xl border border-white/10 rounded-2xl p-4 md:p-6 serre:p-3 shadow-2xl flex flex-col gap-4 serre:gap-2.5">
         <div>
-          <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary mb-2">
-            {N.t('pick_events')}
-          </h3>
-          <div className="flex gap-2">
-            {RACE_KEYS.map(k => (
+          {/* Le titre et l'interrupteur sur la meme ligne : la salle ne coute pas une ligne de plus. */}
+          <div className="flex items-center justify-between mb-2 gap-2">
+            {/* « A quoi sert ce mode » : une icone a cote du titre plutot qu'une ligne a elle seule
+                (l'auteur, 02/11 : tout doit tenir sans defiler). */}
+            <span className="flex items-center gap-1.5">
+              <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary">
+                {N.t('pick_events')}
+              </h3>
               <button
-                key={k}
-                onClick={() => toggle(k)}
-                className={`flex-1 py-2 md:py-3 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
-                  ${picked.includes(k)
-                    ? 'bg-primary/20 text-primary border-primary shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.2)]'
-                    : 'bg-black/30 text-muted-foreground border-transparent hover:bg-white/10'}`}
+                onClick={() => setTuto(true)}
+                aria-label={N.t('os_tuto_open')}
+                title={N.t('os_tuto_open')}
+                className="p-1 -m-1 rounded-full text-muted-foreground hover:text-primary transition-colors"
               >
-                {nomCourt(k)}
+                <GraduationCap className="w-3.5 h-3.5" />
               </button>
-            ))}
+            </span>
+            {salleOuverte && <InterrupteurLieu lieu={lieu} onChange={basculer} id="oneshot" />}
           </div>
+          <LigneEpreuves epreuves={RACE_KEYS} coche={k => picked.includes(k)} onToggle={toggle} />
         </div>
 
         <div>
           <h3 className="text-[10px] md:text-xs font-bold tracking-widest text-primary mb-2">
             {N.t('pick_level')}
           </h3>
+          {enSalle ? (
+            <motion.div
+              key="salle"
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground"
+            >
+              {N.levelName(idxSalle)}
+            </motion.div>
+          ) : (
           <select
             value={level}
             onChange={e => setLevel(Number(e.target.value))}
@@ -134,6 +160,8 @@ export function OneShotPanel() {
                   if (!l.horsSerie || l.evenement || l.legende || (l.reserve && import.meta.env.VITE_CANAL !== 'test')) return null;
                   // (le stade couvert Jesse Owens n'existe qu'en 3D : il attend sa sortie, canal.ts)
                   if (l.avecLa3D && !TROIS_D_OUVERTE) return null;
+                  // la salle ne se choisit plus ici : on y va en prenant une de ses epreuves
+                  if (l.salle) return null;
                   if (stadeDebloque(l)) return (
                     <option key={i} value={i} className="bg-neutral-900">
                       {N.levelName(i)}
@@ -149,13 +177,14 @@ export function OneShotPanel() {
               </optgroup>
             )}
           </select>
+          )}
         </div>
       </div>
 
       <button
         onClick={launch}
         disabled={!picked.length}
-        className="w-full py-3 md:py-5 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
+        className="w-full py-3 md:py-5 serre:py-2.5 rounded-xl font-black font-display text-xl md:text-2xl tracking-widest text-background bg-primary hover:bg-primary/90 transition-all border-b-4 border-[var(--primaire-fonce)] active:border-b-0 active:translate-y-1 shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)] disabled:opacity-40 disabled:pointer-events-none disabled:shadow-none"
       >
         {N.t('launch_oneshot')}
       </button>

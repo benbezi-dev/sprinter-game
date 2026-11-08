@@ -315,7 +315,7 @@ export function BanderoleSelection({ onVoir }: { onVoir?: () => void }) {
     <motion.div {...MONTEE}>
       <Balise
         {...(cliquable ? { onClick: onVoir } : {})}
-        className={`w-full rounded-2xl border-2 px-4 py-3 flex items-center gap-3 text-left
+        className={`w-full rounded-2xl border-2 px-4 py-3 serre:py-2 flex items-center gap-3 text-left
           ${dedans
             ? 'border-primary/60 bg-primary/[0.10]'
             : 'border-white/15 bg-black/40'}

@@ -103,6 +103,9 @@
     pieces_nom:        ['Réserve ton nom pour gagner des pièces', 'Claim your name to earn coins'],
     pieces_reseau:     ['Serveur injoignable, réessaie', 'Server unreachable, try again'],
     pieces_zero:       ['OU REPARTIR DE ZÉRO ?', 'OR START OVER?'],
+    pub_continuer:     ['REGARDER UNE PUB · CONTINUER', 'WATCH AN AD · CONTINUE'],
+    pub_charge:        ['PUB EN COURS…', 'LOADING AD…'],
+    pub_rate:          ['Pas de pub pour l’instant, réessaie', 'No ad right now, try again'],
     pieces_hors_rang:  ['Carrière reprise : hors classement des parcours', 'Resumed career: not in the career ranking'],
     next_stage:   ['ÉTAPE {n}', 'STAGE {n}'],
     home:         ['ACCUEIL', 'HOME'],
@@ -269,7 +272,7 @@
     // a celui qui n'en pose pas.
     pays_title:      ['TA NATIONALITÉ', 'YOUR NATIONALITY'],
     pays_opt:        ['une seule fois', 'once only'],
-    pays_aucun:      ['choisis ton pays', 'pick your country'],
+    pays_aucun:      ['tape le nom de ton pays', 'type your country'],
     // Ce que la nationalite engage, dit AVANT le geste et non apres.
     pays_why:        ['sans choix de ta part, tu cours pour le pays d’où tu te connectes — un choix, lui, ne se change plus',
                       'if you don’t choose, you run for the country you connect from — a choice cannot be changed'],
@@ -896,6 +899,11 @@
     sel_manque_n:    ['il te manque {n} places', 'you are {n} places short'],
     sel_dedans:      ['tu es qualifié', 'you are in'],
     sel_dedans_fige: ['SÉLECTIONNÉ', 'YOU ARE IN'],
+    lieu_dehors: ['DEHORS', 'OUTDOOR'],
+    lieu_salle: ['EN SALLE', 'INDOOR'],
+    // l'interrupteur du one shot (ModePanels) : le vocabulaire de l'athletisme, deux mots qui vont ensemble
+    os_plein_air: ['PLEIN AIR', 'OUTDOOR'],
+    os_salle: ['SALLE', 'INDOOR'],
     sel_dehors_fige: ['TU N’Y ES PAS', 'YOU ARE NOT IN'],
     sel_pas_classe:  ['tu n’es pas encore classé', 'you are not ranked yet'],
     sel_pour_entrer: ['un duel gagné et tu entres au classement',
@@ -1190,6 +1198,8 @@
     disc_100h:       ['100 M HAIES', '100 M HURDLES'],
     disc_110h:       ['110 M HAIES', '110 M HURDLES'],
     disc_400h:       ['400 M HAIES', '400 M HURDLES'],
+    disc_60h:        ['60 M HAIES HOMMES · SALLE', 'MEN’S 60 M HURDLES · INDOOR'],
+    disc_60hf:       ['60 M HAIES FEMMES · SALLE', 'WOMEN’S 60 M HURDLES · INDOOR'],
     disc_longueur:   ['SAUT EN LONGUEUR', 'LONG JUMP'],
     // Hurdlers : ce que la course dit d'une haie, a l'instant ou on la passe.
     // « Trop pres » et « trop loin » plutot que « hache » et « plane » : le
@@ -1410,6 +1420,7 @@
     legal_conditions: ['conditions', 'terms'],
     legal_vie_privee: ['confidentialité', 'privacy'],
     legal_suppression: ['supprimer mes données', 'delete my data'],
+    legal_pub:       ['choix pub', 'ad choices'],
     duel_revanche:   ['PRENDRE MA REVANCHE', 'GET MY REVENGE'],
     duel_revanche_sub: ['même épreuve — à toi de poser le chrono',
                         'same event — your turn to set the time'],

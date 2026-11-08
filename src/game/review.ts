@@ -285,29 +285,27 @@ async function partagerEnNatif(blob: Blob, nom: string): Promise<Sortie | null> 
 }
 
 /**
- * LE CADRE DU FILM : 9:16 EN 2K SUR UN TELEPHONE TENU DEBOUT.
+ * LE CADRE DU FILM : 9:16, A LA DEFINITION DU JEU, 2K AU PLUS.
  *
  * Le film prend le MILIEU de l'ecran au 9:16 — Instagram et TikTok ne montrent
  * que cela et rognent le reste a leur idee, le haut et le bas partaient avec la
  * barre du chrono.
  *
- * ON VISE LE 2K : 1440 x 2560 (demande du 20/10/2026). C'est une CIBLE FIXE,
- * pas un plafond : le jeu dessine son canevas a `largeur x dpr`, dpr plafonne a
- * 2 (3 a l'ULTRA, voir rendu-premium.js et GameCanvas), donc sa toile fait le
- * plus souvent 800 a 1200 de large. On l'AGRANDIT jusqu'au 2K au moment de la
- * recopie — le fichier sort toujours en 1440 x 2560, quitte a etaler le rendu
- * du jeu. L'agrandissement se fait sur le canevas du MONTAGE, a part : le jeu,
- * lui, continue de tourner a sa definition, sans rien y perdre. Seul l'encodeur
- * du replay a plus de pixels a avaler ; sur le plus modeste des telephones
- * c'est le replay qui peut sauter une image, jamais la course.
+ * LE 2K EST UN PLAFOND, PLUS UNE CIBLE (7/11/2026). Du 20/10 au 7/11, le film
+ * sortait toujours en 1440 x 2560, quitte a agrandir une toile de 800 a 1200 de
+ * large : aucun detail de plus, et l'idee etait que seul l'encodeur en payait le
+ * prix. C'etait faux sous Safari : `captureStream` y relit et convertit chaque
+ * image filmee dans le processus GPU du navigateur, et en course 3D sur iPhone
+ * 13 Pro c'etait plus de la moitie de son temps (Instruments) — la course
+ * saccadait. Le film a donc la taille de la toile du jeu, jusqu'au 2K.
  *
  * Le HUD et le carton se mettent en page sur la partie VISIBLE, en points CSS :
  * ils raisonnent deja en `l` x `h` et ne s'accrochent a aucune position de la
- * piste (hud-film.ts, carton-film.ts) ; `echelle` les met a la taille du 2K.
+ * piste (hud-film.ts, carton-film.ts) ; `echelle` les met a la taille du film.
  *
- * Un ecran couche sort en 2560 x 1440 ; un ecran presque carre (telephone plie
- * ouvert, tablette) garde son cadre — le rogner en 9:16 couperait la course —
- * mais grandit lui aussi jusqu'au 2K (voir cadreDuFilm).
+ * Un ecran couche sort au plus en 2560 x 1440 ; un ecran presque carre
+ * (telephone plie ouvert, tablette) garde son cadre — le rogner en 9:16
+ * couperait la course (voir cadreDuFilm).
  */
 const RATIO_PORTRAIT = 1.6;
 
@@ -319,7 +317,7 @@ const RATIO_PORTRAIT = 1.6;
  * duree attendue des epreuves du film ; le 100 m garde ses 5 Mbit/s.
  */
 const POIDS_MAX = 15_000_000;
-const SECONDES: Record<string, number> = { '100': 20, '200': 30, '400': 58, '4x100': 52, '100h': 24, '110h': 24, '400h': 62 };
+const SECONDES: Record<string, number> = { '60': 14, '200s': 30, '400s': 58, '100': 20, '200': 30, '400': 58, '4x100': 52, '100h': 24, '110h': 24, '400h': 62, '60h': 16, '60hf': 16 };
 function debitDuFilm(): number {
   const G = (globalThis as any).SprinterApp?.G;
   const cles: string[] = (G?.mode === 'oneshot' && Array.isArray(G?.shotRaces) && G.shotRaces.length)
@@ -331,18 +329,21 @@ function debitDuFilm(): number {
 const LARGEUR_2K = 1440;
 interface Cadre { l: number; h: number; sx: number; sy: number; sl: number; sh: number; ecran?: string }
 
-// LE 2K TOUJOURS (« film en 2K toujours », l'auteur, 24/10) : un ecran couche sort en 2560 x 1440 ;
-// un ecran presque carre (telephone plie ouvert, tablette) garde son cadre — le rogner couperait la
-// course — mais grandit jusqu'a 2560 pixels sur son grand cote.
+// LE 2K AU PLUS, JAMAIS AU-DELA DE CE QUE LE JEU DESSINE (l'auteur, 7/11/2026, apres comparaison :
+// « applique ») : le film ne grandit plus au-dessus de la toile du jeu. Agrandi, il n'avait aucun
+// detail de plus — mais Safari relit et convertit chaque image filmee (captureStream) dans son
+// processus GPU : sur iPhone 13 Pro, plus de la moitie de ce processus en course 3D (Instruments,
+// 7/11). Un ecran couche sort au plus en 2560 x 1440 ; un ecran presque carre (telephone plie
+// ouvert, tablette) garde son cadre — le rogner couperait la course.
 function cadreDuFilm(sw: number, sh: number): Cadre {
   const ecran = `${sw}x${sh}`;
   if (!sw || !sh) return { l: sw, h: sh, sx: 0, sy: 0, sl: sw, sh, ecran };
   const portrait = sh / sw >= RATIO_PORTRAIT, couche = sw / sh >= RATIO_PORTRAIT;
   if (!portrait && !couche) {
-    const k = (LARGEUR_2K * 16 / 9) / Math.max(sw, sh);
+    const k = Math.min(1, (LARGEUR_2K * 16 / 9) / Math.max(sw, sh));
     return { l: Math.round(sw * k) & ~1, h: Math.round(sh * k) & ~1, sx: 0, sy: 0, sl: sw, sh, ecran };
   }
-  const court = LARGEUR_2K & ~1, long = Math.round(court * 16 / 9) & ~1;
+  const court = Math.min(LARGEUR_2K, portrait ? sw : sh) & ~1, long = Math.round(court * 16 / 9) & ~1;
   const l = portrait ? court : long, h = portrait ? long : court;
   const k = Math.max(l / sw, h / sh);
   const sl = l / k, shv = h / k;
@@ -509,6 +510,8 @@ export class Review {
     (globalThis as any).__filmer3D = (t: HTMLCanvasElement) => {
       // trente copies par seconde suffisent : le film n'en prend pas plus
       if (performance.now() - this.copie3DA < 30) return;
+      // une toile vide (fenetre a zero, appli en arriere-plan) leverait dans drawImage, au milieu de la boucle du jeu
+      if (!t.width || !t.height) return;
       const c = this.copie3D || (this.copie3D = document.createElement('canvas'));
       if (c.width !== t.width || c.height !== t.height) { c.width = t.width; c.height = t.height; }
       c.getContext('2d')?.drawImage(t, 0, 0);

@@ -1,6 +1,7 @@
 /// <reference types="@capacitor-firebase/messaging" />
 
 import type { CapacitorConfig } from '@capacitor/cli';
+import paquet from './package.json' with { type: 'json' };
 
 /**
  * L'enveloppe native, pour l'App Store et le Play Store.
@@ -42,6 +43,10 @@ const config: CapacitorConfig = {
 
   android: {
     backgroundColor: '#05070d',
+    // StatusBar appelle les anciennes API de couleur des son chargement.
+    // SystemBars, fourni par Capacitor, le remplace sur Android.
+    includePlugins: Object.keys({ ...paquet.dependencies, ...paquet.devDependencies })
+      .filter(nom => nom !== '@capacitor/status-bar'),
     // Sans cela, une page servie depuis le paquet n'est pas un contexte
     // securise, et le micro comme la capture video restent inaccessibles.
     allowMixedContent: false,
@@ -62,8 +67,11 @@ const config: CapacitorConfig = {
     },
     StatusBar: {
       style: 'DARK',
-      backgroundColor: '#05070d',
       overlaysWebView: true,
+    },
+    SystemBars: {
+      style: 'DARK',
+      insetsHandling: 'css',
     },
     /**
      * Le clavier, et la place qu'il prend.

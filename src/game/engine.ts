@@ -545,8 +545,8 @@ export function padPress(side: 'left' | 'right') {
       return;
     }
     if (!G.player.jumped) {
-      // One-shot et defi : la course ne se rejoue pas, le faux depart elimine.
-      // En carriere il coute seulement un blocage au coup de pistolet.
+      // Le faux depart elimine (one-shot, defi, carriere) ; ou falseStartOut
+      // le refuse (premiere course du joueur), il coute un blocage au pistolet.
       if (SprinterApp.falseStartOut()) { buzz(120); return; }
       G.player.jumped = true;
       G.player.freeze = C.FALSE_START_FREEZE;
@@ -1285,8 +1285,10 @@ export function updateLogic(dt: number) {
     }
     SprinterApp.followCam(dt);
     
-    const out = G.player.finished && G.player.d >= G.track.total + C.RUNOUT;
-    const slow = G.player.finished && G.elapsed >= G.player.finishTime + 3;
+    // (au 60 m en salle, la course se termine contre le tapis, voir Runner.apresLigne)
+    const auTapis = !!G.race.salleDroite && G.player.tapis != null;
+    const out = G.player.finished && (auTapis ? G.player.auTapisT >= 3.4 : G.player.d >= G.track.total + C.RUNOUT);
+    const slow = G.player.finished && G.elapsed >= G.player.finishTime + (auTapis ? 9 : 3);
     // LA MORSURE TERMINE LA COURSE, et il faut le dire ici parce que rien
     // d'autre ne le dirait : un coureur rattrape est gele sur place, il
     // n'atteindra jamais la ligne, et les deux conditions ci-dessus attendent
