@@ -309,6 +309,7 @@ def coupe(nom, depl, lisse=0, ajouts=(), cotes_ras=None):
     ob.data.materials.append(mat_)
     if cotes_ras is not None or nom == 'Rase':
         ras = bpy.data.materials.new('M_Cheveux_' + nom + '_Ras'); ras.roughness = 0.95; ob.data.materials.append(ras)
+        ras.diffuse_color = (*srgb(tuple(a * 0.55 + b * 0.45 for a, b in zip(COULEURS_CHEVEUX['noir'], (120, 76, 50)))), 1)
         for p in ob.data.polygons:
             if nom == 'Rase' or zrepos.get(p.index, 9) < cotes_ras - 1e-4: p.material_index = 1
     COUPES[nom] = ob
@@ -339,7 +340,7 @@ else:
 # ---------- 5. LA TENUE : de vrais vetements (maillages a part), pas de la peinture ----------
 def matiere(nom, rgb, rugo=0.7):
     m = bpy.data.materials.new(nom); m.diffuse_color = (*rgb, 1); m.roughness = rugo; return m
-PEAU = matiere('M_Peau', (0.42, 0.26, 0.17), 0.55)
+PEAU = matiere('M_Peau', srgb((120, 76, 50)), 0.55)
 HAUT = matiere('M_Haut', (0.97, 0.76, 0.10), 0.8)
 BAS = matiere('M_Bas', (0.07, 0.10, 0.32), 0.45)
 corps.data.materials.append(PEAU)
@@ -477,13 +478,72 @@ def vetement(nom, region, plans, decalage, mat_, gonfle, lisse):
     return ob
 haut = vetement('Debardeur' if male else 'Brassiere', region_haut_c, [(HEM_HAUT, True)], 0.0075 if male else 0.0055, HAUT, 30, 40)
 bas = vetement('Cuissard', region_bas_c, [(TAILLE, False), (CUISSE, True)], 0.0045, BAS, 6, 12)
+# ---------- 5b. LES POINTES : celles du jeu (public/modeles/pointes-*.glb, Tripo sans marque), ajustees a chaque pied ----------
+REPO = os.environ.get('SPRINTER_REPO', '.')                  # la racine du depot (pour public/modeles/pointes-*.glb)
+avant_import = set(bpy.data.objects)
+bpy.ops.import_scene.gltf(filepath=f'{REPO}/public/modeles/pointes-{"homme" if male else "femme"}.glb')
+importes = [o for o in bpy.data.objects if o not in avant_import]
+POINTES = []
+M_POINTES = None
+for c, n in (('l', 'Left'), ('r', 'Right')):
+    src = bpy.data.objects['pointe_' + c]
+    sv = [src.matrix_world @ v.co for v in src.data.vertices]
+    sx0, sx1 = min(p.x for p in sv), max(p.x for p in sv); sy0, sy1 = min(p.y for p in sv), max(p.y for p in sv); sz0 = min(p.z for p in sv)
+    pied = [v.co.copy() for v in me.vertices if dom.get(v.index) in (n + 'Foot', n + 'Toes')]
+    cheville = OS[n + 'Foot'][0].z
+    pied = [p for p in pied if p.z < cheville + 0.01]
+    # l'axe du pied : direction principale (horizontale) des sommets du pied, tournee vers l'avant (-Y)
+    mx = sum(p.x for p in pied) / len(pied); my = sum(p.y for p in pied) / len(pied)
+    cxx = sum((p.x - mx) ** 2 for p in pied); cyy = sum((p.y - my) ** 2 for p in pied); cxy = sum((p.x - mx) * (p.y - my) for p in pied)
+    ang = 0.5 * math.atan2(2 * cxy, cxx - cyy); F = Vector((math.cos(ang), math.sin(ang), 0))
+    if F.y > 0: F = -F
+    L = Vector((-F.y, F.x, 0))                                 # la gauche du pied
+    fu = [p.dot(F) for p in pied]; lv = [p.dot(L) for p in pied]; zmin = min(p.z for p in pied)
+    fmin, fmax, lmin, lmax = min(fu), max(fu), min(lv), max(lv)
+    kx = (fmax - fmin + 0.018) / (sx1 - sx0); ky = (lmax - lmin + 0.012) / (sy1 - sy0); kz = (kx + ky) / 2
+    ob = src.copy(); ob.data = src.data.copy(); ob.name = 'Pointes_' + n; bpy.context.scene.collection.objects.link(ob)
+    ob.parent = None; ob.matrix_world = Matrix.Identity(4)
+    for v, p in zip(ob.data.vertices, sv):
+        u = (p.x - sx0) * kx + fmin - 0.01
+        w_ = (p.y - (sy0 + sy1) / 2) * ky + (lmin + lmax) / 2
+        h = (p.z - sz0) * kz + zmin - 0.009                   # la semelle passe sous la plante
+        v.co = F * u + L * w_ + Vector((0, 0, h))
+    ob.data.update()
+    # poids : le pied, et les orteils en avant de la tete des metatarsiens (la chaussure plie au bon endroit)
+    for g in list(ob.vertex_groups): ob.vertex_groups.remove(g)
+    gp = ob.vertex_groups.new(name=n + 'Foot'); go = ob.vertex_groups.new(name=n + 'Toes')
+    ub = OS[n + 'Toes'][0].dot(F)
+    for v in ob.data.vertices:
+        t = ss(ub - 0.015, ub + 0.02, v.co.dot(F))
+        if t < 1: gp.add([v.index], 1 - t, 'REPLACE')
+        if t > 0: go.add([v.index], t, 'REPLACE')
+    for m_ in list(ob.modifiers): ob.modifiers.remove(m_)
+    mm = ob.modifiers.new('Armature', 'ARMATURE'); mm.object = arm; ob.parent = arm
+    if M_POINTES is None:
+        M_POINTES = ob.data.materials[0]; M_POINTES.name = 'M_Pointes'
+        os.makedirs(os.path.join(os.path.dirname(SORTIE) or '.', 'Textures'), exist_ok=True)
+        for nd in M_POINTES.node_tree.nodes:
+            if nd.type == 'TEX_IMAGE' and nd.image:
+                nom_img = 'Pointes_' + ('BaseMap' if nd.image.name.startswith('Color') else 'Normal' if 'Normal' in nd.image.name else 'ORM') + '.png'
+                chemin = os.path.join(os.path.dirname(SORTIE) or '.', 'Textures', nom_img)
+                nd.image.filepath_raw = chemin; nd.image.file_format = 'PNG'; nd.image.save(); nd.image.name = nom_img[:-4]
+                if nom_img.endswith('BaseMap.png'):
+                    px = list(nd.image.pixels[:4096 * 4:16]); 
+    ob.data.materials.clear(); ob.data.materials.append(M_POINTES)
+    for p in ob.data.polygons: p.use_smooth = True
+    POINTES.append(ob)
+    print('pointe', n, ': pied %.3f x %.3f m, echelle %.2f / %.2f' % (fmax - fmin, lmax - lmin, kx, ky))
+for o in importes:
+    if o.name in bpy.data.objects and o not in POINTES: bpy.data.objects.remove(o)
 # la peau cachee sous la tenue est retiree (aucune peau ne traverse le tissu en course)
 bm = bmesh.new(); bm.from_mesh(corps.data); bm.faces.ensure_lookup_table()
 arbres_v = []
-for o in (haut, bas):
+for o in (haut, bas, *POINTES):
     b2 = bmesh.new(); b2.from_mesh(o.data); arbres_v.append(BVHTree.FromBMesh(b2))
 def couverte(f):
     c = f.calc_center_median()
+    if any(dom.get(v.index, '').endswith(('Foot', 'Toes')) for v in f.verts) and all(dom.get(v.index, '').endswith(('Foot', 'Toes', 'LowerLeg')) for v in f.verts):
+        if c.z < min(OS['LeftFoot'][0].z, OS['RightFoot'][0].z) - 0.004: return True
     if max(region_haut(c, f), region_bas(c, f)) <= 0.006: return False
     return any(t.find_nearest(c)[3] is not None and t.find_nearest(c)[3] < 0.012 for t in arbres_v)
 cache = [f for f in bm.faces if couverte(f)]
@@ -500,12 +560,13 @@ bm.to_mesh(corps.data); bm.free()
 # UN SEUL MAILLAGE (un SkinnedMeshRenderer dans Unity), trois matieres
 for o in bpy.context.scene.objects: o.select_set(False)
 corps.select_set(True); haut.select_set(True); bas.select_set(True)
+for o in POINTES: o.select_set(True)
 bpy.context.view_layer.objects.active = corps; bpy.ops.object.join()
 corps.name = 'Sprinteur_Corps' if male else 'Sprinteuse_Corps'
 for o in list(bpy.context.scene.objects):
     if o.type == 'MESH' and o is not corps and o not in COUPES.values(): bpy.data.objects.remove(o)
 me = corps.data
-print('maillage final :', len(me.vertices), 'sommets,', len(me.polygons), 'faces, matieres', [m.name for m in me.materials],
+print('maillage final :', len(me.vertices), 'sommets,', len(me.polygons), 'faces, matieres', [m.name for m in me.materials if m],
       '| sans poids:', sum(1 for v in me.vertices if not v.groups))
 
 # ---------- 6. LE CLIP DE SPRINT (boucle de 16 images, 30 i/s) ----------
@@ -614,6 +675,17 @@ for f, P_ in sorted(poses.items()):
 sc = bpy.context.scene; sc.frame_start, sc.frame_end = 0, 15; sc.render.fps = 30
 bpy.ops.object.mode_set(mode='OBJECT')
 
+def sync_couleurs():
+    """la couleur affichee (diffuse_color) devient la Base Color du Principled BSDF : c'est elle que lit l'export FBX, donc Unity"""
+    for m in bpy.data.materials:
+        if m.name.startswith('M_Pointes') or not m.use_nodes: 
+            if not m.use_nodes and not m.name.startswith('M_Pointes'):
+                m.use_nodes = True
+            else: continue
+        for nd in m.node_tree.nodes:
+            if nd.type == 'BSDF_PRINCIPLED':
+                nd.inputs['Base Color'].default_value = m.diffuse_color; nd.inputs['Roughness'].default_value = m.roughness
+sync_couleurs()
 # ---------- 7. EXPORT UNITY (memes reglages qu'Aurel : tools/blender/aurel_unity.py) ----------
 def activer(*obs):
     for o in bpy.context.scene.objects: o.select_set(False)
@@ -634,7 +706,7 @@ print('fbx ecrit:', os.path.getsize(SORTIE + '.fbx') // 1024, 'Ko')
 
 for i, o in enumerate(COUPES.values()): o.hide_render = i != 0
 # ---------- 8. RENDUS : le cycle en images, et la tenue de pres ----------
-sc.render.engine = 'BLENDER_WORKBENCH'; sc.display.shading.light = 'STUDIO'; sc.display.shading.color_type = 'MATERIAL'
+sc.render.engine = 'BLENDER_WORKBENCH'; sc.display.shading.light = 'STUDIO'; sc.display.shading.color_type = 'TEXTURE'
 sc.display.shading.show_cavity = True
 sc.world = bpy.data.worlds.new('w'); sc.world.color = (0.80, 0.89, 0.95)
 cam = bpy.data.objects.new('cam', bpy.data.cameras.new('cam')); sc.collection.objects.link(cam); sc.camera = cam
@@ -655,7 +727,7 @@ for nom, d in (('repos_face', Av), ('repos_dos', -Av)):
     viser(Vector((0, 0, 1.0)), d, 2.1, (600, 700)); sc.render.filepath = f'{SORTIE}_images/{nom}.png'; bpy.ops.render.render(write_still=True)
 arm.animation_data.action = act_
 sc.frame_set(0)
-for nom, d, ctr in (('tenue_face', Av, Vector((0, 0, 1.15))), ('tenue_dos', -Av, Vector((0, 0, 1.15))), ('tenue_cote', Lat, Vector((0, 0, 1.15))), ('zoom_taille_dos', -Av, Vector((0, 0, 0.95))), ('zoom_poitrine', Av, Vector((0, 0, 1.3)))):
+for nom, d, ctr in (('tenue_face', Av, Vector((0, 0, 1.15))), ('tenue_dos', -Av, Vector((0, 0, 1.15))), ('tenue_cote', Lat, Vector((0, 0, 1.15))), ('zoom_taille_dos', -Av, Vector((0, 0, 0.95))), ('zoom_poitrine', Av, Vector((0, 0, 1.3))), ('pieds', (Lat * 0.8 + Av * 0.7).normalized(), Vector((0, 0, 0.25))), ('pieds_cote', Lat, Vector((0, 0, 0.25)))):
     viser(ctr, d, 1.1, (600, 700)); sc.render.filepath = f'{SORTIE}_images/{nom}.png'; bpy.ops.render.render(write_still=True)
 PEAUX = {'ebene': (74, 46, 32), 'cacao': (96, 60, 40), 'acajou': (108, 66, 42), 'noisette': (120, 76, 50), 'bronze': (142, 92, 58),
          'ambre': (176, 122, 78), 'miel': (198, 150, 104), 'olive': (206, 166, 118), 'sable': (224, 186, 142), 'clair': (238, 204, 166), 'porcelaine': (246, 220, 190)}
@@ -669,6 +741,7 @@ for i, (nom, o) in enumerate(COUPES.items()):
     ch = COULEURS_CHEVEUX[teintes[i % len(teintes)]]; pe = PEAUX[choix[i % len(choix)]]
     o.data.materials[0].diffuse_color = (*srgb(ch), 1)
     if len(o.data.materials) > 1: o.data.materials[1].diffuse_color = (*srgb(tuple(a * 0.55 + b * 0.45 for a, b in zip(ch, pe))), 1)
+    sync_couleurs()
     viser(tete_c, (Av * 0.85 + Lat * 0.5).normalized(), 0.42, (420, 460)); sc.render.filepath = f'{SORTIE}_images/coupe_{i}_{nom}.png'; bpy.ops.render.render(write_still=True)
     viser(tete_c, (-Av * 0.85 + Lat * 0.5).normalized(), 0.42, (420, 460)); sc.render.filepath = f'{SORTIE}_images/coupe_{i}_{nom}_dos.png'; bpy.ops.render.render(write_still=True)
 for i, o in enumerate(COUPES.values()): o.hide_render = i != 0

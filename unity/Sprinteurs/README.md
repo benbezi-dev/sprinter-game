@@ -9,15 +9,22 @@ script et on relance (voir l'en-tête du script).
 
 | Fichier | Rôle |
 |---|---|
-| `Sprinteur.fbx` | homme, 1,96 m : corps et tenue en **un** maillage (`Sprinteur_Corps`), 5 coupes de cheveux, clip `Sprint` |
+| `Sprinteur.fbx` | homme, 1,96 m : corps, tenue et pointes en **un** maillage (`Sprinteur_Corps`), 5 coupes de cheveux, clip `Sprint` |
 | `Sprinteuse.fbx` | femme, 1,72 m : idem, 4 coupes de cheveux |
+| `Textures/Pointes_*.png` | les textures des pointes (couleur, normales, ORM) : le FBX les reference en chemin relatif, garder le dossier a cote |
 
 - **Squelette Humanoid** de 52 os, aux noms de l'avatar Unity (`Hips`,
   `Spine`, `Chest`, `UpperChest`, `Neck`, `Head`, `LeftShoulder`…
   `LeftHandIndex1`…, `LeftToes`). Les doigts sont présents.
 - **4 influences au plus** par sommet, toutes normalisées.
-- **Trois matériaux** sur le corps : `M_Peau`, `M_Haut` (débardeur ou
-  brassière), `M_Bas` (cuissard).
+- **Quatre matériaux** sur le corps : `M_Peau`, `M_Haut` (débardeur ou
+  brassière), `M_Bas` (cuissard), `M_Pointes` (texturé). Les couleurs sont
+  dans la *Base Color* du matériau : c'est elle qu'Unity importe.
+- **Les pointes** sont celles du jeu (`public/modeles/pointes-*.glb`, faites
+  dans Tripo, sans marque), ajustées à chaque pied : axe du pied, longueur et
+  largeur, semelle sous la plante. Elles sont pondérées sur `…Foot` et
+  `…Toes`, et plient donc à la tête des métatarsiens. Le pied caché dans la
+  chaussure est retiré.
 - **La tenue est faite de vrais vêtements**, pas de peinture sur la peau. Ce
   sont des maillages découpés (col, emmanchures, dos), avec un ourlet replié,
   décollés de la peau et tendus par-dessus les creux. Ils sont fusionnés au
@@ -85,7 +92,10 @@ sprinteurs n'ont pas sa taille.
 - **Ni textures ni yeux** : couleurs unies. Les cheveux sont des volumes lisses,
   sans mèches. Une texture ou un shader de cheveux dans Unity les rendrait
   plus crédibles.
-- **Pieds nus** : pas encore de pointes.
+- **Les pointes sont étirées** : elles sont allongées de 41 % chez l'homme
+  (22 % chez la femme), mais élargies d'à peine 4 % (9 % chez la femme),
+  parce que le pied MakeHuman est plus long et plus fin que celui des coureurs
+  du jeu. Elles gardent la couleur verte de leur texture.
 - **Petits défauts en course** : au bas du cuissard, la jambe tendue peut
   laisser percer un peu de peau. Chez l'homme, les tétons se devinent encore
   sous le débardeur.
