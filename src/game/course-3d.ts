@@ -1253,7 +1253,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // l'ordre des faces ne change rien a l'image.
     salle.interieur.traverse((o: any) => {
       for (const m of [].concat(o.material || []) as THREE.Material[])
-        if (m.transparent && m.side === THREE.DoubleSide && m.blending === THREE.AdditiveBlending) m.forceSinglePass = true;
+        if (m.transparent && m.side === THREE.DoubleSide && m.blending === THREE.AdditiveBlending && !m.depthWrite) m.forceSinglePass = true;
     });
     return;
   }
