@@ -727,12 +727,67 @@ function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: 
  * moment d'avant-course (la cinematique d'intro ou le decompte) et ne revient jamais en arriere : la salle reste noire.
  */
 const DUREE_EXTINCTION = 4;
+/**
+ * LE SON DE L'EXTINCTION : le « clonk » d'un contacteur par rangee de plafonniers, qui roule dans la halle ; le
+ * public qui monte d'un cran quand le noir tombe ; le gresillement des tubes neon qui s'allument. Synthetise sur
+ * l'horloge audio du jeu (Audio_.ctx, Audio_.sortie) : rien a charger, muet si le son est coupe.
+ */
+const sonDeSalle = {
+  audio() { const A = (globalThis as any).SprinterApp?.Audio_; return A && A.ok && A.on && A.ctx && A.sortie ? A : null; },
+  bruit(ctx: AudioContext, dur: number) {
+    const b = ctx.createBuffer(1, Math.max(1, (dur * ctx.sampleRate) | 0), ctx.sampleRate), ch = b.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    const s = ctx.createBufferSource(); s.buffer = b; return s;
+  },
+  enveloppe(ctx: AudioContext, t: number, pic: number, monte: number, tombe: number) {
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(pic, t + monte); g.gain.exponentialRampToValueAtTime(0.0001, t + monte + tombe);
+    return g;
+  },
+  /** Un contacteur qui coupe une rangee : un choc sourd, un clic metallique, et la halle qui le renvoie. */
+  clonk(force = 1) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.01;
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.25);
+    const go = this.enveloppe(ctx, t, 0.55 * force, 0.004, 0.35); o.connect(go).connect(A.sortie); o.start(t); o.stop(t + 0.4);
+    const clic = this.bruit(ctx, 0.05), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 1.2;
+    const gc = this.enveloppe(ctx, t, 0.35 * force, 0.002, 0.04); clic.connect(f).connect(gc).connect(A.sortie); clic.start(t);
+    // l'echo de la halle : le meme choc, etouffe, qui revient trois fois
+    for (let k = 1; k <= 3; k++) {
+      const e = this.bruit(ctx, 0.3), fe = ctx.createBiquadFilter(); fe.type = 'lowpass'; fe.frequency.value = 900 - k * 200;
+      const ge = this.enveloppe(ctx, t + k * 0.11, 0.12 * force / k, 0.01, 0.28); e.connect(fe).connect(ge).connect(A.sortie); e.start(t + k * 0.11);
+    }
+  },
+  /** Le public qui monte quand le noir tombe : une rumeur qui enfle deux secondes, puis retombe. */
+  rumeur() {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.02, d = 4.5;
+    for (const [fq, q, a] of [[520, 0.8, 0.22], [1150, 1.1, 0.14], [2300, 1.4, 0.06]] as const) {
+      const n = this.bruit(ctx, d), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fq; f.Q.value = q;
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(a, t + 1.8); g.gain.setValueAtTime(a, t + 2.3); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      n.connect(f).connect(g).connect(A.sortie); n.start(t);
+    }
+  },
+  /** Un tube neon qui s'amorce : un ping, puis le bourdon du ballast. */
+  neon(dur = 0.12) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.01;
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 100;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400;
+    const g = this.enveloppe(ctx, t, 0.05, 0.005, dur); o.connect(f).connect(g).connect(A.sortie); o.start(t); o.stop(t + dur + 0.05);
+    const p = ctx.createOscillator(); p.type = 'sine'; p.frequency.value = 3800;
+    const gp = this.enveloppe(ctx, t, 0.04, 0.002, 0.06); p.connect(gp).connect(A.sortie); p.start(t); p.stop(t + 0.1);
+  },
+};
 function lExtinction(eteindre: (lumiere: number, neons: number) => void, eclairer: (k: number) => void) {
   const RANGEES = [0.8, 1.4, 2.0];
   const ALLUMAGE: [number, number][] = [[2.6, 0.6], [2.7, 0], [2.8, 1], [2.95, 0.2], [3.05, 1], [3.3, 0.7], [3.4, 1]];
-  let debut = -1, fini = false;
+  let debut = -1, fini = false, vu = -1;
   return (t: number) => {
     if (fini) return;
+    const dt = vu < 0 ? 0 : t - vu; vu = t;
     const G = (globalThis as any).SprinterApp?.G;
     const avant = !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
     if (debut < 0) { if (!avant) return; debut = t; }
@@ -747,6 +802,10 @@ function lExtinction(eteindre: (lumiere: number, neons: number) => void, eclaire
     }
     let neons = 0;
     for (const [a, v] of ALLUMAGE) if (e >= a) neons = v;
+    // le son : un clonk a chaque rangee qui tombe, la rumeur au premier, le gresillement a chaque amorce de neon
+    const avantE = e - dt;
+    RANGEES.forEach((r, i) => { if (avantE < r && e >= r) { sonDeSalle.clonk(1 - i * 0.15); if (i === 0) sonDeSalle.rumeur(); } });
+    ALLUMAGE.forEach(([a, v]) => { if (v > 0 && avantE < a && e >= a) sonDeSalle.neon(v === 1 ? 0.25 : 0.08); });
     eteindre(lumiere, neons); eclairer(lumiere);
     if (e > DUREE_EXTINCTION) fini = true;
   };
