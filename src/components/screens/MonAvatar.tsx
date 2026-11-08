@@ -6,13 +6,14 @@ import { Repliable } from './Repliable';
 import { SprinterApp, SprinterCore, SprinterI18N } from '@/game/engine';
 import { charger as chargerMaillage, pret, dessiner } from '@/game/vedette-3d';
 import { cheminDe } from '@/game/athlete/corps-gens';
-import { POSTURES } from '@/game/athlete/postures';
 import { useVestiaire, choisirAvatar, PEAUX, COIFFURES, CHEVEUX, type Avatar } from '@/game/vestiaire';
 
 const dans = (t: [string, string]) => t[SprinterI18N.index()];
 const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
 /** L'or du maillot du joueur (PLAYER_LOOK), comme la carte TON MAILLOT. */
 const OR = 'rgb(248, 205, 74)';
+/** Le stade de jour : le ciel, la pelouse, la piste bleue. */
+const ENCRE = '#14213A', PISTE = '#2D5BD8';
 const NOMS_COIFFURES: Record<string, [string, string]> = {
   crop: ['COURT', 'CROP'], fade: ['DÉGRADÉ', 'FADE'], shaved: ['RASÉ', 'SHAVED'], bun: ['CHIGNON', 'BUN'],
   ponytail: ['QUEUE', 'PONYTAIL'], braids: ['TRESSES', 'BRAIDS'], flattop: ['FLAT-TOP', 'FLAT-TOP'],
@@ -29,12 +30,13 @@ function Apercu({ av, haut }: { av: Avatar | null; haut: number }) {
     // PLAYER_LOOK porte deja l'avatar (vestiaire.ts) : une copie, pour ne rien laisser au dessin
     const look = { ...SprinterCore.PLAYER_LOOK } as any;
     look.maillage = cheminDe(look); chargerMaillage(look.maillage);
-    const corps = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0,
-      marche: 0, marcheT: 0, posture: POSTURES.debout() } as any;
-    let id = 0;
+    // en pleine course, en boucle : debout et bras ballants, le coureur n'a plus rien d'un athlete
+    const corps = { look, stride: 0, v: 9, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0 } as any;
+    let id = 0, avant = 0;
     const tic = (t: number) => {
+      corps.stride += Math.min(0.05, (t - (avant || t)) / 1000) * 2 * Math.PI * 2.2; avant = t; // 2,2 foulees/s
       c.clearRect(0, 0, cv.width, cv.height);
-      const k = cv.height * 0.47, cap = -Math.PI / 2 + Math.sin(t / 1600) * 0.9;
+      const k = cv.height * 0.47, cap = -Math.PI / 2 + Math.sin(t / 1600) * 0.45;
       const caps = A.personCapsules(corps, cap, 0, false, false, A.niveauDetail(k));
       if (!(pret(look.maillage) && dessiner(c, look.maillage, corps.squelette || null,
             A.repereDuCoureur(corps, cap, 0, false, false), cv.width / 2, cv.height * 0.97, k, look)))
@@ -44,19 +46,19 @@ function Apercu({ av, haut }: { av: Avatar | null; haut: number }) {
     id = requestAnimationFrame(tic);
     return () => cancelAnimationFrame(id);
   }, [av, haut]);
-  return <canvas ref={ref} style={{ height: haut, width: haut * 0.62 }} className="block" aria-hidden />;
+  return <canvas ref={ref} className="block" style={{ height: haut, width: haut * 0.62, filter: 'brightness(1.25)' }} aria-hidden />;
 }
 
 /** Un intitulé de rangée, comme les petites capitales du vestiaire. */
 const Titre = ({ children }: { children: React.ReactNode }) =>
-  <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: OR }}>{children}</span>;
+  <span className="text-[10px] font-black tracking-[0.22em]" style={{ color: PISTE }}>{children}</span>;
 
 /** Une pastille de couleur : liseré or quand elle est choisie. */
 function Pastille({ couleur, actif, nom, onClick }: { couleur: number[]; actif: boolean; nom: string; onClick: () => void }) {
   return (
     <button aria-label={nom} aria-pressed={actif} onClick={onClick}
             className="w-8 h-8 rounded-full transition-transform"
-            style={{ background: rgb(couleur), boxShadow: actif ? `0 0 0 2px #0E0A1A, 0 0 0 4px ${OR}` : 'inset 0 0 0 1px rgba(255,255,255,0.15)',
+            style={{ background: rgb(couleur), boxShadow: actif ? `0 0 0 2px #fff, 0 0 0 4px ${PISTE}` : 'inset 0 0 0 1px rgba(20,33,58,0.2)',
                      transform: actif ? 'scale(1.08)' : undefined }} />
   );
 }
@@ -66,7 +68,7 @@ function Choix({ actif, onClick, children, large }: { actif: boolean; onClick: (
   return (
     <button onClick={onClick} aria-pressed={actif}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest ${large ? 'flex-1' : ''}`}
-            style={actif ? { background: OR, color: '#000' } : { background: 'rgba(255,255,255,0.08)', color: '#fff' }}>
+            style={actif ? { background: OR, color: '#000', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.15)' } : { background: '#fff', color: ENCRE, boxShadow: 'inset 0 0 0 1px rgba(20,33,58,0.15)' }}>
       {children}
     </button>
   );
@@ -88,13 +90,14 @@ export function MonAvatar() {
         marque={<span className="shrink-0 w-6 h-6 rounded-full" style={{ background: rgb(SprinterCore.PLAYER_LOOK.skin), boxShadow: `0 0 0 2px ${OR}` }} />}
       >
         <div className="rounded-2xl border-2 p-3 flex gap-3"
-             style={{ borderColor: OR, background: 'linear-gradient(100deg, #2A2412, #0E0A1A)' }}>
-          <span className="shrink-0 self-start rounded-xl overflow-hidden border border-white/10"
-                style={{ background: 'radial-gradient(circle at 50% 35%, #3A3320, #0A0C18)' }}>
+             style={{ borderColor: OR, background: 'linear-gradient(180deg, #EAF5FD, #D8EDD0)' }}>
+          <span className="shrink-0 self-start rounded-xl overflow-hidden"
+                style={{ background: `linear-gradient(180deg, #BFE0F5 0%, #DDEFF8 55%, #8DBF77 56%, #7AB266 88%, ${PISTE} 88%)`,
+                         boxShadow: 'inset 0 0 0 1px rgba(20,33,58,0.15)' }}>
             <Apercu av={avatar} haut={190} />
           </span>
           <div className="flex-1 min-w-0 flex flex-col gap-2">
-            <span className="font-black font-display text-lg leading-none text-white">{dans(['TON COUREUR', 'YOUR RUNNER'])}</span>
+            <span className="font-black font-display text-lg leading-none" style={{ color: ENCRE }}>{dans(['TON COUREUR', 'YOUR RUNNER'])}</span>
             <div className="flex gap-2">
               <Choix large actif={av.corps === 'm'} onClick={() => changer({ corps: 'm' })}>{dans(['GARÇON', 'BOY'])}</Choix>
               <Choix large actif={av.corps === 'f'} onClick={() => changer({ corps: 'f' })}>{dans(['FILLE', 'GIRL'])}</Choix>
@@ -112,7 +115,7 @@ export function MonAvatar() {
             </div>
             {avatar && (
               <button onClick={() => choisirAvatar(null)}
-                      className="self-start mt-1 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest bg-white text-black">
+                      className="self-start mt-1 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest text-white" style={{ background: ENCRE }}>
                 {dans(['COUREUR D’ORIGINE', 'ORIGINAL RUNNER'])}
               </button>
             )}
