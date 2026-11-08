@@ -31,6 +31,7 @@
 // ?stade=or (habille la course 3D d'un autre stade du jeu, pour le voir sans le
 // canal de test : la liste des stades, elle, ne change pas).
 
+import { affinerLaSilhouette } from './silhouette-sprint';
 import { sponsorDeLaCourse } from './panneaux';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
@@ -1965,12 +1966,12 @@ function chargerLeCorps() {
   const l = new GLTFLoader();
   l.setMeshoptDecoder(MeshoptDecoder);
   chargement = l.loadAsync(base + 'modeles/coureur-homme.glb')
-    .then(g => { gabarit = g.scene; })
+    .then(g => { gabarit = affinerLaSilhouette(g.scene, 'homme'); })
     .catch(() => { /* les tubes restent */ });
   for (const genre of ['homme', 'femme'] as const)
     l.loadAsync(base + 'modeles/pointes-' + genre + '.glb').then(g => { pointesTripo[genre] = g.scene; }).catch(() => { /* les anciennes chaussures restent */ });
   for (const [genre, fichier] of [['femme', 'coureur-femme']] as const)
-    l.loadAsync(base + 'modeles/' + fichier + '.glb').then(g => { autresCorps[genre].push(g.scene); }).catch(() => { /* un corps de moins */ });
+    l.loadAsync(base + 'modeles/' + fichier + '.glb').then(g => { autresCorps[genre].push(affinerLaSilhouette(g.scene, genre)); }).catch(() => { /* un corps de moins */ });
 }
 
 function modeleDe(racineGltf: THREE.Object3D): Modele {
