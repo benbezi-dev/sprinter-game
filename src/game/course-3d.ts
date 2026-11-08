@@ -43,6 +43,7 @@ import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, R
 import { construirePalais, cristalTaille } from './palais-3d';
 import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, SALLE_FINALE, placesDuPublic } from './salle-3d';
 import { EST_TEST } from './canal';
+import { presentationCourante } from './presentation-directe';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -64,6 +65,14 @@ let noirOuvert = EST_TEST;
 if (NOIR_DEMANDE && !EST_TEST) {
   fetch('https://sprinter-leaderboard.benbezi-sprinter.workers.dev/salle-noire')
     .then(r => r.json()).then(j => { noirOuvert = j?.ouvert === true; }).catch(() => {});
+}
+/** Le tour de la competition dans le noir : celui du vrai championnat (champ-direct.ts, G.champNoir), sinon le
+ *  prototype ouvert par le serveur. L'echauffement d'une serie garde la salle allumee : elle s'eteint pour la course. */
+function tourDuChamp(): 'serie' | 'noir' | null {
+  const G = (globalThis as any).SprinterApp?.G;
+  if (G?.champNoir === 'noir') return 'noir';
+  if (G?.champNoir === 'serie') return G.champDirect ? 'serie' : null;
+  return noirOuvert ? NOIR_DEMANDE : null;
 }
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
 const DOS = Q.get('cam') === 'dos';
@@ -788,10 +797,15 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
   let debut = -1;
   return (t: number) => {
     const G = (globalThis as any).SprinterApp?.G;
-    const avant = !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
+    // AU VRAI CHAMPIONNAT, la presentation est celle de la salle (champ-direct.ts) : meme ordre (par couloir), memes
+    // 3 s par athlete (salle-championnat.js), et le premier nom quand la salle le dit (dansMs) ; la serie s'est
+    // eteinte des l'entree dans la salle (lExtinction part au decompte suspendu).
+    const pc = G?.champDirect ? presentationCourante() : undefined;
+    const avant = pc !== undefined ? !!pc && G.state === 'count'
+      : !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
     if (!avant) { debut = -1; presente = -1; for (let k = 0; k < n; k++) { couloirs[k].mat.opacity = couloirs[k].tmat.opacity = 0; fleches?.(k, 1); } return; }
     if (debut < 0) debut = t;
-    const e = t - debut - retard, i = e < 0 ? -1 : Math.floor(e / PRES_PAS), dans = e - i * PRES_PAS;
+    const e = t - debut - (pc ? pc.presentation.dansMs / 1000 : retard), i = e < 0 ? -1 : Math.floor(e / PRES_PAS), dans = e - i * PRES_PAS;
     const ordre = (G.runners || []).slice().sort((a: any, b: any) => (a.lane | 0) - (b.lane | 0));
     const lui = ordre[i];
     // prototype : le pistolet attend la fin de la presentation (le vrai championnat suspend countT, voir engine.ts)
@@ -1033,7 +1047,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // on garde la salle dans le noir pour les demies et la finale »). En attendant le branchement au championnat :
     // ?serie=1 (la salle allumee s'eteint avant la presentation), ?finale=1 (demies et finale : deja dans le noir),
     // seulement une fois la salle noire ouverte par le serveur (noirOuvert).
-    const tourChamp = noirOuvert ? NOIR_DEMANDE : null;
+    const tourChamp = tourDuChamp();
     const finaleNoire = tourChamp !== null;
     const SL0 = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
     scene.background = new THREE.Color(SL0.fond);
@@ -3012,8 +3026,8 @@ export function rendre(App: any, dt: number) {
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
   const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + T.total + '/' + (G.levelIdx | 0)
-    + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour');   // le moment de la journee aussi
-    + (noirOuvert ? '/noir' : '');   // la reponse du serveur arrive apres le premier stade : on rebatit
+    + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour')   // le moment de la journee aussi
+    + '/' + (tourDuChamp() || '');   // echauffement > course, ou reponse du serveur apres le premier stade : on rebatit
   caler(T);
   if (!stade || brut !== themeVu || forme !== formeVue) {
     themeVu = brut; formeVue = forme;
