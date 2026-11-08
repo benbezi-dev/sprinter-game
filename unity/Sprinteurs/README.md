@@ -11,20 +11,31 @@ script et on relance (voir l'en-tête du script).
 |---|---|
 | `Sprinteur.fbx` | homme, 1,96 m : corps, tenue et pointes en **un** maillage (`Sprinteur_Corps`), 5 coupes de cheveux, clip `Sprint` |
 | `Sprinteuse.fbx` | femme, 1,72 m : idem, 4 coupes de cheveux |
-| `Textures/Pointes_*.png` | les textures des pointes (couleur, normales, ORM) : le FBX les reference en chemin relatif, garder le dossier a cote |
+| `Textures/Pointes_*.png` | les textures des pointes (couleur, normales, ORM). Le FBX les référence par `Textures/<nom>.png`, sans aucun chemin absolu : garder le dossier à côté. |
 
 - **Squelette Humanoid** de 52 os, aux noms de l'avatar Unity (`Hips`,
   `Spine`, `Chest`, `UpperChest`, `Neck`, `Head`, `LeftShoulder`…
   `LeftHandIndex1`…, `LeftToes`). Les doigts sont présents.
 - **4 influences au plus** par sommet, toutes normalisées.
-- **Quatre matériaux** sur le corps : `M_Peau`, `M_Haut` (débardeur ou
-  brassière), `M_Bas` (cuissard), `M_Pointes` (texturé). Les couleurs sont
+- **Cinq matériaux** sur le corps : `M_Peau`, `M_Haut` (débardeur ou
+  brassière), `M_Bas` (cuissard), `M_Pointes` (texturé), `M_Pointes_Eclair`
+  (texturé, teintable). Les couleurs sont
   dans la *Base Color* du matériau : c'est elle qu'Unity importe.
+- **L'éclair et le talon des pointes se teintent**, comme dans le jeu
+  (`chausserTripo`, `course-3d.ts`). Leurs verts vifs sont passés en blanc
+  neutre dans `Pointes_BaseMap.png`, et les faces qui les portent (383 sur
+  3 000 par chaussure) sont dans `M_Pointes_Eclair`. Dans Unity, la *Base
+  Color* de ce matériau est la couleur de chaussure du coureur : or
+  (250, 224, 70) par défaut. Le reste de la chaussure (`M_Pointes`) garde sa
+  texture blanc-gris et noire.
 - **Les pointes** sont celles du jeu (`public/modeles/pointes-*.glb`, faites
   dans Tripo, sans marque), ajustées à chaque pied : axe du pied, longueur et
   largeur, semelle sous la plante. Elles sont pondérées sur `…Foot` et
   `…Toes`, et plient donc à la tête des métatarsiens. Le pied caché dans la
-  chaussure est retiré.
+  chaussure est retiré. Le pied MakeHuman est un peu raccourci et élargi
+  (cibles `foot-scale-depth` et `foot-scale-horiz`). La chaussure s'allonge
+  donc au plus de 12 % de plus qu'elle ne s'élargit : 1,32 / 1,18 chez
+  l'homme, 1,19 / 1,17 chez la femme.
 - **La tenue est faite de vrais vêtements**, pas de peinture sur la peau. Ce
   sont des maillages découpés (col, emmanchures, dos), avec un ourlet replié,
   décollés de la peau et tendus par-dessus les creux. Ils sont fusionnés au
@@ -89,13 +100,14 @@ sprinteurs n'ont pas sa taille.
 
 ## Limites connues
 
-- **Ni textures ni yeux** : couleurs unies. Les cheveux sont des volumes lisses,
+- **Corps sans texture ni yeux** : couleurs unies (seules les pointes sont texturées). Les cheveux sont des volumes lisses,
   sans mèches. Une texture ou un shader de cheveux dans Unity les rendrait
   plus crédibles.
-- **Les pointes sont étirées** : elles sont allongées de 41 % chez l'homme
-  (22 % chez la femme), mais élargies d'à peine 4 % (9 % chez la femme),
-  parce que le pied MakeHuman est plus long et plus fin que celui des coureurs
-  du jeu. Elles gardent la couleur verte de leur texture.
+- **Teinte de l'éclair par faces** : la séparation suit les faces du
+  modèle, pas les pixels. Quelques faces mêlent un peu de noir ou de blanc à
+  l'éclair, et ces parties prennent aussi la teinte.
+- **Pieds plutôt petits** pour la taille : 26,5 cm pour l'homme de 1,96 m,
+  21,6 cm pour la femme de 1,72 m.
 - **Petits défauts en course** : au bas du cuissard, la jambe tendue peut
   laisser percer un peu de peau. Chez l'homme, les tétons se devinent encore
   sous le débardeur.

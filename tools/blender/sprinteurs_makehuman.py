@@ -104,6 +104,8 @@ for c in ('l', 'r'):
     detail('armslegs', f'{c}-upperarm-muscle', 0.9); detail('armslegs', f'{c}-upperarm-shoulder-muscle', 1.0)
     detail('armslegs', f'{c}-lowerarm-muscle', 0.8)
 detail('armslegs', 'lowerlegs-height', 0.3); detail('armslegs', 'upperlegs-height', 0.3)
+for c in ('l', 'r'):                                       # pied plus court et un peu plus large : les pointes s'etirent moins
+    detail('armslegs', f'{c}-foot-scale-depth', -0.3 if male else -0.1); detail('armslegs', f'{c}-foot-scale-horiz', 0.3 if male else 0.2)
 
 # ---------- 2b. lissage local de la pointe des seins (le haut est moulant : aucun relief de teton) ----------
 _sk0 = json.load(open(f'{D}/rigs/default.mhskel'))
@@ -485,6 +487,8 @@ bpy.ops.import_scene.gltf(filepath=f'{REPO}/public/modeles/pointes-{"homme" if m
 importes = [o for o in bpy.data.objects if o not in avant_import]
 POINTES = []
 M_POINTES = None
+M_ECLAIR = None
+COULEUR_ECLAIR = (250, 224, 70)        # l'or des chaussures du jeu (sprinter-core.js) ; se change dans Unity
 for c, n in (('l', 'Left'), ('r', 'Right')):
     src = bpy.data.objects['pointe_' + c]
     sv = [src.matrix_world @ v.co for v in src.data.vertices]
@@ -500,7 +504,7 @@ for c, n in (('l', 'Left'), ('r', 'Right')):
     L = Vector((-F.y, F.x, 0))                                 # la gauche du pied
     fu = [p.dot(F) for p in pied]; lv = [p.dot(L) for p in pied]; zmin = min(p.z for p in pied)
     fmin, fmax, lmin, lmax = min(fu), max(fu), min(lv), max(lv)
-    kx = (fmax - fmin + 0.018) / (sx1 - sx0); ky = (lmax - lmin + 0.012) / (sy1 - sy0); kz = (kx + ky) / 2
+    kx = (fmax - fmin + 0.018) / (sx1 - sx0); ky = max((lmax - lmin + 0.012) / (sy1 - sy0), kx / 1.12); kz = (kx + ky) / 2
     ob = src.copy(); ob.data = src.data.copy(); ob.name = 'Pointes_' + n; bpy.context.scene.collection.objects.link(ob)
     ob.parent = None; ob.matrix_world = Matrix.Identity(4)
     for v, p in zip(ob.data.vertices, sv):
@@ -528,8 +532,35 @@ for c, n in (('l', 'Left'), ('r', 'Right')):
                 chemin = os.path.join(os.path.dirname(SORTIE) or '.', 'Textures', nom_img)
                 nd.image.filepath_raw = chemin; nd.image.file_format = 'PNG'; nd.image.save(); nd.image.name = nom_img[:-4]
                 if nom_img.endswith('BaseMap.png'):
-                    px = list(nd.image.pixels[:4096 * 4:16]); 
+                    import numpy as np
+                    w_, h_ = nd.image.size
+                    a = np.array(nd.image.pixels[:], dtype=np.float32).reshape(h_, w_, 4)
+                    r, g_, b = a[..., 0], a[..., 1], a[..., 2]
+                    hi = np.maximum(np.maximum(r, g_), b); lo = np.minimum(np.minimum(r, g_), b)
+                    sat = np.where(hi > 0, (hi - lo) / np.maximum(hi, 1e-6), 0)
+                    # la regle du jeu (course-3d.ts, chausserTripo) : vert-jaune vif = l'eclair et le talon
+                    vif = (np.clip((sat - 0.35) / 0.25, 0, 1) * (b <= g_ * 0.6) * (r <= g_ * 1.15)).astype(np.float32)
+                    gris = np.clip(hi / 0.7, 0.4, 1.0)
+                    for k in range(3): a[..., k] = a[..., k] * (1 - vif) + gris * vif
+                    nd.image.pixels[:] = a.ravel(); nd.image.save()
+                    MASQUE_ECLAIR = (vif, w_, h_)
+                    print('pointes : %.1f %% de la texture est l\'eclair (vert vif), passe en blanc neutre' % (100 * float(vif.mean())))
+    for m_ in (M_POINTES,):
+        for nd in m_.node_tree.nodes:
+            if nd.type == 'TEX_IMAGE' and nd.image and 'BaseMap' in nd.image.name: m_.node_tree.nodes.active = nd
     ob.data.materials.clear(); ob.data.materials.append(M_POINTES)
+    if M_ECLAIR is None:
+        M_ECLAIR = M_POINTES.copy(); M_ECLAIR.name = 'M_Pointes_Eclair'
+        for nd in M_ECLAIR.node_tree.nodes:
+            if nd.type == 'BSDF_PRINCIPLED': nd.inputs['Base Color'].default_value = (*srgb(COULEUR_ECLAIR), 1)
+        M_ECLAIR.diffuse_color = (*srgb(COULEUR_ECLAIR), 1)
+    ob.data.materials.append(M_ECLAIR)
+    vif, w_, h_ = MASQUE_ECLAIR; uvl = ob.data.uv_layers.active.data; n_ecl = 0
+    for p in ob.data.polygons:
+        echant = [uvl[li].uv for li in p.loop_indices]; cuv = sum(echant, Vector((0, 0))) / len(echant)
+        vals = [vif[min(h_ - 1, max(0, int(u.y * h_))), min(w_ - 1, max(0, int(u.x * w_)))] for u in echant + [cuv]]
+        if sum(vals) / len(vals) > 0.35: p.material_index = 1; n_ecl += 1
+    print('pointe', n, ':', n_ecl, 'faces sur', len(ob.data.polygons), 'dans M_Pointes_Eclair')
     for p in ob.data.polygons: p.use_smooth = True
     POINTES.append(ob)
     print('pointe', n, ': pied %.3f x %.3f m, echelle %.2f / %.2f' % (fmax - fmin, lmax - lmin, kx, ky))
@@ -678,8 +709,8 @@ bpy.ops.object.mode_set(mode='OBJECT')
 def sync_couleurs():
     """la couleur affichee (diffuse_color) devient la Base Color du Principled BSDF : c'est elle que lit l'export FBX, donc Unity"""
     for m in bpy.data.materials:
-        if m.name.startswith('M_Pointes') or not m.use_nodes: 
-            if not m.use_nodes and not m.name.startswith('M_Pointes'):
+        if m.name == 'M_Pointes' or not m.use_nodes: 
+            if not m.use_nodes and m.name != 'M_Pointes':
                 m.use_nodes = True
             else: continue
         for nd in m.node_tree.nodes:
@@ -695,16 +726,33 @@ TOUT = (arm, corps, *COUPES.values())
 activer(*TOUT); bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
 arm.rotation_euler = (-math.pi / 2, 0, 0); activer(*TOUT); bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
 arm.rotation_euler = (math.pi / 2, 0, 0); activer(*TOUT)
+# AUCUN CHEMIN ABSOLU dans le FBX : l'exporteur ecrit toujours le chemin complet dans FileName ; on lui fait ecrire
+# « Textures/<nom>.png » dans les deux champs (le dossier Textures est livre a cote du FBX)
+import io_scene_fbx.export_fbx_bin as _efb
+if not getattr(_efb, '_sprinter_patch', False):
+    _orig_vid = _efb._gen_vid_path
+    def _vid_relatif(img, scene_data):
+        a_, r_ = _orig_vid(img, scene_data); n_ = 'Textures/' + os.path.basename(a_ or r_)
+        return n_, n_
+    _efb._gen_vid_path = _vid_relatif; _efb._sprinter_patch = True
 bpy.ops.export_scene.fbx(filepath=SORTIE + '.fbx', use_selection=True, object_types={'ARMATURE', 'MESH'},
     apply_unit_scale=True, apply_scale_options='FBX_SCALE_ALL', axis_forward='-Z', axis_up='Y', bake_space_transform=False,
     use_mesh_modifiers=False, mesh_smooth_type='FACE', use_tspace=False, add_leaf_bones=False, use_armature_deform_only=True,
     primary_bone_axis='Y', secondary_bone_axis='X', armature_nodetype='NULL', bake_anim=True,
     bake_anim_use_all_actions=False, bake_anim_use_nla_strips=False, bake_anim_force_startend_keying=True,
-    bake_anim_simplify_factor=0.0, path_mode='RELATIVE', embed_textures=False)
+    bake_anim_simplify_factor=0.0, path_mode='STRIP', embed_textures=False)
 activer(*TOUT); bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
 print('fbx ecrit:', os.path.getsize(SORTIE + '.fbx') // 1024, 'Ko')
 
 for i, o in enumerate(COUPES.values()): o.hide_render = i != 0
+# apercu seulement (apres l'export) : Blender n'affiche pas la Base Color sur la texture, on teinte une copie
+for nd in M_ECLAIR.node_tree.nodes:
+    if nd.type == 'TEX_IMAGE' and nd.image and 'BaseMap' in nd.image.name:
+        import numpy as np
+        im2 = nd.image.copy(); im2.name = 'apercu_eclair'
+        a = np.array(im2.pixels[:], dtype=np.float32).reshape(-1, 4)
+        a[:, :3] *= np.array(srgb(COULEUR_ECLAIR), dtype=np.float32); im2.pixels[:] = a.ravel(); nd.image = im2
+        M_ECLAIR.node_tree.nodes.active = nd
 # ---------- 8. RENDUS : le cycle en images, et la tenue de pres ----------
 sc.render.engine = 'BLENDER_WORKBENCH'; sc.display.shading.light = 'STUDIO'; sc.display.shading.color_type = 'TEXTURE'
 sc.display.shading.show_cavity = True
