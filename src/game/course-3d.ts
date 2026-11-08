@@ -868,6 +868,13 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // un jeu de lumiere qui fait qu'on les voit clairement », 22/10) : la lumiere de face fait le reste
   uLisereForce.value = cyber ? 0.22 : 0.45;   // Stade d'Or : moitie moins (« reduis la lumiere qui emane du joueur », 22/10)
   uLisereFace.value = cyber ? 1 : 0;   // le Stade d'Or garde le reglage valide
+  // LES COUREURS SE VOIENT PARFAITEMENT DE NUIT (« les assets doivent etre visible parfaitement de nuit », l'auteur,
+  // 08/11 soir) : sous une ambiance a 0,6 et des projecteurs froids venus d'en face, la camera de course les filmait a
+  // contre-jour, presque noirs. Comme a la television, une lumiere blanche douce venue de la camera (la meme que celle
+  // du Stade Neon, uLisereFace) et un fil de lisere a peine visible. Les nuits qui ont deja leur reglage le gardent.
+  if (nuit && !luxe && !cyber && !plage) {
+    uLisere.value = 1; uLisereCoul.value.set(0xe6ecff); uLisereForce.value = 0.16; uLisereFace.value = 1;
+  }
   if (plage && nuit) {
     // la plage de nuit : les yachts eclairent de la mer, les coureurs vus de la piste sont a
     // contre-jour — un liseré chaud (les bateaux) et la lumiere de face du Stade Neon

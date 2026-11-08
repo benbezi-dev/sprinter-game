@@ -3115,11 +3115,14 @@
     // poing pompe un peu plus d'une fois par seconde ; l'autre bras se relache le long du corps.
     const fete = Math.max(0, (r.fete || 0) - cel);
     if (fete > 0) {
-      const pompe = 0.5 + 0.5 * Math.sin((r.gesteT || 0) * 7);
-      const ua = 0.75 + 0.35 * pompe;
-      ar = [ar[0] * (1 - fete) + ua * fete, ar[1] * (1 - fete) + (ua + 1.55) * fete];
-      const lache = 0.6 * fete;
-      al = [al[0] * (1 - lache) + 0.1 * lache, al[1] * (1 - lache) + 0.45 * lache];
+      // (08/11 soir, « les mains ne sont pas naturelles, on dirait qu'ils sont tetraplegiques » : le bras leve a
+      //  45-60 degres ramenait le poing devant le visage, avant-bras replie. Le geste est celui du « Yes ! » : coude au
+      //  corps, avant-bras vers l'avant, le poing qui descend de la poitrine a la hanche ; l'autre bras pend.)
+      const pompe = 0.5 + 0.5 * Math.sin((r.gesteT || 0) * 6);
+      const ua = 0.12 + 0.22 * pompe, fa = 1.05 + 0.55 * pompe;
+      ar = [ar[0] * (1 - fete) + ua * fete, ar[1] * (1 - fete) + fa * fete];
+      const lache = 0.75 * fete;
+      al = [al[0] * (1 - lache) + 0.05 * lache, al[1] * (1 - lache) + 0.2 * lache];
     }
     // LE CLAP DEVANT LE VISAGE — le geste de Mickael Meba-Zeze (L.clap).
     //
