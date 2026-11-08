@@ -1,95 +1,128 @@
 // MON AVATAR — le corps du coureur du joueur (game/vestiaire.ts, Avatar), dans MES COURSES.
-import { useEffect, useRef, useState } from 'react';
+// Meme facture que le vestiaire (DefiVedette.tsx, SkinsMesCourses) : panneau repliable, carte sombre au liseré or.
+import React, { useEffect, useRef } from 'react';
 import { UserRound } from 'lucide-react';
+import { Repliable } from './Repliable';
 import { SprinterApp, SprinterCore, SprinterI18N } from '@/game/engine';
+import { charger as chargerMaillage, pret, dessiner } from '@/game/vedette-3d';
+import { cheminDe } from '@/game/athlete/corps-gens';
 import { POSTURES } from '@/game/athlete/postures';
 import { useVestiaire, choisirAvatar, PEAUX, COIFFURES, CHEVEUX, type Avatar } from '@/game/vestiaire';
 
 const dans = (t: [string, string]) => t[SprinterI18N.index()];
 const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
+/** L'or du maillot du joueur (PLAYER_LOOK), comme la carte TON MAILLOT. */
+const OR = 'rgb(248, 205, 74)';
 const NOMS_COIFFURES: Record<string, [string, string]> = {
-  crop: ['Court', 'Crop'], fade: ['Dégradé', 'Fade'], shaved: ['Rasé', 'Shaved'], bun: ['Chignon', 'Bun'],
-  ponytail: ['Queue de cheval', 'Ponytail'], braids: ['Tresses', 'Braids'], flattop: ['Flat-top', 'Flat-top'],
+  crop: ['COURT', 'CROP'], fade: ['DÉGRADÉ', 'FADE'], shaved: ['RASÉ', 'SHAVED'], bun: ['CHIGNON', 'BUN'],
+  ponytail: ['QUEUE', 'PONYTAIL'], braids: ['TRESSES', 'BRAIDS'], flattop: ['FLAT-TOP', 'FLAT-TOP'],
 };
 
-/** Le coureur qui tourne lentement sur lui-meme, dessine par le moteur (corps a facettes). */
-function Apercu({ av }: { av: Avatar | null }) {
+/** Le coureur 3D de la course (Rocketbox), debout, qui tourne lentement ; les facettes tant qu'il charge. */
+function Apercu({ av, haut }: { av: Avatar | null; haut: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const cv = ref.current; if (!cv) return;
-    const A = SprinterApp as any, haut = 150, dpr = Math.min(2, window.devicePixelRatio || 1);
-    cv.width = Math.round(haut * 0.7 * dpr); cv.height = Math.round(haut * dpr);
+    const A = SprinterApp as any, dpr = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
+    cv.width = Math.round(haut * 0.62 * dpr); cv.height = Math.round(haut * dpr);
     const c = cv.getContext('2d')!;
     // PLAYER_LOOK porte deja l'avatar (vestiaire.ts) : une copie, pour ne rien laisser au dessin
-    const corps = { look: { ...SprinterCore.PLAYER_LOOK }, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0, posture: POSTURES.debout() } as any; // debout, pas en pleine foulee
+    const look = { ...SprinterCore.PLAYER_LOOK } as any;
+    look.maillage = cheminDe(look); chargerMaillage(look.maillage);
+    const corps = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0,
+      marche: 0, marcheT: 0, posture: POSTURES.debout() } as any;
     let id = 0;
     const tic = (t: number) => {
       c.clearRect(0, 0, cv.width, cv.height);
-      const k = cv.height * 0.47, cap = -Math.PI / 2 + Math.sin(t / 1400) * 1.2;
-      A.drawFacetFigure(c, A.personCapsules(corps, cap, 0, false, false, A.niveauDetail(k)), cv.width / 2, cv.height * 0.96, k);
+      const k = cv.height * 0.47, cap = -Math.PI / 2 + Math.sin(t / 1600) * 0.9;
+      const caps = A.personCapsules(corps, cap, 0, false, false, A.niveauDetail(k));
+      if (!(pret(look.maillage) && dessiner(c, look.maillage, corps.squelette || null,
+            A.repereDuCoureur(corps, cap, 0, false, false), cv.width / 2, cv.height * 0.97, k, look)))
+        A.drawFacetFigure(c, caps, cv.width / 2, cv.height * 0.97, k);
       id = requestAnimationFrame(tic);
     };
     id = requestAnimationFrame(tic);
     return () => cancelAnimationFrame(id);
-  }, [av]);
-  return <canvas ref={ref} style={{ height: 150, width: 105 }} className="block" aria-hidden />;
+  }, [av, haut]);
+  return <canvas ref={ref} style={{ height: haut, width: haut * 0.62 }} className="block" aria-hidden />;
+}
+
+/** Un intitulé de rangée, comme les petites capitales du vestiaire. */
+const Titre = ({ children }: { children: React.ReactNode }) =>
+  <span className="text-[10px] font-bold tracking-[0.22em]" style={{ color: OR }}>{children}</span>;
+
+/** Une pastille de couleur : liseré or quand elle est choisie. */
+function Pastille({ couleur, actif, nom, onClick }: { couleur: number[]; actif: boolean; nom: string; onClick: () => void }) {
+  return (
+    <button aria-label={nom} aria-pressed={actif} onClick={onClick}
+            className="w-8 h-8 rounded-full transition-transform"
+            style={{ background: rgb(couleur), boxShadow: actif ? `0 0 0 2px #0E0A1A, 0 0 0 4px ${OR}` : 'inset 0 0 0 1px rgba(255,255,255,0.15)',
+                     transform: actif ? 'scale(1.08)' : undefined }} />
+  );
+}
+
+/** Un choix en toutes lettres : or quand il est pris, blanc sinon (les boutons PORTER du vestiaire). */
+function Choix({ actif, onClick, children, large }: { actif: boolean; onClick: () => void; children: React.ReactNode; large?: boolean }) {
+  return (
+    <button onClick={onClick} aria-pressed={actif}
+            className={`px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest ${large ? 'flex-1' : ''}`}
+            style={actif ? { background: OR, color: '#000' } : { background: 'rgba(255,255,255,0.08)', color: '#fff' }}>
+      {children}
+    </button>
+  );
 }
 
 export function MonAvatar() {
   const { avatar } = useVestiaire();
-  const [ouvert, setOuvert] = useState(false);
-  const L = SprinterCore.PLAYER_LOOK;
   // sans avatar choisi, on part du corps d'origine du joueur
   const av: Avatar = avatar || { corps: 'm', peau: 'ebene', coiffure: 'crop', cheveux: 'noir' };
   const changer = (p: Partial<Avatar>) => choisirAvatar({ ...av, ...p });
-  const pastille = (actif: boolean) => `w-8 h-8 rounded-full border-2 ${actif ? 'border-white scale-110' : 'border-white/20'} transition-transform`;
-  const titre = 'text-[10px] font-black tracking-[0.22em] text-white/60';
-  const bouton = (actif: boolean) => `px-3 py-1.5 rounded-lg text-[11px] font-black tracking-wide ${actif ? 'bg-[#F8CD4A] text-black' : 'bg-white/10 text-white'}`;
 
   return (
-    <div className="w-full bg-card/70 border border-white/10 rounded-2xl p-3 shadow-2xl">
-      <button onClick={() => setOuvert(o => !o)} className="w-full flex items-center gap-2 text-left" aria-expanded={ouvert}>
-        <UserRound className="w-4 h-4 text-primary" />
-        <span className="flex-1 font-black tracking-widest text-sm text-white">{dans(['MON AVATAR', 'MY AVATAR'])}</span>
-        <span className="w-5 h-5 rounded-full border border-white/30" style={{ background: rgb(L.skin) }} />
-        <span className="text-white/50 text-xs">{ouvert ? '▲' : '▼'}</span>
-      </button>
-      {ouvert && (
-        <div className="mt-3 flex gap-3">
-          <div className="shrink-0 rounded-xl bg-gradient-to-b from-[#BFE0F5] to-[#8DBF77] self-start"><Apercu av={avatar} /></div>
+    <div className="w-full">
+      <Repliable
+        titre={dans(['MON AVATAR', 'MY AVATAR'])}
+        sous={dans(['Choisis le corps de ton coureur.', 'Pick your runner’s body.'])}
+        icone={<UserRound className="w-4 h-4" />}
+        couleur="text-primary"
+        marque={<span className="shrink-0 w-6 h-6 rounded-full" style={{ background: rgb(SprinterCore.PLAYER_LOOK.skin), boxShadow: `0 0 0 2px ${OR}` }} />}
+      >
+        <div className="rounded-2xl border-2 p-3 flex gap-3"
+             style={{ borderColor: OR, background: 'linear-gradient(100deg, #2A2412, #0E0A1A)' }}>
+          <span className="shrink-0 self-start rounded-xl overflow-hidden border border-white/10"
+                style={{ background: 'radial-gradient(circle at 50% 35%, #3A3320, #0A0C18)' }}>
+            <Apercu av={avatar} haut={190} />
+          </span>
           <div className="flex-1 min-w-0 flex flex-col gap-2">
+            <span className="font-black font-display text-lg leading-none text-white">{dans(['TON COUREUR', 'YOUR RUNNER'])}</span>
             <div className="flex gap-2">
-              {(['m', 'f'] as const).map(c => (
-                <button key={c} onClick={() => changer({ corps: c })} className={bouton(av.corps === c) + ' flex-1'}>
-                  {c === 'f' ? dans(['Fille', 'Girl']) : dans(['Garçon', 'Boy'])}
-                </button>
-              ))}
+              <Choix large actif={av.corps === 'm'} onClick={() => changer({ corps: 'm' })}>{dans(['GARÇON', 'BOY'])}</Choix>
+              <Choix large actif={av.corps === 'f'} onClick={() => changer({ corps: 'f' })}>{dans(['FILLE', 'GIRL'])}</Choix>
             </div>
-            <span className={titre}>{dans(['PEAU', 'SKIN'])}</span>
+            <Titre>{dans(['PEAU', 'SKIN'])}</Titre>
             <div className="flex flex-wrap gap-2">
-              {PEAUX.map(p => <button key={p} aria-label={p} onClick={() => changer({ peau: p })} className={pastille(av.peau === p)}
-                                      style={{ background: rgb(SprinterCore.SKIN[p]) }} />)}
+              {PEAUX.map(p => <Pastille key={p} nom={p} couleur={SprinterCore.SKIN[p]} actif={av.peau === p} onClick={() => changer({ peau: p })} />)}
             </div>
-            <span className={titre}>{dans(['COIFFURE', 'HAIR'])}</span>
+            <Titre>{dans(['COIFFURE', 'HAIR'])}</Titre>
             <div className="flex flex-wrap gap-2">
-              {COIFFURES.map(h => <button key={h} onClick={() => changer({ coiffure: h })} className={bouton(av.coiffure === h)}>{dans(NOMS_COIFFURES[h])}</button>)}
+              {COIFFURES.map(h => <Choix key={h} actif={av.coiffure === h} onClick={() => changer({ coiffure: h })}>{dans(NOMS_COIFFURES[h])}</Choix>)}
             </div>
             <div className="flex flex-wrap gap-2">
-              {Object.keys(CHEVEUX).map(h => <button key={h} aria-label={h} onClick={() => changer({ cheveux: h })} className={pastille(av.cheveux === h)}
-                                                    style={{ background: rgb(CHEVEUX[h]) }} />)}
+              {Object.keys(CHEVEUX).map(h => <Pastille key={h} nom={h} couleur={CHEVEUX[h]} actif={av.cheveux === h} onClick={() => changer({ cheveux: h })} />)}
             </div>
             {avatar && (
-              <button onClick={() => choisirAvatar(null)} className="self-start text-[11px] text-white/60 underline">
-                {dans(['Reprendre le coureur d’origine', 'Back to the original runner'])}
+              <button onClick={() => choisirAvatar(null)}
+                      className="self-start mt-1 px-3 py-1.5 rounded-lg text-[11px] font-black tracking-widest bg-white text-black">
+                {dans(['COUREUR D’ORIGINE', 'ORIGINAL RUNNER'])}
               </button>
             )}
-            <p className="text-[10px] leading-snug text-white/45">
-              {dans(['Ton coureur sur toutes les courses. Un skin gagné le remplace là où il se porte.',
-                     'Your runner in every race. A won skin replaces it where it is worn.'])}
-            </p>
           </div>
         </div>
-      )}
+        <p className="mt-2 text-[10px] leading-snug text-white/45">
+          {dans(['Sur toutes tes courses. Un skin gagné le remplace là où il se porte.',
+                 'In all your races. A won skin replaces it where it is worn.'])}
+        </p>
+      </Repliable>
     </div>
   );
 }
