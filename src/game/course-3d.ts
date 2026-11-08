@@ -42,6 +42,7 @@ import { construirePlage } from './plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM, OCCULTANTS } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
 import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, SALLE_FINALE, placesDuPublic } from './salle-3d';
+import { EST_TEST } from './canal';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -55,6 +56,15 @@ import { arbresDuLieu, riviera, nuitEtoilee, pelouseAuPinceau, zeroGames } from 
 THREE.Texture.DEFAULT_ANISOTROPY = 16;
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
+// LA SALLE NOIRE, SECRETE JUSQU'AU 19/12 (l'auteur, 8/11) : ?serie=1 / ?finale=1 ne valent que si le serveur dit
+// que la premiere serie du Championnat de France en salle a commence (route /salle-noire). Hors ligne : fermee.
+// Le canal de test (/test/, /test3d/, derriere la porte a code) l'a toujours (l'auteur, 8/11).
+const NOIR_DEMANDE: 'serie' | 'noir' | null = Q.get('finale') === '1' ? 'noir' : Q.get('serie') === '1' ? 'serie' : null;
+let noirOuvert = EST_TEST;
+if (NOIR_DEMANDE && !EST_TEST) {
+  fetch('https://sprinter-leaderboard.benbezi-sprinter.workers.dev/salle-noire')
+    .then(r => r.json()).then(j => { noirOuvert = j?.ouvert === true; }).catch(() => {});
+}
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
 const DOS = Q.get('cam') === 'dos';
 const HAUT = nombre('haut', DOS ? 2.5 : 5.5);
@@ -1021,8 +1031,9 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // LA COMPETITION DANS LE NOIR (Championnat de France du 19/12 ; l'auteur, 8/11 : « toute la competition se deroulera
     // dans le noir ; une animation pour passer de la salle classique a la salle dans le noir pour chaque serie, ensuite
     // on garde la salle dans le noir pour les demies et la finale »). En attendant le branchement au championnat :
-    // ?serie=1 (la salle allumee s'eteint avant la presentation), ?finale=1 (demies et finale : deja dans le noir).
-    const tourChamp: 'serie' | 'noir' | null = Q.get('finale') === '1' ? 'noir' : Q.get('serie') === '1' ? 'serie' : null;
+    // ?serie=1 (la salle allumee s'eteint avant la presentation), ?finale=1 (demies et finale : deja dans le noir),
+    // seulement une fois la salle noire ouverte par le serveur (noirOuvert).
+    const tourChamp = noirOuvert ? NOIR_DEMANDE : null;
     const finaleNoire = tourChamp !== null;
     const SL0 = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
     scene.background = new THREE.Color(SL0.fond);
@@ -3002,6 +3013,7 @@ export function rendre(App: any, dt: number) {
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
   const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + T.total + '/' + (G.levelIdx | 0)
     + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour');   // le moment de la journee aussi
+    + (noirOuvert ? '/noir' : '');   // la reponse du serveur arrive apres le premier stade : on rebatit
   caler(T);
   if (!stade || brut !== themeVu || forme !== formeVue) {
     themeVu = brut; formeVue = forme;

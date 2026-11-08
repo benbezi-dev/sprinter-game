@@ -31,7 +31,7 @@ import {
   etatEdition, editionDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations, fichesDe,
   fluxDirect, recapMondial, tableauNations,
-  poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation,
+  poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation, salleNoireOuverte,
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
@@ -1824,6 +1824,12 @@ async function servir(request, env, ctx, porteur) {
        ne repond pas. */
     if (url.pathname === '/now' && request.method === 'GET') {
       return json({ ms: Date.now() });
+    }
+
+    // La salle noire : fermee tant que la premiere serie du Championnat de France en salle n'est pas partie.
+    // Hors du verrou /champ/ (canal de test) : le jour J, elle s'ouvre pour tout le monde.
+    if (url.pathname === '/salle-noire' && request.method === 'GET') {
+      return json({ ouvert: await salleNoireOuverte(env.DB) });
     }
 
     // ------------------------------------------------------- classement

@@ -1543,6 +1543,23 @@ export function calendrierDe(id, debut) {
   });
 }
 
+/**
+ * LA SALLE NOIRE EST SECRETE JUSQU'AU CHAMPIONNAT DE FRANCE EN SALLE (l'auteur, 8/11) : elle s'ouvre a
+ * tous (?serie=1, ?finale=1) des le depart de la premiere serie, pas avant (l'auteur, 8/11). L'heure est celle du
+ * serveur et la date celle de la vraie edition : ni l'horloge du telephone ni l'adresse n'y changent rien.
+ */
+export async function salleNoireOuverte(db, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const { results } = await db.prepare(
+    `SELECT id, debut FROM champ_editions
+      WHERE echelon = 'national' AND zone = 'FR' AND epreuve IN ('60', '200s', '400s') AND etat != 'annulee'`,
+  ).all();
+  return (results || []).some(e => {
+    const s1 = calendrierDe(e.id, e.debut).find(r => r.cle === 'serie-1');
+    return !!s1 && maintenant >= s1.at;
+  });
+}
+
 export async function prochaineEdition(db, zone, echelon = 'national') {
   await ensureChampTables(db);
   const z = String(zone || '').toUpperCase();
