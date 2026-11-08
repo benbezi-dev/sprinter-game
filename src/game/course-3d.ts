@@ -865,52 +865,6 @@ function lesLampesDuPublic(groupe: THREE.Group, pos: number[], hasard: () => num
     geo.attributes.color.needsUpdate = true;
   };
 }
-/**
- * LES PROJECTEURS DE POURSUITE (l'auteur, 9/11 : « une atmosphere de grande competition ») : deux faisceaux tombent du
- * toit, de part et d'autre de la piste, sur le nom qui s'ecrit (presenteOu) et le suivent de couloir en couloir ; une
- * tache de lumiere au sol. Ils s'eteignent quand la presentation finit. Cones additifs, aucune vraie lumiere (cout nul
- * pour les matieres).
- */
-function lesPoursuites(groupe: THREE.Group) {
-  const degrade = peinte(4, 64, (c, w, h) => {
-    const g = c.createLinearGradient(0, 0, 0, h);   // (haut du dessin = v 1 = le sommet du cone, la source)
-    g.addColorStop(0, 'rgba(235,245,255,0.8)'); g.addColorStop(0.3, 'rgba(210,228,255,0.3)'); g.addColorStop(0.85, 'rgba(190,215,255,0.08)'); g.addColorStop(1, 'rgba(190,215,255,0)');
-    c.fillStyle = g; c.fillRect(0, 0, w, h);
-  });
-  const tache = peinte(64, 64, (c, w, h) => {
-    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
-    g.addColorStop(0, 'rgba(255,252,245,0.9)'); g.addColorStop(0.3, 'rgba(240,244,255,0.45)'); g.addColorStop(0.65, 'rgba(210,225,255,0.12)'); g.addColorStop(1, 'rgba(200,220,255,0)');
-    c.fillStyle = g; c.fillRect(0, 0, w, h);
-  });
-  const geo = new THREE.ConeGeometry(1, 1, 28, 1, true); geo.translate(0, -0.5, 0);   // le sommet a l'origine, la base en -y
-  const bas = new THREE.Vector3(0, -1, 0), dir = new THREE.Vector3(), cible = new THREE.Vector3(), vise = new THREE.Vector3();
-  const faisceaux = [-1, 1].map(cote => {
-    const mat = new THREE.MeshBasicMaterial({ map: degrade, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
-    const m = new THREE.Mesh(geo, mat); m.renderOrder = 5; m.frustumCulled = false; m.visible = false; groupe.add(m);
-    return { cote, m, mat };
-  });
-  const matT = new THREE.MeshBasicMaterial({ map: tache, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
-  matT.polygonOffset = true; matT.polygonOffsetFactor = -8; matT.polygonOffsetUnits = -16;
-  const sol = new THREE.Mesh(new THREE.CircleGeometry(3, 32), matT); sol.renderOrder = 3; sol.visible = false; groupe.add(sol);
-  let k = 0, vu = -1, pret = false;
-  return (t: number) => {
-    const dt = vu < 0 ? 0 : Math.min(0.1, t - vu); vu = t;
-    k += ((presente >= 0 ? 1 : 0) - k) * Math.min(1, dt * 3);
-    const allume = k > 0.01;
-    for (const f of faisceaux) f.m.visible = allume;
-    sol.visible = allume;
-    if (!allume) { pret = false; return; }
-    cible.set(presenteOu.x, presenteOu.y, zSol(presenteOu.x, presenteOu.y));
-    if (!pret) { vise.copy(cible); pret = true; } else vise.lerp(cible, Math.min(1, dt * 4));   // le faisceau glisse vers le nom
-    for (const f of faisceaux) {
-      const src = new THREE.Vector3(vise.x - 8, vise.y + f.cote * 16, vise.z + H_TOIT_SALLE);
-      dir.subVectors(vise, src); const L = dir.length();
-      f.m.position.copy(src); f.m.quaternion.setFromUnitVectors(bas, dir.normalize()); f.m.scale.set(2.2, L, 2.2);
-      f.mat.opacity = 0.32 * k * (0.92 + 0.08 * Math.sin(t * 9 + f.cote));
-    }
-    sol.position.set(vise.x, vise.y, vise.z + 0.03); matT.opacity = 0.7 * k;
-  };
-}
 const H_TOIT_SALLE = 11.5;   // (sous la charpente de la salle, H_TOIT = 12,5 m dans salle-3d.ts)
 function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0) {
   const n = T.lanes || nCouloirs, cw = (T.salle && T.salle.couloir) || LANE_W;
@@ -1338,7 +1292,6 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     }
     finaleVue = finaleNoire;
     // (en serie, la presentation attend la fin de l'extinction)
-    if (finaleNoire) pubAnim.push(lesPoursuites(salle.interieur));
     if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches, tourChamp === 'serie' ? DUREE_EXTINCTION : 0));
     // UNE SEULE PASSE POUR LES LUMIERES ADDITIVES (mesure du 8/11 : la salle noire perdait la moitie de ses images) :
     // three dessine une matiere transparente double face en deux passes, dos puis face, en la marquant a recompiler
