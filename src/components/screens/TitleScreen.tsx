@@ -30,6 +30,8 @@ import { BanderoleEdition } from './BanderoleEdition';
 // non. Et `@__PURE__` pour la seconde moitie de la meme raison — sans elle,
 // Rollup garde l'appel a `lazy`, donc l'`import()`, donc le morceau, qui se
 // telechargeait alors depuis la production.
+const BanderoleEpreuves = /* @__PURE__ */ lazy(() => import('./BanderoleEpreuves')
+  .then(m => ({ default: m.BanderoleEpreuves })));
 const BanderoleMolosse = /* @__PURE__ */ lazy(() => import('./Halloween')
   .then(m => ({ default: m.BanderoleMolosse })));
 // Le defi Aurel Manga : charge a la demande, pour qu'il ne parte pas dans le
@@ -479,6 +481,9 @@ export function TitleScreen() {
                 Meba-Mickael Zeze sur l'accueil de Sprinter, Aurel Manga sur
                 celui de Hurdlers (`jeux`, game/vedettes.ts). */}
             {DEFI_VEDETTE_OUVERT && <Suspense fallback={null}><BanderoleVedette haies={haies} /></Suspense>}
+
+            {/* LE DUEL DES EPREUVES : le serveur dit s'il est ouvert. Sprinter seulement. */}
+            {!haies && <Suspense fallback={null}><BanderoleEpreuves /></Suspense>}
 
             {/* LE DUEL DES MARQUES, un 100 m : Sprinter seulement. */}
             {!haies && DUEL_MARQUES_OUVERT && <Suspense fallback={null}><BanderoleMarques /></Suspense>}
