@@ -28,7 +28,6 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { habiller, teindre, type Teinte } from './athlete/corps-gens';
-import { affinerLaSilhouette } from './silhouette-sprint';
 
 type Squelette = {
   hip: number[]; angB: number; lean: number; yawHip: number; yawTop: number; tete: number;
@@ -189,8 +188,6 @@ export function charger(chemin: string): Promise<Modele | null> {
     chargeur.load(url(chemin), (gltf) => {
       nePasJuger();
       let m: Modele;
-      const coureur = /coureur-(homme|femme)\.glb$/.exec(chemin);
-      if (coureur) affinerLaSilhouette(gltf.scene, coureur[1] as 'homme' | 'femme');
       try { m = preparer(gltf.scene); } catch { ok(null); return; } finally { nePasJuger(); }
       // pret() reste faux jusqu'ici : les tubes tiennent la place pendant
       // que ses shaders se compilent
