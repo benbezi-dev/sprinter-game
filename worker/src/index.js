@@ -91,6 +91,7 @@ import { empreinteIp, sousLimite, quotaAtteint, noterCodeRate, purgerLimites } f
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
+import { noterVoix, tableauEpreuves } from './duel-epreuves.js';
 import { etapeConnue, noterEtape, etapeHalloweenPlausible, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
 import { PROFIL_MAX_OCTETS, donneesValides, appareilRelie, lireProfil, ecrireProfil } from './profil.js';
 import {
@@ -3179,6 +3180,14 @@ async function servir(request, env, ctx, porteur) {
       return json({ error: 'route inconnue' }, 404);
     }
 
+    // Le duel des epreuves : le tableau, ouvert ou non (le jeu decide d'afficher).
+    if (url.pathname === '/duel-epreuves' && request.method === 'GET') {
+      const deviceId = url.searchParams.get('device_id');
+      return json(await tableauEpreuves(env.DB, {
+        test: canal.test, deviceId: isValidDeviceId(deviceId) ? deviceId : null,
+      }));
+    }
+
     if (url.pathname === '/nations' && request.method === 'GET') {
       const race = url.searchParams.get('race') || EPREUVE_NATIONS;
       if (!ALLOWED_RACES.has(race)) return json({ error: 'race invalide' }, 400);
@@ -4228,6 +4237,11 @@ async function servir(request, env, ctx, porteur) {
           });
         } catch (e) { /* une course manquera au compte, pas a l'historique */ }
       }
+      // Le duel des epreuves (duel-epreuves.js) : une course en salle = une voix.
+      let voix = null;
+      try {
+        voix = await noterVoix(env.DB, { test: canal.test, deviceId: device_id, nameKey: cle, epreuve: race_key, at });
+      } catch (e) { /* une voix manquera, pas la course */ }
       // On borne ce qu'un appareil peut accumuler, sinon la table enfle sans
       // limite pour un historique que personne ne fera defiler jusqu'au bout.
       await env.DB.prepare(
@@ -4269,7 +4283,7 @@ async function servir(request, env, ctx, porteur) {
           await regarderClassement(canal, race_key, nom, record.ms, entries);
         })().catch(() => { /* signaler n'est jamais bloquant */ }));
       }
-      return json({ ok: true, record, nom_refuse: nomRefuse });
+      return json({ ok: true, record, nom_refuse: nomRefuse, voix });
     }
 
     // Historique : celui du nom quand il est connu — c'est ce qui suit d'un
