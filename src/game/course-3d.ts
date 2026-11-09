@@ -354,8 +354,11 @@ vec4 carte(vec2 uv) {
   if (uTron > 0.5) {
     // LA GRILLE : tout en noir-bleu, sauf le maillot, allume en cyan ou en orange (selon sa teinte d'origine)
     vec3 neon = vC2.r > vC2.b ? vec3(1.3, 0.5, 0.12) : vec3(0.25, 1.05, 1.25);   // (pas plus : le halo et le tone mapping les blanchiraient)
-    cz = zo > 1.5 && zo < 2.5 ? neon : zo > 2.5 && zo < 3.5 ? vec3(0.02, 0.05, 0.08) : vec3(0.035, 0.06, 0.09);
-    return vec4(cz * (zo > 1.5 && zo < 2.5 ? 1.0 : (0.28 + 0.9 * tx.g)), step(0.5, tx.a));
+    // un spectateur sur trois seulement (tire sur la couleur de son maillot) : toute la tribune allumee eblouissait
+    bool allume = fract(sin(dot(vC2, vec3(12.9898, 78.233, 37.719))) * 43758.5453) < 0.33;
+    bool maillot = zo > 1.5 && zo < 2.5 && allume;
+    cz = maillot ? neon : zo > 2.5 && zo < 3.5 ? vec3(0.02, 0.05, 0.08) : vec3(0.035, 0.06, 0.09);
+    return vec4(cz * (maillot ? 1.0 : (0.28 + 0.9 * tx.g)), step(0.5, tx.a));
   }
   return vec4(cz * (0.28 + 0.9 * tx.g), step(0.5, tx.a));
 }`)
@@ -935,9 +938,10 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // LA SALLE : sous le toit — ni ciel, ni pelouse, ni gradins du stade ; sa propre lumiere, de jour ou de nuit
     // (le theme `salle` ne suit pas l'heure : on lit le moment du joueur, ?heure= compris)
     const nuitSalle = (globalThis as any).SprinterHeure?.moment((globalThis as any).SprinterApp?.G) === 'nuit';
-    // LA GRILLE (salle-tron.ts, 09/11 : « l'atmosphere Tron Legacy dans le stade noir ») : la salle de nuit ;
-    // ?tron=1 la force de jour, ?tron=0 rend la salle de nuit d'avant
-    const tron = Q.get('tron') === '1' || (nuitSalle && Q.get('tron') !== '0');
+    // LA SALLE GRILLE (salle-tron.ts, 09/11 : « cree une salle a part pour Tron Legacy ») : une halle a part, qu'on
+    // choisit au one shot (case GRILLE) ; la salle Jesse Owens reste la halle reelle, de jour comme de nuit.
+    // ?tron=1 : la Grille pour toute course en salle (pour la voir) ; ?tron=0 : jamais
+    const tron = salleGrille();
     const SL = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
     scene.background = new THREE.Color(tron ? TRON.fond : SL.fond);
     scene.fog = new THREE.Fog(tron ? TRON.brume : SL.brume, 110, 320);   // (les memes distances : le survol d'avant-course voit la halle de loin)
@@ -1934,6 +1938,14 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   dimensionner();
 }
 
+/** Court-on dans la salle Grille (salle-tron.ts) ? Le one shot lance sur la case GRILLE, ou ?tron=1. */
+function salleGrille() {
+  if (Q.get('tron') === '0') return false;
+  if (Q.get('tron') === '1') return true;
+  const G = (globalThis as any).SprinterApp?.G;
+  return !!(G && G.mode === 'oneshot' && G.shotOpts && G.shotOpts.grille);
+}
+
 // LE HALO DES NEONS (salle-tron.ts, « pas de halo lumineux autour des neons : corrige », l'auteur, 09/11) : dans la
 // seule salle Tron, l'image passe par un bloom (ce qui depasse le blanc deborde en lumiere), puis par le tone
 // mapping et l'espace de couleur de l'ecran (OutputPass). Pas sous le palier 2 : un appareil qui peine le perd.
@@ -1949,7 +1961,7 @@ function rendreLImage() {
     passeRendu = new RenderPass(scene, camera);
     composeur.addPass(passeRendu);
     renderer!.getSize(tailleEcran);
-    composeur.addPass(new UnrealBloomPass(new THREE.Vector2(tailleEcran.x, tailleEcran.y), 0.55, 0.28, 0.72));
+    composeur.addPass(new UnrealBloomPass(new THREE.Vector2(tailleEcran.x, tailleEcran.y), 0.42, 0.26, 0.8));
     composeur.addPass(new OutputPass());
   }
   renderer!.getSize(tailleEcran);
@@ -2957,7 +2969,7 @@ export function rendre(App: any, dt: number) {
   const brut = forceBrut || (App.themeBrut ? App.themeBrut() : null);
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
-  const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + T.total + '/' + (G.levelIdx | 0)
+  const forme = (salleGrille() ? 'grille/' : '') + (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + T.total + '/' + (G.levelIdx | 0)
     + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour');   // le moment de la journee aussi
   caler(T);
   if (!stade || brut !== themeVu || forme !== formeVue) {

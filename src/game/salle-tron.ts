@@ -1,21 +1,20 @@
-// LA SALLE TRON (09/11, l'auteur : « ajoute l'atmosphere Tron Legacy dans le stade noir (Jesse Owens) »).
+// LA SALLE TRON — la Grille, pour les SACRES (09/11, l'auteur : « on garde celle de ce matin, on part sur Tron pour
+// les sacres ; retire les bandes horizontales »).
 //
-// La nuit, la halle Jesse Owens passe dans la Grille : tout ce qui est construit devient noir et luisant ;
-// les traits de la piste (couloirs de l'anneau releve et de la ligne droite, departs, arrivee) s'allument en
-// neon cyan ; les aretes de la charpente, des gradins et des facades se
-// dessinent en filets de lumiere ; une grille de 2 m couvre le sol de la halle. Les rares murets longs et
-// pleins gardent un liseré orange en haut. Ce qui est debout (corde, bandeaux, rambardes) s'allume en orange
-// (la couleur des rivaux, dans le film), ce qui est au sol en cyan. Les coureurs prennent un
-// liseré cyan (course-3d.ts) et le noir luisant reflete des bandes cyan (carteTron).
+// La salle Jesse Owens reste la halle reelle, de jour comme de nuit. Quand le joueur est sacre (la scene du champion
+// puis le generique, le tour d'honneur dans la halle), elle passe dans la Grille : tout ce qui est construit devient
+// noir et luisant ; les traits de la piste (couloirs, departs, arrivee) s'allument en neon cyan, la corde en orange
+// (la couleur des rivaux, dans le film) ; les aretes de la charpente, des gradins, des facades et des murets se
+// dessinent en filets de lumiere (orange pour les murets) ; une grille de 2 m couvre le sol de la halle. Plus de
+// bandes de lumiere horizontales sur les murets et les rambardes. Les coureurs prennent un liseré cyan, le noir
+// luisant reflete des bandes cyan (carteTron), le public devient des silhouettes dont un sur trois porte un maillot
+// allume, et les neons ont un halo (course-3d.ts : appliquerTron, rendreLImage).
 //
-// On n'ecrit rien dans salle-3d.ts : on rhabille, apres coup, ce qu'il a construit. Chaque matiere est
-// remplacee par une copie (celles du jour ne changent pas). Les ecrans et les cartes du public, qui ne
-// sont pas des matieres de la coque, restent tels quels : ils eclairent deja.
+// On n'ecrit rien dans salle-3d.ts : on rhabille, apres coup, ce qu'il a construit, et habillerTron rend de quoi
+// tout DEFAIRE (la scene sert encore a la course suivante) : les matieres d'origine reviennent, les filets et la
+// grille s'en vont. Les ecrans et les cartes du public, qui ne sont pas des matieres de la coque, restent tels quels.
 //
-// Le public (course-3d.ts, uFoule.uTron) : des silhouettes noir-bleu, les maillots allumes en cyan ou en orange.
-// Le halo des neons : un bloom (course-3d.ts, rendreLImage), dans la seule salle Tron et a partir du palier 2.
-//
-// Reglage d'URL : ?tron=1 (la Grille meme de jour), ?tron=0 (la salle de nuit d'avant).
+// Reglage d'URL : ?tron=1 (la Grille tout le temps, pour la voir), ?tron=0 (jamais, meme au sacre).
 
 import * as THREE from 'three';
 
@@ -56,23 +55,6 @@ function largeurDeBande(geo: THREE.BufferGeometry) {
   return mins[mins.length >> 1];
 }
 
-/** Une copie de la matiere dont les 30 cm du haut (au-dessus de zHaut - 0,30, en z du monde) s'allument en orange. */
-function bandeOrange(m: THREE.Material, zHaut: number) {
-  const b = m.clone();
-  b.onBeforeCompile = (sh: any) => {
-    sh.uniforms.uZHautTron = { value: zHaut };
-    sh.uniforms.uOrangeTron = { value: new THREE.Color(TRON.orange).multiplyScalar(1.15) };
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vZTron;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvZTron = (modelMatrix * vec4(transformed, 1.0)).z;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vZTron;\nuniform float uZHautTron;\nuniform vec3 uOrangeTron;')
-      .replace('#include <dithering_fragment>', '#include <dithering_fragment>\ngl_FragColor.rgb = mix(gl_FragColor.rgb, uOrangeTron, smoothstep(uZHautTron - 0.31, uZHautTron - 0.29, vZTron));');
-  };
-  b.customProgramCacheKey = () => 'tron-bande-orange';
-  return b;
-}
-
 export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
   const neonCyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(TRON.cyan).multiplyScalar(1.15), toneMapped: false });
   const neonCyanDouble = neonCyan.clone(); neonCyanDouble.side = THREE.DoubleSide;
@@ -84,6 +66,9 @@ export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
   const boite = new THREE.Box3(), taille = new THREE.Vector3();
   const filets: { m: THREE.Mesh; geo: THREE.BufferGeometry; mat: THREE.LineBasicMaterial }[] = [];
   let neons = 0, noircies = 0, oranges = 0;
+  const avant = new Map<THREE.Mesh, THREE.Material>();     // ce qu'il faut remettre
+  const ajouts: THREE.Object3D[] = [];
+  const poser = (o: THREE.Mesh, m: THREE.Material) => { if (!avant.has(o)) avant.set(o, o.material as THREE.Material); o.material = m; };
   /** La copie noire et luisante d'une matiere (une seule par matiere d'origine). */
   const noirci = (mat: THREE.MeshStandardMaterial, coqueCuite: boolean): THREE.Material => {
     let c = copies.get(mat);
@@ -116,7 +101,7 @@ export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
     // eux, sont en MeshBasic SANS lumiere cuite : ils restent allumes
     if (mat.name === 'plafonnier') {
       // les plafonniers (salle-3d.ts) : blanc-cyan et plus doux — sous le halo, un plafonnier proche faisait une tache
-      o.material = lampeTron; return;
+      poser(o, lampeTron); return;
     }
     const coqueCuite = (mat as any).isMeshBasicMaterial && !!(mat as any).lightMap;
     if (!(mat as any).isMeshStandardMaterial && !coqueCuite) return;
@@ -127,30 +112,21 @@ export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
     // passaient pour le muret et sortaient orange) — on mesure donc la largeur sur les triangles eux-memes
     const mince = Math.min(taille.x, taille.y, taille.z) < 0.16 || largeurDeBande(o.geometry) < 0.11;   // (les traits font 8 cm)
     if (blanc && mince && taille.z < 1.6) {
-      // LES DEUX COULEURS DE LA GRILLE : ce qui est AU SOL (les traits de la piste) en cyan ; ce qui est DEBOUT (la
-      // corde, les bandeaux des murets, les rambardes) en orange — on le lit a l'orientation des faces, pas a la boite
+      // LES TRAITS : au sol (la piste) en cyan ; la corde, debout au ras du sol, en orange. Ce qui est debout plus haut
+      // (bandeaux des murets, rambardes) ne s'allume plus en bande : noir, borde d'un filet orange
       const debout = inclinaison(o) < 0.6;
-      if (debout && taille.z > 0.3) {
-        // un panneau debout plus haut qu'un bandeau (les vitrages de la coursive) : noir, seul son haut s'allume
-        o.material = bandeOrange(noirci(mat, coqueCuite), boite.max.z); oranges++; noircies++;
+      if (!debout || boite.max.z < 0.2) {
+        let m: THREE.Material = debout ? neonOrange : mat.side === THREE.DoubleSide ? neonCyanDouble : neonCyan;
+        if (mat.polygonOffset) { m = m.clone(); Object.assign(m, { polygonOffset: true, polygonOffsetFactor: mat.polygonOffsetFactor, polygonOffsetUnits: mat.polygonOffsetUnits }); }
+        poser(o, m); neons++; if (debout) oranges++;
         return;
       }
-      o.material = debout ? neonOrange : mat.side === THREE.DoubleSide ? neonCyanDouble : neonCyan;
-      if (debout) oranges++;
-      if (mat.polygonOffset) { o.material = (o.material as THREE.Material).clone(); Object.assign(o.material, { polygonOffset: true, polygonOffsetFactor: mat.polygonOffsetFactor, polygonOffsetUnits: mat.polygonOffsetUnits }); }
-      neons++; return;
     }
-    let arete = filetCyan, bandeHaute = NaN;
-    if (blanc && taille.z < 1.4 && Math.hypot(taille.x, taille.y) > 15) {
-      // le muret qui borde l'anneau : une bande orange s'il est bas ; plus haut (les rambardes de la coursive),
-      // un panneau noir dont seuls les 30 cm du haut s'allument — un mur entier d'orange, de pres, eblouissait
-      if (taille.z < 0.35) { o.material = neonOrange; neons++; oranges++; return; }
-      arete = filetOrange; bandeHaute = boite.max.z; oranges++;
-    }
+    const muret = blanc && taille.z < 1.6 && (mince || Math.hypot(taille.x, taille.y) > 15);
     // tout le reste : noir et luisant (la teinte d'origine a peine, pour garder le dessin des surfaces)
-    let c: THREE.Material = noirci(mat, coqueCuite);
-    if (!isNaN(bandeHaute)) c = bandeOrange(c, bandeHaute);
-    o.material = c; noircies++;
+    poser(o, noirci(mat, coqueCuite)); noircies++;
+    const arete = muret ? filetOrange : filetCyan;
+    if (muret) oranges++;
     // les aretes des volumes (charpente, gradins, facades, poteaux) : des filets de lumiere
     const n = o.geometry.index ? o.geometry.index.count / 3 : o.geometry.getAttribute('position').count / 3;
     if (n < 20000 && taille.length() > 1.5) filets.push({ m: o, geo: o.geometry, mat: arete });
@@ -162,7 +138,7 @@ export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
     const k = aretes.getAttribute('position').count / 2;
     if (!k || segments + k > 120000) continue;       // une limite, pour les telephones
     segments += k;
-    const l = new THREE.LineSegments(aretes, mat); l.renderOrder = 2; m.add(l);
+    const l = new THREE.LineSegments(aretes, mat); l.renderOrder = 2; m.add(l); ajouts.push(l);
   }
 
   // LA GRILLE AU SOL : un pas de 2 m, sur toute la halle, a peine au-dessus du plateau (le tartan la couvre)
@@ -175,8 +151,15 @@ export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
   const grille = new THREE.BufferGeometry(); grille.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
   const gl = new THREE.LineSegments(grille, new THREE.LineBasicMaterial({ color: TRON.cyan, transparent: true, opacity: 0.45, toneMapped: false, depthWrite: false }));
   gl.userData.tronGrille = true; gl.renderOrder = 1;
-  g.add(gl);
-  return { neons, noircies, oranges, segments };
+  g.add(gl); ajouts.push(gl);
+  /** Tout remettre comme avant : les matieres d'origine, sans filets ni grille. */
+  const defaire = () => {
+    for (const [o, m] of avant) o.material = m;
+    for (const a of ajouts) { a.parent?.remove(a); (a as THREE.LineSegments).geometry.dispose(); }
+    for (const m of copies.values()) m.dispose();
+    avant.clear(); ajouts.length = 0;
+  };
+  return { neons, noircies, oranges, segments, defaire };
 }
 
 /** Ce que reflete le noir luisant de la Grille : des bandes de lumiere cyan et blanches, quelques orange. */
