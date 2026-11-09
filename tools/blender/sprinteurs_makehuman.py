@@ -78,6 +78,7 @@ def detail(groupe, nom, valeur):
     return appliquer_cible(f'{D}/targets/{groupe}/{nom}-{suf}.target', abs(valeur))
 
 male = GENRE == 'male'
+MOLLET = [float(x) for x in os.environ.get('MOLLET', '').split(',')] if os.environ.get('MOLLET') else ((0.5, 0.0, -0.1) if male else (0.45, 0.0, -0.08))
 # SPRINTEUR : jeune adulte, muscle marque, peu de graisse, grand
 macro(1.0 if male else 0.0, 0.5, 1.0 if male else 0.9, 0.45, 0.62 if male else 0.55)
 detail('torso', 'torso-vshape', 0.8 if male else 0.3)
@@ -98,7 +99,10 @@ if not male:
         for _w, _wv in _W.items():
             appliquer_cible(f'{D}/targets/breast/female-young-{_m}-{_w}-mincup-averagefirmness.target', _mv * _wv * 0.7)
 for c in ('l', 'r'):
-    detail('armslegs', f'{c}-upperleg-muscle', 1.0); detail('armslegs', f'{c}-lowerleg-muscle', 1.0)
+    detail('armslegs', f'{c}-upperleg-muscle', 1.0)
+    # MOLLETS DE SPRINTEUR (« les mollets sont vraiment tres gros », l'auteur, 09/11) : fins et hauts, cheville seche
+    detail('armslegs', f'{c}-lowerleg-muscle', MOLLET[0]); detail('armslegs', f'{c}-lowerleg-scale-horiz', MOLLET[1])
+    detail('armslegs', f'{c}-lowerleg-scale-depth', MOLLET[2])
     detail('armslegs', f'{c}-upperleg-fat', -0.8); detail('armslegs', f'{c}-lowerleg-fat', -0.8)
     detail('armslegs', f'{c}-upperarm-fat', -0.8); detail('armslegs', f'{c}-lowerarm-fat', -0.8)
     detail('armslegs', f'{c}-upperarm-muscle', 0.9); detail('armslegs', f'{c}-upperarm-shoulder-muscle', 1.0)
@@ -157,6 +161,31 @@ for p in me.polygons: p.use_smooth = True
 hauteur = max(v.co.z for v in me.vertices) - min(v.co.z for v in me.vertices)
 print('hauteur du corps: %.2f m, sommets %d' % (hauteur, len(me.vertices)))
 
+def tour_de_mollet():
+    """le plus grand tour du bas de la jambe gauche (enveloppe convexe des coupes horizontales), en cm"""
+    sk_ = json.load(open(f'{D}/rigs/default.mhskel'))
+    def jt(n):
+        idx = sk_['joints'][n]; return sum((monde(V[i]) for i in idx), Vector()) / len(idx)
+    zg_ = jt(sk_['bones']['lowerleg01.L']['head']).z; zc_ = jt(sk_['bones']['foot.L']['head']).z
+    pts_ = [v.co for v in me.vertices if v.co.x > 0.02 and zc_ < v.co.z < zg_]
+    best = (0, 0)
+    for k in range(30):
+        z0 = zc_ + (zg_ - zc_) * (0.20 + 0.65 * (k + 0.5) / 30)   # le ventre du mollet, pas le genou
+        P_ = sorted({(round(p.x, 4), round(p.y, 4)) for p in pts_ if abs(p.z - z0) < 0.006})
+        if len(P_) < 3: continue
+        def cr(o, a, b): return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+        lo_, hi_ = [], []
+        for p in P_:
+            while len(lo_) >= 2 and cr(lo_[-2], lo_[-1], p) <= 0: lo_.pop()
+            lo_.append(p)
+        for p in reversed(P_):
+            while len(hi_) >= 2 and cr(hi_[-2], hi_[-1], p) <= 0: hi_.pop()
+            hi_.append(p)
+        h_ = lo_[:-1] + hi_[:-1]
+        per = sum(math.dist(h_[i], h_[(i + 1) % len(h_)]) for i in range(len(h_)))
+        if per > best[0]: best = (per, (z0 - zc_) / (zg_ - zc_))
+    return best[0] * 100, best[1]
+_t, _h = tour_de_mollet(); print('tour de mollet : %.1f cm, a %.0f %% de la hauteur cheville-genou' % (_t, _h * 100))
 # ---------- 4. squelette HUMANOID (noms de l'avatar Unity) et poids ----------
 import bmesh
 from mathutils.bvhtree import BVHTree

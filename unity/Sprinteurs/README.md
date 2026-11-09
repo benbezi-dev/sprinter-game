@@ -36,6 +36,10 @@ script et on relance (voir l'en-tête du script).
   (cibles `foot-scale-depth` et `foot-scale-horiz`). La chaussure s'allonge
   donc au plus de 12 % de plus qu'elle ne s'élargit : 1,32 / 1,18 chez
   l'homme, 1,19 / 1,17 chez la femme.
+- **Mollets de sprinteur** : fins et hauts, avec une cheville sèche. Le tour
+  de mollet, mesuré sur le maillage, est de 36,8 cm pour l'homme (il était de
+  40,8 cm) et de 33,9 cm pour la femme (38,8 cm). Le réglage se change par la
+  variable d'environnement `MOLLET` (muscle, largeur, profondeur).
 - **La tenue est faite de vrais vêtements**, pas de peinture sur la peau. Ce
   sont des maillages découpés (col, emmanchures, dos), avec un ourlet replié,
   décollés de la peau et tendus par-dessus les creux. Ils sont fusionnés au
