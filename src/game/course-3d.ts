@@ -868,6 +868,76 @@ function lesLampesDuPublic(groupe: THREE.Group, pos: number[], hasard: () => num
   };
 }
 const H_TOIT_SALLE = 11.5;   // (sous la charpente de la salle, H_TOIT = 12,5 m dans salle-3d.ts)
+/**
+ * LE FAUX DEPART EN ROUGE (l'auteur, 9/11) : les lignes de la salle noire virent au rouge une seconde — 0,8 s pleines,
+ * 0,2 s pour revenir. Le faux depart du joueur (falseFlash), le rappel du starter en championnat (G.rappel), ou
+ * l'elimination (falseout).
+ */
+function lesLignesRouges(alerte: (k: number) => void) {
+  let avant = false, depuis = -1;
+  return (t: number) => {
+    const G = (globalThis as any).SprinterApp?.G;
+    const faute = !!G && (G.falseFlash > 0 || !!G.rappel || G.state === 'falseout');
+    if (faute && !avant) depuis = t;
+    avant = faute;
+    const e = depuis < 0 ? 99 : t - depuis;
+    alerte(e < 0.8 ? 1 : e < 1 ? (1 - e) / 0.2 : 0);
+  };
+}
+/**
+ * L'ARRIVEE EN OR (l'auteur, 9/11) : quand le premier passe la ligne, son couloir s'allume en or sur toute sa longueur
+ * et son chrono s'ecrit au sol, avant la ligne. La salle reste dans le noir. Aucun nom (championnat : seul « TOI »).
+ */
+function lArriveeEnOr(T: any, groupe: THREE.Group) {
+  const cw = (T.salle && T.salle.couloir) || LANE_W;
+  const bord = peinte(8, 64, (c, w, h) => {   // (plus vif sur les bords du couloir, comme deux tubes)
+    for (let y = 0; y < h; y++) { const d = Math.abs(y + 0.5 - h / 2) / (h / 2), a = 0.18 + 0.82 * d ** 6; c.fillStyle = `rgba(255,196,64,${a})`; c.fillRect(0, y, w, 1); }
+  });
+  const matB = new THREE.MeshBasicMaterial({ map: bord, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+  const matC = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+  for (const m of [matB, matC]) { m.polygonOffset = true; m.polygonOffsetFactor = -8; m.polygonOffsetUnits = -16; m.forceSinglePass = true; }
+  const bande = new THREE.Mesh(new THREE.PlaneGeometry(1, cw * 0.96, 120, 1), matB);
+  const chrono = new THREE.Mesh(new THREE.PlaneGeometry(7, cw * 0.9, 24, 1), matC);
+  bande.renderOrder = chrono.renderOrder = 3; bande.visible = chrono.visible = false; bande.frustumCulled = chrono.frustumCulled = false;
+  groupe.add(bande, chrono);
+  const plier = (m: THREE.Mesh, k: number, dc: number, sl: number, tourne = 0) => {
+    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+    const base: Float32Array = m.userData.base ??= Float32Array.from(pos.array as Float32Array);
+    const sens = Math.cos(tourne), mil = milieu(T, k);
+    for (let i = 0; i < pos.count; i++) {
+      const d = Math.max(0, dc + base[i * 3] * sl * sens), lat = base[i * 3 + 1] * sens;
+      const p = ici(T.posDemi(d, k, mil)), a = capIci(T.heading(d, k));
+      const x = p[0] - Math.sin(a) * lat, y = p[1] + Math.cos(a) * lat;
+      pos.setXYZ(i, x, y, zSol(x, y) + 0.02);
+    }
+    pos.needsUpdate = true; m.geometry.computeBoundingSphere();
+  };
+  let pose = '', depuis = -1;
+  return (t: number) => {
+    const G = (globalThis as any).SprinterApp?.G;
+    let best: any = null;
+    // (les adversaires connaissent leur temps des le depart, finished compris : on attend qu'ils passent la ligne)
+    for (const r of G?.runners || []) if (r.finished && r.finishTime > 0 && r.d >= T.total && (!best || r.finishTime < best.finishTime)) best = r;
+    if (!best) { bande.visible = chrono.visible = false; pose = ''; depuis = -1; return; }
+    const k = best.lane | 0, texte = (+best.finishTime).toFixed(2), cle = k + '/' + texte;
+    if (cle !== pose) {
+      pose = cle; if (depuis < 0) depuis = t;
+      plier(bande, k, T.total / 2, T.total);
+      plier(chrono, k, Math.max(4, T.total - 7), 1, Math.PI);   // (lu depuis la tribune, comme les noms)
+      matC.map?.dispose();
+      matC.map = peinte(1024, 160, (x, w, h) => {
+        x.translate(0, h); x.scale(1, -1);   // (le monde est en miroir)
+        x.font = '900 132px Outfit, system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.shadowColor = 'rgba(255,190,50,0.95)'; x.shadowBlur = 26; x.fillStyle = '#ffd34a';
+        x.fillText(texte, w / 2, h / 2 + 6, w * 0.9);
+      });
+      matC.needsUpdate = true;
+    }
+    const a = Math.min(1, (t - depuis) / 0.6);
+    bande.visible = chrono.visible = true;
+    matB.opacity = 0.85 * a; matC.opacity = a;
+  };
+}
 function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0) {
   const n = T.lanes || nCouloirs, cw = (T.salle && T.salle.couloir) || LANE_W;
   type Couloir = { nom: THREE.Mesh; mat: THREE.MeshBasicMaterial; trace: THREE.Mesh; tmat: THREE.MeshBasicMaterial; ecrit: string };
@@ -1317,6 +1387,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     finaleVue = finaleNoire;
     // (en serie, la presentation attend la fin de l'extinction)
     if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches, tourChamp === 'serie' ? DUREE_EXTINCTION : 0));
+    if (finaleNoire) pubAnim.push(lesLignesRouges(salle.alerte), lArriveeEnOr(T, salle.interieur));
     // UNE SEULE PASSE POUR LES LUMIERES ADDITIVES (mesure du 8/11 : la salle noire perdait la moitie de ses images) :
     // three dessine une matiere transparente double face en deux passes, dos puis face, en la marquant a recompiler
     // a chacune — une verification de programme par dessin, pour les neons, les fleches et les noms. En additif,
