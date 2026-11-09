@@ -1204,6 +1204,8 @@ export function updateLogic(dt: number) {
     SprinterApp.followCam(dt);
     if (G.countT >= 3) {
       SprinterApp.coupDePistolet();
+      // le coup de pistolet se sent dans la main, en championnat (l'auteur, 9/11)
+      if (G.champDirect || G.champNoir) buzz(60);
       courseLancee(G.levelIdx);
       G.state = 'race'; G.elapsed = 0;
       G.immobileDepuis = null;

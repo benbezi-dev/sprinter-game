@@ -1285,6 +1285,15 @@ export function construireSalle(ctx: ContexteSalle) {
     },
     /** La lumiere des fleches du couloir k, de 0 (eteinte : un nom s'y ecrit) a 1. */
     fleches: (k: number, a: number) => { voileCouloir[k] = a; for (const m of flechesCouloir[k] || []) m.opacity = a * neonsAllumes; },
+    /** LE FAUX DEPART : les tubes des lignes virent au rouge, de 0 (leur couleur) a 1 (rouge vif). */
+    alerte: (k: number) => {
+      for (const m of neons.values()) m.color.setRGB(1, 1 - 0.97 * k, 1 - 0.97 * k);
+      // (les traits blancs qui brillent sont emissifs : leur couleur d'origine est gardee pour y revenir)
+      for (const m of materiaux.emissifs as Set<THREE.MeshStandardMaterial>) {
+        const b: THREE.Color = m.userData.emissiveBase ??= m.emissive.clone();
+        m.emissive.setRGB(b.r + (1 - b.r) * k, b.g * (1 - 0.97 * k), b.b * (1 - 0.97 * k));
+      }
+    },
     /**
      * ETEINDRE LA SALLE (la competition dans le noir) : `lumiere` de 1 (la salle allumee) a 0 (eteinte : on devine
      * encore la charpente et les gradins, 7 % de la lumiere cuite), `neons` de 0 a 1 (les tubes des couloirs, les
