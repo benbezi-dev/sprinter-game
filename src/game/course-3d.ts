@@ -34,10 +34,6 @@
 import { sponsorDeLaCourse } from './panneaux';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -45,7 +41,6 @@ import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM, OCCULTANTS } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
-import { habillerTron, carteTron, TRON } from './salle-tron';
 import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
@@ -160,7 +155,6 @@ let envPalais: THREE.Texture | null = null;
 // une ville de neons — barres magenta, cyan, violettes, enseignes jaunes — cuite une fois en
 // carte d'environnement, que la laque mouillee de la piste renvoie
 let envNeon: THREE.Texture | null = null;
-let envTron: THREE.Texture | null = null;   // les reflets de la Grille (salle-tron.ts)
 let miroir: { dispose(): void } | null = null;
 function carteNeon(r: THREE.WebGLRenderer) {
   const sc = new THREE.Scene();
@@ -271,7 +265,6 @@ const uFoule = {
   uAtlas: { value: null as THREE.Texture | null }, uCam: { value: new THREE.Vector3() },
   uT: { value: 0 }, uJoueur: { value: new THREE.Vector2(1e4, 1e4) }, uLiesse: { value: 0 },
   uSiege: { value: new THREE.Color(0x2457b8) }, uLum: { value: 1 },
-  uTron: { value: 0 },   // la salle Tron (salle-tron.ts) : silhouettes noir-bleu, maillots en neon cyan ou orange
 };
 function chargerLaPlage() {
   if (plageDemandee) return;
@@ -345,21 +338,12 @@ vCase = vec2((sil * ${P_GESTES}.0 + ge + uv.x) / ${P_SIL * P_GESTES}.0, 1.0 - (i
 vC1 = aC1; vC2 = aC2; vC3 = aC3; vC4 = aC4;`);
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', `#include <common>
-uniform sampler2D uAtlas; uniform vec3 uSiege; uniform float uLum; uniform float uTron;
+uniform sampler2D uAtlas; uniform vec3 uSiege; uniform float uLum;
 varying vec2 vCase; varying vec3 vC1, vC2, vC3, vC4;
 vec4 carte(vec2 uv) {
   vec4 tx = texture2D(uAtlas, uv);
   float zo = floor(tx.r * 255.0 / 32.0 + 0.5);
   vec3 cz = zo < 0.5 ? vec3(0.05) : zo < 1.5 ? vC1 : zo < 2.5 ? vC2 : zo < 3.5 ? uSiege : zo < 4.5 ? vC3 : vC4;
-  if (uTron > 0.5) {
-    // LA GRILLE : tout en noir-bleu, sauf le maillot, allume en cyan ou en orange (selon sa teinte d'origine)
-    vec3 neon = vC2.r > vC2.b ? vec3(1.3, 0.5, 0.12) : vec3(0.25, 1.05, 1.25);   // (pas plus : le halo et le tone mapping les blanchiraient)
-    // un spectateur sur trois seulement (tire sur la couleur de son maillot) : toute la tribune allumee eblouissait
-    bool allume = fract(sin(dot(vC2, vec3(12.9898, 78.233, 37.719))) * 43758.5453) < 0.33;
-    bool maillot = zo > 1.5 && zo < 2.5 && allume;
-    cz = maillot ? neon : zo > 2.5 && zo < 3.5 ? vec3(0.02, 0.05, 0.08) : vec3(0.035, 0.06, 0.09);
-    return vec4(cz * (maillot ? 1.0 : (0.28 + 0.9 * tx.g)), step(0.5, tx.a));
-  }
   return vec4(cz * (0.28 + 0.9 * tx.g), step(0.5, tx.a));
 }`)
       .replace('#include <map_fragment>', `
@@ -368,7 +352,7 @@ vec4 c0 = carte(vCase - 0.125 * ex - 0.375 * ey), c1 = carte(vCase + 0.375 * ex 
 vec4 c2 = carte(vCase + 0.125 * ex + 0.375 * ey), c3 = carte(vCase - 0.375 * ex + 0.125 * ey);
 float couvre = c0.a + c1.a + c2.a + c3.a;
 if (couvre < 0.5) discard;
-diffuseColor.rgb = (c0.rgb * c0.a + c1.rgb * c1.a + c2.rgb * c2.a + c3.rgb * c3.a) / couvre * (uTron > 0.5 ? 1.0 : uLum);
+diffuseColor.rgb = (c0.rgb * c0.a + c1.rgb * c1.a + c2.rgb * c2.a + c3.rgb * c3.a) / couvre * uLum;
 diffuseColor.a = couvre * 0.25;`);
   };
   const mesh = new THREE.Mesh(g, m);
@@ -933,34 +917,22 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // cosmique, la piste qui flotte dans l'espace », l'auteur, 22/10).
   const espace = !!th.espace;
   voute = null; filante = null;
-  uFoule.uTron.value = 0; bloomVoulu = false;
   if (salleActive) {
     // LA SALLE : sous le toit — ni ciel, ni pelouse, ni gradins du stade ; sa propre lumiere, de jour ou de nuit
     // (le theme `salle` ne suit pas l'heure : on lit le moment du joueur, ?heure= compris)
     const nuitSalle = (globalThis as any).SprinterHeure?.moment((globalThis as any).SprinterApp?.G) === 'nuit';
-    // LA SALLE GRILLE (salle-tron.ts, 09/11 : « cree une salle a part pour Tron Legacy ») : une halle a part, qu'on
-    // choisit au one shot (case GRILLE) ; la salle Jesse Owens reste la halle reelle, de jour comme de nuit.
-    // ?tron=1 : la Grille pour toute course en salle (pour la voir) ; ?tron=0 : jamais
-    const tron = salleGrille();
     const SL = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
-    scene.background = new THREE.Color(tron ? TRON.fond : SL.fond);
-    scene.fog = new THREE.Fog(tron ? TRON.brume : SL.brume, 110, 320);   // (les memes distances : le survol d'avant-course voit la halle de loin)
-    hemi.color.set(tron ? 0x9fe8ff : SL.hemiCiel); hemi.groundColor.set(tron ? 0x050a12 : SL.hemiSol); hemi.intensity = tron ? 0.45 : SL.hemi;
-    soleil.color.set(tron ? 0xbfefff : SL.soleilCouleur); soleil.intensity = tron ? 0.55 : SL.soleil;
+    scene.background = new THREE.Color(SL.fond);
+    scene.fog = new THREE.Fog(SL.brume, 110, 320);
+    hemi.color.set(SL.hemiCiel); hemi.groundColor.set(SL.hemiSol); hemi.intensity = SL.hemi;
+    soleil.color.set(SL.soleilCouleur); soleil.intensity = SL.soleil;
     soleilDecal.set(-6, 10, 40);
-    uFoule.uLum.value = 1; uFoule.uTron.value = tron ? 1 : 0; uLisere.value = tron ? 1 : 0;
-    bloomVoulu = tron;
-    if (tron) {
-      // les coureurs se detachent du noir par un liseré cyan, comme au stade neon
-      uLisereCoul.value.set(TRON.cyan); uLisereForce.value = 0.3; uLisereFace.value = 1;
-      if (!envTron && renderer) envTron = carteTron(renderer);
-    }
+    uFoule.uLum.value = 1; uLisere.value = 0;
     if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-    envCorps = tron && envTron ? envTron : envPalais;
+    envCorps = envPalais;
     eclairerLesCorps();
     const base = (import.meta as any).env?.BASE_URL || '/';
     const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle });
-    if (tron) habillerTron(salle.interieur, envTron);
     pubAnim.push(salle.animer); cameraSalle = salle.camera;
     // le public de la salle : les memes cartes que le stade (LE PUBLIC, EN CARTES)
     if (Q.get('foule') !== '0') {
@@ -1936,42 +1908,6 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   }
   window.addEventListener('resize', dimensionner);
   dimensionner();
-}
-
-/** Court-on dans la salle Grille (salle-tron.ts) ? Le one shot lance sur la case GRILLE, ou ?tron=1. */
-function salleGrille() {
-  if (Q.get('tron') === '0') return false;
-  if (Q.get('tron') === '1') return true;
-  const G = (globalThis as any).SprinterApp?.G;
-  return !!(G && G.mode === 'oneshot' && G.shotOpts && G.shotOpts.grille);
-}
-
-// LE HALO DES NEONS (salle-tron.ts, « pas de halo lumineux autour des neons : corrige », l'auteur, 09/11) : dans la
-// seule salle Tron, l'image passe par un bloom (ce qui depasse le blanc deborde en lumiere), puis par le tone
-// mapping et l'espace de couleur de l'ecran (OutputPass). Pas sous le palier 2 : un appareil qui peine le perd.
-// ?bloom=0 : sans halo.
-let bloomVoulu = false;
-let composeur: EffectComposer | null = null, passeRendu: RenderPass | null = null;
-const tailleComposeur = new THREE.Vector2(), tailleEcran = new THREE.Vector2();
-let ratioComposeur = 0;
-function rendreLImage() {
-  if (!(bloomVoulu && palier >= 2 && Q.get('bloom') !== '0')) { renderer!.render(scene, camera); return; }
-  if (!composeur) {
-    composeur = new EffectComposer(renderer!);
-    passeRendu = new RenderPass(scene, camera);
-    composeur.addPass(passeRendu);
-    renderer!.getSize(tailleEcran);
-    composeur.addPass(new UnrealBloomPass(new THREE.Vector2(tailleEcran.x, tailleEcran.y), 0.42, 0.26, 0.8));
-    composeur.addPass(new OutputPass());
-  }
-  renderer!.getSize(tailleEcran);
-  const r = renderer!.getPixelRatio();
-  if (r !== ratioComposeur || !tailleEcran.equals(tailleComposeur)) {
-    composeur.setPixelRatio(r); composeur.setSize(tailleEcran.x, tailleEcran.y);
-    ratioComposeur = r; tailleComposeur.copy(tailleEcran);
-  }
-  passeRendu!.scene = scene; passeRendu!.camera = camera;
-  composeur.render();
 }
 
 function dimensionner() {
@@ -2969,7 +2905,7 @@ export function rendre(App: any, dt: number) {
   const brut = forceBrut || (App.themeBrut ? App.themeBrut() : null);
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
-  const forme = (salleGrille() ? 'grille/' : '') + (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + T.total + '/' + (G.levelIdx | 0)
+  const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + T.total + '/' + (G.levelIdx | 0)
     + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour');   // le moment de la journee aussi
   caler(T);
   if (!stade || brut !== themeVu || forme !== formeVue) {
@@ -3452,7 +3388,7 @@ export function rendre(App: any, dt: number) {
     uFoule.uLiesse.value += (fini - uFoule.uLiesse.value) * Math.min(1, (dt || 0.016) * 1.5);
   }
   dessinerLesEffets(App);
-  rendreLImage();
+  renderer!.render(scene, camera);
   // LE FILM D'APRES COURSE (review.ts) recopie l'image 3D ici, juste apres son trace : plus tard
   // dans l'image, le navigateur a deja vide le tampon WebGL et la copie sortait noire
   const filmer = (globalThis as any).__filmer3D;

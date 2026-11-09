@@ -902,8 +902,6 @@
     // l'interrupteur du one shot (ModePanels) : le vocabulaire de l'athletisme, deux mots qui vont ensemble
     os_plein_air: ['PLEIN AIR', 'OUTDOOR'],
     os_salle: ['SALLE', 'INDOOR'],
-    // la salle Grille (salle-tron.ts) : les epreuves en salle, dans une halle a part, facon Tron Legacy
-    os_grille: ['GRILLE', 'GRID'],
     sel_dehors_fige: ['TU N’Y ES PAS', 'YOU ARE NOT IN'],
     sel_pas_classe:  ['tu n’es pas encore classé', 'you are not ranked yet'],
     sel_pour_entrer: ['un duel gagné et tu entres au classement',

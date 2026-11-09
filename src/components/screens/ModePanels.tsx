@@ -12,7 +12,7 @@ import { DUELS_OUVERTS } from '@/game/duels';
 import { OneShotTuto, oneShotTutoVu, marquerOneShotTutoVu } from './OneShotTuto';
 import { GraduationCap, Swords } from 'lucide-react';
 import { motion } from 'motion/react';
-import { InterrupteurLieu, LigneEpreuves, equivalente, piste, type Lieu } from './ChoixEpreuves';
+import { InterrupteurLieu, LigneEpreuves, equivalente, type Lieu } from './ChoixEpreuves';
 import { Repliable } from './Repliable';
 import { useJeu, epreuvesDuJeu, nomCourt, nomEnLigne, epreuvesDuLieu } from '@/game/jeux';
 import { stadeDebloque, VEDETTES, defiPossible } from '@/game/vedettes';
@@ -35,16 +35,14 @@ export function OneShotPanel() {
   // (Hurdlers aussi depuis le 02/11 : le 60 m haies, femmes et hommes, au meme stade couvert)
   const salleOuverte = (jeu === 'sprinter' || jeu === 'hurdlers') && TROIS_D_OUVERTE && idxSalle >= 0;
   const [lieu, setLieu] = useState<Lieu>(lieuParDefaut);
-  // LA SALLE GRILLE (salle-tron.ts, 09/11 : « cree une salle a part pour Tron Legacy ») : les epreuves de la salle,
-  // courues dans une halle a part ; la salle Jesse Owens, elle, ne change pas
-  const enSalle = salleOuverte && lieu !== 'dehors';
+  const enSalle = salleOuverte && lieu === 'salle';
   const RACE_KEYS = (salleOuverte
     ? epreuvesDuLieu(jeu, enSalle ? 'salle' : 'dehors')
     : epreuvesDuJeu(jeu).filter(k => epreuvesDuLieu(jeu, 'dehors').includes(k))) as readonly RaceKey[];
   const [picked, setPicked] = useState<RaceKey[]>(() => [RACE_KEYS[0]]);
   useEffect(() => {
     const l = salleOuverte ? lieuParDefaut() : 'dehors';
-    setLieu(l); setPicked([epreuvesDuLieu(jeu, piste(l))[0]]);
+    setLieu(l); setPicked([epreuvesDuLieu(jeu, l)[0]]);
   }, [jeu]);
   const niveau = enSalle ? idxSalle : level;
 
@@ -73,7 +71,7 @@ export function OneShotPanel() {
     // On garde l'ordre 100 / 200 / 400 quel que soit l'ordre des clics :
     // c'est l'ordre d'un vrai programme d'athletisme.
     const races = RACE_KEYS.filter(k => picked.includes(k));
-    SprinterApp.startOneShot(races, { levelIdx: niveau, grille: enSalle && lieu === 'grille' });
+    SprinterApp.startOneShot(races, { levelIdx: niveau });
   };
 
   const launch = partir;
@@ -107,7 +105,7 @@ export function OneShotPanel() {
                 <GraduationCap className="w-3.5 h-3.5" />
               </button>
             </span>
-            {salleOuverte && <InterrupteurLieu lieu={lieu} onChange={basculer} id="oneshot" grille />}
+            {salleOuverte && <InterrupteurLieu lieu={lieu} onChange={basculer} id="oneshot" />}
           </div>
           <LigneEpreuves epreuves={RACE_KEYS} coche={k => picked.includes(k)} onToggle={toggle} />
         </div>

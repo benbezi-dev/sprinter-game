@@ -9,10 +9,7 @@ import { sonChoix, sonSelection } from '@/game/ui-son';
    100 / 200 / 400 dehors, 60 / 200 / 400 en salle. Basculer garde les memes cases :
    100 <-> 60, 200 <-> 200 salle, 400 <-> 400 salle. */
 
-/** `grille` : la salle Grille (salle-tron.ts), les memes epreuves que la salle, dans une halle a part. */
-export type Lieu = 'dehors' | 'salle' | 'grille';
-/** La grille court les epreuves de la salle. */
-export const piste = (l: Lieu): 'dehors' | 'salle' => (l === 'dehors' ? 'dehors' : 'salle');
+export type Lieu = 'dehors' | 'salle';
 
 export const estEnSalle = (k: string) => TOUTES_EN_SALLE.includes(k);
 
@@ -22,8 +19,7 @@ const EN_FACE_HAIES: Record<string, RaceKey> = {
 };
 
 /** L'epreuve d'en face, de l'autre cote de l'interrupteur (100 -> 60, 200s -> 200, 110 m H -> 60 m H ♂...). */
-export function equivalente(k: string, versLieu: Lieu): RaceKey {
-  const vers = piste(versLieu);
+export function equivalente(k: string, vers: Lieu): RaceKey {
   if ((vers === 'salle') === estEnSalle(k)) return k as RaceKey;
   if (estUneCourseDeHaies(k)) return EN_FACE_HAIES[k] || (k as RaceKey);
   const jeu = jeuDe(k);
@@ -34,12 +30,11 @@ export function equivalente(k: string, versLieu: Lieu): RaceKey {
 }
 
 /** L'interrupteur PLEIN AIR / SALLE : une pastille qui glisse, et le « tchk » du choix. */
-export function InterrupteurLieu({ lieu, onChange, id, grille = false }: { lieu: Lieu; onChange: (l: Lieu) => void; id: string; grille?: boolean }) {
+export function InterrupteurLieu({ lieu, onChange, id }: { lieu: Lieu; onChange: (l: Lieu) => void; id: string }) {
   const { N } = SprinterApp;
-  const lieux: Lieu[] = grille ? ['dehors', 'salle', 'grille'] : ['dehors', 'salle'];
   return (
     <div className="relative flex rounded-full bg-black/40 border border-white/10 p-0.5">
-      {lieux.map(l => (
+      {(['dehors', 'salle'] as const).map(l => (
         <button
           key={l}
           onClick={() => { if (l !== lieu) { onChange(l); sonChoix(); } }}
@@ -53,7 +48,7 @@ export function InterrupteurLieu({ lieu, onChange, id, grille = false }: { lieu:
               transition={{ type: 'spring', stiffness: 520, damping: 34 }}
             />
           )}
-          <span className="relative">{l === 'grille' ? N.t('os_grille') : l === 'salle' ? N.t('os_salle') : N.t('os_plein_air')}</span>
+          <span className="relative">{l === 'salle' ? N.t('os_salle') : N.t('os_plein_air')}</span>
         </button>
       ))}
     </div>
