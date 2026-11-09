@@ -19,6 +19,7 @@ import { TouchControls } from '@/components/TouchControls';
 import { CoachPremiereCourse } from '@/components/screens/CoachPremiereCourse';
 import { EST_TEST, RELAIS_OUVERT, TCHAT_RAPIDE_OUVERT } from '@/game/canal';
 import { preparerLaPub } from '@/game/pub';
+import { verifierAchats } from '@/game/achats';
 import { MONDES_OUVERTS } from '@/game/mondes';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
@@ -563,7 +564,7 @@ function App() {
   // le tableau de bord ne doit pas gonfler ses propres chiffres.
   useEffect(() => { if (!stats && !file) pingVisit(); }, [stats, file]);
   // la demande d'accord pour la pub (RGPD) au lancement de l'appli, pas au premier clic sur une pub
-  useEffect(() => { preparerLaPub(); }, []);
+  useEffect(() => { preparerLaPub(); void verifierAchats(); }, []);
 
   // LA PAGE PUBLIQUE D'UN CHAMPIONNAT — `?regarder=<edition>`. Meme convention
   // que le tableau de bord : un parametre, parce que Pages ne sert que des
