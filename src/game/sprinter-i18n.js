@@ -219,6 +219,7 @@
     cat_race:        ['PAR COURSE', 'BY RACE'],
     cat_run:         ['PARCOURS', 'FULL RUN'],
     cat_mine:        ['MES COURSES', 'MY RACES'],
+    lb_salle:        ['EN SALLE', 'INDOOR'],
     cat_nations:     ['NATIONS', 'NATIONS'],
     cat_mine_sub:    ['toutes tes courses', 'every race you ran'],
     mine_empty:      ['aucune course sur cette épreuve pour l’instant',
