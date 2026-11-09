@@ -5,6 +5,11 @@ import { SprinterApp } from '@/game/engine';
 import { fetchDuels, cleDiscipline } from '@/game/duels';
 import { fetchLeaderboard, getSavedName, estEpreuveIndividuelle } from '@/game/leaderboard';
 import { useRetour } from '@/hooks/use-retour';
+import { epreuvesDuJeu, nomCourt } from '@/game/jeux';
+
+/** Toutes les epreuves individuelles des jeux : on defie n'importe qui, vu sur n'importe laquelle. */
+const TOUTES = [...new Set([...epreuvesDuJeu('sprinter'), ...epreuvesDuJeu('hurdlers')])]
+  .filter(k => estEpreuveIndividuelle(k)) as string[];
 
 /** Un adversaire choisi. `scoreId` quand il vient du TOP 500 ; un nom seul vient des duels. */
 export type CibleDefi = { name: string; scoreId?: number };
@@ -39,13 +44,16 @@ export function ChoixAdversaires({ epreuves, initial, onValider, onClose }: {
   const [duels, setDuels] = useState<string[] | null>(null);
   const [top, setTop] = useState<CibleDefi[] | null>(null);
   const moi = cle(getSavedName() || '');
+  // l'epreuve dont on lit les classements ; le defi, lui, reste sur la course courue
+  const [vue, setVue] = useState(() => TOUTES.includes(epreuves[0]) ? epreuves[0] : (TOUTES[0] || epreuves[0]));
 
   useEffect(() => {
     let annule = false;
-    fetchDuels(cleDiscipline(epreuves), false)
+    setDuels(null); setTop(null);
+    fetchDuels(cleDiscipline([vue]), false)
       .then(b => { if (!annule) setDuels((b?.classement || []).map(r => r.name)); })
       .catch(() => { if (!annule) setDuels([]); });
-    const course = epreuves[0];
+    const course = vue;
     if (estEpreuveIndividuelle(course)) {
       fetchLeaderboard(course)
         .then(l => {
@@ -54,8 +62,7 @@ export function ChoixAdversaires({ epreuves, initial, onValider, onClose }: {
         .catch(() => { if (!annule) setTop([]); });
     } else setTop([]);
     return () => { annule = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [vue]);
 
   const lignes: CibleDefi[] | null = onglet === 'duels'
     ? (duels ? duels.map(name => ({ name })) : null)
@@ -72,6 +79,11 @@ export function ChoixAdversaires({ epreuves, initial, onValider, onClose }: {
     });
   }, [lignes, filtre, moi]);
 
+  // Un nom tape qui n'est dans aucune liste : on le prend tel quel, le serveur
+  // le retrouve par son appareil ou son dernier chrono, quelle que soit l'epreuve.
+  const libre = filtre.trim();
+  const nomLibre = libre && cle(libre) !== moi && !visibles.some(l => cle(l.name) === cle(libre))
+    && !choix.has(cle(libre)) ? libre.slice(0, 20) : '';
   const plein = choix.size >= MAX_CIBLES_DEFI;
   const basculer = (l: CibleDefi) => {
     setChoix(m => {
@@ -109,12 +121,31 @@ export function ChoixAdversaires({ epreuves, initial, onValider, onClose }: {
           ))}
         </div>
 
+        {TOUTES.length > 1 && (
+          <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+            {TOUTES.map(k => (
+              <button key={k} onClick={() => setVue(k)} aria-pressed={vue === k}
+                      className={`shrink-0 px-3 py-1.5 rounded-lg text-xs font-bold tracking-wider border transition-colors
+                        ${vue === k ? 'bg-primary/20 text-primary border-primary/60' : 'border-white/10 text-muted-foreground'}`}>
+                {nomCourt(k)}
+              </button>
+            ))}
+          </div>
+        )}
+
         <input value={filtre} onChange={e => setFiltre(e.target.value)} placeholder={N.t('defi_chercher')}
                className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50" />
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-1.5 pr-1">
           {lignes === null && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground mx-auto my-6" />}
-          {lignes !== null && visibles.length === 0 && (
+          {nomLibre && (
+            <button onClick={() => { basculer({ name: nomLibre }); setFiltre(''); }} disabled={plein}
+                    className="flex items-center gap-3 px-3 py-2 rounded-xl border border-dashed border-primary/40 text-left text-sm disabled:opacity-40">
+              <Swords className="w-4 h-4 shrink-0 text-primary" />
+              <span className="flex-1 min-w-0 truncate">{N.t('defi_ajouter_nom', { n: nomLibre })}</span>
+            </button>
+          )}
+          {lignes !== null && visibles.length === 0 && !nomLibre && (
             <p className="text-center text-sm text-muted-foreground py-6">{N.t('defi_vide')}</p>
           )}
           {visibles.map((l, i) => {
