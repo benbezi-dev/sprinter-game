@@ -162,8 +162,6 @@ export function OneShotEndScreen() {
   // dans la categorie PAR COURSE, et seulement ceux qui y entrent vraiment.
   const [outcomes, setOutcomes] = useState<RaceOutcome[] | null>(null);
   const [topName, setTopName] = useState(getSavedName());
-  // un nom deja connu ne se redemande pas dans le panneau du defi (09/11)
-  const [nomConnu] = useState(() => !!(getSavedName() || '').trim());
   const [topStatus, setTopStatus] = useState<'checking' | 'idle' | 'sending' | 'done' | 'error'>('checking');
   // Les traces du programme, relevees au montage : chacune est la preuve du
   // chrono de meme rang dans runSplits, et part avec lui au classement.
@@ -1460,7 +1458,8 @@ export function OneShotEndScreen() {
                 <>
                   {/* Un seul champ nom a l'ecran : celui du TOP 500 sert aussi
                       au defi ; sans lui, on ne le demande que s'il manque. */}
-                  {!topVisible && !nomConnu && (
+                  {/* relu a chaque rendu : un nom enregistre via le TOP 500 l'efface aussi */}
+                  {!topVisible && !(getSavedName() || '').trim() && (
                     <input
                       value={name}
                       onChange={e => setName(e.target.value)}
