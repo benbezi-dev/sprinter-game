@@ -51,6 +51,8 @@ function BlocSansPubs() {
   }, []);
   const acheter = async () => { setEtat('envoi'); await acheterSansPubs(); setEtat('repos'); };
   const restaurer = async () => { setEtat('envoi'); setEtat((await restaurerAchats()) ? 'repos' : 'rien'); };
+  // Produit inconnu du store (pas encore cree, store injoignable) : rien a vendre, on ne montre rien.
+  if (!acquis && !prix) return null;
 
   return (
     <div className="w-full flex flex-col gap-1.5 rounded-xl bg-secondary/50 px-3 py-2.5">
