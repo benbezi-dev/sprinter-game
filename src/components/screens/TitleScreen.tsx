@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
-import { Globe, Globe2 } from 'lucide-react';
+import { SprinterApp, useGameStore } from '@/game/engine';
+import { Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecordChip } from './RecordPerso';
 import { CarteObjectif } from './Revanche';
@@ -18,6 +18,7 @@ import { ouvrirLeTuto as ouvrirLeTutoSprint } from '@/game/sprint-tuto.js';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
+import { Parametres } from './Parametres';
 import { Coins } from 'lucide-react';
 import { rafraichirPieces, usePieces } from '@/game/pieces';
 import { NOM_CHANGE, getSavedName } from '@/game/leaderboard';
@@ -165,7 +166,7 @@ export function TitleScreen() {
   // memes objets d'une course a l'autre — voir useGameStore)
   const runsIci = useGameStore(s => s.runs && s.runs[s.raceKey]);
   const furthestIci = useGameStore(s => s.furthest && s.furthest[s.raceKey]);
-  const { Audio_, N, RACES } = SprinterApp;
+  const { N, RACES } = SprinterApp;
   // Sprinter ou Hurdlers : le meme accueil, avec les epreuves du jeu courant.
   const jeu = useJeu();
   const haies = jeu === 'hurdlers';
@@ -381,13 +382,9 @@ export function TitleScreen() {
       <div ref={zoneGeste} className="flex-1 min-h-0 flex flex-col">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4 serre:mb-1">
-          <button 
-            onClick={() => toggleLang()}
-            className="bg-card/80 backdrop-blur-md border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 md:gap-2 hover:bg-white/10 transition-colors"
-          >
-            <Globe className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground" />
-            <span className="font-bold text-xs md:text-sm text-foreground/90">{N.getLang().toUpperCase()}</span>
-          </button>
+          {/* La langue est passee dans les Parametres (roue dentee) ; la case
+              garde le nom au centre du bandeau. */}
+          <div aria-hidden="true" className="w-10 md:w-12 shrink-0" />
 
           {/* Le nom du joueur occupe le centre du bandeau, qui etait vide.
               C'est le seul ecran que tout le monde traverse. */}
@@ -395,16 +392,7 @@ export function TitleScreen() {
 
           <div className="flex items-start gap-2">
             <PucePieces />
-            <button
-              onClick={() => toggleAudio()}
-              className="bg-card/80 backdrop-blur-md border border-white/10 p-2 md:p-3 rounded-xl hover:bg-white/10 transition-colors"
-            >
-              <img
-                src={`${BASE}/icons/${Audio_.on ? 'audio-on' : 'audio-off'}.png`}
-                alt=""
-                className={`w-4 h-4 md:w-5 md:h-5 ${Audio_.on ? 'opacity-100' : 'opacity-40'}`}
-              />
-            </button>
+            <Parametres />
           </div>
         </div>
 

@@ -1,4 +1,5 @@
 import './sprinter-i18n.js';
+import { vibrationActive, sonGarde, garderSon } from './reglages';
 import './coureur-hd.js';
 // Les corps des athletes reels, sculptes a part : ils se posent sur
 // SprinterHD, donc APRES coureur-hd.js, qui le cree.
@@ -101,6 +102,24 @@ const STARTER_MUET = true;
 // Le moteur est du JavaScript ancien, sans acces aux modules : il previent
 // par ce crochet quand une course est terminee, et la couche moderne se
 // charge de l'envoyer.
+// le son coupe la derniere fois le reste a l'ouverture
+if (!sonGarde()) SprinterApp.Audio_.on = false;
+
+// Jeu passe a l'arriere-plan (autre appli, ecran verrouille) : on suspend le
+// son du jeu, sinon la musique continue de jouer hors de l'appli (9/11).
+function sonAuFond(cache: boolean) {
+  const c = SprinterApp.Audio_.ctx as AudioContext | null;
+  if (!c) return;
+  if (cache) c.suspend().catch(() => { });
+  else if (c.state === 'suspended') c.resume().catch(() => { });
+}
+document.addEventListener('visibilitychange', () => sonAuFond(document.hidden));
+// Dans l'appli, la WebView ne previent pas toujours : l'etat d'Android/iOS fait foi.
+if ((window as any).Capacitor?.isNativePlatform?.()) {
+  import('@capacitor/app').then(({ App }) =>
+    App.addListener('appStateChange', ({ isActive }) => sonAuFond(!isActive))).catch(() => { });
+}
+
 SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: number) => {
   // Le vrai mode se lit ICI, tant que les drapeaux de la course sont encore
   // poses : l'envoi part apres un import differe, et l'ecran de fin ou le
@@ -331,6 +350,7 @@ const { N } = SprinterI18N;
  * `Haptics.vibrate` garde la duree demandee ; `impact` ne reste qu'en repli.
  */
 export function buzz(ms: number) {
+  if (!vibrationActive()) return;
   try {
     const h = (window as any).Capacitor?.Plugins?.Haptics;
     if (h) {
@@ -662,7 +682,7 @@ export function toggleLang() {
 }
 
 export function toggleAudio() {
-  SprinterApp.Audio_.toggle();
+  garderSon(SprinterApp.Audio_.toggle());
   rafraichirTout();
 }
 
