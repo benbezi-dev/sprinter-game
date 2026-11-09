@@ -59,16 +59,16 @@ export function RaceHUD() {
   const record = useRecord(raceKey);
   const recordMs = record.ms;
   /**
-   * LA LIGNE PASSEE, LE CHRONO S'ARRETE (l'auteur, 2/11 : partout, plus seulement en serie en direct).
-   *
-   * Le joueur reste sur la piste a regarder les autres finir ou a freiner, et la
-   * course continue donc de tourner — `elapsed` compris. Le chrono du haut est
-   * pourtant le SIEN : il se fige sur son temps, comme le tableau d'un stade.
+   * LA LIGNE PASSEE, LE CHRONO CONTINUE (l'auteur, 08/11, a la place du chrono fige du 2/11). Le temps du joueur
+   * reste celui de l'ecran de fin et de la couleur du record (`tempsJoueur`).
    */
   const champ = useChampDirect();
-  const chronoS: number = player?.finished && player.finishTime != null ? player.finishTime : elapsed;
+  // LE CHRONO CONTINUE DE TOURNER apres la ligne (l'auteur, 08/11 : « je veux qu'il continue de tourner ») ; la couleur
+  // du record, elle, reste jugee sur le temps du joueur — un record battu ne passe pas au rouge pendant qu'il trottine.
+  const tempsJoueur: number = player?.finished && player.finishTime != null ? player.finishTime : elapsed;
+  const chronoS: number = elapsed;
   const directFini = !!SprinterApp.G.champDirect && !!player?.finished && player.finishTime != null;
-  const chronoMs = chronoS * 1000;
+  const chronoMs = tempsJoueur * 1000;
   // LE CHRONO A L'ENVERS. Une nuit du molosse ne compte pas ce qui a ete
   // couru, elle compte ce qu'il reste : le grand nombre du haut change donc
   // de sens, et rien d'autre ne bouge dans ce tableau. Nul hors du mode, ou

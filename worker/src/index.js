@@ -28,7 +28,7 @@ import {
   cloturerAuxHeures,
   prochaineEdition, rangSelection,
   titresDe, continentDe,
-  etatEdition, editionDe, enregistrerCourse, cloturerPhase,
+  etatEdition, editionDe, editionsDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations, fichesDe,
   fluxDirect, recapMondial, tableauNations,
   poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation, salleNoireOuverte,
@@ -91,6 +91,7 @@ import { empreinteIp, sousLimite, quotaAtteint, noterCodeRate, purgerLimites } f
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
+import { noterVoix, tableauEpreuves } from './duel-epreuves.js';
 import { etapeConnue, noterEtape, etapeHalloweenPlausible, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
 import { PROFIL_MAX_OCTETS, donneesValides, appareilRelie, lireProfil, ecrireProfil } from './profil.js';
 import {
@@ -2468,8 +2469,10 @@ async function servir(request, env, ctx, porteur) {
       // Mon championnat, s'il y en a un. Le jeu n'a que le nom du joueur.
       if (sous === 'mien' && request.method === 'GET') {
         const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
-        const id = key ? await editionDe(env.DB, key) : null;
-        return json({ edition: id });
+        const ids = key ? await editionsDe(env.DB, key) : [];
+        // `edition` reste la principale pour les jeux deja installes ; `editions`
+        // les donne toutes (deux championnats le meme weekend, 08/11).
+        return json({ edition: ids[0] || null, editions: ids });
       }
 
       // L'etat d'une edition : ou elle en est, qui court quoi.
@@ -3183,6 +3186,14 @@ async function servir(request, env, ctx, porteur) {
       }
 
       return json({ error: 'route inconnue' }, 404);
+    }
+
+    // Le duel des epreuves : le tableau, ouvert ou non (le jeu decide d'afficher).
+    if (url.pathname === '/duel-epreuves' && request.method === 'GET') {
+      const deviceId = url.searchParams.get('device_id');
+      return json(await tableauEpreuves(env.DB, {
+        test: canal.test, deviceId: isValidDeviceId(deviceId) ? deviceId : null,
+      }));
     }
 
     if (url.pathname === '/nations' && request.method === 'GET') {
@@ -4234,6 +4245,11 @@ async function servir(request, env, ctx, porteur) {
           });
         } catch (e) { /* une course manquera au compte, pas a l'historique */ }
       }
+      // Le duel des epreuves (duel-epreuves.js) : une course en salle = une voix.
+      let voix = null;
+      try {
+        voix = await noterVoix(env.DB, { test: canal.test, deviceId: device_id, nameKey: cle, epreuve: race_key, at });
+      } catch (e) { /* une voix manquera, pas la course */ }
       // On borne ce qu'un appareil peut accumuler, sinon la table enfle sans
       // limite pour un historique que personne ne fera defiler jusqu'au bout.
       await env.DB.prepare(
@@ -4275,7 +4291,7 @@ async function servir(request, env, ctx, porteur) {
           await regarderClassement(canal, race_key, nom, record.ms, entries);
         })().catch(() => { /* signaler n'est jamais bloquant */ }));
       }
-      return json({ ok: true, record, nom_refuse: nomRefuse });
+      return json({ ok: true, record, nom_refuse: nomRefuse, voix });
     }
 
     // Historique : celui du nom quand il est connu — c'est ce qui suit d'un

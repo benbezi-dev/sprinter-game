@@ -897,7 +897,7 @@
     sel_tu_es:       ['tu es {r}', 'you are {r}'],
     sel_manque_1:    ['il te manque une place', 'you are one place short'],
     sel_manque_n:    ['il te manque {n} places', 'you are {n} places short'],
-    sel_dedans:      ['tu es qualifié', 'you are in'],
+    sel_dedans:      ['tu es qualifiable', 'you can qualify'],
     sel_dedans_fige: ['SÉLECTIONNÉ', 'YOU ARE IN'],
     lieu_dehors: ['DEHORS', 'OUTDOOR'],
     lieu_salle: ['EN SALLE', 'INDOOR'],
