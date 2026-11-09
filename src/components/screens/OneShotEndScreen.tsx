@@ -19,6 +19,7 @@ import { pushReprise } from '@/game/history';
 import { feterRecordPerso } from '@/game/fete';
 import { feteDuRecordOuverte } from '@/game/canal';
 import { DuelRanking } from './DuelRanking';
+import { ChoixAdversaires, type CibleDefi } from './ChoixAdversaires';
 import { nomDuRang, Flamme, Approche, ComboBreak } from '@/components/Insignes';
 import { cleDiscipline, nomDiscipline } from '@/game/duels';
 import { pique, boost, relance } from '@/game/piques';
@@ -90,6 +91,19 @@ export function OneShotEndScreen() {
   const [name, setName] = useState(getSavedName());
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  /**
+   * Les destinataires du defi : celui choisi avant la course (TOP 500), plus
+   * ceux qu'on coche ici. `prevenus` est ce que le serveur a vraiment joint.
+   */
+  const [cibles, setCibles] = useState<CibleDefi[]>(() => {
+    const t = SprinterApp.G.challengeTarget as { scoreId: number; name: string } | null;
+    if (t) return [{ name: t.name, scoreId: t.scoreId }];
+    // venu des duels sans ligne au TOP 500 : le serveur le retrouve par son nom
+    const nom = SprinterApp.G.defiSansCible as string | null;
+    return nom ? [{ name: nom }] : [];
+  });
+  const [prevenus, setPrevenus] = useState<string[] | null>(null);
+  const [choisir, setChoisir] = useState(false);
   const [err, setErr] = useState(false);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [sent, setSent] = useState(false);
@@ -227,7 +241,7 @@ export function OneShotEndScreen() {
     envoyer(finalName, tops);
   };
 
-  const cible = SprinterApp.G.challengeTarget as { scoreId: number; name: string } | null;
+  const cible = cibles.length ? { name: cibles.map(c => c.name).join(', ') } : null;
   const sansCible = SprinterApp.G.defiSansCible as string | null;
 
   // Message envoye a l'ami : chrono realise, code, lien direct.
@@ -456,11 +470,15 @@ export function OneShotEndScreen() {
       // code qui est ecrit sur la video, et il n'y en a qu'un par course.
       // Voir `defi-camera.ts` — poser n'est pas lancer, et ce bouton est le
       // lancement.
-      const { id, cible: prevenu } =
-        await lancerLeDefiDeLaCamera({
-          name: finalName || undefined,
-          targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
-        })
+      const ids = cibles.flatMap(c => (c.scoreId != null ? [c.scoreId] : []));
+      const vise = {
+        // le premier aussi en champ simple : un serveur plus ancien en joint au moins un
+        targetScoreId: ids[0] ?? null,
+        targetScoreIds: ids,
+        targetNames: cibles.filter(c => c.scoreId == null).map(c => c.name),
+      };
+      const { id, cibles: joints } =
+        await lancerLeDefiDeLaCamera({ name: finalName || undefined, ...vise })
         ?? await createChallenge({
           races: shotRaces as ('100' | '200' | '400')[],
           levelIdx: SprinterApp.G.shotLevel,
@@ -468,10 +486,11 @@ export function OneShotEndScreen() {
           splits: runSplits.map(s => (s || 0) * 1000),
           traces: SprinterApp.G.shotTraces || [],
           name: finalName || undefined,
-          targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
+          ...vise,
         });
       setCode(id);
-      noterDefiLance(id, prevenu || SprinterApp.G.challengeTarget?.name || '', shotRaces);
+      setPrevenus(joints);
+      noterDefiLance(id, joints.join(', ') || cibles.map(c => c.name).join(', '), shotRaces);
     } catch {
       setErr(true);
     } finally {
@@ -1375,11 +1394,25 @@ export function OneShotEndScreen() {
               </div>
               {/* Defi adresse a quelqu'un du TOP 500 : on le rappelle, sinon
                   le joueur ne sait plus a qui son code va partir. */}
-              {cible && (
+              {cible && !code && (
                 <p className="text-center text-[10px] md:text-xs text-cyan-300">
-                  {N.t(code ? 'target_sent' : 'target_run', { n: cible.name, d: shotRaces[0] })}
+                  {N.t('target_run', { n: cible.name, d: shotRaces[0] })}
                 </p>
               )}
+              {cible && code && prevenus && prevenus.length > 0 && (
+                <p className="text-center text-[10px] md:text-xs text-cyan-300">
+                  {N.t('target_sent', { n: prevenus.join(', ') })}
+                </p>
+              )}
+              {cible && code && prevenus && (() => {
+                const rates = cibles.map(c => c.name)
+                  .filter(n => !prevenus.some(p => p.toLowerCase() === n.toLowerCase()));
+                return rates.length > 0 && (
+                  <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
+                    {N.t('defi_non_joints', { n: rates.join(', ') })}
+                  </p>
+                );
+              })()}
               {/* Defi lance depuis le classement des duels, mais la personne
                   n'a pas ete retrouvee au TOP 500 de cette epreuve : le code
                   existe, personne ne l'a recu. On le dit ici plutot que de
@@ -1444,8 +1477,23 @@ export function OneShotEndScreen() {
                       {busy ? N.t('challenge_making') : N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
                     </button>
                   </div>
+                  {/* Choisir un ou plusieurs destinataires dans les duels ou le TOP 500. */}
+                  <button
+                    onClick={() => setChoisir(true)}
+                    disabled={busy}
+                    className="self-center px-4 py-1.5 rounded-xl font-bold tracking-wide text-[10px] md:text-xs
+                               text-primary border border-primary/40 hover:bg-primary/15 transition-colors flex items-center gap-2"
+                  >
+                    <Swords className="w-3.5 h-3.5" />
+                    {cibles.length ? N.t('defi_choisis', { k: cibles.length, n: cibles.map(c => c.name).join(', ') })
+                                   : N.t('defi_choisir')}
+                  </button>
                   {err && <p className="text-center text-xs text-destructive">{N.t('challenge_net')}</p>}
                 </>
+              )}
+              {choisir && (
+                <ChoixAdversaires epreuves={shotRaces} initial={cibles}
+                                  onValider={setCibles} onClose={() => setChoisir(false)} />
               )}
 
               {code && (
