@@ -1,18 +1,21 @@
 // LA SALLE TRON (09/11, l'auteur : « ajoute l'atmosphere Tron Legacy dans le stade noir (Jesse Owens) »).
 //
 // La nuit, la halle Jesse Owens passe dans la Grille : tout ce qui est construit devient noir et luisant ;
-// les traits de la piste (couloirs de l'anneau releve et de la ligne droite, corde, departs, arrivee) et les
-// bandeaux des murets s'allument en neon cyan ; les aretes de la charpente, des gradins et des facades se
+// les traits de la piste (couloirs de l'anneau releve et de la ligne droite, departs, arrivee) s'allument en
+// neon cyan ; les aretes de la charpente, des gradins et des facades se
 // dessinent en filets de lumiere ; une grille de 2 m couvre le sol de la halle. Les rares murets longs et
-// pleins gardent un liseré orange en haut (la couleur des rivaux, dans le film). Les coureurs prennent un
+// pleins gardent un liseré orange en haut. Ce qui est debout (corde, bandeaux, rambardes) s'allume en orange
+// (la couleur des rivaux, dans le film), ce qui est au sol en cyan. Les coureurs prennent un
 // liseré cyan (course-3d.ts) et le noir luisant reflete des bandes cyan (carteTron).
 //
 // On n'ecrit rien dans salle-3d.ts : on rhabille, apres coup, ce qu'il a construit. Chaque matiere est
 // remplacee par une copie (celles du jour ne changent pas). Les ecrans et les cartes du public, qui ne
 // sont pas des matieres de la coque, restent tels quels : ils eclairent deja.
 //
+// Le public (course-3d.ts, uFoule.uTron) : des silhouettes noir-bleu, les maillots allumes en cyan ou en orange.
+// Le halo des neons : un bloom (course-3d.ts, rendreLImage), dans la seule salle Tron et a partir du palier 2.
+//
 // Reglage d'URL : ?tron=1 (la Grille meme de jour), ?tron=0 (la salle de nuit d'avant).
-// Pas de halo (bloom) : le rendu du jeu n'a pas de post-traitement ; les neons sont hors tone mapping.
 
 import * as THREE from 'three';
 
@@ -25,6 +28,17 @@ export const TRON = {
 
 /** La luminance d'une couleur (lineaire). */
 const lum = (c: THREE.Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+
+/** Le |nz| moyen des normales de la piece, dans le monde : 1 a plat (un sol), 0 debout (un mur). */
+function inclinaison(o: THREE.Mesh) {
+  const geo = o.geometry;
+  if (!geo.getAttribute('normal')) geo.computeVertexNormals();
+  const n = geo.getAttribute('normal'), nm = new THREE.Matrix3().getNormalMatrix(o.matrixWorld), v = new THREE.Vector3();
+  const pas = Math.max(1, Math.floor(n.count / 400));
+  let s = 0, k = 0;
+  for (let i = 0; i < n.count; i += pas) { v.fromBufferAttribute(n, i).applyMatrix3(nm).normalize(); s += Math.abs(v.z); k++; }
+  return k ? s / k : 1;
+}
 
 /** La largeur typique d'une bande : la mediane du plus petit cote de ses triangles (au plus 300 tires). */
 function largeurDeBande(geo: THREE.BufferGeometry) {
@@ -47,7 +61,7 @@ function bandeOrange(m: THREE.Material, zHaut: number) {
   const b = m.clone();
   b.onBeforeCompile = (sh: any) => {
     sh.uniforms.uZHautTron = { value: zHaut };
-    sh.uniforms.uOrangeTron = { value: new THREE.Color(TRON.orange).multiplyScalar(1.4) };
+    sh.uniforms.uOrangeTron = { value: new THREE.Color(TRON.orange).multiplyScalar(1.15) };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying float vZTron;')
       .replace('#include <project_vertex>', '#include <project_vertex>\nvZTron = (modelMatrix * vec4(transformed, 1.0)).z;');
@@ -60,15 +74,38 @@ function bandeOrange(m: THREE.Material, zHaut: number) {
 }
 
 export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
-  const neonCyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(TRON.cyan).multiplyScalar(1.6), toneMapped: false });
+  const neonCyan = new THREE.MeshBasicMaterial({ color: new THREE.Color(TRON.cyan).multiplyScalar(1.15), toneMapped: false });
   const neonCyanDouble = neonCyan.clone(); neonCyanDouble.side = THREE.DoubleSide;
-  const neonOrange = new THREE.MeshBasicMaterial({ color: new THREE.Color(TRON.orange).multiplyScalar(1.4), toneMapped: false, side: THREE.DoubleSide });
-  const filetCyan = new THREE.LineBasicMaterial({ color: new THREE.Color(TRON.cyan).multiplyScalar(1.3), transparent: true, opacity: 0.55, toneMapped: false, depthWrite: false });
-  const filetOrange = new THREE.LineBasicMaterial({ color: new THREE.Color(TRON.orange).multiplyScalar(1.3), transparent: true, opacity: 0.9, toneMapped: false, depthWrite: false });
+  const neonOrange = new THREE.MeshBasicMaterial({ color: new THREE.Color(TRON.orange).multiplyScalar(1.15), toneMapped: false, side: THREE.DoubleSide });
+  const filetCyan = new THREE.LineBasicMaterial({ color: new THREE.Color(TRON.cyan).multiplyScalar(0.75), transparent: true, opacity: 0.6, toneMapped: false, depthWrite: false });
+  const filetOrange = new THREE.LineBasicMaterial({ color: new THREE.Color(TRON.orange).multiplyScalar(0.9), transparent: true, opacity: 0.9, toneMapped: false, depthWrite: false });
+  const lampeTron = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xc8f6ff).multiplyScalar(0.62) }); lampeTron.name = 'plafonnier-tron';
   const copies = new Map<THREE.Material, THREE.Material>();
   const boite = new THREE.Box3(), taille = new THREE.Vector3();
   const filets: { m: THREE.Mesh; geo: THREE.BufferGeometry; mat: THREE.LineBasicMaterial }[] = [];
   let neons = 0, noircies = 0, oranges = 0;
+  /** La copie noire et luisante d'une matiere (une seule par matiere d'origine). */
+  const noirci = (mat: THREE.MeshStandardMaterial, coqueCuite: boolean): THREE.Material => {
+    let c = copies.get(mat);
+    if (c) return c;
+    if (coqueCuite) {
+      const m2 = (mat as any).clone() as THREE.MeshBasicMaterial;
+      m2.color = mat.color.clone().multiplyScalar(0.06).add(new THREE.Color(0x010409));
+      m2.lightMapIntensity = ((mat as any).lightMapIntensity ?? 1) * 0.35;
+      c = m2;
+    } else {
+      const m2 = mat.clone();
+      m2.color = mat.color.clone().multiplyScalar(0.07).add(new THREE.Color(0x02060a));
+      m2.emissive = new THREE.Color(0x000000); m2.emissiveMap = null;
+      m2.roughness = Math.min(mat.roughness, 0.35); m2.metalness = Math.max(mat.metalness, 0.35);
+      if (env) { m2.envMap = env; m2.envMapIntensity = 0.55; }
+      m2.lightMapIntensity = (mat.lightMapIntensity ?? 1) * 0.25;
+      m2.toneMapped = true;
+      c = m2;
+    }
+    copies.set(mat, c);
+    return c;
+  };
 
   g.updateMatrixWorld(true);
   g.traverse((o: any) => {
@@ -77,6 +114,10 @@ export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
     if (!mat || Array.isArray(o.material)) return;
     // la coque (murs, plafond, gradins) est en MeshBasic avec sa lumiere cuite (salle-3d.ts, appliquer) ; les ecrans,
     // eux, sont en MeshBasic SANS lumiere cuite : ils restent allumes
+    if (mat.name === 'plafonnier') {
+      // les plafonniers (salle-3d.ts) : blanc-cyan et plus doux — sous le halo, un plafonnier proche faisait une tache
+      o.material = lampeTron; return;
+    }
     const coqueCuite = (mat as any).isMeshBasicMaterial && !!(mat as any).lightMap;
     if (!(mat as any).isMeshStandardMaterial && !coqueCuite) return;
     o.geometry.computeBoundingBox();
@@ -86,8 +127,16 @@ export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
     // passaient pour le muret et sortaient orange) — on mesure donc la largeur sur les triangles eux-memes
     const mince = Math.min(taille.x, taille.y, taille.z) < 0.16 || largeurDeBande(o.geometry) < 0.11;   // (les traits font 8 cm)
     if (blanc && mince && taille.z < 1.6) {
-      // les traits peints et la corde : des tubes de neon a plat
-      o.material = mat.side === THREE.DoubleSide ? neonCyanDouble : neonCyan;
+      // LES DEUX COULEURS DE LA GRILLE : ce qui est AU SOL (les traits de la piste) en cyan ; ce qui est DEBOUT (la
+      // corde, les bandeaux des murets, les rambardes) en orange — on le lit a l'orientation des faces, pas a la boite
+      const debout = inclinaison(o) < 0.6;
+      if (debout && taille.z > 0.3) {
+        // un panneau debout plus haut qu'un bandeau (les vitrages de la coursive) : noir, seul son haut s'allume
+        o.material = bandeOrange(noirci(mat, coqueCuite), boite.max.z); oranges++; noircies++;
+        return;
+      }
+      o.material = debout ? neonOrange : mat.side === THREE.DoubleSide ? neonCyanDouble : neonCyan;
+      if (debout) oranges++;
       if (mat.polygonOffset) { o.material = (o.material as THREE.Material).clone(); Object.assign(o.material, { polygonOffset: true, polygonOffsetFactor: mat.polygonOffsetFactor, polygonOffsetUnits: mat.polygonOffsetUnits }); }
       neons++; return;
     }
@@ -99,23 +148,7 @@ export function habillerTron(g: THREE.Object3D, env: THREE.Texture | null) {
       arete = filetOrange; bandeHaute = boite.max.z; oranges++;
     }
     // tout le reste : noir et luisant (la teinte d'origine a peine, pour garder le dessin des surfaces)
-    let c = copies.get(mat);
-    if (!c && coqueCuite) {
-      const m2 = (mat as any).clone() as THREE.MeshBasicMaterial;
-      m2.color = mat.color.clone().multiplyScalar(0.06).add(new THREE.Color(0x010409));
-      m2.lightMapIntensity = ((mat as any).lightMapIntensity ?? 1) * 0.35;
-      copies.set(mat, m2); c = m2;
-    }
-    if (!c) {
-      const m2 = mat.clone();
-      m2.color = mat.color.clone().multiplyScalar(0.07).add(new THREE.Color(0x02060a));
-      m2.emissive = new THREE.Color(0x000000); m2.emissiveMap = null;
-      m2.roughness = Math.min(mat.roughness, 0.35); m2.metalness = Math.max(mat.metalness, 0.35);
-      if (env) { m2.envMap = env; m2.envMapIntensity = 0.55; }
-      m2.lightMapIntensity = (mat.lightMapIntensity ?? 1) * 0.25;
-      m2.toneMapped = true;
-      copies.set(mat, m2); c = m2;
-    }
+    let c: THREE.Material = noirci(mat, coqueCuite);
     if (!isNaN(bandeHaute)) c = bandeOrange(c, bandeHaute);
     o.material = c; noircies++;
     // les aretes des volumes (charpente, gradins, facades, poteaux) : des filets de lumiere
