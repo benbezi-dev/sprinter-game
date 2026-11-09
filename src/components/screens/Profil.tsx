@@ -7,7 +7,7 @@ import { savedCode, paysDe } from '@/game/identity';
 import { derniereSauvegarde, envoyerProfil } from '@/game/profil';
 import { useJeu, epreuvesDuJeu } from '@/game/jeux';
 import { Drapeau } from '@/components/Insignes';
-import { RecordChip } from './RecordPerso';
+import { RecordTuile } from './RecordPerso';
 import { LiaisonQR } from './LiaisonQR';
 import { OUVRIR_PARAMETRES } from './Parametres';
 
@@ -73,11 +73,14 @@ export function Profil({ nom, onFermer, onModifier }: { nom: string; onFermer: (
         </div>
 
         {/* Records et nombre de courses */}
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap gap-1.5">
-            {epreuvesDuJeu(jeu).map(r => <RecordChip key={r} race={r} compact avecEpreuve />)}
+        <div className="flex flex-col gap-2">
+          <div className="flex items-baseline justify-between gap-2 px-0.5">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-primary">{N.t('prof_records')}</span>
+            <span className="text-[11px] text-muted-foreground">{N.t('prof_courses', { n: coursesTerminees() })}</span>
           </div>
-          <span className="text-[11px] text-muted-foreground">{N.t('prof_courses', { n: coursesTerminees() })}</span>
+          <div className="grid grid-cols-2 gap-2">
+            {epreuvesDuJeu(jeu).map(r => <RecordTuile key={r} race={r} />)}
+          </div>
         </div>
 
         {/* Sauvegarde sur le serveur */}

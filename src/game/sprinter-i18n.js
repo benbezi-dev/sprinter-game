@@ -1422,6 +1422,7 @@
     reg_titre:       ['PARAMÈTRES', 'SETTINGS'],
     prof_titre:      ['PROFIL', 'PROFILE'],
     prof_modifier:   ['modifier', 'edit'],
+    prof_records:    ['RECORDS', 'RECORDS'],
     prof_courses:    ['{n} courses terminées', '{n} races finished'],
     prof_sauve:      ['Dernière sauvegarde', 'Last save'],
     prof_jamais:     ['jamais', 'never'],
