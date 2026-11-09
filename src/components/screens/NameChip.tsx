@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
 import { User, Check, Loader2, KeyRound, X, Instagram, Unlink, Flag, Lock, LifeBuoy, AlertTriangle, ChevronDown } from 'lucide-react';
 import { getSavedName, saveName, NOM_CHANGE } from '@/game/leaderboard';
@@ -10,6 +10,7 @@ import { claimName, linkDevice, savedCode, lierInstagram, instagramDe, lienInsta
 import { nettoyerInsta } from '@/game/insta';
 import { Drapeau } from '@/components/Insignes';
 import { Recuperation } from './Recuperation';
+import { Profil } from './Profil';
 import { useRetour } from '@/hooks/use-retour';
 import { nomReconnu } from '@/game/presence';
 
@@ -125,11 +126,14 @@ export function NameChip() {
   // Le mur ne concerne que le nom porte maintenant : un avertissement laisse
   // par un nom qu'on a depuis change ne veut plus rien dire.
   const mure = !vide && !!refuse && refuse === nom;
+  // Nom en regle : le profil. Sans nom ou nom refuse : directement le panneau qui repare.
+  const [profil, setProfil] = useState(false);
+  useRetour(() => setProfil(false), profil);
 
   return (
     <div className="relative">
       <button
-        onClick={() => setOuvert(true)}
+        onClick={() => (vide || mure ? setOuvert(true) : setProfil(true))}
         className={`px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 md:gap-2
                     border transition-colors max-w-[45vw]
           ${vide
@@ -163,6 +167,12 @@ export function NameChip() {
       {ouvert && (
         <PanneauIdentite onFermer={() => { setOuvert(false); setNom(getSavedName()); }} />
       )}
+      <AnimatePresence>
+        {profil && (
+          <Profil nom={nom} onFermer={() => setProfil(false)}
+                  onModifier={() => { setProfil(false); setOuvert(true); }} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

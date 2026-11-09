@@ -4,6 +4,7 @@ import { SprinterApp } from '@/game/engine';
 import { Timer, Trophy } from 'lucide-react';
 import { RESSORT, SURGISSEMENT } from '@/lib/mouvement';
 import type { RaceKey } from '@/game/leaderboard';
+import { nomCourt } from '@/game/jeux';
 import {
   useRecord, recordAvant, ecartAuRecord, estUnRecord, s2,
 } from '@/game/record';
@@ -53,6 +54,24 @@ export function RecordChip({
         <span className="text-[9px] font-bold text-muted-foreground tracking-wide">
           {N.t('pb_rank', { o: N.ord(record.rang) })}
         </span>
+      )}
+    </div>
+  );
+}
+
+/** Une case de la grille des records du profil : l'epreuve, le chrono, la place si le serveur l'a donnee. */
+export function RecordTuile({ race }: { race: RaceKey }) {
+  const { N } = SprinterApp;
+  const record = useRecord(race);
+  if (record.ms === null) return null;
+  return (
+    <div className="flex flex-col gap-0.5 rounded-xl bg-secondary/50 px-3 py-2 min-w-0">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{nomCourt(race)}</span>
+      <span className="font-mono font-black tabular-nums text-lg leading-none text-foreground">
+        {s2(record.ms)}<span className="text-primary/70 text-xs"> s</span>
+      </span>
+      {record.distant && record.rang !== null && (
+        <span className="text-[10px] font-bold text-primary tracking-wide">{N.t('pb_rank', { o: N.ord(record.rang) })}</span>
       )}
     </div>
   );

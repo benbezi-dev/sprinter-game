@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Settings } from 'lucide-react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio, HAS_VIBRATION } from '@/game/engine';
@@ -36,8 +36,16 @@ function Ligne({ titre, note, children }: { titre: string; note?: string; childr
  * La roue dentee de l'accueil et la fenetre qu'elle ouvre : son, vibration,
  * langue, consentement pub et liens legaux, au meme endroit.
  */
+/** Ouvre la fenetre des parametres depuis un autre ecran (le profil). */
+export const OUVRIR_PARAMETRES = 'sprinter:parametres';
+
 export function Parametres() {
   const [ouvert, setOuvert] = useState(false);
+  useEffect(() => {
+    const ouvrir = () => setOuvert(true);
+    window.addEventListener(OUVRIR_PARAMETRES, ouvrir);
+    return () => window.removeEventListener(OUVRIR_PARAMETRES, ouvrir);
+  }, []);
   const [vibre, setVibre] = useState(vibrationActive);
   const { N, Audio_ } = SprinterApp;
   useGameStore(() => Audio_.on);
