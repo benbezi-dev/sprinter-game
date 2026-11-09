@@ -41,6 +41,7 @@ import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM, OCCULTANTS } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
+import { habillerTron, carteTron, TRON } from './salle-tron';
 import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, placesDuPublic } from './salle-3d';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
@@ -155,6 +156,7 @@ let envPalais: THREE.Texture | null = null;
 // une ville de neons — barres magenta, cyan, violettes, enseignes jaunes — cuite une fois en
 // carte d'environnement, que la laque mouillee de la piste renvoie
 let envNeon: THREE.Texture | null = null;
+let envTron: THREE.Texture | null = null;   // les reflets de la Grille (salle-tron.ts)
 let miroir: { dispose(): void } | null = null;
 function carteNeon(r: THREE.WebGLRenderer) {
   const sc = new THREE.Scene();
@@ -921,18 +923,27 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // LA SALLE : sous le toit — ni ciel, ni pelouse, ni gradins du stade ; sa propre lumiere, de jour ou de nuit
     // (le theme `salle` ne suit pas l'heure : on lit le moment du joueur, ?heure= compris)
     const nuitSalle = (globalThis as any).SprinterHeure?.moment((globalThis as any).SprinterApp?.G) === 'nuit';
+    // LA GRILLE (salle-tron.ts, 09/11 : « l'atmosphere Tron Legacy dans le stade noir ») : la salle de nuit ;
+    // ?tron=1 la force de jour, ?tron=0 rend la salle de nuit d'avant
+    const tron = Q.get('tron') === '1' || (nuitSalle && Q.get('tron') !== '0');
     const SL = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
-    scene.background = new THREE.Color(SL.fond);
-    scene.fog = new THREE.Fog(SL.brume, 110, 320);
-    hemi.color.set(SL.hemiCiel); hemi.groundColor.set(SL.hemiSol); hemi.intensity = SL.hemi;
-    soleil.color.set(SL.soleilCouleur); soleil.intensity = SL.soleil;
+    scene.background = new THREE.Color(tron ? TRON.fond : SL.fond);
+    scene.fog = tron ? new THREE.Fog(TRON.brume, 45, 230) : new THREE.Fog(SL.brume, 110, 320);
+    hemi.color.set(tron ? 0x9fe8ff : SL.hemiCiel); hemi.groundColor.set(tron ? 0x050a12 : SL.hemiSol); hemi.intensity = tron ? 0.45 : SL.hemi;
+    soleil.color.set(tron ? 0xbfefff : SL.soleilCouleur); soleil.intensity = tron ? 0.55 : SL.soleil;
     soleilDecal.set(-6, 10, 40);
-    uFoule.uLum.value = 1; uLisere.value = 0;
+    uFoule.uLum.value = tron ? 0.55 : 1; uLisere.value = tron ? 1 : 0;
+    if (tron) {
+      // les coureurs se detachent du noir par un liseré cyan, comme au stade neon
+      uLisereCoul.value.set(TRON.cyan); uLisereForce.value = 0.3; uLisereFace.value = 1;
+      if (!envTron && renderer) envTron = carteTron(renderer);
+    }
     if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
-    envCorps = envPalais;
+    envCorps = tron && envTron ? envTron : envPalais;
     eclairerLesCorps();
     const base = (import.meta as any).env?.BASE_URL || '/';
     const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle });
+    if (tron) habillerTron(salle.interieur, envTron);
     pubAnim.push(salle.animer); cameraSalle = salle.camera;
     // le public de la salle : les memes cartes que le stade (LE PUBLIC, EN CARTES)
     if (Q.get('foule') !== '0') {
