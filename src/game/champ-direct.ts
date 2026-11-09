@@ -26,6 +26,7 @@ import { brancherSalle, reinitialiserEnvoi } from './engine';
 import { lancerPresentation } from './presentation-directe';
 import { niveauDuLieu } from './champ-rejeu';
 import { chargerFiches } from './fiches-champ';
+import { EPREUVES_EN_SALLE } from './jeux';
 import {
   entrerDansLeTour, presentationAnnoncee, pistoletAnnonce, rappelSiffle,
   verdictRendu, arreterLaMusique,
@@ -296,6 +297,10 @@ export function entrerEnDirect(ed: string, phase: string, course: number,
   // trouvent rien a programmer, et la course garde sa musique ordinaire.
   if (opts.echelon === 'national' && opts.zone === 'FR') entrerDansLeTour(phase);
   else arreterLaMusique();
+  // LA COMPETITION DANS LE NOIR (l'auteur, 8/11) : au Championnat de France en salle, la serie s'eteint
+  // apres l'entree des athletes, les demies et la finale se courent deja dans le noir (course-3d.ts, tourDuChamp).
+  SprinterApp.G.champNoir = opts.echelon === 'national' && opts.zone === 'FR' && EPREUVES_EN_SALLE.includes(epreuve as any)
+    ? (phase === 'series' ? 'serie' : 'noir') : null;
   entree = { ed, phase, course };
   essaisReconnexion = 0;
   publier({ ...VIDE, ouvert: true });
@@ -497,7 +502,7 @@ export function quitterDirect(accueil = true) {
   entree = null;
   relacherLEcran();
   lien = null;
-  if (SprinterApp.G) SprinterApp.G.echauffementChamp = false;
+  if (SprinterApp.G) { SprinterApp.G.echauffementChamp = false; SprinterApp.G.champNoir = null; }
   if (salle) {
     const s = salle; salle = null;
     s.ecouter({});

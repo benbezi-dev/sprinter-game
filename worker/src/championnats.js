@@ -16,7 +16,7 @@
 import { crediter as crediterPieces, creditDuTitre } from './pieces.js';
 import {
   FORMAT, formatDe, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
-  ANNONCES, EPREUVES, EPREUVE_DEFAUT, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES,
+  ANNONCES, EPREUVES, EPREUVE_DEFAUT, epreuveParDefaut, epreuveAutorisee, CLOTURE_JOURS_AVANT, SUIVANTS_GARDES, DECALAGE_PAR_EDITION_MIN,
   TENANT, lieuDeLEdition, PHASES_A_BULLE,
 } from './championnats-config.js';
 import { serpentin, qualifier, podium, calendrier, ordonner } from './championnats-moteur.js';
@@ -464,6 +464,16 @@ export async function ensureChampTables(db) {
       `ALTER TABLE champ_editions ADD COLUMN epreuve TEXT NOT NULL DEFAULT '${EPREUVE_DEFAUT}'`
     ).run();
   } catch (e) { /* la colonne est deja la */ }
+
+  // DEUX CHAMPIONNATS LE MEME WEEKEND (08/11) : si le duel des epreuves finit a
+  // egalite, on court les deux. La seconde edition decale chaque rendez-vous
+  // (`decalage_min`) et porte un titre a son epreuve (`secondaire`).
+  for (const col of ['decalage_min INTEGER NOT NULL DEFAULT 0', 'secondaire INTEGER NOT NULL DEFAULT 0']) {
+    try { await db.prepare(`ALTER TABLE champ_editions ADD COLUMN ${col}`).run(); }
+    catch (e) { /* la colonne est deja la */ }
+  }
+  try { await db.prepare(`ALTER TABLE champ_titres ADD COLUMN epreuve TEXT`).run(); }
+  catch (e) { /* la colonne est deja la */ }
 
   // LES INVITES DE L'ORGANISATION (26/09) : des joueurs que l'organisateur
   // fait entrer dans la phase suivante, dans l'ordre. `force` = 1 : il prend
@@ -934,7 +944,7 @@ async function championsEnTitre(db, echelon, filtreZone, epreuve = EPREUVE_DEFAU
  * eux, la selection est une affirmation qu'on ne peut pas relire.
  */
 async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUVE_DEFAUT,
-                    engagesDe = null) {
+                    engagesDe = null, secondaire = false) {
   // On lit un peu plus loin que la barre : les trente-deux qui courent, et les
   // suivants qu'on garde pour l'archive de la cloture.
   const large = formatDe(epreuve).partants + SUIVANTS_GARDES;
@@ -952,7 +962,10 @@ async function pool(db, echelon, zone, maintenant = Date.now(), epreuve = EPREUV
   // son sacre n'est le tenant de rien. Il repasse par le classement comme tout
   // le monde, ce qui est le seul moyen d'empecher un titre de devenir une
   // rente que l'on touche sans rejouer.
-  const tenant = await tenantDuTitre(db, echelon, zone, maintenant);
+  // Une edition secondaire (meme weekend, autre epreuve) n'a pas de tenant :
+  // le titre en jeu se defend dans l'edition principale (l'auteur, 08/11 :
+  // le tenant au 60 m seulement).
+  const tenant = secondaire ? null : await tenantDuTitre(db, echelon, zone, maintenant);
   // Engages seulement : le tenant aussi confirme sa venue. Un champion qui ne
   // s'engage pas ne court pas, et sa place d'office ne bloque personne.
   const engages = engagesDe ? await clesEngagees(db, engagesDe) : null;
@@ -1076,8 +1089,9 @@ export async function annoncerEchelon(db, {
   // L'epreuve se valide ici et pas a la porte HTTP : `annoncerCycle` annonce
   // trente pays sans repasser par une requete, et une distance fantaisiste
   // doit etre refusee la aussi.
-  const ep = String(epreuve == null ? EPREUVE_DEFAUT : epreuve);
+  const ep = String(epreuve == null ? epreuveParDefaut(echelon, z) : epreuve);
   if (!EPREUVES.includes(ep)) return { erreur: 'epreuve inconnue', epreuve: ep };
+  if (!epreuveAutorisee(echelon, z, ep)) return { erreur: 'le championnat de France se court en salle (60 m, 200 m, 400 m)', epreuve: ep };
 
   const t = Number(debutSamedi);
   if (!Number.isFinite(t)) return { erreur: 'date de debut invalide' };
@@ -1117,11 +1131,19 @@ export async function annoncerEchelon(db, {
   // le meme pays produiraient deux champions du meme endroit, et un titre qui
   // ne veut plus rien dire. Une edition annulee, en revanche, ne bloque plus
   // rien : elle n'aura pas lieu, et le cycle suivant doit pouvoir reannoncer.
-  const deja = await db.prepare(
-    `SELECT id, debut, etat FROM champ_editions
-      WHERE echelon = ? AND zone = ? AND etat NOT IN ('terminee', 'annulee') LIMIT 1`
-  ).bind(echelon, z).first();
+  //
+  // SAUF le meme weekend sur une autre epreuve (08/11) : un duel des epreuves a
+  // egalite fait courir deux championnats. Chacun a son titre (« Champion de
+  // France du 200 m » pour la seconde), et la seconde decale tous ses
+  // rendez-vous de DECALAGE_PAR_EDITION_MIN : un joueur selectionne dans les
+  // deux ne court jamais deux courses a la meme minute.
+  const { results: dejaListe } = await db.prepare(
+    `SELECT id, debut, etat, epreuve FROM champ_editions
+      WHERE echelon = ? AND zone = ? AND etat NOT IN ('terminee', 'annulee')`
+  ).bind(echelon, z).all();
+  const deja = (dejaListe || []).find(d => d.debut !== t || (d.epreuve || EPREUVE_DEFAUT) === ep);
   if (deja) return { erreur: 'edition deja ouverte', edition: deja.id, debut: deja.debut, etat: deja.etat };
+  const rangWeekend = (dejaListe || []).length;
 
   // Un pays qui ne peut pas tenir son championnat se refuse ICI, et pas dans
   // trois jours. `annoncerCycle` ne lui donnerait jamais son tour, mais une
@@ -1161,9 +1183,10 @@ export async function annoncerEchelon(db, {
   const phase0 = formatDe(ep).phases[0];
   await db.prepare(
     `INSERT INTO champ_editions
-       (id, echelon, zone, epreuve, debut, cloture, phase, etat, cree_le, engagement)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'annoncee', ?, ?)`
-  ).bind(id, echelon, z, ep, t, ferme, phase0.cle, Date.now(), engagement ? 1 : 0).run();
+       (id, echelon, zone, epreuve, debut, cloture, phase, etat, cree_le, engagement, decalage_min, secondaire)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'annoncee', ?, ?, ?, ?)`
+  ).bind(id, echelon, z, ep, t, ferme, phase0.cle, Date.now(), engagement ? 1 : 0,
+         rangWeekend * DECALAGE_PAR_EDITION_MIN, rangWeekend ? 1 : 0).run();
 
   const nom = nomZone(z, echelon);
   await annoncer(db, {
@@ -1202,7 +1225,7 @@ export async function annoncerEchelon(db, {
 export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   await ensureChampTables(db);
   const e = await db.prepare(
-    `SELECT id, echelon, zone, epreuve, debut, cloture, etat, engagement
+    `SELECT id, echelon, zone, epreuve, debut, cloture, etat, engagement, decalage_min, secondaire
        FROM champ_editions WHERE id = ?`).bind(edition).first();
   if (!e) return { erreur: 'edition introuvable' };
   if (e.etat !== 'annoncee') return { erreur: 'edition deja cloturee', etat: e.etat };
@@ -1213,7 +1236,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
   const intitule = e.echelon === 'mondial'
     ? 'Championnat du monde' : ECHELONS[e.echelon].nom + ' ' + nom.avec;
 
-  const p = await pool(db, e.echelon, e.zone, maintenant, ep, e.engagement ? e.id : null);
+  const p = await pool(db, e.echelon, e.zone, maintenant, ep, e.engagement ? e.id : null, !!e.secondaire);
   const manque = !p.erreur && p.joueurs.length < formatDe(ep).partants;
 
   // La zone a ete annoncee et ne peut pas tenir sa grille : elle a perdu des
@@ -1384,7 +1407,7 @@ export async function cloturerSelection(db, edition, maintenant = Date.now()) {
       ? { cle: p.tenantEcarte.cle, nom: p.tenantEcarte.nom, raison: 'inactif depuis le sacre' }
       : null,
     grille: grille.map((c, i) => ({ course: i + 1, joueurs: c })),
-    calendrier: calendrierDe(e.id, e.debut),
+    calendrier: calendrierDe(e.id, e.debut, e.decalage_min),
   };
 }
 
@@ -1534,12 +1557,30 @@ export async function cloturerEcheances(db, maintenant = Date.now()) {
  * qu'il faut convaincre de jouer.
  */
 /** Le calendrier d'une edition, courses hors calendrier comprises (COURSES_EXTRA). */
-export function calendrierDe(id, debut) {
+export function calendrierDe(id, debut, decalageMin = 0) {
   const ex = COURSES_EXTRA[id];
-  if (!ex) return calendrier(debut, CALENDRIER);
-  return calendrier(debut, {
+  const cal = !ex ? calendrier(debut, CALENDRIER) : calendrier(debut, {
     jour1: [...CALENDRIER.jour1, ...ex.filter(x => x.jour !== 2)],
     jour2: [...CALENDRIER.jour2, ...ex.filter(x => x.jour === 2)],
+  });
+  const d = (Number(decalageMin) || 0) * 60_000;
+  return d ? cal.map(x => ({ ...x, at: x.at + d })) : cal;
+}
+
+/**
+ * LA SALLE NOIRE EST SECRETE JUSQU'AU CHAMPIONNAT DE FRANCE EN SALLE (l'auteur, 8/11) : elle s'ouvre a
+ * tous (?serie=1, ?finale=1) des le depart de la premiere serie, pas avant (l'auteur, 8/11). L'heure est celle du
+ * serveur et la date celle de la vraie edition : ni l'horloge du telephone ni l'adresse n'y changent rien.
+ */
+export async function salleNoireOuverte(db, maintenant = Date.now()) {
+  await ensureChampTables(db);
+  const { results } = await db.prepare(
+    `SELECT id, debut FROM champ_editions
+      WHERE echelon = 'national' AND zone = 'FR' AND epreuve IN ('60', '200s', '400s') AND etat != 'annulee'`,
+  ).all();
+  return (results || []).some(e => {
+    const s1 = calendrierDe(e.id, e.debut).find(r => r.cle === 'serie-1');
+    return !!s1 && maintenant >= s1.at;
   });
 }
 
@@ -1551,7 +1592,7 @@ export async function prochaineEdition(db, zone, echelon = 'national') {
     `SELECT id, echelon, zone, epreuve, debut, cloture, etat, engagement
        FROM champ_editions
       WHERE echelon = ? AND zone = ? AND etat IN ('annoncee', 'ouverte')
-      ORDER BY debut LIMIT 1`
+      ORDER BY debut, decalage_min LIMIT 1`
   ).bind(echelon, z).first();
   if (!e) return null;
   const nom = nomZone(e.zone, e.echelon);
@@ -1564,7 +1605,7 @@ export async function prochaineEdition(db, zone, echelon = 'national') {
     debut: e.debut, cloture: e.cloture, etat: e.etat,
     engagement: !!e.engagement,
     partants: formatDe(e.epreuve).partants,
-    calendrier: calendrierDe(e.id, e.debut),
+    calendrier: calendrierDe(e.id, e.debut, e.decalage_min),
   };
 }
 
@@ -1595,15 +1636,18 @@ export async function engager(db, nameKey, oui = true, maintenant = Date.now()) 
   if (ed.etat !== 'annoncee' || (ed.cloture != null && maintenant >= ed.cloture)) {
     return { erreur: 'selection close', code: 409 };
   }
-  if (oui) {
-    await db.prepare(
-      `INSERT OR IGNORE INTO champ_engagements (edition, name_key, le) VALUES (?, ?, ?)`
-    ).bind(ed.id, k, maintenant).run();
-  } else {
-    await db.prepare(
-      `DELETE FROM champ_engagements WHERE edition = ? AND name_key = ?`
-    ).bind(ed.id, k).run();
-  }
+  // S'engager, c'est venir le weekend : on l'est pour toutes les editions du
+  // pays annoncees ce weekend-la (deux si le duel des epreuves a fini a
+  // egalite, 08/11). Chacune selectionne ensuite a son propre classement.
+  const { results: memeWeekend } = await db.prepare(
+    `SELECT id FROM champ_editions
+      WHERE echelon = 'national' AND zone = ? AND debut = ? AND etat = 'annoncee' AND engagement = 1`
+  ).bind(ed.zone, ed.debut).all();
+  const ids = (memeWeekend || []).map(r => r.id);
+  if (!ids.includes(ed.id)) ids.push(ed.id);
+  await db.batch(ids.map(id => oui
+    ? db.prepare(`INSERT OR IGNORE INTO champ_engagements (edition, name_key, le) VALUES (?, ?, ?)`).bind(id, k, maintenant)
+    : db.prepare(`DELETE FROM champ_engagements WHERE edition = ? AND name_key = ?`).bind(id, k)));
   return rangSelection(db, k);
 }
 
@@ -1621,8 +1665,8 @@ async function courseDe(db, edition, nameKey) {
   ).bind(edition, nameKey).first();
   if (!r || r.course == null) return null;
   const e = await db.prepare(
-    `SELECT debut FROM champ_editions WHERE id = ?`).bind(edition).first();
-  const rv = calendrierDe(edition, e ? e.debut : 0)
+    `SELECT debut, decalage_min FROM champ_editions WHERE id = ?`).bind(edition).first();
+  const rv = calendrierDe(edition, e ? e.debut : 0, e ? e.decalage_min : 0)
     .find(x => x.phase === r.phase && x.course === r.course);
   return { phase: r.phase, numero: r.course, at: rv ? rv.at : null };
 }
@@ -1702,7 +1746,7 @@ export async function rangSelection(db, nameKey) {
   // trace dans un classement, et celui du 100 m ne selectionne personne pour
   // une edition du 400 m. `epreuve` voyage donc avec le rang — l'ecran ne
   // dessine la barre que dans le classement ou elle veut dire quelque chose.
-  const epSelection = (ed && ed.epreuve) || EPREUVE_DEFAUT;
+  const epSelection = (ed && ed.epreuve) || epreuveParDefaut('national', g.pays);
   const { results: tous } = await db.prepare(
     `SELECT d.name_key AS cle, g.source AS source
        FROM duel_players d JOIN player_pays g ON g.name_key = d.name_key
@@ -1880,7 +1924,7 @@ export async function poserBulle(db, { edition, phase, nom, texte }, maintenant 
     return { error: 'pas de bulle dans cette phase', code: 400 };
   }
   const e = await db.prepare(
-    `SELECT id, phase, etat, debut FROM champ_editions WHERE id = ?`).bind(id).first();
+    `SELECT id, phase, etat, debut, decalage_min FROM champ_editions WHERE id = ?`).bind(id).first();
   if (!e) return { error: 'edition introuvable', code: 404 };
   if (e.etat !== 'ouverte') return { error: 'edition fermee', code: 409 };
   if (e.phase !== phase) return { error: 'ce n est pas la phase en cours', code: 409 };
@@ -1895,7 +1939,7 @@ export async function poserBulle(db, { edition, phase, nom, texte }, maintenant 
     return { error: 'un partant fictif n a pas de bulle', code: 403 };
   }
 
-  const rv = calendrierDe(id, e.debut).find(x => x.phase === phase && x.course === p.course);
+  const rv = calendrierDe(id, e.debut, e.decalage_min).find(x => x.phase === phase && x.course === p.course);
   if (!rv) return { error: 'course hors calendrier', code: 409 };
   if (maintenant >= rv.at - BULLE_AVANT_PISTOLET_MS) {
     return { error: 'trop tard', code: 409 };
@@ -2016,19 +2060,28 @@ export function calendrierCycle(debutSamedi) {
 const VISIBLE_APRES_LA_FIN_MS = 7 * 24 * 3600 * 1000;
 
 export async function editionDe(db, nameKey, maintenant = Date.now()) {
+  return (await editionsDe(db, nameKey, maintenant))[0] || null;
+}
+
+/**
+ * Toutes ses editions visibles, la principale d'abord : un joueur selectionne
+ * dans les deux championnats du meme weekend (08/11) doit trouver les deux.
+ */
+export async function editionsDe(db, nameKey, maintenant = Date.now()) {
   await ensureChampTables(db);
   const k = String(nameKey || '').trim().toLowerCase();
-  if (!k) return null;
-  const r = await db.prepare(
-    `SELECT e.id FROM champ_editions e
+  if (!k) return [];
+  const { results } = await db.prepare(
+    `SELECT e.id, e.debut FROM champ_editions e
        JOIN champ_partants p ON p.edition = e.id
       WHERE p.name_key = ?
         AND (e.etat NOT IN ('terminee', 'annulee')
              OR COALESCE(e.fini_le, e.debut) > ?)
-      ORDER BY e.etat = 'terminee', e.debut DESC
-      LIMIT 1`
-  ).bind(k, maintenant - VISIBLE_APRES_LA_FIN_MS).first();
-  return r ? r.id : null;
+      ORDER BY e.etat = 'terminee', e.debut DESC, e.decalage_min`
+  ).bind(k, maintenant - VISIBLE_APRES_LA_FIN_MS).all();
+  // Les editions d'un meme weekend seulement : la plus recente et ses jumelles.
+  const r = results || [];
+  return r.filter(x => x.debut === r[0].debut).map(x => x.id);
 }
 
 /** L'etat complet d'une edition : ou elle en est, qui court quoi. */
@@ -2124,13 +2177,13 @@ export async function etatEdition(db, id) {
         // Il se deduit de l'edition et non de `champ_titres` : le titre du
         // tenant peut avoir ete revoque depuis, et l'ecran doit continuer a
         // dire de quoi il etait champion en entrant en lice.
-        libelle: libelleTitre(e.echelon, e.zone),
+        libelle: libelleTitre(e.echelon, e.zone, e.secondaire ? e.epreuve : null),
         cinematique: TENANT.cinematique,
         finaleDOffice: TENANT.finaleDOffice,
       };
     })(),
 
-    calendrier: calendrierDe(e.id, e.debut),
+    calendrier: calendrierDe(e.id, e.debut, e.decalage_min),
   };
 }
 
@@ -2940,7 +2993,7 @@ export async function fichesDe(db, edition, cles, avant = null) {
  * `maintenant` se passe explicitement : la mesure d'activite se prend a la
  * cloture annoncee, pas a l'instant ou le cron est passe.
  */
-export async function tenantDuTitre(db, echelon, zone, maintenant = Date.now()) {
+export async function tenantDuTitre(db, echelon, zone, maintenant = Date.now(), epreuve = null) {
   await ensureChampTables(db);
   await ensureDuelTables(db);
   const r = await db.prepare(
@@ -2951,9 +3004,10 @@ export async function tenantDuTitre(db, echelon, zone, maintenant = Date.now()) 
             COALESCE(d.wins + d.losses + d.draws, 0) AS duels
        FROM champ_titres t LEFT JOIN duel_players d ON d.name_key = t.name_key
       WHERE t.echelon = ? AND t.zone = ? AND t.expire_le > ? AND t.revoque_le IS NULL
+        AND t.epreuve IS ?
       ORDER BY t.sacre_le DESC
       LIMIT 1`
-  ).bind(echelon, String(zone || '').toUpperCase(), maintenant).first();
+  ).bind(echelon, String(zone || '').toUpperCase(), maintenant, epreuve).first();
   if (!r) return null;
 
   // « Actif depuis son sacre » se mesure sur `updated_at`, la meme colonne que
@@ -2985,14 +3039,17 @@ export async function tenantDuTitre(db, echelon, zone, maintenant = Date.now()) 
  * « Champion de {zone} » attend la forme avec preposition : de France, du
  * Maroc, des Etats-Unis. Le mondial, lui, n'a pas de zone a nommer.
  */
-export function libelleTitre(echelon, zone) {
+export function libelleTitre(echelon, zone, epreuve = null) {
   const z = nomZone(zone, echelon);
-  if (echelon === 'mondial') return ECHELONS.mondial.titre;
-  return (ECHELONS[echelon].titre || '{zone}')
-    .replace('Champion de {zone}', 'Champion ' + z.avec)
-    .replace('Champion d’{zone}', 'Champion ' + z.avec)
-    .replace('{zone}', z.nom);
+  const base = echelon === 'mondial' ? ECHELONS.mondial.titre
+    : (ECHELONS[echelon].titre || '{zone}')
+      .replace('Champion de {zone}', 'Champion ' + z.avec)
+      .replace('Champion d’{zone}', 'Champion ' + z.avec)
+      .replace('{zone}', z.nom);
+  // Le titre d'une edition secondaire nomme sa distance : « … du 200 m ».
+  return epreuve ? `${base} du ${NOM_EPREUVE[epreuve] || epreuve}` : base;
 }
+const NOM_EPREUVE = { '60': '60 m', '200s': '200 m', '400s': '400 m', '100': '100 m', '200': '200 m', '400': '400 m' };
 
 /**
  * Le titre perdu s'eteint a la seconde ou la finale s'acheve.
@@ -3043,10 +3100,11 @@ function revoquerTitre(db, id, maintenant) {
 export async function sacrer(db, edition, gagnant, finalistes = null, { test = false } = {}) {
   await ensureChampTables(db);
   const e = await db.prepare(
-    `SELECT echelon, zone FROM champ_editions WHERE id = ?`).bind(edition).first();
+    `SELECT echelon, zone, epreuve, secondaire FROM champ_editions WHERE id = ?`).bind(edition).first();
   if (!e) return { erreur: 'edition introuvable' };
 
-  const libelle = libelleTitre(e.echelon, e.zone);
+  const epTitre = e.secondaire ? (e.epreuve || EPREUVE_DEFAUT) : null;
+  const libelle = libelleTitre(e.echelon, e.zone, epTitre);
   const maintenant = Date.now();
   const expire = new Date(maintenant);
   expire.setMonth(expire.getMonth() + TITRE_MOIS);
@@ -3054,15 +3112,15 @@ export async function sacrer(db, edition, gagnant, finalistes = null, { test = f
   // Le tenant tel qu'il est A CETTE SECONDE, et non celui gele a la cloture :
   // ici la question n'est plus « qui avait des privileges ce weekend » mais
   // « qui porte le titre que l'on vient de remettre en jeu ».
-  const ancien = await tenantDuTitre(db, e.echelon, e.zone, maintenant);
+  const ancien = await tenantDuTitre(db, e.echelon, e.zone, maintenant, epTitre);
   const detrone = ancien && ancien.cle !== gagnant.cle ? ancien : null;
   const conserve = ancien && ancien.cle === gagnant.cle ? ancien : null;
 
   const ecritures = [
     db.prepare(
-      `INSERT INTO champ_titres (echelon, zone, name_key, nom, libelle, edition, sacre_le, expire_le)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    ).bind(e.echelon, e.zone, gagnant.cle, gagnant.nom, libelle, edition, maintenant, expire.getTime()),
+      `INSERT INTO champ_titres (echelon, zone, name_key, nom, libelle, edition, sacre_le, expire_le, epreuve)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).bind(e.echelon, e.zone, gagnant.cle, gagnant.nom, libelle, edition, maintenant, expire.getTime(), epTitre),
     db.prepare(
       `UPDATE champ_editions SET etat = 'terminee', champion_key = ?, champion_nom = ?, fini_le = ?
         WHERE id = ?`

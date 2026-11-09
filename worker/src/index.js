@@ -28,10 +28,10 @@ import {
   cloturerAuxHeures,
   prochaineEdition, rangSelection,
   titresDe, continentDe,
-  etatEdition, editionDe, enregistrerCourse, cloturerPhase,
+  etatEdition, editionDe, editionsDe, enregistrerCourse, cloturerPhase,
   medaillesDe, paysDe, listeNations, fichesDe,
   fluxDirect, recapMondial, tableauNations,
-  poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation,
+  poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation, salleNoireOuverte,
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
@@ -91,6 +91,7 @@ import { empreinteIp, sousLimite, quotaAtteint, noterCodeRate, purgerLimites } f
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
+import { noterVoix, tableauEpreuves } from './duel-epreuves.js';
 import { etapeConnue, noterEtape, etapeHalloweenPlausible, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
 import { PROFIL_MAX_OCTETS, donneesValides, appareilRelie, lireProfil, ecrireProfil } from './profil.js';
 import {
@@ -495,6 +496,71 @@ async function ensureChallengeTarget(db) {
   try { await db.prepare(`ALTER TABLE challenges ADD COLUMN target_device TEXT`).run(); }
   catch (e) { /* colonne deja presente */ }
   targetReady.add(db);
+}
+
+/**
+ * UN DEFI, PLUSIEURS DESTINATAIRES (09/11).
+ *
+ * `target_device` ne garde qu'un appareil ; on le laisse porter le premier —
+ * les statistiques et les anciens clients le lisent — et les autres vont ici.
+ * La boite de reception lit les deux. Un seul code pour tous : chacun court
+ * contre le meme fantome, et le compteur des defis lances ne compte qu'un defi.
+ */
+const MAX_CIBLES_DEFI = 50;
+const ciblesReady = new WeakSet();
+async function ensureChallengeCibles(db) {
+  if (ciblesReady.has(db)) return;
+  await db.prepare(`CREATE TABLE IF NOT EXISTS challenge_cibles (
+    id TEXT NOT NULL, device_id TEXT NOT NULL, PRIMARY KEY (id, device_id))`).run();
+  await db.prepare(`CREATE INDEX IF NOT EXISTS idx_challenge_cibles_device
+    ON challenge_cibles(device_id)`).run();
+  ciblesReady.add(db);
+}
+
+/**
+ * Les appareils vises par `target_score_ids` (lignes du TOP 500) et
+ * `target_names` (noms du classement des duels, qui n'ont pas d'identifiant de
+ * score). Un nom se retrouve par ses appareils relies, sinon par sa derniere
+ * ligne de score. Jamais soi-meme ; un appareil n'apparait qu'une fois.
+ */
+async function ciblesDuDefi(db, body, deviceId) {
+  const ids = (Array.isArray(body?.target_score_ids) ? body.target_score_ids : [])
+    .map(v => Math.round(Number(v))).filter(v => Number.isFinite(v) && v > 0);
+  const noms = (Array.isArray(body?.target_names) ? body.target_names : [])
+    .map(n => String(n || '').trim()).filter(Boolean);
+  const vus = new Set([deviceId]), cibles = [];
+  const ajouter = (device, nom) => {
+    if (!device || vus.has(device) || cibles.length >= MAX_CIBLES_DEFI) return;
+    vus.add(device); cibles.push({ device, nom });
+  };
+  for (const sid of [...new Set(ids)].slice(0, MAX_CIBLES_DEFI)) {
+    const row = await db.prepare(`SELECT device_id, name FROM scores WHERE rowid = ?`).bind(sid).first();
+    if (row) ajouter(row.device_id, row.name);
+  }
+  for (const nom of [...new Set(noms)].slice(0, MAX_CIBLES_DEFI)) {
+    let appareils = await appareilsDe(db, [nom]);
+    if (!appareils.length) {
+      const row = await db.prepare(
+        `SELECT device_id FROM scores WHERE name = ? COLLATE NOCASE ORDER BY rowid DESC LIMIT 1`
+      ).bind(nom).first();
+      if (row) appareils = [row.device_id];
+    }
+    for (const a of appareils) ajouter(a, nom);
+  }
+  return cibles;
+}
+
+/** Range les cibles en plus de `target_device`, et rend tous les noms joints. */
+async function poserLesCibles(db, id, target, targetName, cibles) {
+  const noms = targetName ? [targetName] : [];
+  for (const c of cibles) {
+    if (c.device !== target) {
+      await db.prepare(`INSERT OR IGNORE INTO challenge_cibles (id, device_id) VALUES (?, ?)`)
+        .bind(id, c.device).run();
+    }
+    if (c.nom && !noms.some(n => n.toLowerCase() === c.nom.toLowerCase())) noms.push(c.nom);
+  }
+  return noms;
 }
 
 /**
@@ -1826,6 +1892,12 @@ async function servir(request, env, ctx, porteur) {
       return json({ ms: Date.now() });
     }
 
+    // La salle noire : fermee tant que la premiere serie du Championnat de France en salle n'est pas partie.
+    // Hors du verrou /champ/ (canal de test) : le jour J, elle s'ouvre pour tout le monde.
+    if (url.pathname === '/salle-noire' && request.method === 'GET') {
+      return json({ ouvert: await salleNoireOuverte(env.DB) });
+    }
+
     // ------------------------------------------------------- classement
     if (url.pathname === '/leaderboard' && request.method === 'GET') {
       const race = url.searchParams.get('race');
@@ -2462,8 +2534,10 @@ async function servir(request, env, ctx, porteur) {
       // Mon championnat, s'il y en a un. Le jeu n'a que le nom du joueur.
       if (sous === 'mien' && request.method === 'GET') {
         const key = String(url.searchParams.get('name') || '').trim().toLowerCase();
-        const id = key ? await editionDe(env.DB, key) : null;
-        return json({ edition: id });
+        const ids = key ? await editionsDe(env.DB, key) : [];
+        // `edition` reste la principale pour les jeux deja installes ; `editions`
+        // les donne toutes (deux championnats le meme weekend, 08/11).
+        return json({ edition: ids[0] || null, editions: ids });
       }
 
       // L'etat d'une edition : ou elle en est, qui court quoi.
@@ -3177,6 +3251,14 @@ async function servir(request, env, ctx, porteur) {
       }
 
       return json({ error: 'route inconnue' }, 404);
+    }
+
+    // Le duel des epreuves : le tableau, ouvert ou non (le jeu decide d'afficher).
+    if (url.pathname === '/duel-epreuves' && request.method === 'GET') {
+      const deviceId = url.searchParams.get('device_id');
+      return json(await tableauEpreuves(env.DB, {
+        test: canal.test, deviceId: isValidDeviceId(deviceId) ? deviceId : null,
+      }));
     }
 
     if (url.pathname === '/nations' && request.method === 'GET') {
@@ -4228,6 +4310,11 @@ async function servir(request, env, ctx, porteur) {
           });
         } catch (e) { /* une course manquera au compte, pas a l'historique */ }
       }
+      // Le duel des epreuves (duel-epreuves.js) : une course en salle = une voix.
+      let voix = null;
+      try {
+        voix = await noterVoix(env.DB, { test: canal.test, deviceId: device_id, nameKey: cle, epreuve: race_key, at });
+      } catch (e) { /* une voix manquera, pas la course */ }
       // On borne ce qu'un appareil peut accumuler, sinon la table enfle sans
       // limite pour un historique que personne ne fera defiler jusqu'au bout.
       await env.DB.prepare(
@@ -4269,7 +4356,7 @@ async function servir(request, env, ctx, porteur) {
           await regarderClassement(canal, race_key, nom, record.ms, entries);
         })().catch(() => { /* signaler n'est jamais bloquant */ }));
       }
-      return json({ ok: true, record, nom_refuse: nomRefuse });
+      return json({ ok: true, record, nom_refuse: nomRefuse, voix });
     }
 
     // Historique : celui du nom quand il est connu — c'est ce qui suit d'un
@@ -5082,7 +5169,12 @@ async function servir(request, env, ctx, porteur) {
         if (v) { target = v.device; targetName = v.nom; }
       }
 
+      await ensureChallengeCibles(env.DB);
+      const autres = await ciblesDuDefi(env.DB, body, device_id);
+      if (!target && autres.length) { target = autres[0].device; targetName = autres[0].nom; }
+
       const id = await ecrireLeDefi(env.DB, c, { target, lance: 1 });
+      const prevenus = await poserLesCibles(env.DB, id, target, targetName, autres);
       // On enregistre le lanceur des maintenant, pour tenir son compteur de
       // defis envoyes ; il n'entrera au classement qu'une fois un duel joue.
       const lanceurKey = c.nom.trim().toLowerCase();
@@ -5093,8 +5185,10 @@ async function servir(request, env, ctx, porteur) {
       // La sonnette chez celui qui est vise. Sans elle, il ne l'apprendrait
       // qu'au prochain sondage — vingt secondes plus tard, et seulement s'il
       // se trouve sur un ecran calme.
-      if (target) ctx.waitUntil(sonnerEtPush(env, target, 'defi', canal.test));
-      return json({ id, target_name: targetName });
+      for (const d of new Set([target, ...autres.map(x => x.device)].filter(Boolean))) {
+        ctx.waitUntil(sonnerEtPush(env, d, 'defi', canal.test));
+      }
+      return json({ id, target_name: targetName, target_names: prevenus });
     }
 
     /* ------------------------------------------------------- LE DEFI DE LA CAMERA
@@ -5214,16 +5308,23 @@ async function servir(request, env, ctx, porteur) {
       ).bind(id).first();
       const nomFinal = joue ? d.owner_name : (cleanName(name) || d.owner_name);
 
+      await ensureChallengeCibles(env.DB);
+      const autres = await ciblesDuDefi(env.DB, body, device_id);
+      if (!target && autres.length) { target = autres[0].device; targetName = autres[0].nom; }
+
       await env.DB.prepare(
         `UPDATE challenges SET lance = 1, target_device = ?, owner_name = ? WHERE id = ?`
       ).bind(target, nomFinal, id).run();
+      const prevenus = await poserLesCibles(env.DB, id, target, targetName, autres);
 
       const lanceurKey = String(nomFinal || '').trim().toLowerCase();
       let races = [];
       try { races = JSON.parse(d.races || '[]'); } catch { races = []; }
       if (lanceurKey) await compterLance(env.DB, lanceurKey, nomFinal, races);
-      if (target) ctx.waitUntil(sonnerEtPush(env, target, 'defi', canal.test));
-      return json({ id, target_name: targetName });
+      for (const d of new Set([target, ...autres.map(x => x.device)].filter(Boolean))) {
+        ctx.waitUntil(sonnerEtPush(env, d, 'defi', canal.test));
+      }
+      return json({ id, target_name: targetName, target_names: prevenus });
     }
 
     if (url.pathname === '/challenge' && request.method === 'GET') {
@@ -5257,14 +5358,16 @@ async function servir(request, env, ctx, porteur) {
       if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
       await ensureChallengeTables(env.DB);
       await ensureChallengeTarget(env.DB);
+      await ensureChallengeCibles(env.DB);
       const { results } = await env.DB.prepare(
         `SELECT c.id, c.owner_name, c.races, c.level_idx, c.total_ms, c.splits, c.created_at
            FROM challenges c
-          WHERE c.target_device = ?
+          WHERE c.id IN (SELECT id FROM challenges WHERE target_device = ?
+                         UNION SELECT id FROM challenge_cibles WHERE device_id = ?)
             AND NOT EXISTS (SELECT 1 FROM challenge_attempts a
                              WHERE a.id = c.id AND a.device_id = ?)
           ORDER BY c.created_at DESC LIMIT 20`
-      ).bind(deviceId, deviceId).all();
+      ).bind(deviceId, deviceId, deviceId).all();
       return json({
         defis: (results || []).map(r => ({
           id: r.id, owner_name: r.owner_name, races: JSON.parse(r.races),

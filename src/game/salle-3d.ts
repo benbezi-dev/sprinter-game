@@ -144,6 +144,48 @@ function toile(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: n
   t.anisotropy = 16;
   return t;
 }
+/**
+ * LE LOGO BENBEZI EN TUBES DE NEON, tire de l'image du jeu (public/pubs/benbezi-logo-3d.webp, 1400 x 162, transparente) :
+ * le contour de chaque lettre devient un tube — l'interieur des lettres moins leur erosion de 7 px —, puis trois passes :
+ * une lueur bleue large, une lueur claire serree, le coeur blanc. Sur fond noir, pour un melange additif. La texture
+ * existe tout de suite (vide) et se remplit quand l'image arrive.
+ */
+function logoEnNeon(base: string) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 4;
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  const img = new Image();
+  img.onload = () => {
+    const P = 64, w = img.naturalWidth + 2 * P, h = img.naturalHeight + 2 * P, R = 7;
+    const a = document.createElement('canvas'); a.width = w; a.height = h;
+    const ca = a.getContext('2d')!; ca.drawImage(img, P, P);
+    const px = ca.getImageData(0, 0, w, h).data, dedans = new Uint8Array(w * h);
+    for (let i = 0; i < w * h; i++) dedans[i] = px[i * 4 + 3] > 110 ? 1 : 0;
+    // l'erosion, en deux passes (le minimum sur 2R+1 pixels, en ligne puis en colonne)
+    const tmp = new Uint8Array(w * h), ero = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let m = 1; for (let k = -R; k <= R && m; k++) { const xx = x + k; m = xx >= 0 && xx < w ? dedans[y * w + xx] : 0; } tmp[y * w + x] = m;
+    }
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      let m = 1; for (let k = -R; k <= R && m; k++) { const yy = y + k; m = yy >= 0 && yy < h ? tmp[yy * w + x] : 0; } ero[y * w + x] = m;
+    }
+    const tube = (r: number, g: number, b: number) => {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const x = c.getContext('2d')!, d = x.createImageData(w, h);
+      for (let i = 0; i < w * h; i++) if (dedans[i] && !ero[i]) { d.data[i * 4] = r; d.data[i * 4 + 1] = g; d.data[i * 4 + 2] = b; d.data[i * 4 + 3] = 255; }
+      x.putImageData(d, 0, 0); return c;
+    };
+    cv.width = w; cv.height = h;
+    const c = cv.getContext('2d')!;
+    c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
+    c.globalCompositeOperation = 'lighter';
+    c.shadowColor = 'rgba(70,130,255,1)'; c.shadowBlur = 44; c.drawImage(tube(40, 90, 255), 0, 0); c.drawImage(tube(40, 90, 255), 0, 0);
+    c.shadowColor = 'rgba(170,205,255,1)'; c.shadowBlur = 14; c.drawImage(tube(140, 185, 255), 0, 0);
+    c.shadowBlur = 0; c.drawImage(tube(255, 255, 255), 0, 0);
+    t.needsUpdate = true;
+  };
+  img.src = base + 'pubs/benbezi-logo-3d.webp';
+  return t;
+}
 /** Un tirage fixe : la salle est la meme a chaque course. */
 function tirage(graine: number) { let a = graine; return () => ((a = (a * 16807) % 2147483647) / 2147483647); }
 
@@ -327,14 +369,21 @@ export function creuserTapis(creux: { y: number; p: number }[]) {
   }
   pos.needsUpdate = true; teinte.needsUpdate = true; geo.computeVertexNormals();
 }
-export type ContexteSalle = { stade: THREE.Group; renderer: THREE.WebGLRenderer | null; base: string; nuit?: boolean };
+/** Les fleches LED de la finale (leur defilement : animer). */
+let flecheLED: THREE.Texture | null = null, degradeLED: THREE.Texture | null = null, balayageLED: THREE.Texture | null = null;
+/** Les chevrons et le degrade avancent ensemble, a VITESSE_F m/s ; un cycle bleu-blanc-rouge fait PERIODE_F metres. */
+const PAS_F = 1.6, PERIODE_F = 6, VITESSE_F = 3.2, BALAYAGE_F = 12, VITESSE_BALAYAGE = 9;
+/** Leurs matieres, couloir par couloir (fleches : les eteindre le temps qu'un nom s'ecrive dans le couloir). */
+const flechesCouloir: THREE.Material[][] = [];
+/** `droite` : la course est le 60 m de la ligne droite (sinon l'anneau) — en finale, l'autre piste porte le drapeau. */
+export type ContexteSalle = { stade: THREE.Group; renderer: THREE.WebGLRenderer | null; base: string; nuit?: boolean; finale?: boolean; droite?: boolean };
 
 /**
  * Construire la salle dans `stade`. Rend l'animation de la salle (rien a animer pour
  * l'instant) ; course-3d.ts regle lui-meme le ciel, la brume et les lumieres d'apres SALLE_LUMIERE.
  */
 export function construireSalle(ctx: ContexteSalle) {
-  sieges3.length = 0;
+  sieges3.length = 0; flecheLED = degradeLED = balayageLED = null; flechesCouloir.length = 0;
   const parametres = typeof location !== 'undefined' ? new URLSearchParams(location.search) : new URLSearchParams();
   const exporter = parametres.has('exporterSalle');
   // LES TEXTURES PHOTO (« apporte des textures pour augmenter le realisme », l'auteur, 26/10) :
@@ -368,8 +417,43 @@ export function construireSalle(ctx: ContexteSalle) {
   const BLEU = [56, 100, 166], ANTHRACITE = [74, 74, 79], PLATEAU = [168, 163, 154], BLANC = [244, 245, 246];
   const bleu = matRevetement(BLEU, 11, 1), anthracite = matRevetement(ANTHRACITE, 23, 1);
   const plateau = matRevetement(PLATEAU, 37, 1);
+  // LA COMPETITION DANS LE NOIR (Championnat de France du 19/12, l'auteur, 7/11 puis 8/11 : « toute la competition se
+  // deroulera dans le noir ») : la salle s'eteint, les lignes blanches deviennent la lumiere — elles brillent d'elles-
+  // memes (emissive, reglee par `eteindre`), et les couloirs ont leurs neons, plus bas
   const ligne = new THREE.MeshStandardMaterial({ color: new THREE.Color().setRGB(0.93, 0.94, 0.95), roughness: 0.6 });
+  if (ctx.finale) { ligne.emissive.setRGB(1, 1, 1); ligne.emissiveIntensity = 0; ligne.userData.emissif = 1; }
   ligne.polygonOffset = true; ligne.polygonOffsetFactor = -2; ligne.polygonOffsetUnits = -4;
+  // DE VRAIS NEONS (l'auteur, 8/11) : chaque ligne devient un tube — un coeur blanc brulant, sa couleur au bord du
+  // tube, puis une lueur qui s'eteint sur la piste. Une bande additive de NEON_L de large, peinte en travers (v en metres).
+  // La piste qu'on ne court pas porte le drapeau : ses neons bleu, blanc, rouge, du premier couloir au dernier.
+  const NEON_L = 0.36;
+  const neons = new Map<string, THREE.MeshBasicMaterial>();
+  const neon = (coeur: number[], lueur: number[]) => {
+    const cle = coeur.join() + lueur.join();
+    let m = neons.get(cle);
+    if (m) return m;
+    const t = toile(4, 128, (c, w, h) => {
+      const tube = (LIGNE / 2) / (NEON_L / 2);
+      for (let y = 0; y < h; y++) {
+        const d = Math.abs(y + 0.5 - h / 2) / (h / 2);
+        let col: number[];
+        if (d < tube) { const k = (d / tube) ** 2 * 0.65; col = coeur.map((v, i) => v + (lueur[i] - v) * k); }
+        else { const e = d - tube, a = 0.6 * Math.exp(-((e / 0.2) ** 2)) + 0.14 * Math.exp(-((e / 0.55) ** 2)); col = lueur.map(v => v * a); }
+        c.fillStyle = `rgb(${col.map(v => Math.round(Math.min(255, v))).join(',')})`; c.fillRect(0, y, w, 1);
+      }
+    });
+    t.repeat.set(1, 1 / NEON_L); t.anisotropy = 4;
+    m = new THREE.MeshBasicMaterial({ map: t, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    m.polygonOffset = true; m.polygonOffsetFactor = -3; m.polygonOffsetUnits = -6;
+    m.userData.neon = 1;
+    neons.set(cle, m);
+    return m;
+  };
+  const NEON_FROID = () => neon([255, 255, 255], [140, 196, 255]);
+  const drapeau = (k: number, n: number) => {
+    const f = (k + 0.5) / n;
+    return f < 1 / 3 ? neon([225, 233, 255], [30, 80, 255]) : f < 2 / 3 ? neon([255, 255, 255], [232, 238, 255]) : neon([255, 228, 228], [255, 26, 46]);
+  };
   for (const m of [bleu, anthracite]) { m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -2; }
   // les textures de revetement sont en metres : une tuile pour 1,6 m
   for (const m of [bleu, anthracite, plateau]) { m.map!.repeat.set(1 / 1.6, 1 / 1.6); m.normalMap!.repeat.set(1 / 1.6, 1 / 1.6); }
@@ -404,6 +488,8 @@ export function construireSalle(ctx: ContexteSalle) {
   // L'ANNEAU : six couloirs alternes, et une bande d'anthracite derriere le sixieme jusqu'au muret
   for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? tartanAnthracite : tartanBleu, true, 'sol');
   for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - LIGNE / 2, RS + k * CW + LIGNE / 2, 0.008), ligne, false, 'sol');
+  // (en competition, le tube de neon par-dessus : il s'allume quand la salle s'eteint)
+  if (ctx.finale) for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - NEON_L / 2, RS + k * CW + NEON_L / 2, 0.009), ctx.droite ? drapeau(k, NC + 1) : NEON_FROID(), false);
   // la corde : une lisse blanche en saillie au bord interieur
   ajouter(murAnneau(RS - 0.06, () => 0, () => 0.05), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.5 }), false);
 
@@ -423,6 +509,12 @@ export function construireSalle(ctx: ContexteSalle) {
   };
   for (let k = 0; k < NC_DROITE; k++) entreLesVirages(yD + k * CW_DROITE, yD + (k + 1) * CW_DROITE, 0.004, k % 2 ? tartanAnthracite : tartanBleu);
   for (let k = 0; k <= NC_DROITE; k++) { const y = yD + k * CW_DROITE; entreLesVirages(y - LIGNE / 2, y + LIGNE / 2, 0.008, ligne, ''); }
+  if (ctx.finale) for (let k = 0; k <= NC_DROITE; k++) {
+    const y = yD + k * CW_DROITE, m = entreLesVirages(y - NEON_L / 2, y + NEON_L / 2, 0.009, ctx.droite ? NEON_FROID() : drapeau(k, NC_DROITE + 1), '');
+    // (les UV de ShapeGeometry sont x, y du monde : v recale sur le bord de la bande)
+    const uv = m.geometry.getAttribute('uv') as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) - (y - NEON_L / 2));
+  }
   /** Un trait blanc en travers du plateau, a plat. */
   const traitPlat = (x: number, y: number, lx: number, ly: number, mat: THREE.Material = ligne, z = 0.009) => {
     const m = ajouter(new THREE.PlaneGeometry(lx, ly), mat, false); m.position.set(x, y, z); return m;
@@ -492,6 +584,106 @@ export function construireSalle(ctx: ContexteSalle) {
   // LA LIGNE DE RABATTEMENT DU 400 M, a la sortie du second virage, au debut de la ligne droite d'arrivee
   // (piste-salle.js, rabattement) : verte, comme la decrit la source de l'auteur (27/10)
   traitPlat(-S, W / 2, 0.05, W, new THREE.MeshBasicMaterial({ color: new THREE.Color().setRGB(0.12, 0.62, 0.30, THREE.SRGBColorSpace), polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 }));
+
+  // LES FLECHES D'ACCELERATION (l'auteur, 8/11 : « comme dans Mario Kart, en LED, aucun effet sur la course ») : sur
+  // les 15 premiers et les 15 derniers metres de chaque virage (8/11), dans chaque couloir, des chevrons de LED rouges
+  // qui defilent dans le sens de la course. Pur decor : le moteur n'en sait rien.
+  // (8/11, « pas top », une image de reference — une direction, pas un modele —, « bleu blanc et rouge », « un degrade
+  // en couleur », puis « les LED finissent en fondu, pas sec ; mieux sur l'effet LED / projection mapping ») : DE LA
+  // LUMIERE PROJETEE SUR LA PISTE, sans cadre. Un fond en degrade bleu, blanc, rouge dans le sens de la course, qui
+  // s'allume sur le tartan (additif : le grain de la piste reste dessous) et s'eteint en fondu sur 3 m a chaque bout
+  // et sur les bords du couloir ; par-dessus, des chevrons de LED blanches dans leur halo, suivis d'une trainee, qui
+  // defilent vers l'avant (animer), avec le degrade.
+  // QUALITE PREMIUM (l'auteur, 8/11) : des LED deux fois plus fines (3 cm), un halo large et doux autour du chevron, une
+  // trainee plus longue, un degrade sans palier, et un BALAYAGE — une vague de lumiere blanche qui court plus vite que les
+  // fleches, tous les 12 m — ; le fondu en travers du couloir sur six rangs au lieu de quatre.
+  if (ctx.finale) {
+    const LONG_F = 15, FONDU = 3;
+    flecheLED = toile(512, 256, (c, w, h) => {
+      c.fillStyle = '#000'; c.fillRect(0, 0, w, h);
+      c.globalCompositeOperation = 'lighter';
+      // (d : la distance derriere le bord avant du chevron, le long de la course ; la pointe vers u croissant)
+      const d = (x: number, y: number) => 0.84 - 0.56 * Math.abs((y / h) * 2 - 1) - x / w;
+      const point = (x: number, y: number, r: number, stops: [number, string][]) => {
+        for (const dx of [-w, 0, w]) {   // (repete de part et d'autre : la tuile se raccorde sans couture)
+          const g = c.createRadialGradient(x + dx, y, 0, x + dx, y, r);
+          for (const [o, col] of stops) g.addColorStop(o, col);
+          c.fillStyle = g; c.fillRect(x + dx - r, y - r, 2 * r, 2 * r);
+        }
+      };
+      const pas = 10;
+      for (let y = pas / 2; y < h; y += pas) for (let x = pas / 2; x < w; x += pas) {
+        const v = Math.abs((y / h) * 2 - 1), e = d(x, y);
+        if (v > 0.88) continue;
+        if (e >= 0 && e < 0.16) {
+          // le halo projete, large et doux ; puis la LED, un coeur net et sa couronne
+          point(x, y, 24, [[0, 'rgba(150,185,255,0.10)'], [0.5, 'rgba(150,185,255,0.04)'], [1, 'rgba(150,185,255,0)']]);
+          point(x, y, 5.2, [[0, 'rgba(255,255,255,1)'], [0.35, 'rgba(255,255,255,1)'], [0.7, 'rgba(215,228,255,0.6)'], [1, 'rgba(215,228,255,0)']]);
+        } else if (e >= 0.16 && e < 0.62) {
+          // la trainee : des LED de plus en plus faibles
+          const k = (1 - (e - 0.16) / 0.46) ** 2.2 * 0.6;
+          point(x, y, 5, [[0, `rgba(235,242,255,${k})`], [0.5, `rgba(235,242,255,${k * 0.6})`], [1, 'rgba(235,242,255,0)']]);
+        }
+      }
+    });
+    flecheLED.wrapT = THREE.ClampToEdgeWrapping; flecheLED.anisotropy = 16;
+    const lumiere = (map: THREE.Texture | null, decale: number) => {
+      const m = new THREE.MeshBasicMaterial({ map, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+      m.polygonOffset = true; m.polygonOffsetFactor = -decale; m.polygonOffsetUnits = -2 * decale;
+      return m;
+    };
+    // LE DEGRADE DEFILE (« bleu > blanc > rouge > bleu en continu », l'auteur, 8/11) : un cycle de PERIODE_F metres,
+    // sans couture, qui avance avec les chevrons (animer) ; la nappe ne porte plus que son fondu
+    degradeLED = toile(1024, 4, (c, w, h) => {
+      const g = c.createLinearGradient(0, 0, w, 0);
+      g.addColorStop(0, 'rgb(26,77,255)'); g.addColorStop(1 / 3, 'rgb(199,204,219)');
+      g.addColorStop(2 / 3, 'rgb(255,26,43)'); g.addColorStop(1, 'rgb(26,77,255)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    });
+    degradeLED.repeat.set(PAS_F / PERIODE_F, 1); degradeLED.anisotropy = 16;
+    // le balayage : une vague blanche, douce, une fois par BALAYAGE_F metres
+    balayageLED = toile(512, 4, (c, w, h) => {
+      const g = c.createLinearGradient(0, 0, w, 0);
+      g.addColorStop(0, 'rgb(0,0,0)'); g.addColorStop(0.40, 'rgb(0,0,0)'); g.addColorStop(0.47, 'rgb(90,100,120)');
+      g.addColorStop(0.5, 'rgb(255,255,255)'); g.addColorStop(0.53, 'rgb(90,100,120)'); g.addColorStop(0.6, 'rgb(0,0,0)'); g.addColorStop(1, 'rgb(0,0,0)');
+      c.fillStyle = g; c.fillRect(0, 0, w, h);
+    });
+    balayageLED.repeat.set(PAS_F / BALAYAGE_F, 1);
+    // le fondu : aux deux bouts (FONDU metres) et sur les bords du couloir
+    const bout = (u: number) => lisse(0, FONDU, Math.min(u, LONG_F - u));
+    const TRAVERS: [number, number][] = [[0, 0], [0.1, 0.55], [0.24, 1], [0.76, 1], [0.9, 0.55], [1, 0]];   // (position en travers, intensite)
+    /** Une nappe de lumiere dans un couloir, de u0 sur LONG_F metres, entre r0 et r1 ; `teinte` : sa couleur a t (0..1). */
+    const nappe = (rm: number, u0: number, r0: number, r1: number, dz: number, mat: THREE.Material, teinte: (t: number) => THREE.Color, force: number) => {
+      const pos: number[] = [], uv: number[] = [], col: number[] = [], idx: number[] = [], n = Math.ceil(LONG_F / 0.25), R = TRAVERS.length;
+      for (let i = 0; i <= n; i++) {
+        const s = LONG_F * i / n, c = teinte(i / n), f = bout(s) * force;
+        for (const [v, a] of TRAVERS) {
+          const p = surAnneau(u0 + s, rm, r0 + (r1 - r0) * v);
+          pos.push(p.x, p.y, zSol(p.x, p.y) + dz); uv.push((u0 + s) / PAS_F, v);
+          col.push(c.r * f * a, c.g * f * a, c.b * f * a);
+        }
+        if (i) for (let j = 0; j < R - 1; j++) { const q = i * R + j, p0 = q - R; idx.push(p0, q, p0 + 1, p0 + 1, q, q + 1); }
+      }
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+      geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+      geo.setIndex(idx);
+      ajouter(geo, mat, false);
+    };
+    const blanc = () => new THREE.Color(1, 1, 1);
+    // (une paire de matieres par couloir : le nom presente dans un couloir y eteint la lumiere, voir `fleches`)
+    for (let k = 0; k < NC; k++) {
+      const rm = RS + k * CW + (k ? SALLE.mesN : SALLE.mes1), arc = SALLE.longueurVirage(rm - RS), r0 = RS + k * CW + 0.06, r1 = RS + (k + 1) * CW - 0.06;
+      const ecran = lumiere(flecheLED, 6), fond = lumiere(degradeLED, 4), vague = lumiere(balayageLED, 5);
+      flechesCouloir[k] = [ecran, fond, vague];
+      for (const u0 of [0, arc - LONG_F, arc + S, 2 * arc + S - LONG_F]) {
+        nappe(rm, u0, r0, r1, 0.014, fond, blanc, 0.8);      // le degrade, qui defile
+        nappe(rm, u0, r0, r1, 0.015, vague, blanc, 0.45);    // le balayage, plus rapide
+        nappe(rm, u0, r0, r1, 0.016, ecran, blanc, 1);       // les chevrons, qui defilent
+      }
+    }
+  }
 
   // LES AIRES DE CONCOURS, au plateau, d'apres le plan, cotes relevees depuis le milieu de la salle
   // (« tapis de perche et couloir d'elan, bac de saut en longueur et triple, les tapis de saut en
@@ -611,17 +803,40 @@ export function construireSalle(ctx: ContexteSalle) {
     // (le bleu mesure sur la photo 0661 : rgb(61, 141, 185))
     const mousse = new THREE.MeshStandardMaterial({ color: 0x3d8db9, roughness: 0.9 });
     // (sans sa face avant : c'est la toile, souple, qui s'enfonce au choc ; voir creuserTapis)
+    // LA FINALE : le tapis reste visible dans le noir (l'auteur, 8/11) — une toile eclairee comme un caisson, le nom
+    // de la ville en neon, et un cadre de neon autour
+    // (en competition : la mousse s'eclaire d'un bleu sourd, la toile d'elle-meme — `eteindre` les allume)
+    if (ctx.finale) { mousse.emissive.setRGB(0.10, 0.30, 0.45, THREE.SRGBColorSpace); mousse.emissiveIntensity = 0; mousse.userData.emissif = 1; }
     const corps = ajouter(new THREE.BoxGeometry(EP, 10, hT), [mousse, new THREE.MeshBasicMaterial({ visible: false }), mousse, mousse, mousse, mousse] as any); corps.position.set(xf + EP / 2, -RS, base + hT / 2);
-    const toileTapis = new THREE.MeshStandardMaterial({ roughness: 0.85, vertexColors: true, map: toile(1024, 460, (c, w, h) => {
+    const peindreTapis = (neon: boolean) => toile(1024, 460, (c, w, h) => {
       c.fillStyle = '#3d8db9'; c.fillRect(0, 0, w, h);
       c.fillStyle = '#ffffff'; c.textAlign = 'center';
+      if (neon) { c.shadowColor = '#bfe6ff'; c.shadowBlur = 14; }
       for (let k = 0; k < 3; k++) {
         const x = w * (k + 0.5) / 3;
         c.font = '700 22px system-ui, sans-serif'; c.fillText('NATURELLEMENT', x, 74);
         c.font = '900 40px system-ui, sans-serif'; c.fillText('VAL DE REUIL', x, 124);
+        if (neon) c.fillText('VAL DE REUIL', x, 124);   // (deux passes : le halo du neon s'epaissit)
         c.beginPath(); c.moveTo(x - 46, 160); c.lineTo(x + 46, 160); c.lineTo(x, 236); c.closePath(); c.fill();
       }
-    }) });
+    });
+    const toileTapis = new THREE.MeshStandardMaterial({ roughness: 0.85, vertexColors: true, map: peindreTapis(false) });
+    if (ctx.finale) { toileTapis.emissiveMap = peindreTapis(true); toileTapis.emissive.setRGB(1, 1, 1); toileTapis.emissiveIntensity = 0; toileTapis.userData.emissif = 0.85; }
+    if (ctx.finale) {
+      // le cadre : quatre tubes dans le plan de la toile, a 0,15 m de son bord
+      const cadre = NEON_FROID(), xc = xf - 0.04, zc = base + hT / 2;
+      const tube = (long: number, y: number, z: number, vertical: boolean) => {
+        const p = new THREE.PlaneGeometry(long, NEON_L), uv = p.getAttribute('uv') as THREE.BufferAttribute;
+        for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * NEON_L);
+        const m = ajouter(p, cadre, false); m.position.set(xc, y, z);
+        m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(
+          vertical ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(0, 1, 0),
+          vertical ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1),
+          new THREE.Vector3(vertical ? -1 : 1, 0, 0)));
+      };
+      tube(10.3, -RS, base + hT + 0.15, false); tube(10.3, -RS, base + 0.06, false);
+      tube(hT + 0.3, -RS - 5.15, zc, true); tube(hT + 0.3, -RS + 5.15, zc, true);
+    }
     const face = ajouter(new THREE.PlaneGeometry(10, hT, 50, 24), toileTapis, false);
     face.geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(face.geometry.attributes.position.count * 3).fill(1), 3));
     toileDuTapis = { geo: face.geometry, base: hT / 2 };
@@ -897,6 +1112,30 @@ export function construireSalle(ctx: ContexteSalle) {
     // (scale.x = -1 : le monde de la course est en miroir, voir les panneaux de course-3d.ts)
     f.position.x -= 0.05; f.scale.x = -1; delete f.userData.lumiere;
   }
+  // L'ECRAN GEANT (l'auteur, 8/11 : « un ecran geant pour lancer de la publicite ») : sur le pignon du tapis, au bout de la
+  // ligne droite du 60 m — la ou regarde la camera de course —, 10,8 x 5,4 m (le format 2:1 du film de promotion), dans
+  // un cadre noir. course-3d.ts y passe le film, puis la campagne en cours ou le logo (salle.ecranGeant).
+  const H_ECRAN = 5.4, L_ECRAN = 10.8, Z_ECRAN = 5.4;
+  const ecranGeant = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  {
+    const cadre = paroi(X1 - 0.3, -RS, Z_ECRAN - 0.25, Z_ECRAN + H_ECRAN + 0.25, L_ECRAN + 0.5, 'x-', new THREE.MeshBasicMaterial({ color: 0x08090c }));
+    delete cadre.userData.lumiere;
+    const e = paroi(X1 - 0.35, -RS, Z_ECRAN, Z_ECRAN + H_ECRAN, L_ECRAN, 'x-', ecranGeant);
+    e.scale.x = -1; delete e.userData.lumiere;   // (le monde est en miroir : l'image se lit droit)
+  }
+  // LE LOGO BENBEZI EN NEON (l'auteur, 8/11 : « le logo deja present dans le jeu, en neon ») : le contour de ses lettres
+  // en tubes (logoEnNeon), au-dessus de l'ecran geant et en grand sur le pignon d'en face. En competition seulement ; il
+  // s'allume avec les autres neons (`eteindre`).
+  if (ctx.finale) {
+    const neonLogo = new THREE.MeshBasicMaterial({ map: logoEnNeon(ctx.base), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false });
+    neonLogo.userData.neon = 1;
+    const RAPPORT = 1528 / 290;   // (l'image de logoEnNeon : 1528 x 290)
+    for (const [x, y, z, l, face] of [[X1 - 0.4, -RS, Z_ECRAN + H_ECRAN + 0.08, 8.0, 'x-'],   // (sous le plafond, a 12,5 m)
+                                          [X0 + 0.15, Y0 + 0.27 * LY, 5.6, 16, 'x+']] as const) {
+      const m = paroi(x, y, z, z + l / RAPPORT, l, face, neonLogo);
+      m.scale.x = -1; delete m.userData.lumiere;
+    }
+  }
   // les grandes banderoles bleu ciel suspendues devant le grand vitrage
   for (const a of [0.36, 0.62]) {
     const m = ajouter(new THREE.PlaneGeometry(5, 5.5), matBandeVille(), false);
@@ -979,6 +1218,7 @@ export function construireSalle(ctx: ContexteSalle) {
         neuf = coque
           ? new THREE.MeshBasicMaterial({ map: ancien.map, color: ancien.color, side: ancien.side, lightMap: t, lightMapIntensity: LUMIERE_COQUE })
           : Object.assign(ancien.clone(), { lightMap: t, lightMapIntensity: LUMIERE_SOL });
+        neuf.userData.cuite = (neuf as THREE.MeshBasicMaterial).lightMapIntensity;   // (sa pleine lumiere : `eteindre` la baisse)
         deja.set(ancien, neuf);
       }
       m.material = neuf;
@@ -1021,10 +1261,52 @@ export function construireSalle(ctx: ContexteSalle) {
     gl.scene.scale.x *= L / 103.34; gl.scene.scale.y *= LY / 58;
     dehors.add(gl.scene);
   }, undefined, () => { /* sans exterieur : le survol montre l'interieur */ });
+  // les matieres que `eteindre` regle, relevees une fois (la salle compte des milliers de maillages)
+  const materiaux = { cuites: new Set<THREE.Material>(), emissifs: new Set<THREE.Material>(), neons: new Set<THREE.Material>() };
+  g.traverse((o: any) => {
+    for (const m of (Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) as THREE.Material[]) {
+      if (m.userData.cuite != null) materiaux.cuites.add(m);
+      if (m.userData.emissif != null) materiaux.emissifs.add(m);
+      if (m.userData.neon) materiaux.neons.add(m);
+    }
+  });
+  let neonsAllumes = 1;
+  const voileCouloir: number[] = [];
   return {
     /** L'interieur (la foule s'y range aussi : cachee avec lui quand on survole dehors). */
     interieur: g,
-    animer: (_t: number) => { /* rien ne bouge encore */ },
+    /** L'ecran geant : sa matiere, dont course-3d.ts change l'image (le film, la campagne, le logo). */
+    ecranGeant,
+    // (les chevrons avancent dans le sens de la course : deux fleches par seconde, 3,2 m/s)
+    animer: (t: number) => {
+      if (flecheLED) flecheLED.offset.x = -t * VITESSE_F / PAS_F;
+      if (degradeLED) degradeLED.offset.x = -t * VITESSE_F / PERIODE_F;
+      if (balayageLED) balayageLED.offset.x = -t * VITESSE_BALAYAGE / BALAYAGE_F;
+    },
+    /** La lumiere des fleches du couloir k, de 0 (eteinte : un nom s'y ecrit) a 1. */
+    fleches: (k: number, a: number) => { voileCouloir[k] = a; for (const m of flechesCouloir[k] || []) m.opacity = a * neonsAllumes; },
+    /** LE FAUX DEPART : les tubes des lignes virent au rouge, de 0 (leur couleur) a 1 (rouge vif). */
+    alerte: (k: number) => {
+      for (const m of neons.values()) m.color.setRGB(1, 1 - 0.97 * k, 1 - 0.97 * k);
+      // (les traits blancs qui brillent sont emissifs : leur couleur d'origine est gardee pour y revenir)
+      for (const m of materiaux.emissifs as Set<THREE.MeshStandardMaterial>) {
+        const b: THREE.Color = m.userData.emissiveBase ??= m.emissive.clone();
+        m.emissive.setRGB(b.r + (1 - b.r) * k, b.g * (1 - 0.97 * k), b.b * (1 - 0.97 * k));
+      }
+    },
+    /**
+     * ETEINDRE LA SALLE (la competition dans le noir) : `lumiere` de 1 (la salle allumee) a 0 (eteinte : on devine
+     * encore la charpente et les gradins, 7 % de la lumiere cuite), `neons` de 0 a 1 (les tubes des couloirs, les
+     * fleches, les logos, le tapis et les traits blancs qui brillent). course-3d.ts regle le ciel et les lumieres.
+     */
+    eteindre: (lumiere: number, neons: number) => {
+      const lm = 0.07 + 0.93 * lumiere;
+      for (const m of materiaux.cuites) (m as any).lightMapIntensity = m.userData.cuite * lm;
+      for (const m of materiaux.emissifs) (m as THREE.MeshStandardMaterial).emissiveIntensity = m.userData.emissif * neons;
+      for (const m of materiaux.neons) m.opacity = neons;
+      neonsAllumes = neons;
+      flechesCouloir.forEach((l, k) => { for (const m of l) m.opacity = (voileCouloir[k] ?? 1) * neons; });
+    },
     /**
      * Ou est la camera (repere du stade) : la charpente se cache au-dessus du toit (le plan venu
      * du 2D) ; l'exterieur ne se montre qu'au survol, la camera hors de la halle.
@@ -1174,4 +1456,6 @@ function exporterPourBlender(g: THREE.Object3D) {
 /** Les lumieres de la salle : un jour d'hiver par les vitres, les plafonniers, aucune ombre dure. */
 export const SALLE_LUMIERE = { fond: 0xdde4ec, brume: 0xd4dce6, hemiCiel: 0xf4f7ff, hemiSol: 0x8a8478, hemi: 1.55, soleil: 1.25, soleilCouleur: 0xfff6ea };
 /** La nuit (28/10, la video du club : « lumiere de jour et de nuit ») : le noir derriere les vitres, les plafonniers seuls. */
+/** La finale dans le noir : presque rien, une lueur froide pour garder le public visible. */
+export const SALLE_FINALE = { fond: 0x010206, brume: 0x010206, hemiCiel: 0x5a6a9a, hemiSol: 0x05060c, hemi: 0.45, soleil: 0.12, soleilCouleur: 0x8a9acc };
 export const SALLE_NUIT = { fond: 0x05080f, brume: 0x0a0e18, hemiCiel: 0xfff1dc, hemiSol: 0x2a2620, hemi: 1.0, soleil: 0.9, soleilCouleur: 0xfff0d8 };

@@ -40,6 +40,7 @@
 
 import { SprinterApp } from './engine';
 import { HALLOWEEN_OUVERT, EST_TEST } from './canal';
+import { vibrationActive } from './reglages';
 import {
   lire as lireLeCarnet, ecrire as ecrireLeCarnet, tenir, mordre,
   CLE_JOUEUR, CLE_TESTEUR, type Carnet as CarnetRange, type Rangement,
@@ -298,7 +299,7 @@ function poserLeDepart(nuit: Nuit) {
       if (chasse) chasse.yeux = 1;
       if (!secoussesPermises()) return;
       G.shake = 0.9;
-      try { navigator.vibrate?.([60, 40, 120]); } catch { /* sans vibreur */ }
+      if (vibrationActive()) try { navigator.vibrate?.([60, 40, 120]); } catch { /* sans vibreur */ }
     },
   };
 }

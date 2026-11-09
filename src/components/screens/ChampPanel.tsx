@@ -16,7 +16,7 @@ import { DefiDemieSpectateur } from './DefiDemie';
  * vrais chronos. Il ne voit que cette carte, et seulement a ce moment-la.
  */
 export function ChampPanel() {
-  const [edition, setEdition] = useState<string | null>(null);
+  const [editions, setEditions] = useState<string[]>([]);
   const [dehors, setDehors] = useState(false);
 
   useEffect(() => {
@@ -25,13 +25,15 @@ export function ChampPanel() {
     if (!nom) { setDehors(true); return; }
     monEdition(nom).then(r => {
       if (!vivant) return;
-      if (r?.edition) setEdition(r.edition);
+      const ids = r?.editions?.length ? r.editions : r?.edition ? [r.edition] : [];
+      if (ids.length) setEditions(ids);
       else if (r) setDehors(true);
     });
     return () => { vivant = false; };
   }, []);
 
-  if (edition) return <Championnat edition={edition} />;
+  // Deux championnats le meme weekend (duel des epreuves a egalite) : un panneau chacun.
+  if (editions.length) return <>{editions.map(id => <Championnat key={id} edition={id} />)}</>;
   if (dehors) return <DefiDemieSpectateur />;
   return null;
 }

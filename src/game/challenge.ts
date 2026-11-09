@@ -83,6 +83,9 @@ export async function createChallenge(input: {
   name?: string;
   /** rowid de la ligne de classement visee, pour un defi adresse */
   targetScoreId?: number | null;
+  /** Plusieurs destinataires : lignes du TOP 500, et noms du classement des duels. */
+  targetScoreIds?: number[];
+  targetNames?: string[];
   /**
    * L'identifiant du duel qu'on venge, quand ce chrono est une revanche.
    *
@@ -93,7 +96,7 @@ export async function createChallenge(input: {
    * chrono — voir /challenge, cote worker.
    */
   revancheDe?: string | null;
-}): Promise<{ id: string; cible: string }> {
+}): Promise<{ id: string; cible: string; cibles: string[] }> {
   const res = await fetch(`${API_BASE}/challenge`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -106,6 +109,8 @@ export async function createChallenge(input: {
       splits: input.splits.map(s => Math.round(s)),
       traces: input.traces,
       target_score_id: input.targetScoreId ?? null,
+      target_score_ids: input.targetScoreIds ?? [],
+      target_names: input.targetNames ?? [],
       revanche_de: input.revancheDe ?? null,
     }),
   });
@@ -122,7 +127,13 @@ export async function createChallenge(input: {
    * transmettre soi-meme. Une chaine vide veut dire « personne n'a ete
    * prevenu », et l'ecran a de quoi le dire honnetement.
    */
-  return { id: data.id as string, cible: String(data.target_name || '') };
+  return { id: data.id as string, cible: String(data.target_name || ''), cibles: prevenus(data) };
+}
+
+/** Tous ceux que le serveur a joints. Un serveur plus ancien ne rend que `target_name`. */
+function prevenus(data: any): string[] {
+  if (Array.isArray(data.target_names)) return data.target_names.map(String);
+  return data.target_name ? [String(data.target_name)] : [];
 }
 
 /**
@@ -194,9 +205,11 @@ export async function lancerChallenge(input: {
   id: string;
   name?: string;
   targetScoreId?: number | null;
+  targetScoreIds?: number[];
+  targetNames?: string[];
   /** L'identifiant du duel qu'on venge. Meme regle qu'a la creation. */
   revancheDe?: string | null;
-}): Promise<{ id: string; cible: string }> {
+}): Promise<{ id: string; cible: string; cibles: string[] }> {
   const res = await fetch(`${API_BASE}/challenge/lance`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -205,13 +218,15 @@ export async function lancerChallenge(input: {
       device_id: getDeviceId(),
       name: input.name || getSavedName() || 'Anonyme',
       target_score_id: input.targetScoreId ?? null,
+      target_score_ids: input.targetScoreIds ?? [],
+      target_names: input.targetNames ?? [],
       revanche_de: input.revancheDe ?? null,
     }),
   });
   if (!res.ok) throw new Error('challenge launch failed');
   const data = await res.json();
   if (!data.id) throw new Error('challenge launch failed');
-  return { id: String(data.id), cible: String(data.target_name || '') };
+  return { id: String(data.id), cible: String(data.target_name || ''), cibles: prevenus(data) };
 }
 
 export async function fetchChallenge(code: string): Promise<Challenge | null> {

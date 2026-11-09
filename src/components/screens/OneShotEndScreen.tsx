@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film, ChevronRight } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, raisonDe, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
@@ -19,6 +19,7 @@ import { pushReprise } from '@/game/history';
 import { feterRecordPerso } from '@/game/fete';
 import { feteDuRecordOuverte } from '@/game/canal';
 import { DuelRanking } from './DuelRanking';
+import { ChoixAdversaires, type CibleDefi } from './ChoixAdversaires';
 import { nomDuRang, Flamme, Approche, ComboBreak } from '@/components/Insignes';
 import { cleDiscipline, nomDiscipline } from '@/game/duels';
 import { pique, boost, relance } from '@/game/piques';
@@ -90,6 +91,19 @@ export function OneShotEndScreen() {
   const [name, setName] = useState(getSavedName());
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
+  /**
+   * Les destinataires du defi : celui choisi avant la course (TOP 500), plus
+   * ceux qu'on coche ici. `prevenus` est ce que le serveur a vraiment joint.
+   */
+  const [cibles, setCibles] = useState<CibleDefi[]>(() => {
+    const t = SprinterApp.G.challengeTarget as { scoreId: number; name: string } | null;
+    if (t) return [{ name: t.name, scoreId: t.scoreId }];
+    // venu des duels sans ligne au TOP 500 : le serveur le retrouve par son nom
+    const nom = SprinterApp.G.defiSansCible as string | null;
+    return nom ? [{ name: nom }] : [];
+  });
+  const [prevenus, setPrevenus] = useState<string[] | null>(null);
+  const [choisir, setChoisir] = useState(false);
   const [err, setErr] = useState(false);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
   const [sent, setSent] = useState(false);
@@ -227,13 +241,14 @@ export function OneShotEndScreen() {
     envoyer(finalName, tops);
   };
 
-  const cible = SprinterApp.G.challengeTarget as { scoreId: number; name: string } | null;
+  const cible = cibles.length ? { name: cibles.map(c => c.name).join(', ') } : null;
   const sansCible = SprinterApp.G.defiSansCible as string | null;
 
   // Message envoye a l'ami : chrono realise, code, lien direct.
   const msg = code ? shareText(code, shotRaces, runTime * 1000, N.getLang() === 'fr') : '';
 
   const ghostSplits: number[] = (SprinterApp.G.ghostSplits || []) as number[];
+  const topVisible = tops.length > 0 && topStatus !== 'checking' && topStatus !== 'done';
   const complete = runSplits.length === shotRaces.length && runSplits.every(s => s != null);
 
   /**
@@ -456,11 +471,15 @@ export function OneShotEndScreen() {
       // code qui est ecrit sur la video, et il n'y en a qu'un par course.
       // Voir `defi-camera.ts` — poser n'est pas lancer, et ce bouton est le
       // lancement.
-      const { id, cible: prevenu } =
-        await lancerLeDefiDeLaCamera({
-          name: finalName || undefined,
-          targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
-        })
+      const ids = cibles.flatMap(c => (c.scoreId != null ? [c.scoreId] : []));
+      const vise = {
+        // le premier aussi en champ simple : un serveur plus ancien en joint au moins un
+        targetScoreId: ids[0] ?? null,
+        targetScoreIds: ids,
+        targetNames: cibles.filter(c => c.scoreId == null).map(c => c.name),
+      };
+      const { id, cibles: joints } =
+        await lancerLeDefiDeLaCamera({ name: finalName || undefined, ...vise })
         ?? await createChallenge({
           races: shotRaces as ('100' | '200' | '400')[],
           levelIdx: SprinterApp.G.shotLevel,
@@ -468,10 +487,11 @@ export function OneShotEndScreen() {
           splits: runSplits.map(s => (s || 0) * 1000),
           traces: SprinterApp.G.shotTraces || [],
           name: finalName || undefined,
-          targetScoreId: SprinterApp.G.challengeTarget?.scoreId ?? null,
+          ...vise,
         });
       setCode(id);
-      noterDefiLance(id, prevenu || SprinterApp.G.challengeTarget?.name || '', shotRaces);
+      setPrevenus(joints);
+      noterDefiLance(id, joints.join(', ') || cibles.map(c => c.name).join(', '), shotRaces);
     } catch {
       setErr(true);
     } finally {
@@ -1307,7 +1327,7 @@ export function OneShotEndScreen() {
               revanche, personne ne peut enregistrer a la place du joueur : le
               retirer aussi ferait perdre le record en silence. Le formulaire
               reste donc, seul, et seulement dans ce cas-la. */}
-          {tops.length > 0 && topStatus !== 'checking' && topStatus !== 'done' && (
+          {topVisible && (
             <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2 sm:p-3 md:p-4 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1">
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
                 <span className="flex items-center gap-2 shrink-0">
@@ -1321,7 +1341,7 @@ export function OneShotEndScreen() {
               <div className="flex gap-2">
                 <input
                   value={topName}
-                  onChange={e => setTopName(e.target.value)}
+                  onChange={e => { setTopName(e.target.value); setName(e.target.value); }}
                   placeholder={N.t('your_name')}
                   maxLength={20}
                   className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
@@ -1375,11 +1395,20 @@ export function OneShotEndScreen() {
               </div>
               {/* Defi adresse a quelqu'un du TOP 500 : on le rappelle, sinon
                   le joueur ne sait plus a qui son code va partir. */}
-              {cible && (
+              {cible && code && prevenus && prevenus.length > 0 && (
                 <p className="text-center text-[10px] md:text-xs text-cyan-300">
-                  {N.t(code ? 'target_sent' : 'target_run', { n: cible.name, d: shotRaces[0] })}
+                  {N.t('target_sent', { n: prevenus.join(', ') })}
                 </p>
               )}
+              {cible && code && prevenus && (() => {
+                const rates = cibles.map(c => c.name)
+                  .filter(n => !prevenus.some(p => p.toLowerCase() === n.toLowerCase()));
+                return rates.length > 0 && (
+                  <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
+                    {N.t('defi_non_joints', { n: rates.join(', ') })}
+                  </p>
+                );
+              })()}
               {/* Defi lance depuis le classement des duels, mais la personne
                   n'a pas ete retrouvee au TOP 500 de cette epreuve : le code
                   existe, personne ne l'a recu. On le dit ici plutot que de
@@ -1427,14 +1456,33 @@ export function OneShotEndScreen() {
                   une revanche : elle part d'elle-meme, ou pas du tout. */}
               {!code && !revancheId && revancheFaite === null && (
                 <>
-                  <div className="flex gap-2">
+                  {/* Un seul champ nom a l'ecran : celui du TOP 500 sert aussi
+                      au defi ; sans lui, on ne le demande que s'il manque. */}
+                  {/* relu a chaque rendu : un nom enregistre via le TOP 500 l'efface aussi */}
+                  {!topVisible && !(getSavedName() || '').trim() && (
                     <input
                       value={name}
                       onChange={e => setName(e.target.value)}
                       placeholder={N.t('your_name')}
                       maxLength={20}
-                      className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
                     />
+                  )}
+                  <div className="flex gap-2">
+                    {/* Les destinataires a la place du champ : un clic ouvre
+                        les duels et le TOP 500, on y coche qui l'on veut. */}
+                    <button
+                      onClick={() => setChoisir(true)}
+                      disabled={busy}
+                      className="flex-1 min-w-0 flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-left text-sm court:text-xs hover:border-primary/50 transition-colors"
+                    >
+                      <Swords className="w-4 h-4 shrink-0 text-primary" />
+                      <span className={`flex-1 min-w-0 truncate ${cibles.length ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>
+                        {cibles.length ? cibles.map(c => c.name).join(', ') : N.t('defi_a_qui')}
+                      </span>
+                      {cibles.length > 1 && <span className="shrink-0 text-[10px] font-bold text-primary">{cibles.length}</span>}
+                      <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    </button>
                     <button
                       onClick={handleCreate}
                       disabled={busy || !complete}
@@ -1446,6 +1494,10 @@ export function OneShotEndScreen() {
                   </div>
                   {err && <p className="text-center text-xs text-destructive">{N.t('challenge_net')}</p>}
                 </>
+              )}
+              {choisir && (
+                <ChoixAdversaires epreuves={shotRaces} initial={cibles}
+                                  onValider={setCibles} onClose={() => setChoisir(false)} />
               )}
 
               {code && (

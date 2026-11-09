@@ -41,7 +41,9 @@ import { poser, type Modele } from './vedette-3d';
 import { construirePlage } from './plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM, OCCULTANTS } from './amsalem-3d';
 import { construirePalais, cristalTaille } from './palais-3d';
-import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, placesDuPublic } from './salle-3d';
+import { construireSalle, creuserTapis, zSol, auBordDeLaPiste, calageSalle, estEnSalle, SURVOL_SALLE, SALLE_LUMIERE, SALLE_NUIT, SALLE_FINALE, placesDuPublic } from './salle-3d';
+import { EST_TEST } from './canal';
+import { presentationCourante } from './presentation-directe';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { construireRuelle, type Ruelle } from './ruelle-3d';
 import { construireLegende } from './legende-3d';
@@ -55,6 +57,23 @@ import { arbresDuLieu, riviera, nuitEtoilee, pelouseAuPinceau, zeroGames } from 
 THREE.Texture.DEFAULT_ANISOTROPY = 16;
 
 const Q = (() => { try { return new URLSearchParams(location.search); } catch { return new URLSearchParams(); } })();
+// LA SALLE NOIRE, SECRETE JUSQU'AU 19/12 (l'auteur, 8/11) : ?serie=1 / ?finale=1 ne valent que si le serveur dit
+// que la premiere serie du Championnat de France en salle a commence (route /salle-noire). Hors ligne : fermee.
+// Le canal de test (/test/, /test3d/, derriere la porte a code) l'a toujours (l'auteur, 8/11).
+const NOIR_DEMANDE: 'serie' | 'noir' | null = Q.get('finale') === '1' ? 'noir' : Q.get('serie') === '1' ? 'serie' : null;
+let noirOuvert = EST_TEST;
+if (NOIR_DEMANDE && !EST_TEST) {
+  fetch('https://sprinter-leaderboard.benbezi-sprinter.workers.dev/salle-noire')
+    .then(r => r.json()).then(j => { noirOuvert = j?.ouvert === true; }).catch(() => {});
+}
+/** Le tour de la competition dans le noir : celui du vrai championnat (champ-direct.ts, G.champNoir), sinon le
+ *  prototype ouvert par le serveur. L'echauffement d'une serie garde la salle allumee : elle s'eteint pour la course. */
+function tourDuChamp(): 'serie' | 'noir' | null {
+  const G = (globalThis as any).SprinterApp?.G;
+  if (G?.champNoir === 'noir') return 'noir';
+  if (G?.champNoir === 'serie') return G.champDirect ? 'serie' : null;
+  return noirOuvert ? NOIR_DEMANDE : null;
+}
 const nombre = (k: string, d: number) => { const v = parseFloat(Q.get(k) || ''); return Number.isFinite(v) ? v : d; };
 const DOS = Q.get('cam') === 'dos';
 const HAUT = nombre('haut', DOS ? 2.5 : 5.5);
@@ -200,6 +219,8 @@ const camPos = new THREE.Vector3(), camVise = new THREE.Vector3();
 const BORD_CADRE = 0.82, _joueur = new THREE.Vector3(), _viseCadre = new THREE.Vector3(), _ndc = new THREE.Vector3();
 const _rayon = new THREE.Ray(), _touche = new THREE.Vector3();
 let corrCadre = 0, amsalemActif = false;
+// le stade a-t-il l'anneau complet apres l'arrivee ? (pas le Champ-de-Mars, ni le stade Amsalem : voir virageApres)
+let virageApresLigne = true;
 let camPret = false;
 let secousse = 0, etatVu = '', champBase = 55;
 const soleilDecal = new THREE.Vector3(-10, -18, 30), solCam = new THREE.Vector3(), _solVoulu = new THREE.Vector3();
@@ -686,6 +707,333 @@ const milieu = (T: any, k: number) => {
   const C = (globalThis as any).SprinterApp?.C;
   return T.curved && C ? LANE_W / 2 - (k ? C.MES_N : C.MES_1) : 0;
 };
+// LA PRESENTATION DE LA FINALE, ECRITE DANS LA PISTE (Championnat de France du 19/12, l'auteur, 7/11 ;
+// la direction : la finale du 100 m de Doha 2019, « en mieux et dans la piste »). Un athlete toutes les
+// 3 s : son nom s'ecrit en lumiere, couche dans son couloir, une trainee fantome part des blocs a la
+// vitesse de son chrono, puis tout se retire (« ils sont la pour la presentation puis se retirent »).
+// Le joueur : « TOI », en or. Au pistolet, plus rien sur la piste — on court dans le noir, lignes allumees.
+const PRES_PAS = 3;
+/** La finale : le couloir presente (-1 : aucun) et le point ou s'ecrit son nom — la camera le cadre. */
+let finaleVue = false, presente = -1, finActive = false, presenteTexte = '';
+const presenteOu = new THREE.Vector3(), finCam = new THREE.Vector3(), finVise = new THREE.Vector3();
+function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: number, h: number) => void) {
+  const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+  peindre(cv.getContext('2d')!, w, h);
+  const t = new THREE.CanvasTexture(cv); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+  return t;
+}
+/**
+ * L'EXTINCTION DE LA SALLE, avant la presentation d'une serie (l'auteur, 8/11) : quatre secondes. Les plafonniers
+ * s'eteignent en trois rangees, chacune avec son clignotement (0,8 s, 1,4 s, 2 s) ; puis les neons s'allument comme
+ * de vrais tubes, en hesitant (2,6 a 3,4 s) — les couloirs, les fleches, les logos, le tapis. Elle part au premier
+ * moment d'avant-course (la cinematique d'intro ou le decompte) et ne revient jamais en arriere : la salle reste noire.
+ */
+const DUREE_EXTINCTION = 4;
+/**
+ * LE SON DE L'EXTINCTION : le « clonk » d'un contacteur par rangee de plafonniers, qui roule dans la halle ; le
+ * public qui monte d'un cran quand le noir tombe ; le gresillement des tubes neon qui s'allument. Synthetise sur
+ * l'horloge audio du jeu (Audio_.ctx, Audio_.sortie) : rien a charger, muet si le son est coupe.
+ */
+const sonDeSalle = {
+  audio() { const A = (globalThis as any).SprinterApp?.Audio_; return A && A.ok && A.on && A.ctx && A.sortie ? A : null; },
+  bruit(ctx: AudioContext, dur: number) {
+    const b = ctx.createBuffer(1, Math.max(1, (dur * ctx.sampleRate) | 0), ctx.sampleRate), ch = b.getChannelData(0);
+    for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    const s = ctx.createBufferSource(); s.buffer = b; return s;
+  },
+  enveloppe(ctx: AudioContext, t: number, pic: number, monte: number, tombe: number) {
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(pic, t + monte); g.gain.exponentialRampToValueAtTime(0.0001, t + monte + tombe);
+    return g;
+  },
+  /** Un contacteur qui coupe une rangee : un choc sourd, un clic metallique, et la halle qui le renvoie. */
+  clonk(force = 1) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.01;
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(95, t); o.frequency.exponentialRampToValueAtTime(42, t + 0.25);
+    const go = this.enveloppe(ctx, t, 0.55 * force, 0.004, 0.35); o.connect(go).connect(A.sortie); o.start(t); o.stop(t + 0.4);
+    const clic = this.bruit(ctx, 0.05), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 2600; f.Q.value = 1.2;
+    const gc = this.enveloppe(ctx, t, 0.35 * force, 0.002, 0.04); clic.connect(f).connect(gc).connect(A.sortie); clic.start(t);
+    // l'echo de la halle : le meme choc, etouffe, qui revient trois fois
+    for (let k = 1; k <= 3; k++) {
+      const e = this.bruit(ctx, 0.3), fe = ctx.createBiquadFilter(); fe.type = 'lowpass'; fe.frequency.value = 900 - k * 200;
+      const ge = this.enveloppe(ctx, t + k * 0.11, 0.12 * force / k, 0.01, 0.28); e.connect(fe).connect(ge).connect(A.sortie); e.start(t + k * 0.11);
+    }
+  },
+  /** Le public qui monte quand le noir tombe : une rumeur qui enfle deux secondes, puis retombe. */
+  rumeur() {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.02, d = 4.5;
+    for (const [fq, q, a] of [[520, 0.8, 0.22], [1150, 1.1, 0.14], [2300, 1.4, 0.06]] as const) {
+      const n = this.bruit(ctx, d), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = fq; f.Q.value = q;
+      const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(a, t + 1.8); g.gain.setValueAtTime(a, t + 2.3); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+      n.connect(f).connect(g).connect(A.sortie); n.start(t);
+    }
+  },
+  /** L'ovation d'un nom : des applaudissements serres (un bruit haché) et la clameur qui monte, plus fort pour toi. */
+  ovation(moi = false) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.02, d = 2.4, f = moi ? 1.5 : 1;
+    const n = this.bruit(ctx, d), ch = (n.buffer as AudioBuffer).getChannelData(0), sr = ctx.sampleRate;
+    // des centaines de mains : chaque claquement, 4 ms de bruit, place au hasard (plus dense au milieu)
+    for (let i = 0; i < ch.length; i++) ch[i] *= 0.15;
+    for (let c = 0; c < 900 * d; c++) {
+      const u = Math.random(), at = (u * u * (3 - 2 * u)) * (ch.length - 200) | 0, a = 0.4 + Math.random() * 0.6;
+      for (let j = 0; j < 180; j++) ch[at + j] += (Math.random() * 2 - 1) * a * Math.exp(-j / 30);
+    }
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 900;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.09 * f, t + 0.25); g.gain.setValueAtTime(0.09 * f, t + 1.2); g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+    n.connect(hp).connect(g).connect(A.sortie); n.start(t);
+    const cl = this.bruit(ctx, d), bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 650; bp.Q.value = 0.9;
+    const gc = this.enveloppe(ctx, t, 0.12 * f, 0.4, d - 0.4); cl.connect(bp).connect(gc).connect(A.sortie); cl.start(t);
+  },
+  /** Un tube neon qui s'amorce : un ping, puis le bourdon du ballast. */
+  neon(dur = 0.12) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.01;
+    const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 100;
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400;
+    const g = this.enveloppe(ctx, t, 0.05, 0.005, dur); o.connect(f).connect(g).connect(A.sortie); o.start(t); o.stop(t + dur + 0.05);
+    const p = ctx.createOscillator(); p.type = 'sine'; p.frequency.value = 3800;
+    const gp = this.enveloppe(ctx, t, 0.04, 0.002, 0.06); p.connect(gp).connect(A.sortie); p.start(t); p.stop(t + 0.1);
+  },
+};
+function lExtinction(eteindre: (lumiere: number, neons: number) => void, eclairer: (k: number) => void) {
+  const RANGEES = [0.8, 1.4, 2.0];
+  const ALLUMAGE: [number, number][] = [[2.6, 0.6], [2.7, 0], [2.8, 1], [2.95, 0.2], [3.05, 1], [3.3, 0.7], [3.4, 1]];
+  let debut = -1, fini = false, vu = -1;
+  return (t: number) => {
+    if (fini) return;
+    const dt = vu < 0 ? 0 : t - vu; vu = t;
+    const G = (globalThis as any).SprinterApp?.G;
+    const avant = !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
+    if (debut < 0) { if (!avant) return; debut = t; }
+    const e = t - debut;
+    // la lumiere : un tiers de moins a chaque rangee, et 0,18 s de clignotement au moment ou elle tombe
+    let lumiere = 1;
+    for (let i = 0; i < RANGEES.length; i++) {
+      const f = e - RANGEES[i];
+      if (f < 0) break;
+      const avantR = 1 - i / RANGEES.length, apres = 1 - (i + 1) / RANGEES.length;
+      lumiere = f < 0.18 && Math.floor(f / 0.045) % 2 === 0 ? avantR : apres;
+    }
+    let neons = 0;
+    for (const [a, v] of ALLUMAGE) if (e >= a) neons = v;
+    // le son : un clonk a chaque rangee qui tombe, la rumeur au premier, le gresillement a chaque amorce de neon
+    const avantE = e - dt;
+    RANGEES.forEach((r, i) => { if (avantE < r && e >= r) { sonDeSalle.clonk(1 - i * 0.15); if (i === 0) sonDeSalle.rumeur(); } });
+    ALLUMAGE.forEach(([a, v]) => { if (v > 0 && avantE < a && e >= a) sonDeSalle.neon(v === 1 ? 0.25 : 0.08); });
+    eteindre(lumiere, neons); eclairer(lumiere);
+    if (e > DUREE_EXTINCTION) fini = true;
+  };
+}
+
+/**
+ * LES LAMPES DES TELEPHONES DANS LES TRIBUNES (l'auteur, 8/11) : pendant la presentation des noms, des points de
+ * lumiere qui scintillent chacun a son rythme, puis a moitie jusqu'a l'arrivee. Un seul objet Points (quelques
+ * centaines de sommets), additif.
+ */
+function lesLampesDuPublic(groupe: THREE.Group, pos: number[], hasard: () => number) {
+  const n = pos.length / 3, geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  const coul = new Float32Array(n * 3), phase = new Float32Array(n), vite = new Float32Array(n);
+  for (let i = 0; i < n; i++) { phase[i] = hasard() * 6.28; vite[i] = 0.6 + hasard() * 1.8; }
+  geo.setAttribute('color', new THREE.BufferAttribute(coul, 3));
+  const tache = peinte(32, 32, (c, w, h) => {
+    const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.18, 'rgba(255,255,255,1)'); g.addColorStop(0.45, 'rgba(220,235,255,0.35)'); g.addColorStop(1, 'rgba(200,220,255,0)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  });
+  const mat = new THREE.PointsMaterial({ size: 2.4, map: tache, vertexColors: true, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, toneMapped: false, sizeAttenuation: true });
+  const pts = new THREE.Points(geo, mat); pts.renderOrder = 4; pts.frustumCulled = false;
+  groupe.add(pts);
+  let k = 0, vu = -1;
+  return (t: number) => {
+    const dt = vu < 0 ? 0 : Math.min(0.1, t - vu); vu = t;
+    // pleine lumiere pendant la presentation, a moitie jusqu'a l'arrivee (le plan de course voit les tribunes)
+    const G = (globalThis as any).SprinterApp?.G, st = G?.state;
+    const cible = presente >= 0 ? 1 : st === 'count' || st === 'race' || st === 'falseout' ? 0.5 : 0;
+    k += (cible - k) * Math.min(1, dt * 2.5);
+    pts.visible = k > 0.01;
+    if (!pts.visible) return;
+    for (let i = 0; i < n; i++) {
+      const v = k * (0.55 + 0.45 * Math.sin(t * vite[i] + phase[i]));
+      coul[i * 3] = v * 0.95; coul[i * 3 + 1] = v * 0.97; coul[i * 3 + 2] = v;
+    }
+    geo.attributes.color.needsUpdate = true;
+  };
+}
+const H_TOIT_SALLE = 11.5;   // (sous la charpente de la salle, H_TOIT = 12,5 m dans salle-3d.ts)
+/**
+ * LE FAUX DEPART EN ROUGE (l'auteur, 9/11) : les lignes de la salle noire virent au rouge une seconde — 0,8 s pleines,
+ * 0,2 s pour revenir. Le faux depart du joueur (falseFlash), le rappel du starter en championnat (G.rappel), ou
+ * l'elimination (falseout).
+ */
+function lesLignesRouges(alerte: (k: number) => void) {
+  let avant = false, depuis = -1;
+  return (t: number) => {
+    const G = (globalThis as any).SprinterApp?.G;
+    const faute = !!G && (G.falseFlash > 0 || !!G.rappel || G.state === 'falseout');
+    if (faute && !avant) depuis = t;
+    avant = faute;
+    const e = depuis < 0 ? 99 : t - depuis;
+    alerte(e < 0.8 ? 1 : e < 1 ? (1 - e) / 0.2 : 0);
+  };
+}
+/**
+ * L'ARRIVEE EN OR (l'auteur, 9/11) : quand le premier passe la ligne, son couloir s'allume en or sur toute sa longueur
+ * et son chrono s'ecrit au sol, avant la ligne. La salle reste dans le noir. Aucun nom (championnat : seul « TOI »).
+ */
+function lArriveeEnOr(T: any, groupe: THREE.Group) {
+  const cw = (T.salle && T.salle.couloir) || LANE_W;
+  const bord = peinte(8, 64, (c, w, h) => {   // (plus vif sur les bords du couloir, comme deux tubes)
+    for (let y = 0; y < h; y++) { const d = Math.abs(y + 0.5 - h / 2) / (h / 2), a = 0.18 + 0.82 * d ** 6; c.fillStyle = `rgba(255,196,64,${a})`; c.fillRect(0, y, w, 1); }
+  });
+  const matB = new THREE.MeshBasicMaterial({ map: bord, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+  const matC = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+  for (const m of [matB, matC]) { m.polygonOffset = true; m.polygonOffsetFactor = -8; m.polygonOffsetUnits = -16; m.forceSinglePass = true; }
+  const bande = new THREE.Mesh(new THREE.PlaneGeometry(1, cw * 0.96, 120, 1), matB);
+  const chrono = new THREE.Mesh(new THREE.PlaneGeometry(7, cw * 0.9, 24, 1), matC);
+  bande.renderOrder = chrono.renderOrder = 3; bande.visible = chrono.visible = false; bande.frustumCulled = chrono.frustumCulled = false;
+  groupe.add(bande, chrono);
+  const plier = (m: THREE.Mesh, k: number, dc: number, sl: number, tourne = 0) => {
+    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+    const base: Float32Array = m.userData.base ??= Float32Array.from(pos.array as Float32Array);
+    const sens = Math.cos(tourne), mil = milieu(T, k);
+    for (let i = 0; i < pos.count; i++) {
+      const d = Math.max(0, dc + base[i * 3] * sl * sens), lat = base[i * 3 + 1] * sens;
+      const p = ici(T.posDemi(d, k, mil)), a = capIci(T.heading(d, k));
+      const x = p[0] - Math.sin(a) * lat, y = p[1] + Math.cos(a) * lat;
+      pos.setXYZ(i, x, y, zSol(x, y) + 0.02);
+    }
+    pos.needsUpdate = true; m.geometry.computeBoundingSphere();
+  };
+  let pose = '', depuis = -1;
+  return (t: number) => {
+    const G = (globalThis as any).SprinterApp?.G;
+    let best: any = null;
+    // (les adversaires connaissent leur temps des le depart, finished compris : on attend qu'ils passent la ligne)
+    for (const r of G?.runners || []) if (r.finished && r.finishTime > 0 && r.d >= T.total && (!best || r.finishTime < best.finishTime)) best = r;
+    if (!best) { bande.visible = chrono.visible = false; pose = ''; depuis = -1; return; }
+    const k = best.lane | 0, texte = (+best.finishTime).toFixed(2), cle = k + '/' + texte;
+    if (cle !== pose) {
+      pose = cle; if (depuis < 0) depuis = t;
+      plier(bande, k, T.total / 2, T.total);
+      plier(chrono, k, Math.max(4, T.total - 7), 1, Math.PI);   // (lu depuis la tribune, comme les noms)
+      matC.map?.dispose();
+      matC.map = peinte(1024, 160, (x, w, h) => {
+        x.translate(0, h); x.scale(1, -1);   // (le monde est en miroir)
+        x.font = '900 132px Outfit, system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.shadowColor = 'rgba(255,190,50,0.95)'; x.shadowBlur = 26; x.fillStyle = '#ffd34a';
+        x.fillText(texte, w / 2, h / 2 + 6, w * 0.9);
+      });
+      matC.needsUpdate = true;
+    }
+    const a = Math.min(1, (t - depuis) / 0.6);
+    bande.visible = chrono.visible = true;
+    matB.opacity = 0.85 * a; matC.opacity = a;
+  };
+}
+function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0) {
+  const n = T.lanes || nCouloirs, cw = (T.salle && T.salle.couloir) || LANE_W;
+  type Couloir = { nom: THREE.Mesh; mat: THREE.MeshBasicMaterial; trace: THREE.Mesh; tmat: THREE.MeshBasicMaterial; ecrit: string };
+  const couloirs: Couloir[] = [];
+  // la trainee : un degrade (la tete a droite, x = 1), additive
+  const degrade = peinte(256, 16, (c, w, h) => {
+    const g = c.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, 'rgba(90,210,255,0)'); g.addColorStop(0.85, 'rgba(120,225,255,0.55)'); g.addColorStop(1, 'rgba(235,252,255,1)');
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+  });
+  const LN = 9, D_NOM = 7;                         // le nom : 9 m de long, centre a 7 m des blocs
+  for (let k = 0; k < n; k++) {
+    const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    // (decoupes en tranches : chaque sommet se pose sur la ligne du couloir, le nom epouse le virage — plier)
+    const nom = new THREE.Mesh(new THREE.PlaneGeometry(LN, cw * 0.9, 36, 1), mat);
+    const tmat = new THREE.MeshBasicMaterial({ map: degrade, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+    const trace = new THREE.Mesh(new THREE.PlaneGeometry(1, cw * 0.55, 12, 1), tmat);
+    nom.renderOrder = trace.renderOrder = 3;
+    // (le tartan et les lignes sont tires vers la camera par polygonOffset : le nom l'est davantage, sinon il passe dessous)
+    for (const x of [mat, tmat]) { x.polygonOffset = true; x.polygonOffsetFactor = -8; x.polygonOffsetUnits = -16; }
+    groupe.add(nom, trace);
+    couloirs.push({ nom, mat, trace, tmat, ecrit: '' });
+  }
+  /** Poser un plan a plat dans le couloir k, centre a d metres de la ligne de depart. */
+  /**
+   * Plier un plan dans le couloir k, centre a dc metres de la ligne de depart, `sl` fois sa longueur : chaque sommet
+   * suit la ligne du couloir et son cap (« les noms dans les virages ne respectent pas les courbes », l'auteur, 9/11).
+   * `tourne` = PI : retourne d'un demi-tour (le nom se lit depuis la tribune).
+   */
+  const plier = (m: THREE.Mesh, k: number, dc: number, sl = 1, tourne = 0) => {
+    const pos = m.geometry.attributes.position as THREE.BufferAttribute;
+    const base: Float32Array = m.userData.base ??= Float32Array.from(pos.array as Float32Array);
+    const sens = Math.cos(tourne), mil = milieu(T, k);
+    for (let i = 0; i < pos.count; i++) {
+      const d = Math.max(0, dc + base[i * 3] * sl * sens), lat = base[i * 3 + 1] * sens;
+      const p = ici(T.posDemi(d, k, mil)), a = capIci(T.heading(d, k));
+      const x = p[0] - Math.sin(a) * lat, y = p[1] + Math.cos(a) * lat;
+      pos.setXYZ(i, x, y, zSol(x, y) + 0.02);
+    }
+    pos.needsUpdate = true; m.geometry.computeBoundingSphere();
+    m.position.set(0, 0, 0); m.rotation.set(0, 0, 0); m.scale.set(1, 1, 1);
+  };
+  const ecrire = (c: Couloir, texte: string, moi: boolean) => {
+    if (c.ecrit === texte) return;
+    c.ecrit = texte;
+    c.mat.map?.dispose();
+    // (le monde est en miroir, monde.scale.y = -1 : on ecrit a l'envers pour lire a l'endroit)
+    c.mat.map = peinte(1024, 128, (x, w, h) => {
+      // (le monde est en miroir, monde.scale.y = -1 : on ecrit retourne pour lire a l'endroit)
+      x.translate(0, h); x.scale(1, -1);
+      x.font = '900 104px Outfit, system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
+      x.shadowColor = moi ? 'rgba(255,200,60,0.9)' : 'rgba(150,215,255,0.9)'; x.shadowBlur = 22;
+      x.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
+      x.fillText(texte, w / 2, h / 2 + 4, w * 0.94);
+    });
+    c.mat.needsUpdate = true;
+  };
+  let debut = -1;
+  return (t: number) => {
+    const G = (globalThis as any).SprinterApp?.G;
+    // AU VRAI CHAMPIONNAT, la presentation est celle de la salle (champ-direct.ts) : meme ordre (par couloir), memes
+    // 3 s par athlete (salle-championnat.js), et le premier nom quand la salle le dit (dansMs) ; la serie s'est
+    // eteinte des l'entree dans la salle (lExtinction part au decompte suspendu).
+    const pc = G?.champDirect ? presentationCourante() : undefined;
+    const avant = pc !== undefined ? !!pc && G.state === 'count'
+      : !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
+    if (!avant) { debut = -1; presente = -1; for (let k = 0; k < n; k++) { couloirs[k].mat.opacity = couloirs[k].tmat.opacity = 0; fleches?.(k, 1); } return; }
+    if (debut < 0) debut = t;
+    const e = t - debut - (pc ? pc.presentation.dansMs / 1000 : retard), i = e < 0 ? -1 : Math.floor(e / PRES_PAS), dans = e - i * PRES_PAS;
+    const ordre = (G.runners || []).slice().sort((a: any, b: any) => (a.lane | 0) - (b.lane | 0));
+    const lui = ordre[i];
+    // prototype : le pistolet attend la fin de la presentation (le vrai championnat suspend countT, voir engine.ts)
+    const avD = G.avantDepart; if (G.state === 'count' && avD?.attitudes) avD.reste = Math.max(avD.reste, ordre.length * PRES_PAS + 0.5 - e);
+    const avantP = presente;
+    presente = lui ? (lui.lane | 0) : -1;
+    presenteTexte = lui ? (lui.isPlayer ? 'TOI' : String(lui.name || '').toUpperCase()) : '';
+    if (presente >= 0 && presente !== avantP) sonDeSalle.ovation(!!lui?.isPlayer);   // le public salue chaque nom
+    if (lui) { const q = ici(T.posDemi(D_NOM, presente, milieu(T, presente))); presenteOu.set(q[0], q[1], 0); }
+    for (let k = 0; k < n; k++) {
+      const c = couloirs[k], r = lui && (lui.lane | 0) === k ? lui : null;
+      if (!r) { c.mat.opacity = c.tmat.opacity = 0; fleches?.(k, 1); continue; }
+      ecrire(c, r.isPlayer ? 'TOI' : String(r.name || '').toUpperCase(), !!r.isPlayer);
+      const fondu = Math.min(1, dans / 0.35, (PRES_PAS - dans) / 0.45);
+      c.mat.opacity = Math.max(0, fondu);
+      // le nom prend la place des fleches de lumiere de son couloir, qui reviennent quand il se retire (l'auteur, 8/11)
+      fleches?.(k, 1 - Math.max(0, fondu));
+      plier(c.nom, k, D_NOM, 1, Math.PI);   // (le nom se lit depuis la tribune : retourne d'un demi-tour)
+      // le fantome : 60 m au chrono annonce (ou 6,9 s), parti 0,4 s apres le nom
+      const chrono = +(r.announced || r.chrono || r.pb || 0) || 6.9, d = Math.max(0, (dans - 0.4) * (60 / chrono));
+      // (la trainee nait au bout du nom : additive et blanche, elle fondait les lettres qu'elle traversait)
+      const queue = Math.max(D_NOM + LN / 2, d - 7), lt = d - queue;
+      c.tmat.opacity = lt > 0 ? Math.max(0, fondu) : 0;
+      plier(c.trace, k, queue + Math.max(0, lt) / 2, Math.max(0.01, lt));
+    }
+  };
+}
 // LE PELOTON DU 400 M EN SALLE (piste-salle.js, rabattement) : passe la ligne, le moteur met tout le monde
 // sur la ligne de mesure du couloir 1 — deux coureurs a la meme distance s'y confondraient. A l'image
 // seulement, chacun garde un ecart vers l'exterieur (0 a 1,25 m), pris pendant la diagonale.
@@ -693,9 +1041,22 @@ const milieu = (T: any, k: number) => {
 const enPeloton = (T: any, lane: number, d: number) =>
   T.salle && T.salle.rabat ? T.rabattu(d, lane) * T.salle.peloton[lane % T.salle.peloton.length] : 0;
 let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
+// APRES LA LIGNE, LE VIRAGE, DANS SON COULOIR (« les coureurs deccelerent tout en restant dans leurs couloirs »,
+// l'auteur, 08/11/2026). Au 100 m et au 200 m, le moteur prolonge la piste tout droit apres l'arrivee ; le stade,
+// lui, tourne : passe la ligne, chacun filait droit hors du virage, jusqu'au pied de la tribune — d'autant plus
+// loin qu'il etait arrive tot. A l'image seulement, on suit donc le premier virage (centre (DROITE1, -R_CORDE),
+// comme posLap2 au 400 m), chacun a son rayon. Rend l'angle deja tourne (0 avant la ligne).
+const virageApres = (T: any, lane: number, d: number) => {
+  if (!virageApresLigne || salleActive || T.fullLap || !T.total || d <= T.total) return 0;
+  return (d - T.total) / Math.max(1, ici(T.pos(T.total, lane))[1] + R_CORDE);
+};
 const ouCourt = (T: any, r: any, d: number = r.d) => {
-  const u = Math.min(1, Math.max(0, d / 10)), garde = 1 - u * u * (3 - 2 * u);
-  return ici(T.posDemi(d, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r.lane, d)));
+  const theta = virageApres(T, r.lane, d), dl = theta ? T.total : d;
+  const u = Math.min(1, Math.max(0, dl / 10)), garde = 1 - u * u * (3 - 2 * u);
+  const p = ici(T.posDemi(dl, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r.lane, dl)));
+  if (!theta) return p;
+  const rad = p[1] + R_CORDE;
+  return [p[0] + rad * Math.sin(theta), -R_CORDE + rad * Math.cos(theta)];
 };
 const c3 = (v: number[] | undefined, d: number[]) => {
   const a = v || d;
@@ -794,6 +1155,7 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   const cdm = !!th.champDeMars;
   // LE STADE BERNARD AMSALEM (amsalem-3d.ts) : un lieu reel — sa tribune, sa halle, ses mats ; rien du stade generique
   const amsalem = !!th.amsalem;
+  virageApresLigne = !cdm && !amsalem;
   amsalemActif = amsalem;
   // ... son EDITION CHAMPIONNAT DE FRANCE (THEMES.amsalemFrance) : panneaux LED, ecran geant, arche, mats allumes
   const championnat = amsalem && !!th.championnat;
@@ -852,6 +1214,13 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
   // un jeu de lumiere qui fait qu'on les voit clairement », 22/10) : la lumiere de face fait le reste
   uLisereForce.value = cyber ? 0.22 : 0.45;   // Stade d'Or : moitie moins (« reduis la lumiere qui emane du joueur », 22/10)
   uLisereFace.value = cyber ? 1 : 0;   // le Stade d'Or garde le reglage valide
+  // LES COUREURS SE VOIENT PARFAITEMENT DE NUIT (« les assets doivent etre visible parfaitement de nuit », l'auteur,
+  // 08/11 soir) : sous une ambiance a 0,6 et des projecteurs froids venus d'en face, la camera de course les filmait a
+  // contre-jour, presque noirs. Comme a la television, une lumiere blanche douce venue de la camera (la meme que celle
+  // du Stade Neon, uLisereFace) et un fil de lisere a peine visible. Les nuits qui ont deja leur reglage le gardent.
+  if (nuit && !luxe && !cyber && !plage) {
+    uLisere.value = 1; uLisereCoul.value.set(0xe6ecff); uLisereForce.value = 0.16; uLisereFace.value = 1;
+  }
   if (plage && nuit) {
     // la plage de nuit : les yachts eclairent de la mer, les coureurs vus de la piste sont a
     // contre-jour — un liseré chaud (les bateaux) et la lumiere de face du Stade Neon
@@ -898,29 +1267,109 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
     // LA SALLE : sous le toit — ni ciel, ni pelouse, ni gradins du stade ; sa propre lumiere, de jour ou de nuit
     // (le theme `salle` ne suit pas l'heure : on lit le moment du joueur, ?heure= compris)
     const nuitSalle = (globalThis as any).SprinterHeure?.moment((globalThis as any).SprinterApp?.G) === 'nuit';
-    const SL = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
-    scene.background = new THREE.Color(SL.fond);
-    scene.fog = new THREE.Fog(SL.brume, 110, 320);
-    hemi.color.set(SL.hemiCiel); hemi.groundColor.set(SL.hemiSol); hemi.intensity = SL.hemi;
-    soleil.color.set(SL.soleilCouleur); soleil.intensity = SL.soleil;
+    // LA COMPETITION DANS LE NOIR (Championnat de France du 19/12 ; l'auteur, 8/11 : « toute la competition se deroulera
+    // dans le noir ; une animation pour passer de la salle classique a la salle dans le noir pour chaque serie, ensuite
+    // on garde la salle dans le noir pour les demies et la finale »). En attendant le branchement au championnat :
+    // ?serie=1 (la salle allumee s'eteint avant la presentation), ?finale=1 (demies et finale : deja dans le noir),
+    // seulement une fois la salle noire ouverte par le serveur (noirOuvert).
+    const tourChamp = tourDuChamp();
+    const finaleNoire = tourChamp !== null;
+    const SL0 = nuitSalle ? SALLE_NUIT : SALLE_LUMIERE;
+    scene.background = new THREE.Color(SL0.fond);
+    scene.fog = new THREE.Fog(SL0.brume, 110, 320);
     soleilDecal.set(-6, 10, 40);
-    uFoule.uLum.value = 1; uLisere.value = 0;
+    uLisere.value = 0;
+    /** La lumiere de la salle, de 1 (allumee, SL0) a 0 (eteinte, SALLE_FINALE) : le ciel, la brume, les lumieres, le public. */
+    const _c0 = new THREE.Color(), _c1 = new THREE.Color();
+    const eclairerSalle = (k: number) => {
+      const melange = (a: number, b: number, c: THREE.Color) => c.copy(_c0.set(b)).lerp(_c1.set(a), k);
+      melange(SL0.fond, SALLE_FINALE.fond, scene.background as THREE.Color);
+      melange(SL0.brume, SALLE_FINALE.brume, (scene.fog as THREE.Fog).color);
+      melange(SL0.hemiCiel, SALLE_FINALE.hemiCiel, hemi.color); melange(SL0.hemiSol, SALLE_FINALE.hemiSol, hemi.groundColor);
+      melange(SL0.soleilCouleur, SALLE_FINALE.soleilCouleur, soleil.color);
+      hemi.intensity = SALLE_FINALE.hemi + (SL0.hemi - SALLE_FINALE.hemi) * k;
+      soleil.intensity = SALLE_FINALE.soleil + (SL0.soleil - SALLE_FINALE.soleil) * k;
+      uFoule.uLum.value = 0.32 + 0.68 * k;
+    };
+    eclairerSalle(tourChamp === 'noir' ? 0 : 1);
     if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
     envCorps = envPalais;
     eclairerLesCorps();
     const base = (import.meta as any).env?.BASE_URL || '/';
-    const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle });
+    const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle, finale: finaleNoire, droite: !T.curved });
     pubAnim.push(salle.animer); cameraSalle = salle.camera;
+    if (tourChamp) {
+      salle.eteindre(tourChamp === 'noir' ? 0 : 1, tourChamp === 'noir' ? 1 : 0);
+      if (tourChamp === 'serie') pubAnim.push(lExtinction(salle.eteindre, eclairerSalle));
+    }
+    // L'ECRAN GEANT DE LA SALLE (l'auteur, 8/11) : le film de promotion quinze secondes, puis six secondes de la
+    // campagne en cours (panneaux.ts) ou, sans campagne, du logo BENBEZI balaye d'un reflet ; en boucle
+    {
+      const film = document.createElement('video');
+      film.src = base + (ULTRA ? 'pubs/videos/sprinter-direct.mp4' : 'pubs/videos/sprinter-direct-640.mp4');
+      film.muted = true; film.loop = true; film.playsInline = true; film.preload = 'auto'; film.setAttribute('playsinline', '');
+      videoPub = film;
+      const tFilm = new THREE.VideoTexture(film); tFilm.colorSpace = THREE.SRGBColorSpace;
+      const logo = new Image(); logo.src = base + 'pubs/benbezi-logo-3d-cadre-halo.webp';
+      const toileE = document.createElement('canvas'); toileE.width = 1024; toileE.height = 512;
+      const ce = toileE.getContext('2d')!, tE = new THREE.CanvasTexture(toileE); tE.colorSpace = THREE.SRGBColorSpace;
+      const matG = salle.ecranGeant; matG.map = tE; matG.needsUpdate = true;
+      let imageE = -1;
+      pubAnim.push(t => {
+        if (film.paused) film.play().catch(() => {});
+        // PENDANT LA PRESENTATION, l'ecran montre l'athlete presente, comme a la television (l'auteur, 9/11 : « une
+        // atmosphere de grande competition ») : son couloir, son nom (TOI pour le joueur), le titre de l'epreuve
+        if (finaleVue && presente >= 0) {
+          matG.map = tE;
+          const img = Math.floor(t * 30); if (img === imageE) return; imageE = img;
+          const w = 1024, h = 512, moi = presenteTexte === 'TOI';
+          ce.globalCompositeOperation = 'source-over';
+          const fond = ce.createLinearGradient(0, 0, w, h); fond.addColorStop(0, '#020616'); fond.addColorStop(1, '#0a1640');
+          ce.fillStyle = fond; ce.fillRect(0, 0, w, h);
+          ce.fillStyle = moi ? '#ffd34a' : '#3d7bff'; ce.fillRect(0, 0, 230, h);
+          ce.textAlign = 'center'; ce.textBaseline = 'middle'; ce.fillStyle = '#04050a';
+          ce.font = '900 44px Outfit, system-ui, sans-serif'; ce.fillText('COULOIR', 115, 150, 196);
+          ce.font = '900 230px Outfit, system-ui, sans-serif'; ce.fillText(String(presente + 1), 115, 315);
+          ce.textAlign = 'left'; ce.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
+          ce.font = '900 110px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 250, w - 300);
+          ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 38px Outfit, system-ui, sans-serif';
+          ce.fillText('CHAMPIONNAT DE FRANCE · SALLE', 274, 360, w - 300);
+          // le liseré qui balaie l'ecran
+          const x = ((t % 3) / 3 * 1.6 - 0.3) * w, g = ce.createLinearGradient(x - 90, 0, x + 90, 0);
+          g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.12)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+          ce.globalCompositeOperation = 'lighter'; ce.fillStyle = g; ce.fillRect(0, 0, w, h);
+          tE.needsUpdate = true;
+          return;
+        }
+        const cycle = t % 21;
+        if (cycle < 15 && film.readyState >= 2) { matG.map = tFilm; return; }
+        matG.map = tE;
+        const img = Math.floor(t * 30); if (img === imageE) return; imageE = img;   // (30 images/s suffisent)
+        const w = 1024, h = 512, u = ((cycle - 15 + 6) % 6) / 6;
+        ce.globalCompositeOperation = 'source-over'; ce.fillStyle = '#04050a'; ce.fillRect(0, 0, w, h);
+        const sponsor = sponsorDeLaCourse((globalThis as any).SprinterApp?.G);
+        if (sponsor) ce.drawImage(sponsor, w * 0.06, (h - w * 0.88 / 4) / 2, w * 0.88, w * 0.88 / 4);   // (1000 x 250, sans deformer)
+        else if (logo.complete && logo.naturalWidth) { const lw = w * 0.86, lh = lw * logo.naturalHeight / logo.naturalWidth; ce.drawImage(logo, (w - lw) / 2, (h - lh) / 2, lw, lh); }
+        // le reflet qui traverse l'ecran
+        const x = (u * 1.8 - 0.4) * w, g = ce.createLinearGradient(x - 120, 0, x + 120, 0);
+        g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.18)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+        ce.globalCompositeOperation = 'lighter'; ce.fillStyle = g; ce.fillRect(0, 0, w, h);
+        tE.needsUpdate = true;
+      });
+    }
     // le public de la salle : les memes cartes que le stade (LE PUBLIC, EN CARTES)
     if (Q.get('foule') !== '0') {
-      const pal = paletteDuPublic(th, false, false), cartes: number[] = [];
+      const pal = paletteDuPublic(th, false, false), cartes: number[] = [], lampes: number[] = [];
       const choix = (t: THREE.Color[]) => t[(hasard() * t.length) | 0];
       for (const p of placesDuPublic(affluence, hasard)) {
+        // dans le noir, quatre spectateurs sur dix levent leur telephone, lampe allumee, a hauteur de tete
+        if (finaleNoire && hasard() < 0.4) lampes.push(p.x, p.y, p.z + (p.debout ? 1.7 : 1.3));
         const u = hasard(), geste = p.debout ? 3 : u < 0.6 ? 0 : u < 0.85 ? 1 : 2;
         cartes.push(p.x, p.y, p.z, p.face, ((hasard() * P_SIL) | 0) * P_GESTES + geste, hasard());
         for (const c of [choix(pal.peaux), choix(pal.coulMaillots), choix(pal.coulCheveux), choix(pal.coulPantalons)]) cartes.push(c.r, c.g, c.b);
       }
       if (cartes.length) { const f = laFoule(cartes); f.userData.sansReflet = true; salle.interieur.add(f); }
+      if (lampes.length) pubAnim.push(lesLampesDuPublic(salle.interieur, lampes, hasard));
     }
     // LES BLOCS DE DEPART (« il n'y a de starting-block sur aucune epreuve », l'auteur, 26/10) : les
     // memes que dehors, au milieu de chaque couloir, la ou le coureur part — a la hauteur du releve
@@ -935,6 +1384,18 @@ function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle:
       l.finir(salle.interieur);
       blocsSalle.push(...salle.interieur.children.slice(n0));
     }
+    finaleVue = finaleNoire;
+    // (en serie, la presentation attend la fin de l'extinction)
+    if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches, tourChamp === 'serie' ? DUREE_EXTINCTION : 0));
+    if (finaleNoire) pubAnim.push(lesLignesRouges(salle.alerte), lArriveeEnOr(T, salle.interieur));
+    // UNE SEULE PASSE POUR LES LUMIERES ADDITIVES (mesure du 8/11 : la salle noire perdait la moitie de ses images) :
+    // three dessine une matiere transparente double face en deux passes, dos puis face, en la marquant a recompiler
+    // a chacune — une verification de programme par dessin, pour les neons, les fleches et les noms. En additif,
+    // l'ordre des faces ne change rien a l'image.
+    salle.interieur.traverse((o: any) => {
+      for (const m of [].concat(o.material || []) as THREE.Material[])
+        if (m.transparent && m.side === THREE.DoubleSide && m.blending === THREE.AdditiveBlending && !m.depthWrite) m.forceSinglePass = true;
+    });
     return;
   }
   if (espace) espaceAutour(th, hasard);
@@ -2014,6 +2475,44 @@ function eclairerCorps(m: THREE.MeshStandardMaterial) {
 function eclairerLesCorps() {
   for (const c of corps.values()) c.m.racine.traverse((o: any) => { if (o.isMesh) for (const m of [].concat(o.material)) eclairerCorps(m); });
 }
+// LES VETEMENTS RESTENT SUR LE CORPS (« les vetements sur les assets ne restent pas », l'auteur, 08/11 soir : ils
+// se decollaient, disparaissaient par moments, des taches noires). Les nouveaux corps Tripo (tripo_coureur.py) portent
+// la tenue en coques a 3-10 mm de la peau, menees par des os de tissu un peu libres, sur un corps plus galbe que
+// muscle encore le jeu (PHYSIQUES, jusqu'a 14 mm) : la peau passait au travers — un short disparu, une brassiere
+// trouee —, et la ou peau et tissu se confondaient, la carte graphique ne savait plus lequel montrer (les taches).
+// A l'image, chaque piece est donc poussee le long de sa normale APRES le squelette (metres, ci-dessous) et gagne les
+// egalites de profondeur contre la peau. Le dossard un cran plus loin, pour rester devant le debardeur.
+const EPAIS_TISSU: Record<string, number> = { brassiere: 0.007, debardeur: 0.009, shortlarge: 0.009, dossard: 0.012 };
+function porterAuDessus(m: THREE.MeshStandardMaterial, e: number) {
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.vertexShader = sh.vertexShader.replace('#include <skinning_vertex>', `#include <skinning_vertex>
+transformed += normalize(objectNormal) * ${e.toFixed(4)};`);
+  };
+  m.customProgramCacheKey = () => 'tissu' + e;
+  m.polygonOffset = true; m.polygonOffsetFactor = -1; m.polygonOffsetUnits = -2;
+}
+
+// LE CUISSARD MONTE SOUS LE NOMBRIL (« le cuissard est trop bas au niveau du haut du ventre », l'auteur, 08/11 soir) :
+// sa zone peinte s'arrete aux hanches (0,92 m sur la coureuse), et sous une brassiere tout le ventre restait nu. Le
+// bas du ventre prend la couleur du bas jusqu'a `haut` (metres, position de repos : la limite suit le corps).
+function ceintureHaute(m: THREE.MeshStandardMaterial, couleur: THREE.Color, haut: number) {
+  const avant = m.onBeforeCompile;
+  const uBas = { value: couleur.clone() }, uHaut = { value: haut };
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.uniforms.uCeintureBas = uBas; sh.uniforms.uCeintureHaut = uHaut;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vHautRepos;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvHautRepos = position.y;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vHautRepos; uniform vec3 uCeintureBas; uniform float uCeintureHaut;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\nif (vHautRepos < uCeintureHaut) diffuseColor.rgb = uCeintureBas;');
+  };
+  m.customProgramCacheKey = () => 'ceinture';
+}
+
 function lisere(m: THREE.MeshStandardMaterial) {
   eclairerCorps(m);
   m.onBeforeCompile = (sh) => {
@@ -2232,6 +2731,7 @@ function corpsDe(r: any): Corps | null {
       const n = new THREE.MeshStandardMaterial({ roughness: zone === 'peau' ? 0.55 : zone === 'semelle' || zone === 'plaque' ? 0.45 : 0.7, metalness: 0,
         ...(zone === 'logo' ? { map: m.map, transparent: true, alphaTest: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } : {}) });
       lisere(n);
+      if (EPAIS_TISSU[zone]) porterAuDessus(n, EPAIS_TISSU[zone]);
       mats[zone] = n;
       return n;
     });
@@ -2273,9 +2773,19 @@ function corpsDe(r: any): Corps | null {
   if (mats.brassiere) mats.brassiere.visible = brassiere;
   if (mats.shortlarge) mats.shortlarge.visible = tenue === 'debardeur-short';
   mats.short?.color.copy(bas);
-  // sous la brassiere le ventre est nu ; sous la culotte, le haut des cuisses
+  // sous la brassiere le ventre est nu. LA CULOTTE COUVRE LES FESSES (« les vetements de femme disparaissent et on voit
+  // leurs fesses », l'auteur, 08/11 soir) : peinte sur le corps, elle s'arretait 11,5 cm sous la taille
+  // (coureur_realiste.decouper_tenues), et les corps Tripo, plus galbes, descendent plus bas. Le bas de la zone prend
+  // donc toujours la couleur du bas : une culotte se porte en cuissard court.
+  void culotte;
   mats.ventre?.color.copy(brassiere ? rgb(L.skin) : maillot);
-  mats.shortbas?.color.copy(culotte ? rgb(L.skin) : bas);
+  mats.shortbas?.color.copy(bas);
+  if (brassiere && mats.ventre) {
+    // le haut actuel de la zone du short, sur ce corps (homme et femme n'ont pas la meme taille), plus cinq centimetres
+    let hautShort = 0;
+    copie.traverse((o: any) => { if (o.isMesh && o.material === mats.short) { o.geometry.computeBoundingBox(); hautShort = Math.max(hautShort, o.geometry.boundingBox.max.y); } });
+    if (hautShort > 0) ceintureHaute(mats.ventre, bas, hautShort + 0.05);
+  }
   if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
   if (L.kit === 'vrac' && mats.debardeur) {
@@ -2595,13 +3105,16 @@ function dossardDe(n: number): THREE.Texture {
 // vent de la course le rabat vers l'arriere, et il claque un peu a haute vitesse. Quelques os par coureur : rien
 // pour un petit telephone.
 // (inertie : la part du mouvement du parent que le tissu refuse de suivre ; borne : son angle maximal)
+// (08/11 soir, « les vetements ne restent pas » : jusqu'a 0,45-0,8 rad, le bas du short pivotait loin de la cuisse et
+//  la jambe ressortait au travers, le debardeur s'ouvrait sur le ventre. Bornes et inertie reduites des deux tiers :
+//  le tissu bouge encore a pleine vitesse, il ne quitte plus le corps.)
 const TISSU: Record<string, { k: number; amort: number; vent: number; claque: number; inertie: number; borne: number }> = {
-  tissu_avant: { k: 60, amort: 9, vent: -0.15, claque: 0.05, inertie: 0.5, borne: 0.4 },      // plaque contre le ventre par le vent
-  tissu_dos: { k: 45, amort: 7, vent: 0.45, claque: 0.10, inertie: 0.6, borne: 0.7 },         // s'ecarte du dos
-  tissu_short_l: { k: 90, amort: 10, vent: 0.18, claque: 0.06, inertie: 0.25, borne: 0.45 }, // suit la cuisse, en retard
-  tissu_short_r: { k: 90, amort: 10, vent: 0.18, claque: 0.06, inertie: 0.25, borne: 0.45 },
-  tissu_dossard: { k: 35, amort: 5, vent: -0.10, claque: 0.12, inertie: 0.8, borne: 0.5 },
-  tissu_dossard_dos: { k: 35, amort: 5, vent: 0.55, claque: 0.16, inertie: 0.8, borne: 0.8 },
+  tissu_avant: { k: 60, amort: 9, vent: -0.06, claque: 0.03, inertie: 0.2, borne: 0.14 },     // plaque contre le ventre par le vent
+  tissu_dos: { k: 45, amort: 7, vent: 0.18, claque: 0.05, inertie: 0.25, borne: 0.24 },       // s'ecarte du dos
+  tissu_short_l: { k: 90, amort: 10, vent: 0.06, claque: 0.03, inertie: 0.08, borne: 0.15 },  // suit la cuisse, en retard
+  tissu_short_r: { k: 90, amort: 10, vent: 0.06, claque: 0.03, inertie: 0.08, borne: 0.15 },
+  tissu_dossard: { k: 35, amort: 5, vent: -0.05, claque: 0.06, inertie: 0.3, borne: 0.2 },
+  tissu_dossard_dos: { k: 35, amort: 5, vent: 0.22, claque: 0.08, inertie: 0.3, borne: 0.3 },
 };
 const _qw = new THREE.Quaternion(), _qp = new THREE.Quaternion(), _ax = new THREE.Vector3(), _dir = new THREE.Vector3(), _bas = new THREE.Vector3();
 const LATERAL_MODELE = new THREE.Vector3(0, 0, -1);   // l'axe y du jeu (le cote), dans le repere du modele (Qi)
@@ -2742,7 +3255,7 @@ function dessinerLesEffets(App: any) {
   aura.visible = true;
   // les copies derriere lui, de plus en plus pales
   if (!poussEchos || !p.squelette) return;
-  const cap = capIci(T.heading(p.d, p.lane)), lean = T.lean(p.d, p.lane, p.v);
+  const cap = capIci(T.heading(p.d, p.lane)) - virageApres(T, p.lane, p.d), lean = T.lean(p.d, p.lane, p.v);
   const k0 = (p.look.h || C.MODEL_H) / C.MODEL_H;
   for (let k = 1; k <= 3; k++) {
     // plus espacees qu'en 2D : vue de dos, des copies serrees se fondent en une tache
@@ -2826,7 +3339,8 @@ export function rendre(App: any, dt: number) {
   // ... et la forme de la course : ligne droite, demi-tour ou tour complet
   // ... et l'etape : les pieces du stade des quatre premieres en sortent de plus en plus
   const forme = (T.curved ? (T.fullLap ? 'tour' : 'demi') + T.straight : 'droite') + T.total + '/' + (G.levelIdx | 0)
-    + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour');   // le moment de la journee aussi
+    + '/' + ((App.theme && App.theme() && App.theme().moment) || 'jour')   // le moment de la journee aussi
+    + '/' + (tourDuChamp() || '');   // echauffement > course, ou reponse du serveur apres le premier stade : on rebatit
   caler(T);
   if (!stade || brut !== themeVu || forme !== formeVue) {
     themeVu = brut; formeVue = forme;
@@ -2852,7 +3366,7 @@ export function rendre(App: any, dt: number) {
   for (const r of tous) {
     if (!r || !r.look) continue;
     const p = ouCourt(T, r);
-    const cap = capIci(T.heading(r.d, r.lane)) + (r.retour ? Math.PI : 0) + (r.cap || 0);
+    const cap = capIci(T.heading(r.d, r.lane)) - virageApres(T, r.lane, r.d) + (r.retour ? Math.PI : 0) + (r.cap || 0);
     const k = (r.look.h || C.MODEL_H) / C.MODEL_H;
     const lean = T.lean(r.d, r.lane, r.v) + (r.roulis || 0);
     r.squelette3D = true;
@@ -2917,7 +3431,7 @@ export function rendre(App: any, dt: number) {
     // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
     // il est au milieu de l'image, ses voisins des deux cotes. Dans un virage, elle tourne
     // avec lui. Y retourne : voir `monde`.
-    const h = capIci(T.heading(pl.d, pl.lane));
+    const h = capIci(T.heading(pl.d, pl.lane)) - virageApres(T, pl.lane, pl.d);
     const ax = Math.cos(h), ay = Math.sin(h), ix = Math.sin(h), iy = -Math.cos(h);   // devant, vers la corde
     const voulu = _a.set(p[0] - RECUL * ax + COTE * ix, -(p[1] - RECUL * ay + COTE * iy), HAUT);
     // le point vise prolonge la droite camera -> joueur : il reste au centre de l'image
@@ -3100,7 +3614,7 @@ export function rendre(App: any, dt: number) {
       const crieur = ((G.viseCamera as any)?.cri || criEnCours) ? (G.runners || []).find((r: any) => r.look && r.look.clap && !r.isPlayer) : null;
       const lui = (nom && (G.runners || []).find((r: any) => r.name === nom)) || crieur || G.presente || pl;
       // lui, au centre : le moteur vise en 2D un point de son couloir ; en 3D, c'est son corps
-      const c = ouCourt(T, lui), h = capIci(T.heading(Math.max(0, lui.d || 0), lui.lane | 0));
+      const c = ouCourt(T, lui), h = capIci(T.heading(Math.max(0, lui.d || 0), lui.lane | 0)) - virageApres(T, lui.lane | 0, Math.max(0, lui.d || 0));
       const ex = Math.sin(h), ey = -Math.cos(h), axe = Math.cos(h), aye = Math.sin(h);
       if (crieur && lui === crieur) {
         // SA PRESENTATION : dans son couloir, devant lui et face a lui — ses voisins restent sur les
@@ -3116,6 +3630,16 @@ export function rendre(App: any, dt: number) {
         vise.set(c[0], -c[1], 1.0);
       }
     }
+    // LA FINALE : pendant la presentation, la camera cadre le nom qui s'ecrit dans le couloir, de haut et
+    // de cote (la tribune), comme les plans de Doha — mais au ras de la salle
+    if (finaleVue && presente >= 0 && (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro'))) {
+      const h = capIci(T.heading(7, presente)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
+      // en portrait le champ est etroit : plus loin, plus haut, plus en arriere, sinon le nom (9 m) sort du cadre
+      const recul = camera.aspect < 1 ? 9 : 5, cote = camera.aspect < 1 ? 12 : 9, haut = camera.aspect < 1 ? 10 : 6.5;
+      finCam.set(presenteOu.x - ax * recul + ex * cote, -(presenteOu.y - ay * recul + ey * cote), haut);
+      finVise.set(presenteOu.x + ax * 1, -(presenteOu.y + ay * 1), 0);
+      finActive = true;
+    } else finActive = false;
     // (le tapis du 60 m s'enfonce sous ceux qui le frappent)
     const auTapis = G.ghost && (G.runners || []).indexOf(G.ghost.runner) < 0 ? (G.runners || []).concat([G.ghost.runner]) : G.runners || [];
     if (salleActive && auTapis.some((r: any) => r.creuxTapis != null)) {
@@ -3135,7 +3659,7 @@ export function rendre(App: any, dt: number) {
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
     // pas de survol pour la nuit du molosse (« pas de vue aerienne de presentation », l'auteur, 23/10)
-    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue;
+    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue && !(finaleVue && presente >= 0);
     if (!avant && G.state !== 'race' && G.state !== 'falseout') { volLance = false; volPlonge = -1; }
     if (avant && !volLance) { volLance = true; volT = 0; volPlonge = -1; }
     let survol = false;
@@ -3176,6 +3700,8 @@ export function rendre(App: any, dt: number) {
     // LE TOURNAGE (28/10, la video du club de Val-de-Reuil) : un harnais peut poser sa propre camera
     // (globalThis.__tournage.camera(camPos, camVise, vise, G, dt, p) ; reperes du monde, y retourne ; p : le joueur, repere 2D). Rien sans lui.
     const tournage = (globalThis as any).__tournage;
+    // (la finale : ce cadrage passe avant la cinematique de presentation)
+    if (finActive) { camPos.copy(finCam); camVise.copy(finVise); }
     if (tournage?.camera) { tournage.camera(camPos, camVise, vise, G, dt || 0.016, p); survol = survol || !!tournage.survol; }
     camera.position.copy(camPos);
     // le toit des tribunes s'efface quand la camera le survole (vue 2D), jamais pendant le survol d'avant-course

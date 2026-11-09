@@ -166,6 +166,8 @@ export function poserLeDefiDeLaCamera(genre: GenreFilm) {
 export async function lancerLeDefiDeLaCamera(input: {
   name?: string;
   targetScoreId?: number | null;
+  targetScoreIds?: number[];
+  targetNames?: string[];
   revancheDe?: string | null;
 }) {
   const id = etat.id;
@@ -174,6 +176,8 @@ export async function lancerLeDefiDeLaCamera(input: {
     id,
     name: input.name,
     targetScoreId: input.targetScoreId ?? null,
+    targetScoreIds: input.targetScoreIds,
+    targetNames: input.targetNames,
     revancheDe: input.revancheDe ?? null,
   });
 }
