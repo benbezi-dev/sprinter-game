@@ -506,7 +506,7 @@ async function ensureChallengeTarget(db) {
  * La boite de reception lit les deux. Un seul code pour tous : chacun court
  * contre le meme fantome, et le compteur des defis lances ne compte qu'un defi.
  */
-const MAX_CIBLES_DEFI = 20;
+const MAX_CIBLES_DEFI = 50;
 const ciblesReady = new WeakSet();
 async function ensureChallengeCibles(db) {
   if (ciblesReady.has(db)) return;

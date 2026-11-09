@@ -9,7 +9,7 @@ import { useRetour } from '@/hooks/use-retour';
 /** Un adversaire choisi. `scoreId` quand il vient du TOP 500 ; un nom seul vient des duels. */
 export type CibleDefi = { name: string; scoreId?: number };
 
-export const MAX_CIBLES_DEFI = 20; // meme plafond que le worker
+export const MAX_CIBLES_DEFI = 50; // meme plafond que le worker
 
 const cle = (n: string) => n.trim().toLowerCase();
 

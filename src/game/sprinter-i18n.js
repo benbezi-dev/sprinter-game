@@ -1847,7 +1847,7 @@
     challenge_make:  ['DÉFIER UN AMI', 'CHALLENGE A FRIEND'],
     challenge_making:['création du défi...', 'creating challenge...'],
     defi_choisir:    ['CHOISIR QUI DÉFIER', 'PICK WHO TO CHALLENGE'],
-    defi_choisis:    ['{k} choisi(s) : {n}', '{k} picked: {n}'],
+    defi_a_qui:      ['À qui ? Duels ou TOP 500', 'Who? Duels or TOP 500'],
     defi_onglet_duels:['DUELS', 'DUELS'],
     defi_onglet_top: ['TOP 500', 'TOP 500'],
     defi_chercher:   ['chercher un nom', 'search a name'],

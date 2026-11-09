@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film } from 'lucide-react';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film, ChevronRight } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, raisonDe, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
@@ -162,6 +162,8 @@ export function OneShotEndScreen() {
   // dans la categorie PAR COURSE, et seulement ceux qui y entrent vraiment.
   const [outcomes, setOutcomes] = useState<RaceOutcome[] | null>(null);
   const [topName, setTopName] = useState(getSavedName());
+  // un nom deja connu ne se redemande pas dans le panneau du defi (09/11)
+  const [nomConnu] = useState(() => !!(getSavedName() || '').trim());
   const [topStatus, setTopStatus] = useState<'checking' | 'idle' | 'sending' | 'done' | 'error'>('checking');
   // Les traces du programme, relevees au montage : chacune est la preuve du
   // chrono de meme rang dans runSplits, et part avec lui au classement.
@@ -248,6 +250,7 @@ export function OneShotEndScreen() {
   const msg = code ? shareText(code, shotRaces, runTime * 1000, N.getLang() === 'fr') : '';
 
   const ghostSplits: number[] = (SprinterApp.G.ghostSplits || []) as number[];
+  const topVisible = tops.length > 0 && topStatus !== 'checking' && topStatus !== 'done';
   const complete = runSplits.length === shotRaces.length && runSplits.every(s => s != null);
 
   /**
@@ -1326,7 +1329,7 @@ export function OneShotEndScreen() {
               revanche, personne ne peut enregistrer a la place du joueur : le
               retirer aussi ferait perdre le record en silence. Le formulaire
               reste donc, seul, et seulement dans ce cas-la. */}
-          {tops.length > 0 && topStatus !== 'checking' && topStatus !== 'done' && (
+          {topVisible && (
             <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2 sm:p-3 md:p-4 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1">
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
                 <span className="flex items-center gap-2 shrink-0">
@@ -1340,7 +1343,7 @@ export function OneShotEndScreen() {
               <div className="flex gap-2">
                 <input
                   value={topName}
-                  onChange={e => setTopName(e.target.value)}
+                  onChange={e => { setTopName(e.target.value); setName(e.target.value); }}
                   placeholder={N.t('your_name')}
                   maxLength={20}
                   className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
@@ -1394,11 +1397,6 @@ export function OneShotEndScreen() {
               </div>
               {/* Defi adresse a quelqu'un du TOP 500 : on le rappelle, sinon
                   le joueur ne sait plus a qui son code va partir. */}
-              {cible && !code && (
-                <p className="text-center text-[10px] md:text-xs text-cyan-300">
-                  {N.t('target_run', { n: cible.name, d: shotRaces[0] })}
-                </p>
-              )}
               {cible && code && prevenus && prevenus.length > 0 && (
                 <p className="text-center text-[10px] md:text-xs text-cyan-300">
                   {N.t('target_sent', { n: prevenus.join(', ') })}
@@ -1460,14 +1458,32 @@ export function OneShotEndScreen() {
                   une revanche : elle part d'elle-meme, ou pas du tout. */}
               {!code && !revancheId && revancheFaite === null && (
                 <>
-                  <div className="flex gap-2">
+                  {/* Un seul champ nom a l'ecran : celui du TOP 500 sert aussi
+                      au defi ; sans lui, on ne le demande que s'il manque. */}
+                  {!topVisible && !nomConnu && (
                     <input
                       value={name}
                       onChange={e => setName(e.target.value)}
                       placeholder={N.t('your_name')}
                       maxLength={20}
-                      className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
                     />
+                  )}
+                  <div className="flex gap-2">
+                    {/* Les destinataires a la place du champ : un clic ouvre
+                        les duels et le TOP 500, on y coche qui l'on veut. */}
+                    <button
+                      onClick={() => setChoisir(true)}
+                      disabled={busy}
+                      className="flex-1 min-w-0 flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-left text-sm court:text-xs hover:border-primary/50 transition-colors"
+                    >
+                      <Swords className="w-4 h-4 shrink-0 text-primary" />
+                      <span className={`flex-1 min-w-0 truncate ${cibles.length ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>
+                        {cibles.length ? cibles.map(c => c.name).join(', ') : N.t('defi_a_qui')}
+                      </span>
+                      {cibles.length > 1 && <span className="shrink-0 text-[10px] font-bold text-primary">{cibles.length}</span>}
+                      <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    </button>
                     <button
                       onClick={handleCreate}
                       disabled={busy || !complete}
@@ -1477,17 +1493,6 @@ export function OneShotEndScreen() {
                       {busy ? N.t('challenge_making') : N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
                     </button>
                   </div>
-                  {/* Choisir un ou plusieurs destinataires dans les duels ou le TOP 500. */}
-                  <button
-                    onClick={() => setChoisir(true)}
-                    disabled={busy}
-                    className="self-center px-4 py-1.5 rounded-xl font-bold tracking-wide text-[10px] md:text-xs
-                               text-primary border border-primary/40 hover:bg-primary/15 transition-colors flex items-center gap-2"
-                  >
-                    <Swords className="w-3.5 h-3.5" />
-                    {cibles.length ? N.t('defi_choisis', { k: cibles.length, n: cibles.map(c => c.name).join(', ') })
-                                   : N.t('defi_choisir')}
-                  </button>
                   {err && <p className="text-center text-xs text-destructive">{N.t('challenge_net')}</p>}
                 </>
               )}
