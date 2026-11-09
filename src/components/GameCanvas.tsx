@@ -170,7 +170,10 @@ export function GameCanvas() {
     // noms des maintenant, bien avant que le joueur n'y arrive.
     primeTopNames();
 
+    // Images dessinées depuis l'arrivée sur un écran de fin (voir FOND FIGÉ dans frame)
+    let imagesSousLeVoile = 0;
     const resize = () => {
+      imagesSousLeVoile = 0; // la toile vient d'être vidée : il faut la repeindre
       const box = canvas.parentElement || canvas;
       const r = box.getBoundingClientRect();
       const w = Math.round(r.width) || window.innerWidth;
@@ -272,6 +275,15 @@ export function GameCanvas() {
         const st = SprinterApp.G.state;
         if ((st === 'title' || st === 'open') && Prem.dpr() !== SprinterApp.G.dpr) resize();
       }
+
+      // FOND FIGÉ SOUS LES ÉCRANS DE FIN (9/11, « le jeu rame énormément »). Over, Result et
+      // WinAll posent un voile noir à 80-90 % avec backdrop-blur : redessiner le stade dessous à
+      // chaque image ne se voyait pas, mais obligeait le navigateur à refaire le flou plein écran
+      // à chaque image. Une demi-seconde de dessin (le temps que l'écran apparaisse), puis la
+      // toile garde sa dernière image ; la logique, elle, continue de tourner.
+      const sousLeVoile = SprinterApp.G.state === 'over' || SprinterApp.G.state === 'result' || SprinterApp.G.state === 'winall';
+      imagesSousLeVoile = sousLeVoile ? imagesSousLeVoile + 1 : 0;
+      if (!redessin && imagesSousLeVoile > 30) { rafRef.current = requestAnimationFrame(frame); return; }
 
       ctx.setTransform(SprinterApp.G.dpr, 0, 0, SprinterApp.G.dpr, 0, 0);
       ctx.clearRect(0, 0, SprinterApp.G.VW, SprinterApp.G.VH);
