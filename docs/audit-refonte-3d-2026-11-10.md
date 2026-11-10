@@ -125,5 +125,23 @@ garder Fable 5.2 pour les lots 2 et 3.
   sRGB juste, aucune erreur WebGL, rendu identique à l'œil. Mémoire vidéo des
   textures ≈ 43 Mo → ≈ 8 Mo ; **téléchargement 3,4 → 4,1 Mo** (le JPEG est plus
   compact sur disque : le gain est en mémoire, pas en réseau).
-- Aucun modèle publié n'est encore converti. `texture-stable.ts` charge des JPG
-  hors GLB : non concerné tant qu'on ne les convertit pas.
+- `texture-stable.ts` charge des JPG hors GLB : non concerné tant qu'on ne les convertit pas.
+
+### Lot 1, étape 4 — conversion KTX2 des modèles du palier ordinaire (10/11)
+
+- Convertis (9) : `amsalem/{tribune,arbre,cage,mat,haie}`, `pointes-{homme,femme}`,
+  `salle/exterieur`, `molosse-chien`. **Mémoire vidéo des textures ≈ 175 → 44 Mo** ;
+  **téléchargement 7,2 → 11,1 Mo** (+3,9 Mo : le JPEG est plus compact sur disque que
+  l'ETC1S/UASTC). Le choix porte sur la stabilité des petits téléphones, pas sur le réseau.
+- Preuves : géométrie identique (`verifier-identique.mjs`, 9/9), animations, squelettes,
+  matériaux inchangés ; chargés par le jeu (course en salle, stade Amsalem, palier 2),
+  aucune erreur WebGL ; comparaison côte à côte avec l'original : identique à l'œil.
+- **Non convertis, volontairement** :
+  - `boss-plein/` (15 × ~90 Mo de mémoire vidéo, PNG 4096) et `amsalem/tribune-ultra`
+    (268 Mo) : consigne « sans la compression qui les arrondit » / export `--ultra`
+    « sans compression » ; l'ETC1S est avec perte. Décision de l'auteur à prendre.
+  - `coureur-{homme,femme}` : texture minuscule (1,2 Mo de mémoire vidéo), et la
+    réécriture touchait leurs accesseurs « sparse » (+0,2 Mo).
+  - `gens/` : plus chargé par le jeu (`athlete/corps-gens.ts`).
+- Outil : `tools/assets/inventaire-textures.mjs` (poids et mémoire vidéo par GLB).
+- Non fait : mesure sur un vrai téléphone.
