@@ -99,7 +99,9 @@ const TELEPHONE = (() => {
   try { return matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); } catch { return false; }
 })();
 // v3 (24/10) : les paliers retenus sous l'ancien seuil (45 images/s) repartent de zero
-const PALIER_CLE = 'sprinter_palier3d-v3';
+// v4 (10/11) : ceux retenus sous la regle trop prompte du 10/11 (seuil a 22 ms, presentation
+// jugee, un pixel par point) aussi — « on perd enormement en qualite », l'auteur, video du Flip
+const PALIER_CLE = 'sprinter_palier3d-v4';
 const palierRetenu = (() => { try { const v = localStorage.getItem(PALIER_CLE); return v == null ? null : Math.max(0, Math.min(3, +v | 0)); } catch { return null; } })();
 const QUALITE = Q.get('qualite');
 // ?palier=0..3 : un palier fixe, sans adaptation (pour mesurer)
@@ -120,9 +122,9 @@ const PALIER_MAX = TELEPHONE ? 2 : 3, PALIER_MIN = 0;
 // economie d'energie (Safari plafonne alors a 30 images/s) donnait 33 ms a chaque image : toutes
 // « lentes » sous un seuil de 22 ms, et le palier tombait a 0 des la presentation. La cadence de
 // base est le 20e centile des intervalles de la fenetre ; une image est lente au-dela d'une fois
-// et demie cette base, entre 22 ms (un ecran a 120 Hz ne juge pas plus severement qu'a 60) et
-// 38 ms (sous 26 images/s, c'est lent quelle que soit la base).
-const IMAGE_LENTE_MIN = 0.022, IMAGE_LENTE_MAX = 0.038;
+// et demie cette base, entre 34 ms (le seuil d'avant le 10/11, que le Flip tenait en course au
+// palier 2 ; 22 ms le faisait tomber) et 39 ms (sous 26 images/s, c'est lent quelle que soit la base).
+const IMAGE_LENTE_MIN = 0.034, IMAGE_LENTE_MAX = 0.039;
 function seuilImageLente(dts: number[]) {
   const tries = [...dts].sort((a, b) => a - b);
   const base = tries[Math.floor(tries.length * 0.2)] || 1 / 60;
@@ -139,15 +141,15 @@ function appliquerLePalier() {
   if (soleil) soleil.castShadow = OMBRES && palier > 0;
   dimensionner();
 }
-/** Une baisse durable sur 1,5 s allege le rendu ; une image isolee ne suffit pas.
- *  `actif` : la scene se joue (presentation, decompte ou course). `enCourse` : la course elle-meme. */
-function tenirLaCadence(dt: number, actif: boolean, enCourse = actif) {
-  // La premiere seconde d'un stade laisse ses shaders se compiler. Ensuite,
-  // une presentation lente doit pouvoir s'alleger avant le coup de pistolet.
-  // Un retour d'onglet (> 1 s) ne compte pas comme une cadence perdue.
-  if (!renderer || !dt || dt > 1 || QUALITE === 'ultra' || PALIER_FORCE != null || !actif || performance.now() < qualiteApres) return;
+/** Une baisse durable sur 2,5 s de course allege le rendu ; une image isolee ne suffit pas. */
+function tenirLaCadence(dt: number, enCourse: boolean) {
+  // SEULE LA COURSE SE JUGE (retabli le 10/11, apres la video du Flip) : la presentation et le
+  // decompte chargent encore (stade, foule, shaders) et faisaient tomber au palier 0 un appareil
+  // qui tient le palier 2 en course. La premiere seconde d'un stade laisse aussi ses shaders se
+  // compiler. Un retour d'onglet (> 1 s) ne compte pas comme une cadence perdue.
+  if (!renderer || !dt || dt > 1 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse || performance.now() < qualiteApres) return;
   mesure += dt; intervalles.push(dt);
-  if (mesure < 1.5) return;
+  if (mesure < 2.5) return;
   const dureeMesuree = mesure, seuil = seuilImageLente(intervalles);
   const lentes = intervalles.reduce((s, d) => s + (d > seuil ? d : 0), 0);
   // un quart du temps en images lentes, c'est deja une course qui saccade (au Flip, en ULTRA :
@@ -159,7 +161,6 @@ function tenirLaCadence(dt: number, actif: boolean, enCourse = actif) {
   // course fluide (moins d'une image lente sur trente), sans avoir baisse dans la visite : un
   // palier de plus, jusqu'a celui de l'appareil. Seule la course compte pour remonter.
   if (!trop) {
-    if (!enCourse) return;
     fluide = part < 0.03 ? fluide + dureeMesuree : 0;
     if (fluide >= 10 && !aBaisse && palier < PALIER_MAX) {
       palier++; fluide = 0;
@@ -173,10 +174,7 @@ function tenirLaCadence(dt: number, actif: boolean, enCourse = actif) {
   palier--;
   ULTRA = false;
   appliquerLePalier();
-  // UNE PRESENTATION QUI SACCADE N'ENGAGE QUE LA VISITE (au Galaxy Flip, le survol et le decompte
-  // faisaient tomber au palier 0 un appareil qui tient le palier 2 en course) : on allege tout de
-  // suite, mais seule une baisse mesuree en course est retenue pour les visites suivantes.
-  if (enCourse) try { localStorage.setItem(PALIER_CLE, String(palier)); } catch { /* le palier vaut pour la visite */ }
+  try { localStorage.setItem(PALIER_CLE, String(palier)); } catch { /* le palier vaut pour la visite */ }
 }
 // ?vue=survol : une vue aerienne fixe du stade entier, pour verifier le decor (rien ne s'y chevauche)
 const SURVOL = Q.get('vue') === 'survol';
@@ -3337,13 +3335,11 @@ export function rendre(App: any, dt: number) {
   if (IPS) compterLesImages();
   const { G, C } = App;
   // La qualite suit le temps reel du rendu, jamais le pas plafonne de la
-  // simulation ni le ralenti d'un tutoriel. Elle protege aussi la presentation.
+  // simulation ni le ralenti d'un tutoriel.
   const maintenantImage = performance.now();
   const dtRendu = imagePrecedente3D === null ? 0 : (maintenantImage - imagePrecedente3D) / 1000;
   imagePrecedente3D = maintenantImage;
-  tenirLaCadence(dtRendu, !G.paused && !document.hidden
-    && (G.state === 'race' || G.state === 'count' || (G.state === 'cut' && G.cut?.kind === 'intro')),
-    G.state === 'race');
+  tenirLaCadence(dtRendu, !G.paused && !document.hidden && G.state === 'race' && G.elapsed > 1);
   const T = G.track;
   if (!renderer) {
     const lanes = (G.runners || []).map((r: any) => r.lane | 0);
