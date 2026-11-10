@@ -197,7 +197,7 @@
    */
   function dpr() {
     const d = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
-    return Math.min(d, niveau >= ULTRA ? 3 : 2);
+    return Math.min(d, [1, 1.5, 2, 3][niveau]);
   }
 
   // -------------------------------------------------------------------
