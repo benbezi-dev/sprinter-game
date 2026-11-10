@@ -77,6 +77,16 @@ const MESSAGES = {
     fr: ['On te veut dans le duel', 'Un coureur t’invite au duel des marques. Choisis ton camp.'],
     en: ['They want you in the duel', 'A runner invites you to the brand duel. Pick your side.'],
   },
+  // Noel 2026 (noel.js) : l'etoile du sapin vient de changer de main, ou une
+  // volee de boules de neige est tombee sur ton fantome (une fois par heure).
+  noel_etoile: {
+    fr: ['On t\u2019a volé l\u2019étoile !', 'Ton fantôme vient de tomber. Va la reprendre.'],
+    en: ['Your star was stolen!', 'Your ghost just fell. Go take it back.'],
+  },
+  noel_neige: {
+    fr: ['Ton fantôme est sous la neige', 'On te bombarde de boules de neige. Recours pour la secouer.'],
+    en: ['Your ghost is snowed under', 'You are being pelted with snowballs. Run again to shake it off.'],
+  },
   // L'objectif du jour fabrique son texte a l'envoi — il porte le chrono du
   // joueur, qui n'existe pas dans une table statique. Cette entree est ce
   // qu'on dit quand ce calcul n'a pas abouti : une sonnerie generique vaut
