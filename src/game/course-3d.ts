@@ -3328,7 +3328,15 @@ function compterLesImages() {
     document.body.appendChild(ipsBoite); ipsT0 = t; ipsPrec = t;
   }
   ipsN++; ipsPire = Math.max(ipsPire, t - ipsPrec); ipsPrec = t;
-  if (t - ipsT0 >= 1000) { ipsBoite.textContent = `${Math.round(ipsN * 1000 / (t - ipsT0))} i/s · pire ${Math.round(ipsPire)} ms`; ipsN = 0; ipsT0 = t; ipsPire = 0; }
+  // LE NIVEAU S'AFFICHE AVEC LA CADENCE (10/11, pour comparer des mesures sur telephone) : sans
+  // lui, on ne savait pas quel palier le reglage automatique avait choisi pendant la course.
+  if (t - ipsT0 >= 1000) {
+    const r = renderer ? renderer.getPixelRatio() : 0;
+    const qui = PALIER_FORCE != null ? 'force' : QUALITE === 'ultra' ? 'ultra' : 'auto';
+    ipsBoite.textContent = `${Math.round(ipsN * 1000 / (t - ipsT0))} i/s · pire ${Math.round(ipsPire)} ms · niveau ${palier} ${qui} · ${String(+r.toFixed(2)).replace('.', ',')} px`
+      + (toile ? ` · ${toile.width}×${toile.height}` : '');
+    ipsN = 0; ipsT0 = t; ipsPire = 0;
+  }
 }
 const IPS = Q.get('ips') !== null;
 export function rendre(App: any, dt: number) {
