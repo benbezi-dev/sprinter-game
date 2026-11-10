@@ -3,6 +3,7 @@ import { SprinterApp } from '@/game/engine';
 import { Coins, Clapperboard } from 'lucide-react';
 import { rafraichirPieces, usePieces, coutDuContinue, acheterContinue, type EtatPieces } from '@/game/pieces';
 import { pubPossible, regarderUnePub, PUBS_PAR_CARRIERE } from '@/game/pub';
+import { sansPubs } from '@/game/achats';
 
 /**
  * LES REPRISES D'UNE ETAPE PERDUE : le Continue paye en pieces et la pub
@@ -73,7 +74,8 @@ export function Reprises({ parcours, achetes, pubs, pubsMax = PUBS_PAR_CARRIERE,
   const handlePub = async () => {
     if (pub === 'envoi') return;
     setPub('envoi');
-    if (await regarderUnePub()) { reprendre(true); return; }
+    // Sans pubs (game/achats.ts) : la meme 2e chance, sans la video.
+    if (sansPubs() || await regarderUnePub()) { reprendre(true); return; }
     setPub('rate');
   };
 
@@ -120,7 +122,7 @@ export function Reprises({ parcours, achetes, pubs, pubsMax = PUBS_PAR_CARRIERE,
           )}
           <button onClick={handlePub} disabled={pub === 'envoi'}
             className="w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-sm sm:text-xl md:text-2xl whitespace-nowrap tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
-            {N.t(pub === 'envoi' ? 'pub_charge' : revanche ? 'pub_revanche' : 'pub_continuer')}<Clapperboard className="w-5 h-5 md:w-6 md:h-6" />
+            {sansPubs() ? N.t('pub_offerte') : N.t(pub === 'envoi' ? 'pub_charge' : revanche ? 'pub_revanche' : 'pub_continuer')}{!sansPubs() && <Clapperboard className="w-5 h-5 md:w-6 md:h-6" />}
           </button>
           {pub === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}</div>}
         </div>
