@@ -22,6 +22,23 @@
 
 import * as THREE from 'three';
 
+// LES PIECES ULTRA SONT QUANTIFIEES (10/11, tools/assets/optimiser-glb.mjs --quantifier) : leurs
+// sommets sont des entiers normalises entre -1 et 1, et la mise a l'echelle est dans la matrice du
+// noeud. Fusionner cette matrice dans la geometrie (applyMatrix4) ecrirait des positions de plusieurs
+// metres dans des entiers bornes a 1 : la piece serait ecrasee. On repasse donc en Float32 d'abord ;
+// une geometrie deja en Float32 (les pieces legeres) est rendue telle quelle.
+export function geometrieFlottante(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const out = g.clone();
+  for (const nom of Object.keys(out.attributes)) {
+    const a = out.getAttribute(nom);
+    if (a.array instanceof Float32Array && !a.normalized) continue;
+    const f = new Float32Array(a.count * a.itemSize);
+    for (let i = 0; i < a.count; i++) for (let k = 0; k < a.itemSize; k++) f[i * a.itemSize + k] = a.getComponent(i, k);
+    out.setAttribute(nom, new THREE.BufferAttribute(f, a.itemSize));
+  }
+  return out;
+}
+
 export type ContexteRuelle = {
   stade: THREE.Group;
   /** Le trace du jeu (Track) : `total`, `curved`, `arc`. */
@@ -177,7 +194,7 @@ export function construireRuelle(o: ContexteRuelle): Ruelle {
     const mat = (m.material as THREE.MeshStandardMaterial).clone();
     if ((mat as any).color) mat.color.multiply(new THREE.Color(0.55, 0.52, 0.68));
     m.updateWorldMatrix(true, false);
-    const geo = m.geometry.clone().applyMatrix4(m.matrixWorld);
+    const geo = geometrieFlottante(m.geometry).applyMatrix4(m.matrixWorld);
     const im = new THREE.InstancedMesh(geo, mat, n);
     im.count = 0; im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false;
     ajoute(im);

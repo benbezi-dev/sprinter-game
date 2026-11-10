@@ -90,3 +90,31 @@ garder Fable 5.2 pour les lots 2 et 3.
 - Non touchés : `boss-plein/` et `vedettes/meba-plein.glb` (le choix « sans la
   compression qui les arrondit » y est explicite, et leur poids vient des textures
   PNG 4096, que les téléphones ne chargent pas).
+
+### Lot 1, étape 2 — quantification des sommets des pièces ultra (10/11)
+
+- `public/modeles/stades-ultra/` : **74 → 38 Mo** (148 Mo à l'origine). Les sommets
+  restent en entiers dans la mémoire graphique : environ deux fois moins de mémoire
+  vidéo pour ces pièces (non mesuré sur téléphone).
+- Positions sur 14 bits, normales sur 10 (`--quantifier`) ; 16 bits pour les trois
+  plus grandes pièces (deux sautoirs de longueur, le mât de Montreuil :
+  `--bits-position 16`), qui dépassaient 1 mm à 14 bits.
+- Écart mesuré sommet par sommet (`tools/assets/mesurer-ecart.mjs`) : au plus
+  0,33 mm et 0,1° sur les 45 pièces. L'outil signale bien 14 mm pour une
+  quantification sur 8 bits.
+- **Correction nécessaire dans le jeu** : `ruelle-3d.ts` fusionnait la matrice du
+  nœud dans la géométrie ; sur des sommets quantifiés, une maison de 11 m sortait
+  écrasée dans un cube de 1 m (vérifié). `geometrieFlottante()` repasse les sommets
+  en Float32 avant la fusion. Vérifié dans Chromium avec la fonction du jeu
+  (transpilée depuis `ruelle-3d.ts`) et le GLTFLoader du jeu : 45/45 pièces, mêmes
+  triangles, boîtes à 0,23 mm près.
+- `npm run typecheck` et `npm run build` passent.
+- Non fait : course complète dans la ruelle, mesure sur téléphone.
+
+### En attente — textures compressées pour le GPU (KTX2)
+
+L'encodeur officiel (`toktx`, KTX-Software de Khronos) a été téléchargé mais son
+exécution a été refusée par le garde-fou de la session (code téléchargé). À faire
+quand l'outil sera autorisé ou depuis le Mac (`brew install ktx-software`).
+Travail associé : chargeur KTX2 commun à tous les GLTFLoader du jeu, et
+`texture-stable.ts` à revoir (incompatible avec des textures compressées).
