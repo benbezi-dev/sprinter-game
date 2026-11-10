@@ -86,8 +86,8 @@ jobs:
       # ne publie rien, on relance ce deploiement (gh workflow run deploy.yml --ref main).
       #
       # Le JEU COMPLET (« je veux le jeu complet, en test », 23/10) : rien n'est retire ici.
-      # C'est GitHub Pages, plafonne vers 1 Go, qui en recoit plus bas une copie allegee ;
-      # Cloudflare Pages, lui, recoit tout. Si la branche n'existe plus, l'etape ne fait rien.
+      # Cloudflare Pages recoit tout. GitHub Pages, plafonne a 1 Go, ne garde que
+      # la production et des liens vers les copies de test completes sur Cloudflare. Si la branche n'existe plus, l'etape ne fait rien.
       - name: Construire la branche de test 3D
         run: |
           git fetch --depth 1 origin test-ferme/course-3d || { echo "pas de branche test 3D"; exit 0; }
@@ -123,10 +123,11 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@4 pages deploy dist --project-name sprinter-game --branch main --commit-dirty=true
 
-      # LA COPIE POUR GITHUB PAGES, sous son plafond d'1 Go : la version 3D y laisse les
-      # videos anglaises du molosse et les images 2D de la ruelle (~160 Mo).
-      - name: Alleger la version 3D pour GitHub Pages
-        run: rm -rf dist/test3d/modeles/stades-ultra dist/test3d/modeles/boss-plein dist/test3d/decors-ultra/halloween-* dist/test3d/halloween/*-en.mp4 dist/test3d/halloween/*-en.jpg dist/test3d/halloween/*-en.webp
+      # Les trois copies depassent le plafond d'1 Go de GitHub Pages.
+      # Cloudflare vient de les recevoir en entier ; les entrees /test/ et
+      # /test3d/ y renvoient en gardant les parametres et l'ancre.
+      - name: Preparer la production pour GitHub Pages
+        run: node tools/preparer-github-pages.mjs dist
 
       - uses: actions/upload-pages-artifact@v3
         with:
