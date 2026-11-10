@@ -55,10 +55,16 @@ export function useMenuSansDefiler(plancher = 0.5) {
       if (!vivant || !c || !d) return;
       // on tape dans un champ : le clavier rogne la hauteur, on ne touche a rien
       if (document.activeElement instanceof HTMLInputElement && d.contains(document.activeElement)) return;
+      // Ce qui est a l'ecran maintenant, et si ca tient sans defiler (voir STABILITE plus bas).
+      const avant = parseFloat(d.style.zoom) || 1;
+      const avantTient = c.scrollHeight <= c.clientHeight + 0.5;
+      const dispo = place(c) - 2;   // deux pixels de marge : un arrondi ne doit pas faire defiler
+      // Deja reduit, tient sans defiler, et presque rien a regagner : on ne touche a rien. Toute
+      // ecriture du zoom refait la mise en page du menu, et c'est elle qui le faisait trembler.
+      if (avant < 1 && avantTient && d.getBoundingClientRect().height >= dispo - 12) return;
       // La mesure se fait sans reduction : sinon le calcul tourne en rond.
       d.style.zoom = '';
       const besoin = d.offsetHeight;
-      const dispo = place(c) - 2;   // deux pixels de marge : un arrondi ne doit pas faire defiler
       let e = 1;
       if (dispo > 0 && besoin > dispo) {
         const r = Math.floor((dispo / besoin) * 1000) / 1000;
@@ -81,6 +87,15 @@ export function useMenuSansDefiler(plancher = 0.5) {
           d.style.zoom = String(e);
         }
       }
+      // STABILITE (l'auteur, 10/11/2026 : « l'affichage bouge et donne mal a la tete »).
+      // Les arrondis du zoom font hesiter le calcul entre deux valeurs voisines (0,62 et 0,628
+      // mesures) : chaque changement redimensionne le cadre, l'observateur relance la mesure, qui
+      // repart dans l'autre sens — le menu tremblait de quelques pixels sans fin. On ne regrandit
+      // donc pas le menu pour un gain de moins de 2 % quand la valeur en place tient deja sans
+      // defiler : elle reste. Rapetisser, en revanche, se fait toujours (sinon le menu defilerait).
+      if (avant < 1 && avantTient && e > avant && e - avant < 0.02) {
+        d.style.zoom = String(avant);
+      }
     };
 
     const planifier = () => {
@@ -90,7 +105,25 @@ export function useMenuSansDefiler(plancher = 0.5) {
 
     planifier();
     // Le menu change apres coup : un bandeau arrive du reseau, un onglet change de contenu.
-    const ro = new ResizeObserver(planifier);
+    // Un pixel n'est pas un changement : le menu reduit est centre dans son cadre, l'arrondi du
+    // texte zoome depend de sa position, et sa hauteur hesite d'un pixel d'une mesure a l'autre.
+    // Relancer la mesure sur ce pixel entretenait une boucle sans fin (le menu sautait d'un
+    // pixel plusieurs fois par seconde). Seul un vrai changement de taille relance.
+    const vues = new WeakMap<Element, { l: number; h: number }>();
+    const ro = new ResizeObserver(entrees => {
+      let reel = false;
+      for (const en of entrees) {
+        const { width: l, height: h } = en.contentRect;
+        const v = vues.get(en.target);
+        if (!v || Math.abs(v.l - l) >= 2 || Math.abs(v.h - h) >= 2) {
+          vues.set(en.target, { l, h });
+          reel = true;
+        }
+      }
+      // ... sauf si ce pixel fait defiler : la, on resserre.
+      const c = cadre.current;
+      if (reel || (c && c.scrollHeight > c.clientHeight + 0.5)) planifier();
+    });
     const mo = new MutationObserver(planifier);
     if (cadre.current) ro.observe(cadre.current);
     if (cadre.current?.parentElement) ro.observe(cadre.current.parentElement);
