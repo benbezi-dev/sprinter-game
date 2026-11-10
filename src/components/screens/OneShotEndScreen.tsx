@@ -1000,7 +1000,7 @@ export function OneShotEndScreen() {
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-bold text-destructive tracking-widest uppercase">
                 {/* En tournoi, le titre dit deja ELIMINE : on dit pourquoi. */}
                 {resTournoi ? N.t('false_out')
-                  : N.t(defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
+                  : N.t(duelEnSuspens ? 'false_out_suspens' : defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
               </div>
             ) : (
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-medium text-foreground/80 tracking-widest uppercase">
@@ -1183,7 +1183,7 @@ export function OneShotEndScreen() {
           {/* Resultat du duel : les points comptent pour le classement des
               duels, et une seule fois. On l'annonce comme definitif parce
               qu'il l'est — relancer le meme defi ne redistribue rien. */}
-          {challenge && (duelEnCours || duel) && (
+          {challenge && !duelEnSuspens && (duelEnCours || duel) && (
             <motion.div
               {...MONTEE}
               className={`w-full rounded-2xl border px-4 py-3 md:py-4 court:px-3 court:py-2 flex flex-col items-center gap-1.5 shadow-2xl
@@ -1434,7 +1434,7 @@ export function OneShotEndScreen() {
               </p>
               <Reprises parcours={parcoursOS}
                 achetes={SprinterApp.G.shotRepAchats || 0} pubs={SprinterApp.G.shotRepPubs || 0}
-                pubsMax={PUBS_PAR_CARRIERE}
+                pubsMax={PUBS_PAR_CARRIERE} revanche
                 etape={nomDiscipline(cleDiscipline([shotRaces[SprinterApp.G.fauxDepartIdx] as string]))}
                 recaler={n => { SprinterApp.G.shotRepAchats = n; }}
                 reprendre={reprendreLeOneShot} />
@@ -1833,7 +1833,7 @@ export function OneShotEndScreen() {
 
             {/* Ce qui est joue de la course precedente. Un constat, plus un
                 verrou : il n'empeche plus rien, il informe. */}
-            {verrou && (
+            {verrou && !duelEnSuspens && (
               <p className={`text-center text-[11px] md:text-xs tracking-wide leading-snug max-w-sm mx-auto
                 ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold'
                                                 : 'text-muted-foreground'}`}>

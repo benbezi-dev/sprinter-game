@@ -65,7 +65,7 @@ export function RevanchePub({ cle, adversaire, onRevanche }: {
     <div className="w-full flex flex-col items-center gap-2">
       <Reprises parcours={parcours}
         achetes={lire('revanchesAchats', parcours)} pubs={lire('revanchesPub', parcours)}
-        pubsMax={PUBS_PAR_REVANCHE}
+        pubsMax={PUBS_PAR_REVANCHE} revanche
         etape={N.t('duel_revanche_etape', { n: adversaire })}
         recaler={n => { poser('revanchesAchats', parcours, n); rafraichir(x => x + 1); }}
         reprendre={parPub => {
