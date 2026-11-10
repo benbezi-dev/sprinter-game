@@ -44,78 +44,24 @@ jobs:
       # attendrait sa date se retirerait ici, comme Aurel jusqu'au 03/10.
       #
       # LA NUIT DU MOLOSSE EST CLOSE (01/11) : sa ruelle et sa bete ne vivent plus
-      # que dans la version de test, construite a part juste apres.
+      # que dans les versions de test (depot benbezi-dev/sprinter).
       - name: Retirer l'edition close de la production
         run: rm -rf dist/halloween dist/modeles/molosse-chien.glb dist/modeles/boss-plein/molosse.glb
 
-      # La version de test, dans un sous-dossier du meme site. Un seul
-      # deploiement sert les deux : pas de second depot a tenir a jour, et la
-      # version de test recoit chaque changement au meme moment que l'autre.
-      #
-      # VITE_CANAL=test est ce qui ouvre tout — et, en production, ce qui fait
-      # disparaitre du build tout ce qui n'est pas ouvert.
-      - name: Construire la version de test
-        run: npx vite build --outDir dist-test
-        env:
-          BASE_PATH: /test/
-          VITE_CANAL: test
-
-      # Le manifeste dit a iOS et Android quelle application on installe. Sans
-      # cette reecriture, la version de test revendiquerait l'identite et le
-      # perimetre du vrai jeu : installer l'une remplacerait l'autre.
-      - name: Distinguer la version de test a l'installation
-        run: |
-          node -e '
-            const f = "dist-test/manifest.webmanifest";
-            const m = JSON.parse(require("fs").readFileSync(f, "utf8"));
-            const base = "/test/";
-            m.name = "Sprinter — test";
-            m.short_name = "Sprinter test";
-            m.id = base;
-            m.scope = base;
-            m.start_url = ".";
-            require("fs").writeFileSync(f, JSON.stringify(m, null, 2));
-          '
-          mv dist-test dist/test
-
-      # LA BRANCHE DE TEST 3D, sous /test3d/ (23/10, l'auteur : « met le jeu en ligne mais
-      # pas pour les joueurs, uniquement sur une branche test 3D »). Elle est construite
-      # depuis la branche test-ferme/course-3d, en canal de test : la meme porte a code
-      # que /test/, aucun joueur n'y entre. La production et /test/ viennent toujours de
-      # main (ce depot-ci) ; la branche n'a pas de workflow a elle : une poussee sur elle
-      # ne publie rien, on relance ce deploiement (gh workflow run deploy.yml --ref main).
-      #
-      # Le JEU COMPLET (« je veux le jeu complet, en test », 23/10) : rien n'est retire ici.
-      # C'est GitHub Pages, plafonne vers 1 Go, qui en recoit plus bas une copie allegee ;
-      # Cloudflare Pages, lui, recoit tout. Si la branche n'existe plus, l'etape ne fait rien.
-      - name: Construire la branche de test 3D
-        run: |
-          git fetch --depth 1 origin test-ferme/course-3d || { echo "pas de branche test 3D"; exit 0; }
-          git worktree add ../course-3d FETCH_HEAD
-          cd ../course-3d
-          npm install
-          npx vite build --outDir dist-test3d
-          node -e '
-            const f = "dist-test3d/manifest.webmanifest";
-            const m = JSON.parse(require("fs").readFileSync(f, "utf8"));
-            const base = "/test3d/";
-            m.name = "Sprinter — test 3D";
-            m.short_name = "Sprinter 3D";
-            m.id = base;
-            m.scope = base;
-            m.start_url = ".";
-            require("fs").writeFileSync(f, JSON.stringify(m, null, 2));
-          '
-          mv dist-test3d "$GITHUB_WORKSPACE/dist/test3d"
-        env:
-          BASE_PATH: /test3d/
-          VITE_CANAL: test
+      # LES VERSIONS DE TEST NE SONT PLUS CONSTRUITES ICI (10/11/2026, l'auteur : « deplace
+      # la partie test pour alleger le jeu »). Le depot benbezi-dev/sprinter les construit
+      # depuis ce depot-ci (main pour /test/, test-ferme/course-3d pour /test3d/) et les
+      # publie sur https://benbezi-dev.github.io/sprinter/ — voir son .github/workflows/test.yml.
+      # Ici, /test/ et /test3d/ ne sont plus qu'une entree qui renvoie la-bas (chemin,
+      # parametres et ancre compris), sur Cloudflare comme sur GitHub Pages.
+      - name: Renvoyer /test/ et /test3d/ vers le depot des tests
+        run: node tools/preparer-github-pages.mjs dist
 
       # CLOUDFLARE PAGES (23/10, « heberger le site sur Cloudflare Pages » — pas de plafond
-      # de taille, 25 Mo par fichier, 20 000 fichiers) : le meme site, complet, sur le
-      # projet `sprinter-game` (sprinter-game.pages.dev). Tant que le domaine n'y a pas
-      # bascule, GitHub Pages reste la version servie aux joueurs : un echec ici ne bloque
-      # pas sa publication.
+      # de taille, 25 Mo par fichier, 20 000 fichiers) : le meme site sur le projet
+      # `sprinter-game` (sprinter-game.pages.dev). Tant que le domaine n'y a pas bascule,
+      # GitHub Pages reste la version servie aux joueurs : un echec ici ne bloque pas sa
+      # publication.
       - name: Publier sur Cloudflare Pages
         continue-on-error: true
         env:
@@ -123,10 +69,19 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: npx --yes wrangler@4 pages deploy dist --project-name sprinter-game --branch main --commit-dirty=true
 
-      # LA COPIE POUR GITHUB PAGES, sous son plafond d'1 Go : la version 3D y laisse les
-      # videos anglaises du molosse et les images 2D de la ruelle (~160 Mo).
-      - name: Alleger la version 3D pour GitHub Pages
-        run: rm -rf dist/test3d/modeles/stades-ultra dist/test3d/modeles/boss-plein dist/test3d/decors-ultra/halloween-* dist/test3d/halloween/*-en.mp4 dist/test3d/halloween/*-en.jpg dist/test3d/halloween/*-en.webp
+      # Prevenir le depot des tests qu'il y a du nouveau : il reconstruit tout de suite au
+      # lieu d'attendre sa verification des demi-heures. Il faut pour cela un jeton
+      # (secret SPRINTER_TEST_TOKEN, droit « Contents: write » sur benbezi-dev/sprinter) ;
+      # sans lui, l'etape ne fait rien.
+      - name: Prevenir le depot des tests
+        continue-on-error: true
+        env:
+          JETON: ${{ secrets.SPRINTER_TEST_TOKEN }}
+        run: |
+          [ -n "$JETON" ] || { echo "pas de SPRINTER_TEST_TOKEN : le depot des tests passera de lui-meme"; exit 0; }
+          curl -fsS -X POST -H "Authorization: Bearer $JETON" -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/benbezi-dev/sprinter/dispatches \
+            -d '{"event_type":"deployer-test"}'
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -34,6 +34,10 @@ RACINE = os.path.abspath(os.path.join(ICI, '..', '..'))
 # compression ni reduction de qualite », l'auteur, 23/10) — textures d'origine, sans perte,
 # geometrie non compressee ; seul plafond, 250 000 faces par piece (une maison Tripo en a
 # 1,8 million, et la ruelle en aligne des dizaines : aucun appareil ne les tiendrait)
+# Apres un export --ultra, passer les pieces par la compression SANS PERTE (memes sommets,
+# memes triangles, au bit pres ; 148 -> 74 Mo le 10/11) :
+#   npm run assets:optimiser -- public/modeles/stades-ultra/*/*.glb
+#   node tools/assets/verifier-identique.mjs <original> <optimise>   (la preuve, piece par piece)
 ULTRA = '--ultra' in sys.argv
 SORTIE = os.path.join(RACINE, 'public', 'modeles', 'stades-ultra' if ULTRA else 'stades')
 

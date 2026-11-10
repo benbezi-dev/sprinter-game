@@ -25,8 +25,7 @@
 // le rendu echoue, drawRunner dessine les tubes : on ne voit jamais un trou.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF, brancherKTX2 } from './chargeur-gltf';
 import { habiller, teindre, type Teinte } from './athlete/corps-gens';
 
 type Squelette = {
@@ -120,6 +119,7 @@ function renduWebGL(): THREE.WebGLRenderer | null {
   try {
     const cv = document.createElement('canvas');
     rendu = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true, premultipliedAlpha: true });
+    brancherKTX2(rendu);
     rendu.setPixelRatio(1);
     rendu.outputColorSpace = THREE.SRGBColorSpace;
     rendu.toneMapping = THREE.NoToneMapping;
@@ -183,8 +183,7 @@ export function charger(chemin: string): Promise<Modele | null> {
   nePasJuger();
   if (!R) return Promise.resolve(null);
   const p = new Promise<Modele | null>((ok) => {
-    const chargeur = new GLTFLoader();
-    chargeur.setMeshoptDecoder(MeshoptDecoder);
+    const chargeur = chargeurGLTF();
     chargeur.load(url(chemin), (gltf) => {
       nePasJuger();
       let m: Modele;

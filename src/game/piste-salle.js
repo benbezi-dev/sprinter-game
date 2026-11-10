@@ -22,8 +22,8 @@
 //
 // LE 400 M SE RABAT (l'auteur, 27/10 : « le 2e tour se fait sur un couloir, tous les athletes se
 // rabattent ») : en couloirs jusqu'a la sortie du second virage, puis a la corde (voir rabattement).
-// shortcut: au dernier tour, tout le monde court sur la ligne de mesure du couloir 1 — le moteur n'a pas
-// d'evitement entre coureurs : deux athletes a la meme distance s'y superposent.
+// Au dernier tour, le moteur mesure toute course sur la ligne de mesure du couloir 1 ; la place de chacun en travers
+// (corde, epaule, couloir 2 : PELOTON) ne change que son chemin dans les virages et ce qui se passe entre voisins.
 
 const DROITE_SALLE = 35, MES = 0.2, COULOIR = 0.9, NC = 6;
 let H = 17.2, A = H;                                  // la demi-largeur et la demi-longueur interieures
@@ -128,12 +128,34 @@ const PENTE = { monte: 5, descend: 5 };
 // fois. Au couloir 1, rayon de 12,8 m au plus serre et 10° de devers : il paie le double du couloir 6
 // (17,3 m, 17°) — le couloir 6, lui, monte et descend plus haut (1,13 m contre 4 cm).
 const VIRAGE = 0.4;
-// LE PELOTON DU 400 M : passe la ligne, tout le monde rejoint la corde — chacun a son ecart vers l'exterieur
-// (0 a 1,25 m), pris pendant la diagonale. Et les ACCROCHAGES (« sur le 400 m les accrochages sont possibles
-// au 2e tour, il peut y avoir du contact », l'auteur, 27/10) : a moins de LONG metres l'un de l'autre et de
-// LARGE en travers, c'est le contact — le joueur y laisse GARDE de sa vitesse et titube, une fois par REPIT.
-const PELOTON = [0, 0.5, 1.0, 0.25, 0.75, 1.25];
-const CONTACT = { long: 0.9, large: 0.55, garde: 0.93, repit: 1.5 };
+// LE PELOTON DU 400 M : passe la ligne, tout le monde rejoint LE COULOIR 1 (l'auteur, 09/11 : « lors du rabattement
+// le coureur passe dans le couloir 1, pas dans le couloir 2 » ; l'ecart fixe de 0 a 1,25 m d'avant en mettait la
+// moitie dans le 2). Chacun y prend une place, en metres vers l'exterieur depuis la ligne de mesure du couloir 1
+// (sprinter-app.js, placerPeloton) : la CORDE ; l'EPAULE, a la hauteur d'un coureur deja a la corde — le couloir 1
+// fait 0,90 m, la ligne de mesure est a 0,20 m du bord, l'epaule a 0,65 m : le corps (0,45 m de carrure) reste dans le
+// couloir 1 ; et DEHORS, le couloir 2, pour le troisieme de front ou le joueur qui le choisit (l'auteur, 09/11 :
+// « pouvoir passer dans le couloir 2 pour ne pas se prendre de coups et accelerer ») — il y fait plus de chemin dans les
+// virages (Track.trajetPeloton : pi x 1,0 m par virage entier). LONG : la longueur d'un coureur dans le peloton ; a
+// moins de LONG d'un coureur deja place, sa place est prise. ENFERME : derriere un coureur a moins de BLOQUE metres,
+// la corde et l'epaule prises devant lui, le joueur ne peut pas aller plus vite que lui (il garde GARDE metres) —
+// seul le couloir 2 le libere. GLISSE : le temps, en secondes, de changer de place.
+const PELOTON = { corde: 0, epaule: 0.45, dehors: 1.0, long: 1.1, bloque: 1.4, garde: 0.85, glisse: 0.35 };
+// Les ACCROCHAGES (« sur le 400 m les accrochages sont possibles au 2e tour, il peut y avoir du contact », l'auteur,
+// 27/10) : a moins de LONG metres l'un de l'autre et de LARGE en travers, c'est le contact — le joueur y laisse GARDE
+// de sa vitesse et titube, une fois par REPIT. Il ne vaut plus que contre un adversaire en direct ou un fantome : leur
+// course ne se rejoue pas ici, ils ne donnent ni ne prennent de coups de coude (COUDE).
+const CONTACT = { long: 0.9, large: 0.5, garde: 0.93, repit: 1.5 };
+// LES COUPS DE COUDE (l'auteur, 09/11 : « pouvoir donner des coups de coude pour faire ralentir les autres lorsqu'ils
+// sont au coude a coude avec vous ») : a moins de LONG metres et de LARGE en travers — la corde et l'epaule, jamais
+// l'epaule et le couloir 2 (0,55 m). Le coup du joueur retarde l'adversaire de RETARD secondes (il titube et perd son
+// allure le temps de se retablir, sprinter-core.js, stepAI) et coute au joueur COUT de sa vitesse ; donne dans le vide,
+// VIDE. Un coup tous les REPIT secondes au plus. Les adversaires en donnent aussi : PAR_S coups par seconde a qui reste
+// a leur hauteur, trois fois plus pendant COLERE secondes apres en avoir pris un ; le joueur y laisse RECU de sa
+// vitesse, une fois par REPIT_RECU. (Reglages de jeu : rien de mesure.)
+const COUDE = {
+  long: 0.8, large: 0.5, retard: 0.16, cout: 0.985, vide: 0.97, repit: 0.8,
+  parS: 0.6, colere: 1.5, recu: 0.93, repitRecu: 1.5,
+};
 
 /**
  * LE RABATTEMENT DU 400 M (l'auteur, 27/10 ; sa source, non verifiee : « ligne de rabattement a la sortie
@@ -157,7 +179,7 @@ export const SALLE = {
   inclinaison: 15 * Math.PI / 180,   // en moyenne : la pente se raidit vers l'exterieur (salle-3d.ts, profil)
   demiLong: A,
   virage, capVirage, longueurVirage, phiVirage, surVirage, hauteur, devers, rayonVirage, rabattement, pente: PENTE, serre: VIRAGE,
-  peloton: PELOTON, contact: CONTACT,
+  peloton: PELOTON, contact: CONTACT, coude: COUDE,
 };
 /** La ligne droite de l'anneau. */
 export const DROITE = DROITE_SALLE;

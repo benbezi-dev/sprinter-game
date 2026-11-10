@@ -256,6 +256,19 @@ export const DUEL_MARQUES_OUVERT = EST_TEST || (Date.now() >= LANCEMENT_DUEL_MAR
   && Date.now() < LANCEMENT_DUEL_MARQUES + DUREE_DUEL_MARQUES_MS);
 
 /**
+ * NOEL 2026 — boules de neige et etoile du sapin (10/11/2026). Ouvert sur le
+ * canal de test ; au public pendant DUREE_NOEL_MS a partir de LANCEMENT_NOEL
+ * (vite.config.ts), ferme tant que la date n'est pas fixee. Le serveur tient
+ * sa propre date (worker/src/noel.js, DEBUT_PROD) : les deux bougent ensemble.
+ */
+declare const __LANCEMENT_NOEL__: number | null;
+declare const __DUREE_NOEL_MS__: number;
+export const LANCEMENT_NOEL: number =
+  typeof __LANCEMENT_NOEL__ === 'number' ? __LANCEMENT_NOEL__ : Infinity;
+export const DUREE_NOEL_MS: number = typeof __DUREE_NOEL_MS__ === 'number' ? __DUREE_NOEL_MS__ : 0;
+export const NOEL_OUVERT = EST_TEST || (Date.now() >= LANCEMENT_NOEL && Date.now() < LANCEMENT_NOEL + DUREE_NOEL_MS);
+
+/**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
  *
  * Ce que Hurdlers a de casse aujourd'hui tient en une phrase : le joueur ne

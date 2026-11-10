@@ -28,8 +28,7 @@
 import * as THREE from 'three';
 import { textureStable, type NomStable } from './texture-stable';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF } from './chargeur-gltf';
 
 export type ContexteAmsalem = {
   stade: THREE.Group;
@@ -171,7 +170,7 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
    * UNE PIECE TRIPO (tools/blender/amsalem/piece_tripo.py : a l'echelle, centree au sol) posee a chaque place
    * [x, y, cap, echelle] ; les clones partagent geometrie et matiere. Sans le fichier : `repli` (la forme simple).
    */
-  const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+  const chargeur = chargeurGLTF();
   const piece = (nom: string, places: [number, number, number, number][], repli: () => void, forme = [1, 1, 1], occulte = false) => {
     chargeur.load(o.base + 'modeles/amsalem/' + nom, gl => {
       gl.scene.traverse((m: any) => { if (m.isMesh) { m.castShadow = false; m.receiveShadow = true; } });
@@ -260,7 +259,7 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
   // 103,3 x 58 m, sa longueur sur x), pose sur le corps principal du contour OSM (a de -202 a -90, n de 55 a 120) ---
   {
     const halle = new THREE.Group(); halle.position.set(X(-146), Y(87.5), 0); stade.add(halle);
-    const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+    const chargeur = chargeurGLTF();
     chargeur.load(o.base + 'modeles/salle/exterieur.glb', gl => {
       // le bardage gris argent, comme au survol de la salle (salle-3d.ts : la texture Tripo tire au beige) — mais pas
       // austere (« les couleurs du stade Jesse Owens sont austeres depuis la vue du stade Amsalem », l'auteur, 27/10 ; ses
@@ -297,7 +296,7 @@ export function construireAmsalem(o: ContexteAmsalem): THREE.Material[] {
     const t = TRIBUNE_AMSALEM, tribune = new THREE.Group();
     tribune.position.set(X(t.a0) + t.long / 2, Y(t.n0) + t.prof / 2, 0); stade.add(tribune);
     tribune.rotation.z = Math.PI;   // (Tripo rend la facade vers +y : on la tourne vers la piste)
-    const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+    const chargeur = chargeurGLTF();
     chargeur.load(o.base + (o.ultra ? 'modeles/amsalem/tribune-ultra.glb' : 'modeles/amsalem/tribune.glb'), gl => {
       // LE GRIS DE LA TRIBUNE EN BLANC CASSE (« la couleur grise du gradin est austere », l'auteur, 27/10 ; ses photos :
       // un beton clair presque blanc, les sieges rouges) : dans la texture Tripo, ce qui est peu sature remonte vers un

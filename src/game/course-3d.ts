@@ -33,8 +33,7 @@
 
 import { sponsorDeLaCourse } from './panneaux';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF, brancherKTX2 } from './chargeur-gltf';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
@@ -99,23 +98,37 @@ const TELEPHONE = (() => {
   try { return matchMedia('(pointer: coarse)').matches || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); } catch { return false; }
 })();
 // v3 (24/10) : les paliers retenus sous l'ancien seuil (45 images/s) repartent de zero
-const PALIER_CLE = 'sprinter_palier3d-v3';
+// v4 (10/11) : ceux retenus sous la regle trop prompte du 10/11 (seuil a 22 ms, presentation
+// jugee, un pixel par point) aussi — « on perd enormement en qualite », l'auteur, video du Flip
+const PALIER_CLE = 'sprinter_palier3d-v4';
 const palierRetenu = (() => { try { const v = localStorage.getItem(PALIER_CLE); return v == null ? null : Math.max(0, Math.min(3, +v | 0)); } catch { return null; } })();
 const QUALITE = Q.get('qualite');
 // ?palier=0..3 : un palier fixe, sans adaptation (pour mesurer)
 const PALIER_FORCE = Q.get('palier');
 let palier = PALIER_FORCE != null ? Math.max(0, Math.min(3, +PALIER_FORCE | 0))
-  : QUALITE === 'ultra' ? 3 : QUALITE === 'plein' ? 2 : Math.max(TELEPHONE ? 1 : 0, Math.min(TELEPHONE ? 2 : 3, palierRetenu ?? 3));
+  : QUALITE === 'ultra' ? 3 : QUALITE === 'plein' ? 2 : Math.max(0, Math.min(TELEPHONE ? 2 : 3, palierRetenu ?? 3));
 // les pieces et les boss se choisissent au chargement : pleins seulement en ULTRA
 let ULTRA = palier >= 3;
-// (24/10, « je ne veux pas de crenelage ») : au telephone, jamais sous deux pixels par point —
-// les paliers bas n'y allegent plus que les ombres
-const RATIO = TELEPHONE ? [2, 2, 2, 3] : [1, 1.5, 2, 3];
-let lentes = 0, mesure = 0, fluide = 0, aBaisse = false;
-// LE PALIER NE S'EFFONDRE PLUS (« les lignes ne sont toujours pas droites », l'auteur, 24/10) : au
-// palier 0 — un pixel par point, sans ombres —, les lignes de couloir se crenelaient en escaliers.
-// Un telephone ne descend pas sous le palier 1, et ne descend que sous 30 images par seconde.
-const PALIER_MAX = TELEPHONE ? 2 : 3, PALIER_MIN = TELEPHONE ? 1 : 0, IMAGE_LENTE = 0.034;
+// LE TELEPHONE NE DESCEND PAS SOUS 1,5 PIXEL PAR POINT (24/10, l'auteur : « je ne veux pas de
+// crenelage », « les lignes ne sont toujours pas droites ») : a un pixel par point, les lignes de
+// couloir se crenelaient en escaliers. 1,5 dessine encore 44 % de pixels de moins que 2. Au
+// palier 0, le telephone garde donc 1,5 et ne perd que les ombres.
+const RATIO = TELEPHONE ? [1.5, 1.5, 2, 3] : [1, 1.5, 2, 3];
+let intervalles: number[] = [], mesure = 0, fluide = 0, aBaisse = false;
+let qualiteApres = 0, imagePrecedente3D: number | null = null;
+const PALIER_MAX = TELEPHONE ? 2 : 3, PALIER_MIN = 0;
+// UNE IMAGE LENTE SE JUGE CONTRE LA CADENCE DE L'ECRAN, pas contre un seuil fixe. Un iPhone en
+// economie d'energie (Safari plafonne alors a 30 images/s) donnait 33 ms a chaque image : toutes
+// « lentes » sous un seuil de 22 ms, et le palier tombait a 0 des la presentation. La cadence de
+// base est le 20e centile des intervalles de la fenetre ; une image est lente au-dela d'une fois
+// et demie cette base, entre 34 ms (le seuil d'avant le 10/11, que le Flip tenait en course au
+// palier 2 ; 22 ms le faisait tomber) et 39 ms (sous 26 images/s, c'est lent quelle que soit la base).
+const IMAGE_LENTE_MIN = 0.034, IMAGE_LENTE_MAX = 0.039;
+function seuilImageLente(dts: number[]) {
+  const tries = [...dts].sort((a, b) => a - b);
+  const base = tries[Math.floor(tries.length * 0.2)] || 1 / 60;
+  return Math.min(IMAGE_LENTE_MAX, Math.max(IMAGE_LENTE_MIN, base * 1.5));
+}
 function appliquerLePalier() {
   if (!renderer) return;
   renderer.setPixelRatio(Math.min(RATIO[palier], window.devicePixelRatio || 1));
@@ -127,25 +140,27 @@ function appliquerLePalier() {
   if (soleil) soleil.castShadow = OMBRES && palier > 0;
   dimensionner();
 }
-/** La cadence decide du palier : sur deux secondes et demie de course, si plus d'un cinquieme
- *  du temps passe en images de plus de 22 ms, on descend d'un palier. */
+/** Une baisse durable sur 2,5 s de course allege le rendu ; une image isolee ne suffit pas. */
 function tenirLaCadence(dt: number, enCourse: boolean) {
-  // un a-coup (chargement, compilation d'un shader) n'est pas une cadence perdue — et seule la
-  // course compte : le survol et le decompte chargent encore (au Galaxy Flip, ils faisaient
-  // tomber au palier 0 un appareil qui tient le palier 2 en course)
-  if (!renderer || !dt || dt > 0.1 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse) return;
-  mesure += dt; lentes += dt > IMAGE_LENTE ? dt : 0;
+  // SEULE LA COURSE SE JUGE (retabli le 10/11, apres la video du Flip) : la presentation et le
+  // decompte chargent encore (stade, foule, shaders) et faisaient tomber au palier 0 un appareil
+  // qui tient le palier 2 en course. La premiere seconde d'un stade laisse aussi ses shaders se
+  // compiler. Un retour d'onglet (> 1 s) ne compte pas comme une cadence perdue.
+  if (!renderer || !dt || dt > 1 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse || performance.now() < qualiteApres) return;
+  mesure += dt; intervalles.push(dt);
   if (mesure < 2.5) return;
-  // un cinquieme du temps en images lentes, c'est deja une course qui saccade (au Flip, en ULTRA :
+  const dureeMesuree = mesure, seuil = seuilImageLente(intervalles);
+  const lentes = intervalles.reduce((s, d) => s + (d > seuil ? d : 0), 0);
+  // un quart du temps en images lentes, c'est deja une course qui saccade (au Flip, en ULTRA :
   // 40 images/s, une image sur six a 33 ms)
   const part = lentes / mesure, trop = part > 0.25;
-  mesure = 0; lentes = 0;
+  mesure = 0; intervalles = [];
   // ON REMONTE AUSSI (« la qualite du jeu est basse meme en ultra », l'auteur, 24/10) : un
   // telephone qui avait saccade une fois restait au palier bas pour toujours. Dix secondes de
   // course fluide (moins d'une image lente sur trente), sans avoir baisse dans la visite : un
-  // palier de plus, jusqu'a celui de l'appareil.
+  // palier de plus, jusqu'a celui de l'appareil. Seule la course compte pour remonter.
   if (!trop) {
-    fluide = part < 0.03 ? fluide + 2.5 : 0;
+    fluide = part < 0.03 ? fluide + dureeMesuree : 0;
     if (fluide >= 10 && !aBaisse && palier < PALIER_MAX) {
       palier++; fluide = 0;
       appliquerLePalier();
@@ -605,8 +620,7 @@ function pieceDuStade(cleDemandee: string): THREE.Object3D | null {
   if (!pieces3D.has(cleDemandee)) {
     pieces3D.set(cleDemandee, null);
     const base = (import.meta as any).env?.BASE_URL || '/';
-    const l = new GLTFLoader();
-    l.setMeshoptDecoder(MeshoptDecoder);
+    const l = chargeurGLTF();
     // en ULTRA, la piece pleine (tools/blender/stades_3d_glb.py --ultra), sinon la legere — et
     // la legere si la pleine manque (la copie GitHub du site ne les porte pas : son plafond)
     const charger = (dossier: string) => l.loadAsync(base + 'modeles/' + dossier + '/' + cle + '.glb');
@@ -1034,12 +1048,11 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
     }
   };
 }
-// LE PELOTON DU 400 M EN SALLE (piste-salle.js, rabattement) : passe la ligne, le moteur met tout le monde
-// sur la ligne de mesure du couloir 1 — deux coureurs a la meme distance s'y confondraient. A l'image
-// seulement, chacun garde un ecart vers l'exterieur (0 a 1,25 m), pris pendant la diagonale.
-// (l'ecart : piste-salle.js, PELOTON — le moteur y cherche aussi les accrochages)
-const enPeloton = (T: any, lane: number, d: number) =>
-  T.salle && T.salle.rabat ? T.rabattu(d, lane) * T.salle.peloton[lane % T.salle.peloton.length] : 0;
+// LE PELOTON DU 400 M EN SALLE (piste-salle.js, rabattement) : passe la ligne, le moteur mesure tout le monde
+// sur la ligne de mesure du couloir 1. Chacun y tient sa place en travers — la corde, l'epaule, le couloir 2
+// (r.travers, sprinter-app.js, placerPeloton ; piste-salle.js, PELOTON), prise pendant la diagonale.
+const enPeloton = (T: any, r: any, d: number) =>
+  T.salle && T.salle.rabat ? T.rabattu(d, r.lane) * (r.travers || 0) : 0;
 let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
 // APRES LA LIGNE, LE VIRAGE, DANS SON COULOIR (« les coureurs deccelerent tout en restant dans leurs couloirs »,
 // l'auteur, 08/11/2026). Au 100 m et au 200 m, le moteur prolonge la piste tout droit apres l'arrivee ; le stade,
@@ -1053,7 +1066,7 @@ const virageApres = (T: any, lane: number, d: number) => {
 const ouCourt = (T: any, r: any, d: number = r.d) => {
   const theta = virageApres(T, r.lane, d), dl = theta ? T.total : d;
   const u = Math.min(1, Math.max(0, dl / 10)), garde = 1 - u * u * (3 - 2 * u);
-  const p = ici(T.posDemi(dl, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r.lane, dl)));
+  const p = ici(T.posDemi(dl, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r, dl)));
   if (!theta) return p;
   const rad = p[1] + R_CORDE;
   return [p[0] + rad * Math.sin(theta), -R_CORDE + rad * Math.cos(theta)];
@@ -2295,6 +2308,7 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   // (24/10) et a tous les paliers : il se decide ici, une fois pour la partie — un telephone qui
   // demarrait au palier bas le perdait jusqu'au bout, et c'est au palier bas qu'il manque le plus
   renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: Q.get('aa') !== '0', powerPreference: 'high-performance' });
+  brancherKTX2(renderer);
   (globalThis as any).__palier3d = () => palier;
   // L'ULTRA (l'auteur, 23/10 : « mets le jeu en ultra ») : la definition pleine de l'ecran,
   // jusqu'a trois pixels par point, et des ombres deux fois plus fines. Comme l'ULTRA du
@@ -2397,8 +2411,7 @@ function chargerLeBloc() {
   if (blocDemande) return;
   blocDemande = true;
   const base = (import.meta as any).env?.BASE_URL || '/';
-  const l = new GLTFLoader();
-  l.setMeshoptDecoder(MeshoptDecoder);
+  const l = chargeurGLTF();
   l.loadAsync(base + 'modeles/bloc-depart.glb').then(g => {
     g.scene.updateMatrixWorld(true);
     const parMat = new Map<string, THREE.BufferGeometry[]>();
@@ -2423,8 +2436,7 @@ function chargerLeBloc() {
 function chargerLeCorps() {
   if (chargement) return;
   const base = (import.meta as any).env?.BASE_URL || '/';
-  const l = new GLTFLoader();
-  l.setMeshoptDecoder(MeshoptDecoder);
+  const l = chargeurGLTF();
   chargement = l.loadAsync(base + 'modeles/coureur-homme.glb')
     .then(g => { gabarit = g.scene; })
     .catch(() => { /* les tubes restent */ });
@@ -2603,7 +2615,7 @@ function chargerLaBete() {
   // (molosse_trellis.py --plein), la legere si elle manque
   const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/?$/, '/');
   f().then((u) => {
-    const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+    const l = chargeurGLTF();
     const leger = () => new Promise<any>((ok, ko) => l.load(u, ok, undefined, ko));
     // LE GALOP DE CHIEN (molosse_trellis.py --chien) : une foulee tous les 3,5 m. La pleine, puis sa
     // version legere (test3d ne publie pas boss-plein : sans elle, la bete en ligne gardait le
@@ -2671,14 +2683,15 @@ function maillageDe(chemin: string): THREE.Object3D | null | false {
   if (!maillages.has(chemin)) {
     maillages.set(chemin, null);
     const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/?$/, '/');
-    const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+    const l = chargeurGLTF();
     const leger = () => l.loadAsync(base + chemin.replace(/^\//, ''));
     // EN ULTRA, LA PLEINE RESOLUTION (« les assets dans leur plein potentiel », 23/10) : la meme
-    // vedette, texture Tripo a sa taille d'origine en PNG, sans meshopt (boss_pleine_resolution.py) ;
-    // la legere si elle manque
-    // (pas sur un appareil a moins de 4 Go : une texture de 4096 px y pese pres de 90 Mo de memoire graphique)
+    // vedette, texture Tripo a sa taille d'origine (4096 px, en KTX2 depuis le 10/11), sans meshopt
+    // (boss_pleine_resolution.py) ; la legere si elle manque
+    // (pas sur un appareil a moins de 2 Go : la texture 4096 en KTX2 pese ~22 Mo de memoire graphique,
+    // contre ~90 Mo en PNG quand le seuil etait a 4 Go)
     const memoire = (navigator as any).deviceMemory;
-    const nom = ULTRA && !(memoire && memoire < 4) && (chemin.match(new RegExp('(?:^|/)(' + PLEINS + ')(?:[-.][^/]*)?\\.glb$')) || [])[1];
+    const nom = ULTRA && !(memoire && memoire < 2) &&(chemin.match(new RegExp('(?:^|/)(' + PLEINS + ')(?:[-.][^/]*)?\\.glb$')) || [])[1];
     // MEBA-MICKAEL ZEZE AU MAXIMUM, A TOUS LES PALIERS (« rends le skin de Mickael au maximum de sa
     // qualite », l'auteur, 24/10) : sa texture 2048 en PNG, ses sommets sans la compression qui les
     // arrondit, et une subdivision lissee (31 000 faces au lieu de 10 000, coutures ressoudees).
@@ -3293,7 +3306,7 @@ export function afficher(oui: boolean) {
   visible = oui;
   toile.style.display = oui ? 'block' : 'none';
   if (vignetteDe) vignetteDe.style.display = oui ? 'block' : 'none';
-  if (!oui) camPret = false;
+  if (!oui) { camPret = false; imagePrecedente3D = null; mesure = 0; intervalles = []; }
   if (!oui && videoPub) videoPub.pause();     // rendre() la relance au retour en piste
 }
 
@@ -3313,13 +3326,26 @@ function compterLesImages() {
     document.body.appendChild(ipsBoite); ipsT0 = t; ipsPrec = t;
   }
   ipsN++; ipsPire = Math.max(ipsPire, t - ipsPrec); ipsPrec = t;
-  if (t - ipsT0 >= 1000) { ipsBoite.textContent = `${Math.round(ipsN * 1000 / (t - ipsT0))} i/s · pire ${Math.round(ipsPire)} ms`; ipsN = 0; ipsT0 = t; ipsPire = 0; }
+  // LE NIVEAU S'AFFICHE AVEC LA CADENCE (10/11, pour comparer des mesures sur telephone) : sans
+  // lui, on ne savait pas quel palier le reglage automatique avait choisi pendant la course.
+  if (t - ipsT0 >= 1000) {
+    const r = renderer ? renderer.getPixelRatio() : 0;
+    const qui = PALIER_FORCE != null ? 'force' : QUALITE === 'ultra' ? 'ultra' : 'auto';
+    ipsBoite.textContent = `${Math.round(ipsN * 1000 / (t - ipsT0))} i/s · pire ${Math.round(ipsPire)} ms · niveau ${palier} ${qui} · ${String(+r.toFixed(2)).replace('.', ',')} px`
+      + (toile ? ` · ${toile.width}×${toile.height}` : '');
+    ipsN = 0; ipsT0 = t; ipsPire = 0;
+  }
 }
 const IPS = Q.get('ips') !== null;
 export function rendre(App: any, dt: number) {
   if (IPS) compterLesImages();
   const { G, C } = App;
-  tenirLaCadence(dt, G.state === 'race' && G.elapsed > 1);
+  // La qualite suit le temps reel du rendu, jamais le pas plafonne de la
+  // simulation ni le ralenti d'un tutoriel.
+  const maintenantImage = performance.now();
+  const dtRendu = imagePrecedente3D === null ? 0 : (maintenantImage - imagePrecedente3D) / 1000;
+  imagePrecedente3D = maintenantImage;
+  tenirLaCadence(dtRendu, !G.paused && !document.hidden && G.state === 'race' && G.elapsed > 1);
   const T = G.track;
   if (!renderer) {
     const lanes = (G.runners || []).map((r: any) => r.lane | 0);
@@ -3348,6 +3374,8 @@ export function rendre(App: any, dt: number) {
     const stadeCle = Object.keys(TH).find(k => TH[k] === b) || null;
     const affluence = force ? 0.92 : App.fouleDe ? App.fouleDe(G.levelIdx | 0) : 1;
     construireLeStade(nCouloirs, force || (App.theme ? App.theme() : {}), T, C, stadeCle, force ? 9 : G.levelIdx | 0, affluence);
+    // Une compilation initiale ne doit pas condamner la qualite de toute la partie.
+    qualiteApres = performance.now() + 1000; mesure = 0; intervalles = [];
   }
   if (!toile || toile.style.display === 'none') {
     afficher(true);

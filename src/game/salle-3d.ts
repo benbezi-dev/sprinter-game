@@ -19,8 +19,7 @@
 // z en haut. Les virages tournent autour de (0, -RS) et (-S, -RS).
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF } from './chargeur-gltf';
 import { SALLE, DROITE, profil, RAMPE, lisse, rabattement } from './piste-salle.js';
 import { textureStable, type NomStable } from './texture-stable';
 
@@ -1239,7 +1238,7 @@ export function construireSalle(ctx: ContexteSalle) {
     p.position.z = -0.05; dehors.add(p);
     const v = new THREE.Mesh(new THREE.PlaneGeometry(L + 16, LY + 16), new THREE.MeshStandardMaterial({ color: 0xb8b4ac, roughness: 0.95 }));
     v.position.z = -0.02; dehors.add(v); }
-  const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+  const chargeur = chargeurGLTF();
   chargeur.load(ctx.base + 'modeles/salle/exterieur.glb', gl => {
     // le bardage est d'aluminium argent : la texture Tripo, prise sur une photo au soleil couchant, tire au beige
     // (le bardage reel est un gris neutre, rgb(117, 121, 116) a l'ombre, image cBlE 0011 : on retire la

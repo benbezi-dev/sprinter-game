@@ -284,6 +284,48 @@
     RUNOUT: 26.0
   };
 
+  // LE CASSE (l'auteur, 09/11 : « en fin de course glisse les deux pouces vers l'exterieur pour casser sur la ligne ;
+  // si tu casses trop tot tu perds en vitesse, si ton casse est parfait tu gagnes quelques centiemes »).
+  // LA REGLE (World Athletics, TR 18.2 et TR 19.2, relue le 09/11/2026 dans l'edition 2024) : l'ordre d'arrivee et le
+  // chrono se prennent quand le TORSE — ni la tete, ni le cou, ni les bras, ni les jambes — atteint le plan vertical du
+  // bord de la ligne le plus proche du depart. Projeter la poitrine fait franchir la ligne avant les hanches.
+  // LE MOMENT (avis d'entraineurs, aucune mesure publiee trouvee) : sur la derniere foulee, « sur la ligne » (Ato Boldon,
+  // ESPN) ; beaucoup cassent un metre ou deux trop tot, et un casse trop tot fait decelerer. Aucune etude ne chiffre le
+  // gain ni la perte : ce qui suit est un reglage de jeu. La poitrine : un buste de 0,5 m qui passe de 10° a 45° vers
+  // l'avant avance de 0,5 x (sin 45° - sin 10°) = 0,27 m ; 0,30 m ici, soit 0,03 s a 10 m/s au mieux.
+  // Le moteur juge la ligne sur `d + avanceCasse` (Runner.stepPlayer) ; pendant le geste on ne pousse presque plus.
+  const CASSE = {
+    avance: 0.30,      // m : la poitrine devant les hanches, casse plein
+    monte: 0.16,       // s : jusqu'au casse plein
+    tient: 0.12,       // s : tenu
+    releve: 0.32,      // s : le buste se redresse si la ligne n'est pas passee
+    frein: 1.0,        // m/s² de plus, penche : on ne court plus, on tombe en avant
+    freinReleve: 4.0,  // m/s² de plus en se redressant : le rythme est casse
+    pousse: 0.6,       // ce qui reste de la poussee d'un appui pendant le geste
+    zone: 20,          // m : les derniers metres ou le geste se lit
+    plein: 0.85,       // part de l'avance, sur la ligne, qui fait un casse parfait (s'il fait gagner)
+    bon: 0.003,        // s gagnees qui font encore un bon casse
+    consigne: 12,      // m : la consigne du geste s'affiche (engine.ts, consigneDuGeste)
+  };
+  const lisseCasse = (t) => { t = Math.max(0, Math.min(1, t)); return t * t * (3 - 2 * t); };
+  /** L'avance de la poitrine, `tau` secondes apres le debut du casse (0 avant, 0 une fois redresse). */
+  function avanceCasse(tau) {
+    if (!(tau >= 0)) return 0;
+    const K = CASSE;
+    if (tau < K.monte) return K.avance * lisseCasse(tau / K.monte);
+    if (tau < K.monte + K.tient) return K.avance;
+    return K.avance * (1 - lisseCasse((tau - K.monte - K.tient) / K.releve));
+  }
+  const DUREE_CASSE = CASSE.monte + CASSE.tient + CASSE.releve;
+  // l'adversaire qui prend un coup de coude (stepAI) : la part de son allure qu'il perd le temps de se retablir
+  const RETARD = { vitesse: 0.35 };
+  // LES DEUX GESTES DANS LE RIG (pose) : angles absolus, 0 vers le bas, positif vers l'avant ; le buste negatif vers
+  // l'avant. Le casse couche le buste a pres de 50° et jette les deux bras en arriere ; le coup de coude plie le bras du
+  // cote du voisin et l'ecarte du corps (roulis, en radians, ajoute a `rouleBras` ; mesure a l'image le 09/11 : dans la
+  // chaine du bras, `side x roulis` positif ecarte le coude du corps).
+  const CASSE_POSE = { buste: -0.85, bras: -1.1, avBras: -0.75 };
+  const COUDE_POSE = { bras: -0.25, avBras: 1.25, roule: 1.05, rouleAv: 0.6 };
+
   // LES RECORDS DU MONDE MASCULINS, PLAFOND DE CHAQUE EPREUVE (l'auteur, 28/10 : « plafonne les temps des 60 m en
   // salle, 100 m, 200 m, 400 m, 200 m et 400 m en salle a leurs records du monde respectifs chez les hommes ») :
   // personne — joueur ni adversaire — ne court plus vite. Verifies le 28/10/2026 : 60 m salle 6,34 (Coleman 2018),
@@ -1848,15 +1890,79 @@
     const R = P.rabattement(this.radius(lane) - P.rayon, this.total);
     return Math.min(1, Math.max(0, (s - R.avant) / R.diag));
   };
-  Track.prototype.enTravers = function (s, lane) {
-    const P = this.salle, k = this.rabattu(s, lane);
-    return (this.radius(lane) - this.radius(0)) * (1 - k) + P.peloton[lane % P.peloton.length] * k;
+  // `travers` : sa place une fois rabattu, en metres vers l'exterieur depuis la ligne de mesure du couloir 1 — la
+  // corde, l'epaule ou le couloir 2 (piste-salle.js, PELOTON ; sprinter-app.js la tient a jour, coureur par coureur).
+  // Sans elle, la corde.
+  Track.prototype.enTravers = function (s, lane, travers) {
+    const k = this.rabattu(s, lane);
+    return (this.radius(lane) - this.radius(0)) * (1 - k) + (travers || 0) * k;
   };
-  // Deux coureurs de la piste couverte au contact : rabattus (ou en train de l'etre) et colles l'un a l'autre
-  Track.prototype.auContact = function (a, b) {
+  // Deux coureurs de la piste couverte au contact : rabattus (ou en train de l'etre) et colles l'un a l'autre.
+  // `zone` : P.contact (l'accrochage subi) ou P.coude (a portee de coude).
+  Track.prototype.auContact = function (a, b, zone) {
     const P = this.salle;
     if (!P || !P.rabat || !this.rabattu(a.d, a.lane) || !this.rabattu(b.d, b.lane)) return false;
-    return Math.abs(a.d - b.d) < P.contact.long && Math.abs(this.enTravers(a.d, a.lane) - this.enTravers(b.d, b.lane)) < P.contact.large;
+    const Z = zone || P.contact;
+    return Math.abs(a.d - b.d) < Z.long && Math.abs(this.enTravers(a.d, a.lane, a.travers) - this.enTravers(b.d, b.lane, b.travers)) < Z.large;
+  };
+  /**
+   * LA PLACE DE CHACUN EN TRAVERS AU PELOTON (piste-salle.js, PELOTON), a chaque pas : `travers` (ou il est, qui
+   * glisse en PELOTON.glisse secondes), `traversVise` (ou il va), `enferme` (le joueur seul). Dans l'ordre de course :
+   * le premier prend la corde ; a moins de PELOTON.long d'un coureur deja place devant ou a sa hauteur, sa place est
+   * prise et l'on court a l'epaule, puis au couloir 2 pour un troisieme de front. LE JOUEUR NE SORT PAS DU COULOIR 1
+   * DE LUI-MEME : la corde et l'epaule prises, il reste ou il est, enferme (retenir) — a lui de choisir le couloir 2
+   * (`couloir2`, sprinter-app.js, changerCouloir).
+   */
+  Track.prototype.placerPeloton = function (runners, dt) {
+    const P = this.salle;
+    if (!P || !P.rabat) return;
+    const PE = P.peloton, k = 1 - Math.exp(-3 * dt / PE.glisse);
+    const ordre = runners.filter(r => r && Number.isFinite(r.d)).sort((a, b) => b.d - a.d);
+    const places = [];
+    for (const r of ordre) {
+      const libre = (x) => !places.some(q => q.d - r.d > -0.3 && q.d - r.d < PE.long && Math.abs(q.x - x) < 0.3);
+      const dedans = this.rabattu(r.d, r.lane) >= 0.5;
+      let x;
+      r.enferme = false;
+      if (!dedans) x = 0;
+      else if (r.isPlayer && r.couloir2) x = PE.dehors;
+      else if (libre(PE.corde)) x = PE.corde;
+      else if (libre(PE.epaule)) x = PE.epaule;
+      else if (r.isPlayer) { x = r.traversVise === PE.epaule ? PE.epaule : PE.corde; r.enferme = true; }
+      else x = libre(PE.dehors) ? PE.dehors : PE.dehors + PE.epaule;
+      if (dedans) places.push({ d: r.d, x });
+      r.traversVise = x;
+      r.travers = r.travers == null ? x : r.travers + (x - r.travers) * k;
+    }
+  };
+  /**
+   * ENFERME (placerPeloton), le joueur ne court pas plus vite que le coureur juste devant lui a sa place : il le
+   * suit a PELOTON.garde metres. Retient `r.v` et rend le coureur qui le retient, ou null.
+   */
+  Track.prototype.retenir = function (r, runners) {
+    const P = this.salle;
+    if (!P || !P.rabat || !r.enferme || r.couloir2) return null;
+    const PE = P.peloton;
+    let devant = null;
+    for (const o of runners) {
+      if (o === r || this.rabattu(o.d, o.lane) < 0.5 || Math.abs((o.travers || 0) - (r.travers || 0)) > 0.3) continue;
+      const ecart = o.d - r.d;
+      if (ecart > 0 && ecart < PE.bloque && (!devant || ecart < devant.d - r.d)) devant = o;
+    }
+    if (devant) r.v = Math.min(r.v, Math.max(0, devant.v + 3 * (devant.d - r.d - PE.garde)));
+    return devant;
+  };
+  // LE CHEMIN DE PLUS LOIN DE LA CORDE : rabattu, on mesure sa course sur la ligne de mesure du couloir 1 ; a
+  // `travers` metres de plus vers l'exterieur, un virage est plus long (pi x travers par virage entier, quelle que
+  // soit sa forme). Rend la part de chaque pas qui avance sur la ligne du couloir 1 : 1 en ligne droite.
+  Track.prototype.trajetPeloton = function (s, lane, travers) {
+    const P = this.salle;
+    if (!P || !P.rabat || !(travers > 0.01)) return 1;
+    const k = this.rabattu(s, lane);
+    if (k < 1) return 1;
+    const b = this.boucle(s, this.radius(lane));
+    if (!b.bend) return 1;
+    return P.longueurVirage(P.mes1) / P.longueurVirage(P.mes1 + travers);
   };
   // Rayon de la ligne de mesure du couloir (lane compte a partir de zero) :
   // la trajectoire du coureur, pas le milieu du couloir.
@@ -2416,21 +2522,29 @@
       this.dernierAppui = elapsed;
     }
     let stumbled = false;
+    // PENCHE SUR LA LIGNE, ON NE POUSSE PRESQUE PLUS (CASSE.pousse) ; `vSans` court la meme course sans le casse,
+    // pour dire au joueur ce que son geste lui a fait gagner ou perdre (stepPlayer)
+    const kCasse = this.casseT != null && elapsed !== undefined && elapsed - this.casseT < DUREE_CASSE ? CASSE.pousse : 1;
     if (this.lastKey === key) {
       const risk = (C.STUMBLE_BASE +
         C.STUMBLE_SPEED * Math.min(1, this.v / this.maxSpeed)) *
         C.STUMBLE_INPUT_SCALE * (this.coefChute || 1);
       if (alea() < risk) {
         this.v *= C.STUMBLE_KEEP;
+        if (this.vSans != null) this.vSans *= C.STUMBLE_KEEP;
         this.stumbleTimer = C.STUMBLE_TIME;
         this.fallAnim = 1;
         if (this.d - this.legStart < this.driveEnd) this.stumbledInDrive = true;
         stumbled = true;
       } else {
-        this.v = Math.min(this.plafond(), this.v + C.BOOST * 0.3 * (this.coefBoost || 1) * this.allure);
+        const b = C.BOOST * 0.3 * (this.coefBoost || 1) * this.allure;
+        this.v = Math.min(this.plafond(), this.v + b * kCasse);
+        if (this.vSans != null) this.vSans = Math.min(this.plafond(), this.vSans + b);
       }
     } else {
-      this.v = Math.min(this.plafond(), this.v + C.BOOST * (this.coefBoost || 1) * this.allure);
+      const b = C.BOOST * (this.coefBoost || 1) * this.allure;
+      this.v = Math.min(this.plafond(), this.v + b * kCasse);
+      if (this.vSans != null) this.vSans = Math.min(this.plafond(), this.vSans + b);
     }
     this.lastKey = key;
     return stumbled;
@@ -2518,15 +2632,21 @@
       this.apresLigne(dt, 1.15);
       this.stride += this.v * dt * (Math.PI / this.strideLength());
       this.drivePitch = 0;
+      // la ligne passee, le buste se redresse (le casse, voir pose)
+      if (this.casse) this.casse = this.casse > 0.01 ? this.casse * Math.exp(-5 * dt) : 0;
       return;
     }
+    // (le casse : `vSans` et `dSans` suivent la meme course sans lui, voir press)
+    const sans = this.vSans != null;
     if (this.stumbleTimer > 0) {
       this.stumbleTimer -= dt;
       this.v *= Math.exp(-6 * dt);
+      if (sans) this.vSans *= Math.exp(-6 * dt);
     } else {
       // le freinage est allege quelques secondes apres une bonne transition
       const drag = C.DRAG * (this.boostT > 0 ? this.boostDrag : 1) * (this.coefDrag || 1);
       this.v *= Math.exp(-drag * dt);
+      if (sans) this.vSans *= Math.exp(-drag * dt);
     }
     // la montee et la descente des virages releves (piste couverte : Track.accelPente) — et le rythme y
     // compte : la cadence tenue (effort 1 a dix appuis par seconde) limite la perte dans la montee, et la
@@ -2535,14 +2655,29 @@
     // fond quand la cadence monte, le gain grandit avec elle — et peut porter au-dela de la vitesse de pointe
     if (this.pente) {
       const a = this.pente(this.d, this.v), e = this.effort == null ? 1 : this.effort, rend = Math.max(0, 1.5 * e - 0.5);
-      this.v = Math.max(0, this.v + (a.perte * (1.6 - 0.6 * e) + a.gain * rend) * dt);
+      const dv = (a.perte * (1.6 - 0.6 * e) + a.gain * rend) * dt;
+      this.v = Math.max(0, this.v + dv);
+      if (sans) this.vSans = Math.max(0, this.vSans + dv);
       // la descente ouvre le plafond a qui y appuie : jusqu'a 1,2 m/s de mieux au couloir 6, presque rien au 1
       this.elan = Math.min(1.2, a.gain * 0.3 * rend);
     }
-    // les accrochages du 400 m en salle (Track.auContact)
-    if (this.bouscule) this.bouscule(dt);
+    // les accrochages du 400 m en salle (Track.auContact) ; et le peloton, qui peut enfermer le joueur
+    // (sprinter-app.js, bousculade)
+    if (this.bouscule) {
+      const v0 = this.v;
+      this.bouscule(dt, elapsed);
+      if (sans && v0 > 0) this.vSans *= this.v / v0;
+    }
+    // LE CASSE (CASSE) : penche, on freine un peu ; en se redressant avant la ligne, beaucoup
+    const tau = this.casseT != null && elapsed !== undefined ? elapsed - this.casseT : -1;
+    if (tau >= 0 && tau < DUREE_CASSE)
+      this.v = Math.max(0, this.v - (tau < CASSE.monte + CASSE.tient ? CASSE.frein : CASSE.freinReleve) * dt);
     const before = this.d;
-    this.d += this.v * dt;
+    // AU PELOTON DU 400 M EN SALLE, CELUI QUI COURT LOIN DE LA CORDE FAIT PLUS DE CHEMIN DANS LES VIRAGES
+    // (`trajet`, pose par sprinter-app.js : la part de son pas qui avance sur la ligne de mesure du couloir 1)
+    const trajet = this.trajet == null ? 1 : this.trajet;
+    this.d += this.v * dt * trajet;
+    if (sans) this.dSans += this.vSans * dt * trajet;
     // LE BOUT DE LA ZONE EST UN MUR, PAS UNE LIGNE D'ARRIVEE.
     //
     // On ne le « termine » pas — un relayeur qui passe son temoin n'a pas
@@ -2559,7 +2694,10 @@
     if (this.transGrade === null && before < fin && this.d >= fin) {
       this.gradeTransition();
     }
-    if (this.d >= this.total) {
+    // LA LIGNE SE JUGE AU TORSE (CASSE) : la poitrine, `avance` devant les hanches pendant le casse
+    const avance = tau >= 0 ? avanceCasse(tau) : 0;
+    this.casse = avance / CASSE.avance;
+    if (this.d + avance >= this.total) {
       this.finished = true;
       // Le chrono affiche doit toujours etre le temps reellement couru : le
       // plancher a `this.best` cachait les performances qui le battaient
@@ -2567,7 +2705,37 @@
       // Le plafond du record du monde (RECORDS_DU_MONDE) porte sur le chrono, pas sur la course : retenir le
       // coureur en route le freinait au depart, ou il va plus vite que le profil du record (0,58 s perdus au 100 m).
       this.finishTime = this.record ? Math.max(elapsed, this.record) : elapsed;
+      if (tau >= 0) this.jugerCasse(tau, avance);
     }
+  };
+
+  /**
+   * LE JOUEUR CASSE (engine.ts, casser) : une fois par course, dans les CASSE.zone derniers metres. Rend la note
+   * si elle tombe a l'instant (un casse donne apres la ligne : « trop tard »), sinon null — la note tombe sur la
+   * ligne (jugerCasse).
+   */
+  Runner.prototype.casser = function (elapsed) {
+    if (this.casseT != null || this.casseNote) return null;
+    if (this.finished) {
+      // la ligne vient d'etre passee : le geste arrive trop tard, et ne change rien
+      if (elapsed - this.finishTime < 0.5) { this.casseNote = 'tard'; this.casseGain = 0; return 'tard'; }
+      return null;
+    }
+    if (this.total - this.d > CASSE.zone) return null;
+    this.casseT = elapsed;
+    this.vSans = this.v; this.dSans = this.d;
+    return null;
+  };
+  // LA NOTE DU CASSE, sur la ligne. `casseGain` (s, positif = gagne) compare a la meme course sans casse (vSans,
+  // dSans) : l'avance de la poitrine moins la vitesse laissee pendant le geste. Parfait : la poitrine pleinement
+  // projetee sur la ligne, et du temps gagne ; bon : du temps gagne ; sinon trop tot si le buste se redressait deja,
+  // trop tard s'il commencait a peine. (La note suit le chrono : un « bon casse » qui fait perdre n'existe pas.)
+  Runner.prototype.jugerCasse = function (tau, avance) {
+    const k = avance / CASSE.avance, pic = CASSE.monte + CASSE.tient / 2;
+    const v = Math.max(1, this.vSans || this.v), gain = (this.total - this.dSans) / v;
+    this.casseGain = gain;
+    this.casseNote = k >= CASSE.plein && gain > 0 ? 'parfait' : gain > CASSE.bon ? 'bon' : tau > pic ? 'tot' : 'tard';
+    this.vSans = null;
   };
 
   Runner.prototype.stepAI = function (dt, elapsed) {
@@ -2576,17 +2744,25 @@
       this.gesteT = (this.gesteT || 0) + dt;
       this.apresLigne(dt, 1.05);
       this.stride += this.v * dt * (Math.PI / this.strideLength());
+      if (this.casse) this.casse = this.casse > 0.01 ? this.casse * Math.exp(-5 * dt) : 0;
       return;
     }
     const K = this.canon;
-    if (elapsed >= this.target) {
+    // LE COUP DE COUDE RECU (sprinter-app.js, coupDeCoude) : son horloge retarde de `retard` secondes. Il ne les
+    // perd pas d'un coup — `retardVise` monte a l'impact, `retard` le rejoint a RETARD.vitesse : le temps de se
+    // retablir, il court a 65 % de son allure. Son chrono final en porte autant (finishTime).
+    if (this.retardVise > (this.retard || 0)) this.retard = Math.min(this.retardVise, (this.retard || 0) + RETARD.vitesse * dt);
+    const t = elapsed - (this.retard || 0);
+    // LE CASSE DES ADVERSAIRES, a l'image seulement : il tombe pile sur la ligne, leur chrono est deja ecrit
+    if (this.casseT == null && this.target - t <= CASSE.monte + CASSE.tient / 2) this.casseT = elapsed;
+    if (this.casseT != null) this.casse = avanceCasse(elapsed - this.casseT) / CASSE.avance;
+    if (t >= this.target) {
       this.d = this.total;
       this.v = K ? K.vFin : this.vmax * (1 - Math.exp(-this.target / this.tau));
       this.finished = true;
-      this.finishTime = this.target;
+      this.finishTime = this.target + (this.retard || 0);
       return;
     }
-    const t = elapsed;
     let d = K ? K.d(t) : this.vmax * (t - this.tau * (1 - Math.exp(-t / this.tau)));
     d = Math.max(0, Math.min(this.total, d));
     if (dt > 0) this.v = Math.max(0, (d - this.d) / dt);
@@ -3239,6 +3415,21 @@
       if (posture.buste != null) lean = melange(lean, posture.buste, wPo);
       leve += (posture.leve || 0) * wPo;
     }
+    // LE CASSE (CASSE ; Runner.casse, de 0 a 1 : la part de l'avance de la poitrine) : le buste plonge vers la ligne
+    // et les bras partent en arriere (« baisser la tete, plier a la taille, jeter les mains en arriere », Lee Evans)
+    const wCa = Math.max(0, Math.min(1, r.casse || 0));
+    if (wCa > 0) {
+      lean = melange(lean, CASSE_POSE.buste, wCa);
+      al = [melange(al[0], CASSE_POSE.bras, wCa), melange(al[1], CASSE_POSE.avBras, wCa)];
+      ar = [melange(ar[0], CASSE_POSE.bras, wCa), melange(ar[1], CASSE_POSE.avBras, wCa)];
+    }
+    // LE COUP DE COUDE (sprinter-app.js, coupDeCoude ; Runner.coude de 0 a 1, `coudeCote` 1 a gauche, -1 a droite) :
+    // le bras du cote du voisin se plie et part en dehors, l'avant-bras devant (son roulis : plus bas, avec les bras)
+    const wCo = Math.max(0, Math.min(1, r.coude || 0)), cCo = r.coudeCote || 1;
+    if (wCo > 0) {
+      const b = cCo > 0 ? al : ar, plie = [melange(b[0], COUDE_POSE.bras, wCo), melange(b[1], COUDE_POSE.avBras, wCo)];
+      if (cCo > 0) al = plie; else ar = plie;
+    }
 
     // LES ATTITUDES D'AVANT LE DEPART (02/10, a la demande de l'auteur :
     // « ajoute les attitudes de sprinter avant les departs, c'est trop sec »).
@@ -3642,7 +3833,7 @@
         const shL = rot(0, 0.470, lean);
         const S = [hip[0] + shL[0], side * shY, hip[2] + shL[1]];
         const aB = side > 0 ? al[0] : ar[0];
-        roule = rouleBras ? side * rouleBras[0] * 0.45 : 0;
+        roule = ((rouleBras ? side * rouleBras[0] : 0) + (side === cCo ? side * COUDE_POSE.roule * wCo : 0)) * 0.45;
         PREM.chaine(add, PR, 'deltoid', niv, peauBras, S, lean + 0.45 * (aB - lean), 0,
                     yawTop, kSh, -0.470, SOUS_BAS, LIBRE);
         roule = 0;
@@ -3882,8 +4073,10 @@
     let livre = null;
     for (const [side, aArm, aFore] of [[1, al[0], al[1]], [-1, ar[0], ar[1]]]) {
       const S = [hip[0] + sh[0], side * shY, hip[2] + sh[1]];
-      const rB = rouleBras ? side * rouleBras[0] : 0;
-      const rAv = rouleBras ? side * rouleBras[1] : 0;
+      // (le coup de coude ecarte le bras de son cote : un roulis vers l'exterieur, voir COUDE_POSE)
+      const co = side === cCo ? wCo : 0;
+      const rB = (rouleBras ? side * rouleBras[0] : 0) + side * COUDE_POSE.roule * co;
+      const rAv = (rouleBras ? side * rouleBras[1] : 0) + side * COUDE_POSE.rouleAv * co;
       roule = rB;
       // LE HAUT DU BRAS SE FERME, LUI AUSSI.
       //
@@ -4169,7 +4362,7 @@
     TAU, C, RACES, LEVELS, STADES_HORS_SERIE,
     GAIT, GAITS, gaitOf, gait, catmull, Track, Runner, CLAP,
     FOULEES, FOULEE_DES_EPREUVES, poserLAllure, allureCourante,
-    pose, fallShape, alea, semer, desemer, estSeme,
+    pose, fallShape, alea, semer, desemer, estSeme, CASSE, avanceCasse, RETARD,
     ZEZE, PLAYER_LOOK, lookFor, look, CUBE, FACES, LIGHT, SKIN, SKIN_POOL, RECORDS_DU_MONDE, ALLURE_DU_JOUEUR, CONVERSION_ADVERSAIRES,
     VEDETTES
   };

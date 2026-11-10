@@ -28,6 +28,9 @@ docs/instagram_charte.md
 !.claude/settings.json
 !.claude/hooks/
 !.claude/agents/
+# Les skills du projet (find-skills de vercel-labs/skills, ajoute le 10/11/2026) :
+# du texte d'instructions, sans chemin absolu. Leur source est dans skills-lock.json.
+!.claude/skills/
 
 # Secrets de developpement wrangler.
 worker/.dev.vars

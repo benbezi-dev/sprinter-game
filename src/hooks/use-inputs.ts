@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { SprinterApp, padPress, padRelease, toggleLang, toggleAudio, setTouchInput } from '@/game/engine';
+import { SprinterApp, padPress, padRelease, toggleLang, toggleAudio, setTouchInput, casser, coupDeCoude, changerCouloir } from '@/game/engine';
 
 /* Le jeu ecoute le clavier sur window, donc il recoit aussi les frappes
    destinees aux champs de texte. Sans ce filtre, taper son nom pilotait la
@@ -23,7 +23,7 @@ export function useInputHandlers() {
       if (zoneDeSaisie(e.target) || zoneDeSaisie(document.activeElement)) return;
       SprinterApp.Audio_.init();
       // Le clavier reprend la main : on revient a la rigueur d'origine.
-      if (e.key.startsWith('Arrow')) setTouchInput(false);
+      if (e.key.startsWith('Arrow')) { setTouchInput(false); SprinterApp.G.auClavier = true; }
 
       // LA REPETITION DU CLAVIER NE DOIT PAS MARTELER. Une fleche maintenue
       // emet des `keydown` en rafale au bout d'une demi-seconde ; depuis que le
@@ -33,6 +33,15 @@ export function useInputHandlers() {
         if (!SprinterApp.G.touches.left) { padPress('left'); SprinterApp.G.touches.left = 1; }
       } else if (e.key === 'ArrowRight') {
         if (!SprinterApp.G.touches.right) { padPress('right'); SprinterApp.G.touches.right = 1; }
+      } else if (e.key === 'ArrowDown') {
+        // LE CASSE (engine.ts) : au clavier, la fleche du bas tient lieu des deux pouces ecartes
+        if (!e.repeat) casser();
+      } else if (e.key === 'ArrowUp') {
+        // le coup de coude, au peloton du 400 m en salle
+        if (!e.repeat) coupDeCoude();
+      } else if (e.key === 'c' || e.key === 'C') {
+        // le couloir 2, puis le retour a la corde
+        if (!e.repeat) changerCouloir(SprinterApp.G.player?.couloir2 ? 1 : 2);
       } else if (e.key === 's' || e.key === 'S') {
         toggleAudio();
       } else if (e.key === 'l' || e.key === 'L') {
@@ -60,12 +69,14 @@ export function useInputHandlers() {
     handleLeftTouch: () => {
       SprinterApp.Audio_.init();
       setTouchInput(true);
+      SprinterApp.G.auClavier = false;
       padPress('left');
       SprinterApp.G.touches.left = 1;
     },
     handleRightTouch: () => {
       SprinterApp.Audio_.init();
       setTouchInput(true);
+      SprinterApp.G.auClavier = false;
       padPress('right');
       SprinterApp.G.touches.right = 1;
     },

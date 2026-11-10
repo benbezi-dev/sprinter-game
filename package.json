@@ -13,9 +13,13 @@
     "android:sync": "npm run build:app && npm run android:alleger && SPRINTER_WEBDIR=dist-app npx cap sync android",
     "android:ouvrir": "npm run android:sync && npx cap open android",
     "android:aab": "npm run android:sync && cd android && ./gradlew bundleRelease",
-    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease"
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleRelease",
+    "assets:optimiser": "node tools/assets/optimiser-glb.mjs"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/extensions": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.4",
     "@radix-ui/react-alert-dialog": "^1.1.7",

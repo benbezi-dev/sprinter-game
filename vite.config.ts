@@ -267,6 +267,18 @@ const LANCEMENT_DUEL_MARQUES = (() => {
 // Meme valeur que DUREE_MS dans worker/src/marques.js.
 const DUREE_DUEL_MARQUES_MS = 6 * 24 * 3600 * 1000;
 
+// NOEL 2026 (boules de neige et etoile du sapin, 10/11/2026) : ouvert en
+// permanence sur le canal de test ; au public du 1er au 25 decembre 2026
+// (dates de l'auteur, 10/11, modifiables) — la meme date doit etre posee
+// cote serveur (worker/src/noel.js, DEBUT_PROD). Essai : LANCEMENT_NOEL=<ms>.
+const LANCEMENT_NOEL = (() => {
+  const v = process.env.LANCEMENT_NOEL;
+  if (v) { const n = Number(v); return Number.isFinite(n) ? n : Date.parse(v); }
+  return Date.parse('2026-12-01T00:00:00+01:00'); // 1er decembre, minuit a Paris
+})();
+// 25 jours : jusqu'au 25 decembre a minuit (inclus).
+const DUREE_NOEL_MS = 25 * 24 * 3600 * 1000;
+
 /* ---------------------------------------------------------------------------
    LA SORTIE DE LA 3D (29/10, decalee par l'auteur) : samedi 31 octobre 2026,
    21 h a Paris (UTC+1, heure d'hiver). Avant, le jeu public reste en 2D ; des
@@ -289,6 +301,8 @@ export default defineConfig(({ mode }) => ({
     __DUREE_EVENEMENT_MS__: JSON.stringify(DUREE_EVENEMENT_MS),
     __LANCEMENT_DUEL_MARQUES__: JSON.stringify(LANCEMENT_DUEL_MARQUES),
     __DUREE_DUEL_MARQUES_MS__: JSON.stringify(DUREE_DUEL_MARQUES_MS),
+    __LANCEMENT_NOEL__: JSON.stringify(LANCEMENT_NOEL),
+    __DUREE_NOEL_MS__: JSON.stringify(DUREE_NOEL_MS),
   },
   plugins: [
     react(),

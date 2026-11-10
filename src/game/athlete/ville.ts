@@ -29,8 +29,7 @@
 
 import * as THREE from 'three';
 import { SprinterApp, SprinterCore } from '../engine';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF, brancherKTX2 } from '../chargeur-gltf';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { poser, type Modele } from '../vedette-3d';
 import { tenueDeVilleDe } from './garde-robe';
@@ -447,7 +446,7 @@ function gabaritDe(look: any): THREE.Object3D | null {
   const chemin = cheminDe(look);
   if (!gabarits.has(chemin)) {
     gabarits.set(chemin, null);
-    const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+    const l = chargeurGLTF();
     const base = (import.meta as any).env?.BASE_URL || '/';
     l.loadAsync(base + chemin).then(g => gabarits.set(chemin, g.scene)).catch(() => { /* l'affiche reste */ });
   }
@@ -723,6 +722,7 @@ export class Ville {
     cv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block';
     hote.appendChild(cv);
     this.rendu = new THREE.WebGLRenderer({ canvas: cv, antialias: true, powerPreference: 'high-performance' });
+    brancherKTX2(this.rendu);
     this.rendu.outputColorSpace = THREE.SRGBColorSpace;
     this.rendu.toneMapping = THREE.ACESFilmicToneMapping;
     this.rendu.toneMappingExposure = 1.05;

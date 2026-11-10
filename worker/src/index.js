@@ -34,6 +34,8 @@ import {
   poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation, salleNoireOuverte,
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
+import { fenetre as fenetreNoel, tableau as tableauNoel, fantome as fantomeNoel,
+         noterCourse as noterCourseNoel, lancer as lancerNoel } from './noel.js';
 import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
          noterCourse as noterCourseMarques, changerEpreuve as changerEpreuveMarques,
          fantome as fantomeMarques, EPREUVES as EPREUVES_MARQUES } from './marques.js';
@@ -3113,6 +3115,59 @@ async function servir(request, env, ctx, porteur) {
        selecteur restait vide (constat du 23 septembre 2026). Les applis
        publiees appellent ce chemin-ci : on ne le renomme pas, on y ajoute la
        liste. Elle ne depend pas de la base, et nommer les pays n'engage rien. */
+    /* ---------------------------------------------- Noel 2026
+       Boules de neige et etoile du sapin : voir noel.js. Quatre routes. */
+    if (url.pathname.startsWith('/noel')) {
+      const f = fenetreNoel(canal.test);
+      if (!f.ouvert) return json({ error: 'noel ferme' }, 404);
+      if (url.pathname === '/noel' && request.method === 'GET') {
+        const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+        const t = await tableauNoel(env.DB, { nameKey: nom && nom !== 'anonyme' ? nom : null });
+        return json({ ...t, debut: f.debut, fin: f.fin });
+      }
+      if (url.pathname === '/noel/fantome' && request.method === 'GET') {
+        const cible = (url.searchParams.get('cible') || '').trim().toLowerCase();
+        if (!cible) return json({ error: 'cible manquante' }, 400);
+        const r = await fantomeNoel(env.DB, { cibleKey: cible });
+        return json(r.corps, r.status);
+      }
+      if ((url.pathname === '/noel/course' || url.pathname === '/noel/lancer') && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        const { device_id } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const name = cleanName(body.name);
+        const key = name.trim().toLowerCase();
+        if (key === 'anonyme') return json({ error: 'choisis d abord ton nom' }, 409);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: url.pathname, nameKey: key, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        const cible = typeof body.cible === 'string' ? body.cible.trim().toLowerCase().slice(0, 40) || null : null;
+        let r;
+        if (url.pathname === '/noel/lancer') {
+          r = await lancerNoel(env.DB, { nameKey: key, name, cibleKey: cible, n: body.n });
+        } else {
+          const timeMs = Math.round(Number(body.time_ms));
+          if (!Number.isFinite(timeMs) || timeMs < MIN_TIME_MS || timeMs > MAX_TIME_MS) {
+            return json({ error: 'chrono invalide' }, 400);
+          }
+          r = await noterCourseNoel(env.DB, {
+            nameKey: key, name, epreuve: String(body.race_key || ''), timeMs, trace: body.trace, cibleKey: cible,
+          });
+        }
+        // La victime d'un vol d'etoile ou d'une volee de boules est prevenue.
+        if (r.sonner) {
+          const s = r.sonner;
+          ctx.waitUntil((async () => {
+            for (const appareil of await appareilsDe(env.DB, [s.pour])) await sonnerEtPush(env, appareil, s.genre, canal.test);
+          })().catch(() => {}));
+        }
+        return json(r.corps, r.status);
+      }
+      return json({ error: 'route inconnue' }, 404);
+    }
+
     /* ---------------------------------------------- le duel des marques
        Team adidas contre Team Nike : voir marques.js. Cinq routes, toutes
        muettes (404) tant que le duel n'est pas ouvert sur ce canal. */

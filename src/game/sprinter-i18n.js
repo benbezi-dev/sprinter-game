@@ -78,6 +78,26 @@
     go:           ['PARTEZ', 'GO'],
     alternate:    ['alterne les deux touches', 'alternate the two buttons'],
     alternate_kb: ['alterne les deux flèches', 'alternate the two arrows'],
+    // Le cassé sur la ligne (sprinter-core.js, CASSE) : les deux pouces glissent vers l'extérieur.
+    casse_consigne:    ['écarte les deux pouces : casse sur la ligne', 'slide both thumbs out: dip at the line'],
+    casse_consigne_kb: ['flèche du bas : casse sur la ligne', 'down arrow: dip at the line'],
+    casse_parfait:     ['CASSÉ PARFAIT', 'PERFECT DIP'],
+    casse_bon:         ['BON CASSÉ', 'GOOD DIP'],
+    casse_tot:         ['CASSÉ TROP TÔT', 'DIPPED TOO EARLY'],
+    casse_tard:        ['CASSÉ TROP TARD', 'DIPPED TOO LATE'],
+    casse_gagne:       ['gagné {s} s', '{s} s gained'],
+    casse_perdu:       ['perdu {s} s', '{s} s lost'],
+    // Le peloton du 400 m en salle (piste-salle.js, PELOTON et COUDE).
+    coude_consigne:    ['glisse un pouce vers le haut : coup de coude', 'slide a thumb up: elbow'],
+    coude_consigne_kb: ['flèche du haut : coup de coude', 'up arrow: elbow'],
+    enferme_consigne:  ['enfermé : pouce droit vers la droite, couloir 2', 'boxed in: right thumb out, lane 2'],
+    enferme_consigne_kb: ['enfermé : touche C, couloir 2', 'boxed in: C key, lane 2'],
+    coude_donne:       ['COUP DE COUDE', 'ELBOW'],
+    coude_recu:        ['TU PRENDS UN COUP', 'YOU TAKE A HIT'],
+    coude_vide:        ['DANS LE VIDE', 'INTO THIN AIR'],
+    enferme:           ['ENFERMÉ', 'BOXED IN'],
+    couloir_2:         ['COULOIR 2', 'LANE 2'],
+    couloir_1:         ['RETOUR À LA CORDE', 'BACK TO THE RAIL'],
     you:          ['TOI', 'YOU'],
     opponent:     ['ADVERSAIRE', 'RIVAL'],
     depart:       ['DÉPART', 'START'],
@@ -94,6 +114,7 @@
     // Les pieces et le Continue (game/pieces.ts). {n} est un nombre de pieces.
     pieces_solde:      ['{n} pièces', '{n} coins'],
     pieces_continuer:  ['CONTINUER · {n}', 'CONTINUE · {n}'],
+    pieces_revanche:   ['REVANCHE · {n}', 'REMATCH · {n}'],
     pieces_reprendre:  ['Reprendre à : {etape}', 'Resume at: {etape}'],
     pieces_manque:     ['Il te manque {n} pièces', 'You need {n} more coins'],
     pieces_gagner:     ['Gagne-les en duel, à l’Objectif du jour et en championnat', 'Earn them in duels, Daily Goals and championships'],
@@ -104,6 +125,7 @@
     pub_continuer:     ['REGARDER UNE PUB · CONTINUER', 'WATCH AN AD · CONTINUE'],
     pub_charge:        ['PUB EN COURS…', 'LOADING AD…'],
     pub_rate:          ['Pas de pub pour l’instant, réessaie', 'No ad right now, try again'],
+    pub_revanche:      ['REGARDER UNE PUB · REVANCHE', 'WATCH AN AD · REMATCH'],
     pieces_hors_rang:  ['Carrière reprise : hors classement des parcours', 'Resumed career: not in the career ranking'],
     next_stage:   ['ÉTAPE {n}', 'STAGE {n}'],
     home:         ['ACCUEIL', 'HOME'],
@@ -1464,6 +1486,19 @@
     duel_revanche_ratee_titre: ['PAS ENCORE', 'NOT YET'],
     duel_revanche_ratee: ['il fallait descendre sous {s} s pour renvoyer le défi à {n} — rien n’est parti',
                           'you needed under {s} s to send the challenge back to {n} — nothing went out'],
+    // Faux depart en one shot : la revanche se regagne par une pub (RevanchePub.tsx).
+    duel_revanche_fd_pub: ['faux départ — une pub ou des pièces pour retenter ta revanche contre {n}, sinon RECOMMENCER repart sans elle',
+                           'false start — an ad or coins to retry your rematch against {n}, otherwise RESTART goes on without it'],
+    duel_revanche_etape: ['ta revanche contre {n}', 'your rematch against {n}'],
+    // Faux depart rachetable hors revanche (OneShotEndScreen, repriseOS).
+    fd_reprise:       ['faux départ — une pub ou des pièces pour ta revanche au {e}, tes chronos d’avant gardés',
+                       'false start — an ad or coins for your rematch at the {e}, your earlier times kept'],
+    fd_reprise_duel:  ['faux départ — une pub ou des pièces pour ta revanche au {e} ; rien n’est encore parti chez ton adversaire',
+                       'false start — an ad or coins for your rematch at the {e}; nothing has been sent to your rival yet'],
+    false_out_suspens: ['éliminé — le duel n’est pas encore perdu', 'eliminated — the duel is not lost yet'],
+    fd_renoncer_duel: ['J’abandonne le duel', 'I give up the duel'],
+    duel_revanche_fd_perdue: ['faux départ — la revanche contre {n} est perdue, RECOMMENCER repart sur une course neuve',
+                              'false start — the rematch against {n} is lost, RESTART starts a fresh race'],
     // L'echelle des divisions. Les noms viennent de l'athletisme francais
     // plutot que des metaux : on ne monte pas de bronze en argent, on passe du
     // departemental au regional.
