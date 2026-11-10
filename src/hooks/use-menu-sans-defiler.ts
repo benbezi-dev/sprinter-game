@@ -50,52 +50,68 @@ export function useMenuSansDefiler(plancher = 0.5) {
       return parent.clientHeight - gap - hTitre - minScene + depasse;
     };
 
+    /**
+     * CE QUI DECIDE DU ZOOM, ET RIEN D'AUTRE (l'auteur, 10/11/2026, video a l'appui : « l'ecran
+     * bouge, ca donne mal a la tete » — encore apres le premier correctif du matin).
+     *
+     * La video montrait le menu deplace de 1 a 4 pixels une image sur deux, quarante-cinq fois par
+     * seconde : le rythme exact d'une boucle « on ecrit le zoom -> l'observateur de taille le voit
+     * -> on remesure a l'image suivante -> on ecrit un zoom un peu different ». Le calcul d'avant
+     * dependait de la valeur deja en place (raffinage, resserrage d'un cran, regle des 2 %) : il ne
+     * retombait pas toujours sur le meme chiffre, et chaque ecart relancait le tour suivant.
+     *
+     * Desormais le zoom ne depend que de deux grandeurs que le zoom lui-meme ne peut pas changer :
+     * la place offerte au menu (`place`, prise sur la colonne, le titre et la scene) et la hauteur
+     * du menu NON reduit, a largeur fixe. Tant qu'elles n'ont pas bouge de 2 px, on n'ecrit rien :
+     * nos propres ecritures ne peuvent donc plus relancer quoi que ce soit. Quand elles changent
+     * vraiment (un bandeau arrive, l'ecran tourne), le zoom est recalcule de zero, toujours de la
+     * meme facon, au centieme pres.
+     */
+    let vu: { dispo: number; besoin: number; largeur: number } | null = null;
+
     const mesurer = () => {
       const c = cadre.current, d = contenu.current;
       if (!vivant || !c || !d) return;
       // on tape dans un champ : le clavier rogne la hauteur, on ne touche a rien
       if (document.activeElement instanceof HTMLInputElement && d.contains(document.activeElement)) return;
-      // Ce qui est a l'ecran maintenant, et si ca tient sans defiler (voir STABILITE plus bas).
-      const avant = parseFloat(d.style.zoom) || 1;
-      const avantTient = c.scrollHeight <= c.clientHeight + 0.5;
+
       const dispo = place(c) - 2;   // deux pixels de marge : un arrondi ne doit pas faire defiler
-      // Deja reduit, tient sans defiler, et presque rien a regagner : on ne touche a rien. Toute
-      // ecriture du zoom refait la mise en page du menu, et c'est elle qui le faisait trembler.
-      if (avant < 1 && avantTient && d.getBoundingClientRect().height >= dispo - 12) return;
-      // La mesure se fait sans reduction : sinon le calcul tourne en rond.
+      const largeur = c.clientWidth;
+      // La hauteur du menu non reduit. Retirer puis remettre le zoom dans la meme tache ne se voit
+      // pas a l'ecran (aucune image n'est dessinee entre les deux) et, la valeur remise etant la
+      // meme, ne change aucune taille : l'observateur ne se reveille pas pour si peu.
+      const enPlace = d.style.zoom;
       d.style.zoom = '';
       const besoin = d.offsetHeight;
+
+      const pareil = vu
+        && Math.abs(vu.dispo - dispo) < 2
+        && Math.abs(vu.besoin - besoin) < 2
+        && Math.abs(vu.largeur - largeur) < 2;
+      if (pareil) { d.style.zoom = enPlace; return; }
+      vu = { dispo, besoin, largeur };
+
       let e = 1;
       if (dispo > 0 && besoin > dispo) {
-        const r = Math.floor((dispo / besoin) * 1000) / 1000;
-        // sous le plancher, on reduit quand meme jusqu'au plancher : le moins de defilement possible
-        e = Math.max(r, plancher);
-      }
-      if (e < 1) {
-        d.style.zoom = String(e);
-        // reduit, le texte occupe moins de lignes dans la meme largeur : la colonne raccourcit
-        // plus que prevu, on peut souvent reduire un peu moins
-        const h = d.getBoundingClientRect().height;
-        if (h > 0 && h < dispo - 4) {
-          const e2 = Math.min(1, Math.floor(e * (dispo / h) * 1000) / 1000);
-          d.style.zoom = e2 < 1 ? String(e2) : '';
-          e = e2;
+        // Reduit, le texte occupe moins de lignes (la colonne garde sa largeur, son contenu
+        // rapetisse) : la hauteur vue n'est pas proportionnelle au zoom. On cherche donc, par
+        // dichotomie et au centieme, le plus grand zoom qui tient. Plus le zoom est petit, plus le
+        // menu vu est court : la recherche converge, et toujours vers la meme valeur.
+        const tient = (z: number) => {
+          d.style.zoom = String(z / 100);
+          return d.getBoundingClientRect().height <= dispo;
+        };
+        const bas = Math.ceil(plancher * 100);
+        let lo = bas, hi = 99;
+        if (!tient(lo)) hi = lo;            // meme au plancher ca deborde : le plancher, et ca defile
+        else while (lo < hi) {
+          const m = Math.ceil((lo + hi) / 2);
+          if (tient(m)) lo = m; else hi = m - 1;
         }
-        // les arrondis du zoom laissent parfois un pixel qui defile : on resserre d'un cran
-        for (let i = 0; i < 6 && c.scrollHeight > c.clientHeight + 0.5 && e > plancher; i++) {
-          e = Math.round((e - 0.01) * 1000) / 1000;
-          d.style.zoom = String(e);
-        }
+        e = lo / 100;
       }
-      // STABILITE (l'auteur, 10/11/2026 : « l'affichage bouge et donne mal a la tete »).
-      // Les arrondis du zoom font hesiter le calcul entre deux valeurs voisines (0,62 et 0,628
-      // mesures) : chaque changement redimensionne le cadre, l'observateur relance la mesure, qui
-      // repart dans l'autre sens — le menu tremblait de quelques pixels sans fin. On ne regrandit
-      // donc pas le menu pour un gain de moins de 2 % quand la valeur en place tient deja sans
-      // defiler : elle reste. Rapetisser, en revanche, se fait toujours (sinon le menu defilerait).
-      if (avant < 1 && avantTient && e > avant && e - avant < 0.02) {
-        d.style.zoom = String(avant);
-      }
+      const ecrit = e < 1 ? String(e) : '';
+      d.style.zoom = ecrit;
     };
 
     const planifier = () => {
