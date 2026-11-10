@@ -452,7 +452,7 @@ export function TitleScreen() {
               revelation, le boss et les podiums du championnat (Championnat.tsx
               les ouvre depuis sa carte). */}
           <div ref={n => { rouleau.current = n; menuCadre.current = n; }}
-               className="flex-initial landscape:flex-1 min-h-0 overflow-y-auto flex flex-col
+               className="flex-initial landscape:flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] flex flex-col
                           w-[calc(100%+4rem)] max-w-[calc(28rem+4rem)] -mx-8 px-8 -mb-4">
           <div ref={menuContenu} className="my-auto flex flex-col gap-3 sm:gap-4 md:gap-6 serre:gap-2 w-full pt-2 pb-6 serre:pt-1 serre:pb-3">
 
