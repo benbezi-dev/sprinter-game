@@ -11,6 +11,12 @@ import { HaiesHUD } from './HaiesHUD';
 import { HalloweenHUD, reboursDeLaNuit, couleurDuRebours, texteDuRebours } from './HalloweenHUD';
 import { HALLOWEEN_OUVERT } from '@/game/canal';
 
+// La couleur d'un geste annonce (annoncerGeste, sprinter-app.js) : l'or d'un casse parfait, le vert de ce qui a porte,
+// le rouge de ce qui a coute.
+const TON_GESTE: Record<string, string> = {
+  or: 'text-primary', bon: 'text-emerald-400', alerte: 'text-destructive', neutre: 'text-foreground',
+};
+
 export function RaceHUD() {
   // LE TABLEAU DE COURSE SE REDESSINE A CHAQUE IMAGE, ET C'EST VOULU : chrono,
   // vitesse, ecarts. `elapsed` (en course) et `countT` (au decompte) changent a
@@ -29,6 +35,9 @@ export function RaceHUD() {
   const falseFlash = useGameStore(s => s.falseFlash);
   const reactFlash = useGameStore(s => s.reactFlash);
   const transFlash = useGameStore(s => s.transFlash);
+  // le dernier geste : le casse, un coup de coude, le couloir 2 (annoncerGeste, sprinter-app.js)
+  const gesteFlash = useGameStore(s => s.gesteFlash);
+  const geste = useGameStore(s => s.geste);
   const stumbleFlash = useGameStore(s => s.stumbleFlash);
   const mode = useGameStore(s => s.mode);
   const shotRaces = useGameStore(s => s.shotRaces);
@@ -570,6 +579,19 @@ export function RaceHUD() {
           </div>
         )}
         
+        {gesteFlash > 0 && geste && (
+          <div className="flex flex-col items-center mt-2 md:mt-4" style={{ opacity: Math.min(gesteFlash, 1) }}>
+            <div className={`text-lg sm:text-xl md:text-2xl font-black tracking-widest uppercase drop-shadow-lg ${TON_GESTE[geste.ton] || 'text-foreground'}`}>
+              {N.t(geste.cle)}
+            </div>
+            {geste.sous && (
+              <div className="text-xs sm:text-sm md:text-base font-bold text-cyan-400 font-mono tracking-wide bg-black/50 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full mt-1">
+                {geste.sous}
+              </div>
+            )}
+          </div>
+        )}
+
         {ph === 0 && elapsed > 0.1 && transFlash <= 0 && reactFlash <= 0 && !player?.finished && (
           <div className="text-xs md:text-sm font-medium text-muted-foreground tracking-widest uppercase mt-4 md:mt-8 animate-pulse">
             {rejeu ? '' : N.t('drive_hint')}

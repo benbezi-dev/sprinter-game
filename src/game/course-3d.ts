@@ -1034,12 +1034,11 @@ function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, 
     }
   };
 }
-// LE PELOTON DU 400 M EN SALLE (piste-salle.js, rabattement) : passe la ligne, le moteur met tout le monde
-// sur la ligne de mesure du couloir 1 — deux coureurs a la meme distance s'y confondraient. A l'image
-// seulement, chacun garde un ecart vers l'exterieur (0 a 1,25 m), pris pendant la diagonale.
-// (l'ecart : piste-salle.js, PELOTON — le moteur y cherche aussi les accrochages)
-const enPeloton = (T: any, lane: number, d: number) =>
-  T.salle && T.salle.rabat ? T.rabattu(d, lane) * T.salle.peloton[lane % T.salle.peloton.length] : 0;
+// LE PELOTON DU 400 M EN SALLE (piste-salle.js, rabattement) : passe la ligne, le moteur mesure tout le monde
+// sur la ligne de mesure du couloir 1. Chacun y tient sa place en travers — la corde, l'epaule, le couloir 2
+// (r.travers, sprinter-app.js, placerPeloton ; piste-salle.js, PELOTON), prise pendant la diagonale.
+const enPeloton = (T: any, r: any, d: number) =>
+  T.salle && T.salle.rabat ? T.rabattu(d, r.lane) * (r.travers || 0) : 0;
 let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
 // APRES LA LIGNE, LE VIRAGE, DANS SON COULOIR (« les coureurs deccelerent tout en restant dans leurs couloirs »,
 // l'auteur, 08/11/2026). Au 100 m et au 200 m, le moteur prolonge la piste tout droit apres l'arrivee ; le stade,
@@ -1053,7 +1052,7 @@ const virageApres = (T: any, lane: number, d: number) => {
 const ouCourt = (T: any, r: any, d: number = r.d) => {
   const theta = virageApres(T, r.lane, d), dl = theta ? T.total : d;
   const u = Math.min(1, Math.max(0, dl / 10)), garde = 1 - u * u * (3 - 2 * u);
-  const p = ici(T.posDemi(dl, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r.lane, dl)));
+  const p = ici(T.posDemi(dl, r.lane, (r.demi || 0) + milieu(T, r.lane) * garde + enPeloton(T, r, dl)));
   if (!theta) return p;
   const rad = p[1] + R_CORDE;
   return [p[0] + rad * Math.sin(theta), -R_CORDE + rad * Math.cos(theta)];

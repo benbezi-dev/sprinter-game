@@ -195,6 +195,9 @@ export type GameState = {
   reactFlash: number;
   transFlash: number;
   falseFlash: number;
+  /** Le dernier geste du joueur — le casse, un coup de coude, le couloir 2 (annoncerGeste, sprinter-app.js). */
+  geste: { cle: string; sous: string | null; ton: string } | null;
+  gesteFlash: number;
   cut: any;
   /** Le sacre qui s'efface par-dessus le generique, pendant le croisement. */
   sortie: any;
@@ -665,6 +668,65 @@ export function padRelease(side: 'left' | 'right') {
   else { buzz(HAIE.rate); cue(side, 'trip'); }
 }
 
+/**
+ * LE CASSE — les deux pouces glissent vers l'exterieur (TouchControls.tsx), ou la fleche du bas.
+ *
+ * Une fois par course, dans les derniers metres (sprinter-core.js, CASSE) : la poitrine part vers la ligne, et
+ * c'est elle que le chrono attend. Trop tot, le buste se redresse avant la ligne et la vitesse est perdue ; une fois
+ * la ligne passee, il ne change plus rien — on le dit quand meme.
+ */
+export function casser() {
+  if (G.paused || G.state !== 'race' || G.rejeu || G.spectateur) return;
+  // (au saut, les deux pouces font le ramene : longueur-course.js)
+  if (G.sautEnCours || G.appuiSaut || G.pasSauteur) return;
+  const p = G.player;
+  if (!p || typeof p.casser !== 'function') return;
+  const avant = p.casseT;
+  const note = p.casser(G.elapsed);
+  if (note === 'tard') {
+    p.casseDite = true;
+    SprinterApp.annoncerGeste('casse_tard', null, 'alerte');
+    buzz(10);
+  } else if (avant == null && p.casseT != null) {
+    buzz(24);
+    cue('left', 'step'); cue('right', 'step');
+  }
+}
+
+/** Le coup de coude — un pouce glisse vers le haut, ou la fleche du haut (le peloton du 400 m en salle). */
+export function coupDeCoude() {
+  if (G.paused || G.rejeu || G.spectateur) return;
+  const r = SprinterApp.coupDeCoude();
+  if (r === 'touche') buzz(34);
+  else if (r === 'vide') buzz(8);
+}
+
+/** Le couloir 2 (2) ou le retour a la corde (1) — un pouce glisse vers l'exterieur, ou la touche C. */
+export function changerCouloir(vers: 1 | 2) {
+  if (G.paused || G.rejeu || G.spectateur) return;
+  if (SprinterApp.changerCouloir(vers)) buzz(12);
+}
+
+/**
+ * CE QUE LA CONSIGNE SOUS LES PAVES DOIT DIRE, A CET INSTANT (TouchControls.tsx) : la cle de traduction, ou null
+ * pour la consigne ordinaire. Enferme, le couloir 2 ; au coude a coude, le coup de coude ; dans les derniers
+ * metres, le casse — tant qu'il n'est pas donne.
+ */
+export function consigneDuGeste(clavier: boolean): string | null {
+  const p = G.player, T = G.track;
+  if (G.state !== 'race' || !p || p.finished || G.rejeu || G.spectateur || G.sautEnCours) return null;
+  const kb = clavier ? '_kb' : '';
+  if (T && T.salle && T.salle.rabat) {
+    if (p.enferme && !p.couloir2) return 'enferme_consigne' + kb;
+    const Z = T.salle.coude;
+    const voisin = (G.runners || []).some((o: any) => o !== p && !o.isLive && !o.isGhost && !o.fictif && !o.finished
+                                                    && T.auContact(p, o, Z));
+    if (voisin) return 'coude_consigne' + kb;
+  }
+  if (p.casseT == null && !p.casseNote && p.total - p.d > 0 && p.total - p.d <= SprinterCore.CASSE.consigne) return 'casse_consigne' + kb;
+  return null;
+}
+
 // Garde l'attribut lang du document aligne sur la langue du jeu. Sans ca
 // la page annonce une langue qui n'est pas celle affichee, et les
 // navigateurs proposent de la traduire — une traduction navigateur
@@ -1025,6 +1087,7 @@ export function updateLogic(dt: number) {
   G.reactFlash = Math.max(0, G.reactFlash - dt);
   G.transFlash = Math.max(0, G.transFlash - dt);
   G.falseFlash = Math.max(0, G.falseFlash - dt);
+  G.gesteFlash = Math.max(0, (G.gesteFlash || 0) - dt);
   G.shake = Math.max(0, G.shake - dt * 3.2);
   G.flash = Math.max(0, G.flash - dt * 1.4);
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
@@ -1273,6 +1336,8 @@ export function updateLogic(dt: number) {
       // temps ne sont jamais calculees, la position devient NaN, et
       // l'adversaire disparait de la piste sans une erreur.
       for (const r of G.runners) if (!r.isPlayer && !r.isLive) r.stepAI(step, G.elapsed);
+      // le peloton du 400 m en salle : la place de chacun en travers, les gestes du coude (sprinter-app.js)
+      SprinterApp.placerPeloton(step);
       // la place a l'arrivee, des la ligne : les trois premiers celebrent (Runner.apresLigne)
       for (const r of G.runners) if (r.finished && r.place == null && r.finishTime != null)
         r.place = 1 + G.runners.filter((o: any) => o !== r && o.finished && o.finishTime != null && o.finishTime < r.finishTime).length;
@@ -1307,6 +1372,16 @@ export function updateLogic(dt: number) {
     if (G.player.transGrade !== null && !G.transShown) {
       G.transShown = true; G.transFlash = 2.4;
       if (G.player.transGrade) { Audio_.sfx('win'); G.flash = 0.6; }
+    }
+    // LE CASSE, JUGE SUR LA LIGNE (sprinter-core.js, jugerCasse) : sa note, et ce qu'il a fait au chrono
+    if (G.player.casseNote && !G.player.casseDite) {
+      const p = G.player, g = p.casseGain || 0, N = SprinterApp.N;
+      p.casseDite = true;
+      const sous = g >= 0.005 ? N.t('casse_gagne').replace('{s}', g.toFixed(2))
+        : g <= -0.005 ? N.t('casse_perdu').replace('{s}', (-g).toFixed(2)) : null;
+      SprinterApp.annoncerGeste('casse_' + p.casseNote, sous,
+        p.casseNote === 'parfait' ? 'or' : p.casseNote === 'bon' ? 'bon' : 'alerte');
+      if (p.casseNote === 'parfait') { Audio_.sfx('win'); G.flash = Math.max(G.flash, 0.5); }
     }
     SprinterApp.followCam(dt);
     
@@ -1363,7 +1438,7 @@ export function updateLogic(dt: number) {
       if (!G.rejeuFini && G.elapsed >= dernier + 2.5) {
         G.rejeuFini = true;
         for (const r of G.runners)
-          if (!r.finished && !r.isPlayer) r.finishTime = r.target;
+          if (!r.finished && !r.isPlayer) r.finishTime = r.target + (r.retard || 0);
         const fin = G.rejeuFin; G.rejeuFin = null;
         if (fin) fin(); else SprinterApp.goHome();
       }
@@ -1389,7 +1464,7 @@ export function updateLogic(dt: number) {
       // Plante seulement : la serie s'arrete la (finishRace, one shot).
       G.finPlante = plante && !(out || slow || mordu);
       for (const r of G.runners)
-        if (!r.finished && !r.isPlayer) r.finishTime = r.target;
+        if (!r.finished && !r.isPlayer) r.finishTime = r.target + (r.retard || 0);
       SprinterApp.finishRace();
     }
   }
@@ -1411,6 +1486,8 @@ export function updateLogic(dt: number) {
     reactFlash: G.reactFlash,
     transFlash: G.transFlash,
     falseFlash: G.falseFlash,
+    geste: G.geste,
+    gesteFlash: G.gesteFlash,
     cut: G.cut,
     sortie: G.sortie,
     levelIdx: G.levelIdx,
