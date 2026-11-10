@@ -67,7 +67,7 @@ import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
 import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
-import { DUEL_MARQUES_OUVERT } from './canal';
+import { DUEL_MARQUES_OUVERT, NOEL_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
 import { jouerLeFauxDepart, rangerLeFauxDepart } from './faux-depart';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
@@ -151,6 +151,15 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
     const dm = (SprinterApp.G.shotOpts || {}).duelMarques;
     const cible = dm && SprinterApp.G.ghostSet ? String(dm.cible || '') || null : null;
     import('./marques').then(m => m.envoyerCourse(race, t, trace, ctx, cible)).catch(() => { /* hors ligne */ });
+  }
+  // NOEL 2026 : une course partie de l'ecran de Noel (game/noel.ts) devient le
+  // fantome du joueur, et juge la cible si elle en avait une. Seulement si le
+  // depart portait `noel` : un 60 m ordinaire ne touche pas a l'arene.
+  const noel = (SprinterApp.G.shotOpts || {}).noel;
+  if (NOEL_OUVERT && noel && race === '60' && t != null && !SprinterApp.G.rejeu) {
+    const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
+    const cible = noel.cible && SprinterApp.G.ghostSet ? String(noel.cible) : null;
+    import('./noel').then(m => m.envoyerCourse(t, trace, cible)).catch(() => { /* hors ligne */ });
   }
 };
 

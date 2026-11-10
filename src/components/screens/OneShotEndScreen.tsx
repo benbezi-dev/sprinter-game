@@ -36,6 +36,11 @@ import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { EcartRecord } from './RecordPerso';
 import { mesPointsDe, tournoiLance, type PointsDuel, type ResultatTournoi } from '@/game/live';
 import { RevancheDirecte } from './RevancheDirecte';
+import { RevanchePub, useRevancheRachetable } from './RevanchePub';
+import { Reprises, repriseOfferte } from './Reprises';
+import { usePieces, PIECES_OUVERTES } from '@/game/pieces';
+import { pubPossible, PUBS_PAR_CARRIERE } from '@/game/pub';
+import { garderLeFauxDepart, oublierLeFauxDepart, envoyerLeFauxDepartEnAttente } from '@/game/dsq-attente';
 import { BlocTournoi } from './TournoiDirect';
 import { voterRevanche, useSalonDirect } from '@/game/salon-direct';
 import { nomDeManche, maPlace } from '@/game/tournoi-direct';
@@ -331,6 +336,48 @@ export function OneShotEndScreen() {
   const revancheNom = SprinterApp.G.revanche as string | null;
   const revancheMs = (SprinterApp.G.revancheMs as number) || 0;
   const revancheBattue = !!revancheId && !falseOut && complete && runTime * 1000 < revancheMs;
+  // Faux depart dans une revanche : une pub ou des pieces la rendent (RevanchePub.tsx).
+  const revancheRachetable = useRevancheRachetable(revancheId);
+
+  /**
+   * LE FAUX DEPART SE RACHETE (l'auteur, 10/11/2026 : « pareil pour tous les
+   * faux departs du jeu sauf en championnat »). Une pub (PUBS_PAR_CARRIERE par
+   * one shot) ou des pieces reprennent l'epreuve du faux depart, les chronos
+   * d'avant gardes (reprendreOneShot du moteur).
+   *
+   * Seulement la ou RECOMMENCER ne rend pas deja la meme chose gratuitement :
+   * un enchainement de plusieurs epreuves, un duel, un fantome. Jamais en
+   * direct (les autres n'attendent pas) ni en championnat. La revanche a son
+   * propre bloc (RevanchePub), le duel des marques recommence deja contre son
+   * fantome.
+   */
+  const pieces = usePieces();
+  const repriseOS = falseOut && !liveOn && !SprinterApp.G.champDirect && !revancheId
+    && !(SprinterApp.G.shotOpts as any)?.duelMarques && SprinterApp.G.fauxDepartIdx != null
+    && (shotRaces.length > 1 || !!challenge || ghostTime > 0);
+  const parcoursOS = repriseOS ? String(SprinterApp.G.shotRunId || '') : '';
+  const repriseOSOfferte = repriseOS && repriseOfferte(pieces, {
+    parcours: parcoursOS, achetes: SprinterApp.G.shotRepAchats || 0,
+    pubs: SprinterApp.G.shotRepPubs || 0, pubsMax: PUBS_PAR_CARRIERE,
+  });
+  /**
+   * UN DUEL PERDU SUR FAUX DEPART ATTEND QUE LE JOUEUR RENONCE avant de partir
+   * chez l'adversaire (dsq-attente.ts). Decide sur ce qui PEUT etre offert —
+   * pub possible ou pieces ouvertes — et pas sur le solde, qui arrive apres :
+   * sans quoi la defaite partirait avant que le bouton n'apparaisse.
+   */
+  const [renonce, setRenonce] = useState(false);
+  const dsqGarde = useRef(false);
+  const reprisLeDuel = useRef(false);
+  const duelEnSuspens = !!challenge && repriseOS && !renonce && (pubPossible() || PIECES_OUVERTES);
+  const reprendreLeOneShot = (parPub: boolean) => {
+    if (dsqGarde.current) { reprisLeDuel.current = true; oublierLeFauxDepart(); }
+    SprinterApp.reprendreOneShot(parPub);
+  };
+  // Quitter l'ecran sans racheter ni renoncer : la defaite part quand meme.
+  useEffect(() => () => {
+    if (dsqGarde.current && !reprisLeDuel.current) envoyerLeFauxDepartEnAttente();
+  }, []);
 
 
   // Defi en cours : on envoie le resultat une seule fois, des l'arrivee.
@@ -338,6 +385,13 @@ export function OneShotEndScreen() {
   // course qui n'a pas eu lieu, et l'adversaire doit toucher ses points.
   useEffect(() => {
     if (!challenge || submitted.current === challenge.id || (!complete && !falseOut)) return;
+    // Faux depart rachetable : la defaite attend que le joueur y renonce.
+    if (falseOut && duelEnSuspens) {
+      garderLeFauxDepart({ id: challenge.id, name: getSavedName() || undefined });
+      dsqGarde.current = true;
+      return;
+    }
+    if (dsqGarde.current) { oublierLeFauxDepart(); dsqGarde.current = false; }
     submitted.current = challenge.id;
     setDuel(null); setDuelEnCours(true); sonne.current = false;
     submitAttempt({
@@ -369,7 +423,7 @@ export function OneShotEndScreen() {
       .catch(() => { /* le chrono local reste affiche */ })
       .finally(() => setDuelEnCours(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [challenge && challenge.id, complete, falseOut]);
+  }, [challenge && challenge.id, complete, falseOut, duelEnSuspens]);
 
   // La musique du resultat. Elle ne part qu'une fois l'issue connue : jouer
   // une fanfare avant de savoir qui a gagne serait pire que le silence.
@@ -460,6 +514,16 @@ export function OneShotEndScreen() {
       levelIdx: opts.levelIdx == null ? SprinterApp.G.shotLevel : opts.levelIdx,
       challenge: null,
     });
+  };
+
+  /** Prendre sa revanche apres un duel perdu : le fantome qui vient de nous
+   *  battre repart avec elle, sa trace est deja celle du defi couru. */
+  const prendreLaRevanche = () => {
+    if (!challenge) return;
+    SprinterApp.G.revanche = challenge.owner_name;
+    SprinterApp.G.revancheId = challenge.id;
+    SprinterApp.G.revancheMs = challenge.total_ms;
+    memeCourseSansLeDefi();
   };
 
   const handleCreate = async () => {
@@ -936,7 +1000,7 @@ export function OneShotEndScreen() {
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-bold text-destructive tracking-widest uppercase">
                 {/* En tournoi, le titre dit deja ELIMINE : on dit pourquoi. */}
                 {resTournoi ? N.t('false_out')
-                  : N.t(defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
+                  : N.t(duelEnSuspens ? 'false_out_suspens' : defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
               </div>
             ) : (
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-medium text-foreground/80 tracking-widest uppercase">
@@ -1119,7 +1183,7 @@ export function OneShotEndScreen() {
           {/* Resultat du duel : les points comptent pour le classement des
               duels, et une seule fois. On l'annonce comme definitif parce
               qu'il l'est — relancer le meme defi ne redistribue rien. */}
-          {challenge && (duelEnCours || duel) && (
+          {challenge && !duelEnSuspens && (duelEnCours || duel) && (
             <motion.div
               {...MONTEE}
               className={`w-full rounded-2xl border px-4 py-3 md:py-4 court:px-3 court:py-2 flex flex-col items-center gap-1.5 shadow-2xl
@@ -1227,16 +1291,14 @@ export function OneShotEndScreen() {
                                     px-2 mt-0.5">
                         « {pique(challenge.id, challenge.owner_name)} »
                       </p>
+                      {/* Perdu sur faux depart : la revanche coute une pub
+                          (RevanchePub.tsx) ou des pieces, decision du 10/11/2026. Sans pub
+                          possible, pas de bouton : RECOMMENCER, sans revanche. */}
+                      {falseOut ? (
+                        <RevanchePub cle={challenge.id} adversaire={challenge.owner_name || N.t('opponent')} onRevanche={prendreLaRevanche} />
+                      ) : (
                       <button
-                        onClick={() => {
-                          SprinterApp.G.revanche = challenge.owner_name;
-                          SprinterApp.G.revancheId = challenge.id;
-                          SprinterApp.G.revancheMs = challenge.total_ms;
-                          // Le fantome qui vient de nous battre repart avec la
-                          // revanche : sa trace est deja la, celle du defi
-                          // qu'on vient de courir.
-                          memeCourseSansLeDefi();
-                        }}
+                        onClick={prendreLaRevanche}
                         className="mt-1 px-5 py-2.5 rounded-xl font-black font-display tracking-widest
                                    text-background bg-primary hover:bg-primary/90 transition-colors
                                    flex flex-col items-center leading-tight text-sm"
@@ -1246,6 +1308,7 @@ export function OneShotEndScreen() {
                           {N.t('duel_revanche_sub')}
                         </span>
                       </button>
+                      )}
                     </>
                   )}
                   <span className="text-[10px] md:text-xs text-muted-foreground tracking-wide text-center">
@@ -1361,6 +1424,37 @@ export function OneShotEndScreen() {
             </div>
           )}
 
+          {/* LE FAUX DEPART SE RACHETE (voir repriseOS) : pub ou pieces, et
+              l'on repart a l'epreuve du faux depart. Dans un duel, renoncer
+              envoie la defaite — c'est seulement alors qu'elle part. */}
+          {repriseOSOfferte && (
+            <div className="w-full bg-card/60 border border-primary/40 rounded-2xl p-2 sm:p-3 md:p-5 court:p-2 shadow-2xl flex flex-col items-center gap-2 court:gap-1.5">
+              <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
+                {N.t(challenge ? 'fd_reprise_duel' : 'fd_reprise', { e: nomDiscipline(cleDiscipline([shotRaces[SprinterApp.G.fauxDepartIdx] as string])) })}
+              </p>
+              <Reprises parcours={parcoursOS}
+                achetes={SprinterApp.G.shotRepAchats || 0} pubs={SprinterApp.G.shotRepPubs || 0}
+                pubsMax={PUBS_PAR_CARRIERE} revanche
+                etape={nomDiscipline(cleDiscipline([shotRaces[SprinterApp.G.fauxDepartIdx] as string]))}
+                recaler={n => { SprinterApp.G.shotRepAchats = n; }}
+                reprendre={reprendreLeOneShot} />
+              {duelEnSuspens && (
+                <button onClick={() => setRenonce(true)}
+                  className="text-[10px] md:text-xs font-bold tracking-widest uppercase text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                  {N.t('fd_renoncer_duel')}
+                </button>
+              )}
+            </div>
+          )}
+          {/* Duel en suspens mais rien a offrir (pas de solde, pas de pub) : le
+              seul bouton qui fasse partir la defaite et montrer l'issue. */}
+          {duelEnSuspens && !repriseOSOfferte && (
+            <button onClick={() => setRenonce(true)}
+              className="text-xs font-bold tracking-widest uppercase text-muted-foreground underline underline-offset-2">
+              {N.t('fd_renoncer_duel')}
+            </button>
+          )}
+
           {/* Creer un defi a partir de cette course. Hors defi c'est le
               partage normal ; une revanche part toute seule des qu'elle bat
               le chrono qu'elle venge. */}
@@ -1370,7 +1464,9 @@ export function OneShotEndScreen() {
               et avec lui le seul bouton qui gardait la trace de qui l'on
               venge : il fallait repasser par RECOMMENCER, qui sort de la
               chaine. On le garde donc ouvert, sans le formulaire de creation
-              — celui-la reste ferme, il n'y a pas de chrono a envoyer. */}
+              — celui-la reste ferme, il n'y a pas de chrono a envoyer. 
+              Depuis le 10/11/2026, la nouvelle tentative coute une pub ou
+              des pieces (RevanchePub.tsx) ; sans pub, RECOMMENCER repart sans revanche. */}
           {(!falseOut || !!revancheId) && (!challenge || beaten) && (
             <div className={`w-full bg-card/60 border rounded-2xl p-2 sm:p-3 md:p-6 court:p-2 shadow-2xl flex flex-col gap-2 court:gap-1.5
               ${beaten || revancheBattue || revancheFaite !== null
@@ -1440,8 +1536,16 @@ export function OneShotEndScreen() {
               {!cible && revancheId && !revancheBattue && revancheFaite === null && (
                 <div className="flex flex-col items-center gap-2.5">
                   <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
-                    {N.t('duel_revanche_ratee', { n: revancheNom, s: (revancheMs / 1000).toFixed(2) })}
+                    {falseOut
+                      ? N.t(revancheRachetable ? 'duel_revanche_fd_pub' : 'duel_revanche_fd_perdue', { n: revancheNom })
+                      : N.t('duel_revanche_ratee', { n: revancheNom, s: (revancheMs / 1000).toFixed(2) })}
                   </p>
+                  {/* Faux depart : la tentative est brulee, une pub la rend
+                      ou des pieces la rendent (RevanchePub.tsx). Sinon RECOMMENCER,
+                      qui oublie la revanche. */}
+                  {falseOut ? (
+                    <RevanchePub cle={revancheId} adversaire={revancheNom || N.t('opponent')} onRevanche={memeCourseSansLeDefi} />
+                  ) : (
                   <button
                     onClick={memeCourseSansLeDefi}
                     className="px-5 py-2 rounded-xl font-black font-display tracking-widest text-xs md:text-sm
@@ -1449,6 +1553,7 @@ export function OneShotEndScreen() {
                   >
                     {N.t('duel_revanche')}
                   </button>
+                  )}
                 </div>
               )}
 
@@ -1728,7 +1833,7 @@ export function OneShotEndScreen() {
 
             {/* Ce qui est joue de la course precedente. Un constat, plus un
                 verrou : il n'empeche plus rien, il informe. */}
-            {verrou && (
+            {verrou && !duelEnSuspens && (
               <p className={`text-center text-[11px] md:text-xs tracking-wide leading-snug max-w-sm mx-auto
                 ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold'
                                                 : 'text-muted-foreground'}`}>

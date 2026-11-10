@@ -41,6 +41,9 @@ const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
   .then(m => ({ default: m.BanderoleVedette })));
 // Le duel des marques (Team adidas contre Team Nike) : charge a la demande,
 // pour la meme raison — DUEL_MARQUES_OUVERT est ferme au public (canal.ts).
+// Noel 2026 : boules de neige et etoile du sapin (Noel.tsx), paresseux comme le duel.
+const BanderoleNoel = /* @__PURE__ */ lazy(() => import('./Noel')
+  .then(m => ({ default: m.BanderoleNoel })));
 const BanderoleMarques = /* @__PURE__ */ lazy(() => import('./DuelMarques')
   .then(m => ({ default: m.BanderoleMarques })));
 // Le tchat du duel lui survit (16/10) : apres la fermeture, il vit sur l'accueil.
@@ -68,7 +71,7 @@ import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, epreuvesDuLieu } from '@/game/jeux';
 import { useMenuSansDefiler } from '@/hooks/use-menu-sans-defiler';
 import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
-import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
+import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE, NOEL_OUVERT } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
@@ -472,6 +475,9 @@ export function TitleScreen() {
 
             {/* LE DUEL DES EPREUVES : le serveur dit s'il est ouvert. Sprinter seulement. */}
             {!haies && <Suspense fallback={null}><BanderoleEpreuves /></Suspense>}
+
+            {/* NOEL 2026, un 60 m : Sprinter seulement. */}
+            {!haies && NOEL_OUVERT && <Suspense fallback={null}><BanderoleNoel /></Suspense>}
 
             {/* LE DUEL DES MARQUES, un 100 m : Sprinter seulement. */}
             {!haies && DUEL_MARQUES_OUVERT && <Suspense fallback={null}><BanderoleMarques /></Suspense>}
