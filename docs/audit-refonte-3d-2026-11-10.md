@@ -63,3 +63,30 @@ garder Fable 5.2 pour les lots 2 et 3.
 2. Lot 1 : c'est le gain le plus fort pour le coût le plus faible (mémoire,
    chargement, stabilité).
 3. Lot 2, puis 3 et 4 stade par stade, en vérifiant la cadence à chaque étape.
+
+## 5. Avancement
+
+### Lot 1, étape 1 — compression sans perte des pièces ultra (10/11)
+
+- `public/modeles/stades-ultra/` : **148 → 74 Mo** (45 pièces). Les quatre pièces de
+  la ruelle d'Halloween, que tous les appareils chargent (`course-3d.ts:630`), passent
+  de 98 à environ 49 Mo.
+- Méthode : `tools/assets/optimiser-glb.mjs` (`npm run assets:optimiser`). Retire les
+  coordonnées de texture des matériaux sans texture, réordonne pour le cache de sommets,
+  compresse en `EXT_meshopt_compression` **sans quantification** (Float32 conservé,
+  comme les pièces légères déjà publiées : le jeu fusionne des matrices dans la
+  géométrie, `ruelle-3d.ts:180`).
+- Preuve : `tools/assets/verifier-identique.mjs` compare l'ensemble des triangles
+  (positions, normales, sens) : 45/45 identiques à l'original. Le même outil signale
+  bien une version quantifiée comme différente. Les 45 pièces ont aussi été chargées
+  avec le GLTFLoader + MeshoptDecoder du jeu, en refaisant le chemin `applyMatrix4`
+  de la ruelle : mêmes triangles, mêmes boîtes.
+- `tools/assets/comparer.mjs` : capture côte à côte de deux GLB.
+- Non fait : course 3D complète dans le navigateur, mesure sur téléphone.
+- Écart avec une consigne : l'export Blender `--ultra` disait « sans compression »
+  (`tools/blender/stades_3d_glb.py`). La compression appliquée est sans perte ; si la
+  consigne visait aussi la compression sans perte, `git revert` du commit rétablit les
+  fichiers d'origine.
+- Non touchés : `boss-plein/` et `vedettes/meba-plein.glb` (le choix « sans la
+  compression qui les arrondit » y est explicite, et leur poids vient des textures
+  PNG 4096, que les téléphones ne chargent pas).
