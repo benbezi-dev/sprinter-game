@@ -75,29 +75,51 @@ try {
   const js = (await transform(regle, { loader: 'ts' })).code;
   const cadence = (retenu = null, query = '') => new Function('retenu', 'query', `
     const Q = new URLSearchParams(query), matchMedia = () => ({ matches: true });
-    const localStorage = { getItem: () => retenu, setItem() {} };
+    const ecrits = [];
+    const localStorage = { getItem: () => retenu, setItem(k, v) { ecrits.push(v); } };
     const window = { devicePixelRatio: 3 };
     let ratio = 0, renderer = { setPixelRatio(r) { ratio = r; } }, soleil = null;
     const OMBRES = true, dimensionner = () => {};
     ${js}
-    return { image: tenirLaCadence, lire: () => ({ palier, ratio }), appliquerLePalier, grace: () => { qualiteApres = performance.now() + 1000; } };
+    return { image: tenirLaCadence, lire: () => ({ palier, ratio }), ecrits, appliquerLePalier, grace: () => { qualiteApres = performance.now() + 1000; } };
   `)(retenu, query);
+  // 60 Hz qui saccade : deux images a 16,7 ms, une a 33,3 ms — la moitie du temps en images lentes
+  const saccade = (c, actif = true, enCourse = actif) => {
+    for (let i = 0; i < 30; i++) { c.image(1/60, actif, enCourse); c.image(1/60, actif, enCourse); c.image(1/30, actif, enCourse); }
+  };
   let c = cadence(); c.appliquerLePalier(); assert.equal(c.lire().ratio, 2);
   for (let i = 0; i < 100; i++) c.image(1/60, true);
   assert.equal(c.lire().palier, 2, '60 images/s gardent la qualite');
   c.image(0.1, true); assert.equal(c.lire().palier, 2, 'une seule image lente ne suffit pas');
-  for (let i = 0; i < 65; i++) c.image(0.025, true);
+  saccade(c);
   assert.equal(c.lire().palier, 1); assert.equal(c.lire().ratio, 1.5);
-  for (let i = 0; i < 65; i++) c.image(0.025, true);
-  assert.equal(c.lire().palier, 0); assert.equal(c.lire().ratio, 1);
-  c = cadence('0'); assert.equal(c.lire().palier, 0, 'palier bas memorise sur telephone');
+  assert.deepEqual(c.ecrits, ['1'], 'une baisse mesuree en course est retenue');
+  saccade(c);
+  assert.equal(c.lire().palier, 0);
+  assert.equal(c.lire().ratio, 1.5, 'le telephone ne descend jamais sous 1,5 pixel par point');
+  c = cadence('0'); c.appliquerLePalier(); assert.equal(c.lire().ratio, 1.5, 'palier bas memorise, toujours a 1,5');
   c = cadence(null, 'qualite=ultra'); for (let i = 0; i < 200; i++) c.image(0.04, true);
   assert.equal(c.lire().palier, 3, 'choix ultra explicite conserve');
-  console.log('✓ Rendu : 60 images/s, incident isole, baisse durable, resolution, memoire et choix explicite');
+  console.log('✓ Rendu : 60 images/s, incident isole, baisse durable, plancher 1,5 au telephone, memoire et choix explicite');
+  c = cadence(); for (let i = 0; i < 300; i++) c.image(1/30, true, false);
+  for (let i = 0; i < 300; i++) c.image(1/30, true, true);
+  assert.equal(c.lire().palier, 2, 'un ecran plafonne a 30 images/s (economie d energie) ne perd pas la qualite');
   c = cadence(); for (let i = 0; i < 12; i++) c.image(0.2, true);
   assert.ok(c.lire().palier < 2, 'une cadence de 5 images/s est comptee, pas ignoree');
+  c = cadence(); for (let i = 0; i < 60; i++) c.image(0.040, true);
+  assert.equal(c.lire().palier, 1, '25 images/s regulieres restent une cadence lente');
   c = cadence(); c.grace(); for (let i = 0; i < 100; i++) c.image(0.04, true);
   assert.equal(c.lire().palier, 2, 'la compilation du nouveau stade a sa periode de grace');
+  c = cadence(); saccade(c, true, false);
+  assert.equal(c.lire().palier, 1, 'une presentation qui saccade s allege tout de suite');
+  assert.deepEqual(c.ecrits, [], 'mais la baisse de la presentation n est pas retenue');
+  for (let i = 0; i < 1200; i++) c.image(1/60, true, true);
+  assert.equal(c.lire().palier, 1, 'pas de va-et-vient dans la meme visite');
+  c = cadence('1'); for (let i = 0; i < 1200; i++) c.image(1/60, true, false);
+  assert.equal(c.lire().palier, 1, 'une presentation fluide ne fait pas remonter');
+  for (let i = 0; i < 700; i++) c.image(1/60, true, true);
+  assert.equal(c.lire().palier, 2, 'dix secondes de course fluide font remonter');
+  assert.deepEqual(c.ecrits, ['2']);
   const horlogeSource = rendu.slice(rendu.indexOf('  const maintenantImage ='), rendu.indexOf('  const T = G.track;', rendu.indexOf('  const maintenantImage =')));
   const horloge = new Function(`
     let imagePrecedente3D = null, instant = 0, dernier;
