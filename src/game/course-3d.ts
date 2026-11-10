@@ -2686,11 +2686,12 @@ function maillageDe(chemin: string): THREE.Object3D | null | false {
     const l = chargeurGLTF();
     const leger = () => l.loadAsync(base + chemin.replace(/^\//, ''));
     // EN ULTRA, LA PLEINE RESOLUTION (« les assets dans leur plein potentiel », 23/10) : la meme
-    // vedette, texture Tripo a sa taille d'origine en PNG, sans meshopt (boss_pleine_resolution.py) ;
-    // la legere si elle manque
-    // (pas sur un appareil a moins de 4 Go : une texture de 4096 px y pese pres de 90 Mo de memoire graphique)
+    // vedette, texture Tripo a sa taille d'origine (4096 px, en KTX2 depuis le 10/11), sans meshopt
+    // (boss_pleine_resolution.py) ; la legere si elle manque
+    // (pas sur un appareil a moins de 2 Go : la texture 4096 en KTX2 pese ~22 Mo de memoire graphique,
+    // contre ~90 Mo en PNG quand le seuil etait a 4 Go)
     const memoire = (navigator as any).deviceMemory;
-    const nom = ULTRA && !(memoire && memoire < 4) && (chemin.match(new RegExp('(?:^|/)(' + PLEINS + ')(?:[-.][^/]*)?\\.glb$')) || [])[1];
+    const nom = ULTRA && !(memoire && memoire < 2) &&(chemin.match(new RegExp('(?:^|/)(' + PLEINS + ')(?:[-.][^/]*)?\\.glb$')) || [])[1];
     // MEBA-MICKAEL ZEZE AU MAXIMUM, A TOUS LES PALIERS (« rends le skin de Mickael au maximum de sa
     // qualite », l'auteur, 24/10) : sa texture 2048 en PNG, ses sommets sans la compression qui les
     // arrondit, et une subdivision lissee (31 000 faces au lieu de 10 000, coutures ressoudees).
