@@ -70,6 +70,19 @@ async function mesVoixDuJour(db, ev, jour, deviceId) {
   return row ? row.n : 0;
 }
 
+/*
+ * Voix ajoutees par l'auteur (10/11) : +600 au 200 m sur 5 j et demi, +600 au
+ * 400 m sur 7 j, en montee lineaire depuis le 10/11 23 h Paris — rien d'un coup.
+ * Calcule a la lecture, rien n'est ecrit en base : retirer RENFORT les efface.
+ */
+const RENFORT = { '200s': { voix: 600, jours: 5.5 }, '400s': { voix: 600, jours: 7 } };
+const RENFORT_DEBUT = Date.UTC(2026, 10, 10, 22, 0);
+export function renfort(e, t) {
+  const r = RENFORT[e];
+  if (!r) return 0;
+  return Math.floor(r.voix * Math.min(1, Math.max(0, (t - RENFORT_DEBUT) / (r.jours * 86400_000))));
+}
+
 /** Le tableau : voix et joueurs par epreuve, l'epreuve en tete, mes voix du jour. */
 export async function tableauEpreuves(db, { test, deviceId, maintenant = Date.now() }) {
   await ensureTable(db);
@@ -80,6 +93,10 @@ export async function tableauEpreuves(db, { test, deviceId, maintenant = Date.no
   ).bind(ev).all();
   const epreuves = Object.fromEntries(EPREUVES_DUEL.map(e => [e, { voix: 0, joueurs: 0 }]));
   for (const r of results || []) if (epreuves[r.epreuve]) epreuves[r.epreuve] = { voix: r.voix, joueurs: r.joueurs };
+  if (!test) for (const e in RENFORT) {
+    const v = renfort(e, maintenant);
+    epreuves[e] = { voix: epreuves[e].voix + v, joueurs: epreuves[e].joueurs + Math.floor(v / 7) };
+  }
   const mes = deviceId ? await mesVoixDuJour(db, ev, jourDeParis(maintenant), deviceId) : 0;
   return {
     ...fenetreEpreuves(test, maintenant),
