@@ -21,6 +21,9 @@ type Props = {
   achetes: number;
   /** Pubs deja regardees sur ce parcours. */
   pubs: number;
+  /** Plafond de pubs du parcours : PUBS_PAR_CARRIERE par defaut ; la revanche
+   *  d'un one shot a le sien (RevanchePub.tsx). */
+  pubsMax?: number;
   /** Nom de l'etape a reprendre. */
   etape: string;
   /** Le serveur compte autrement : se recaler sur son compte. */
@@ -30,12 +33,12 @@ type Props = {
 };
 
 /** Une reprise est-elle proposee ? (pour dire « ou repartir de zero ».) */
-export function repriseOfferte(pieces: EtatPieces | null, p: Pick<Props, 'parcours' | 'achetes' | 'pubs'>): boolean {
+export function repriseOfferte(pieces: EtatPieces | null, p: Pick<Props, 'parcours' | 'achetes' | 'pubs' | 'pubsMax'>): boolean {
   if (!p.parcours) return false;
-  return coutDuContinue(pieces, p.achetes) != null || (pubPossible() && p.pubs < PUBS_PAR_CARRIERE);
+  return coutDuContinue(pieces, p.achetes) != null || (pubPossible() && p.pubs < (p.pubsMax ?? PUBS_PAR_CARRIERE));
 }
 
-export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }: Props) {
+export function Reprises({ parcours, achetes, pubs, pubsMax = PUBS_PAR_CARRIERE, etape, recaler, reprendre }: Props) {
   const { N } = SprinterApp;
   const pieces = usePieces();
   const [achat, setAchat] = useState<'libre' | 'envoi' | 'reseau' | 'solde' | 'epuise' | 'nom'>('libre');
@@ -63,7 +66,7 @@ export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }:
 
   // LA PUB « 2E CHANCE » (game/pub.ts) : reprend l'etape comme un Continue,
   // sans pieces, PUBS_PAR_CARRIERE fois. Pas de bouton la ou il n'y a pas de pub.
-  const pubOfferte = pubPossible() && pubs < PUBS_PAR_CARRIERE;
+  const pubOfferte = pubPossible() && pubs < pubsMax;
   const handlePub = async () => {
     if (pub === 'envoi') return;
     setPub('envoi');

@@ -2748,7 +2748,39 @@ import { sponsorDeLaCourse } from './panneaux';
     G.ghostSplits = opts.ghostSplits || [];
     G.ghostName = opts.ghostName || '';
     G.ghostTime = opts.ghostTime || 0;
+    // LES REPRISES DE CE ONE SHOT (pub ou pieces apres un faux depart, voir
+    // reprendreOneShot) : un identifiant neuf par one shot lance, que le
+    // serveur des pieces accepte ([a-zA-Z0-9-]{8,64}), et ses compteurs.
+    G.shotRunId = 'os-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    G.shotRepAchats = 0; G.shotRepPubs = 0;
+    G.fauxDepartIdx = null;
     startShotRace();
+  }
+
+  /**
+   * REPRENDRE UN ONE SHOT A L'EPREUVE DU FAUX DEPART (l'auteur, 10/11/2026 :
+   * le faux depart se rachete partout, sauf en championnat, par une pub ou des
+   * pieces). Les epreuves deja courues gardent leur chrono et leur trace ;
+   * celle du faux depart repart, avec le meme plateau, le meme fantome, le
+   * meme defi. Ce n'est pas RECOMMENCER, qui repart de zero et seul.
+   *
+   * Refuse hors one shot, sans faux depart, en direct et en championnat.
+   */
+  function reprendreOneShot(parPub) {
+    if (G.mode !== 'oneshot' || !G.falseOut || G.liveOn || G.champDirect) return false;
+    const i = G.fauxDepartIdx;
+    if (i == null || i < 0 || !G.shotRaces || i >= G.shotRaces.length) return false;
+    if (parPub) G.shotRepPubs = (G.shotRepPubs || 0) + 1;
+    else G.shotRepAchats = (G.shotRepAchats || 0) + 1;
+    G.runSplits = G.runSplits.slice(0, i);
+    G.shotTraces = G.shotTraces.slice(0, i);
+    G.runTime = G.runSplits.reduce((t, x) => t + (x || 0), 0);
+    G.runRank = null;
+    G.falseOut = false; G.falseOutT = 0; G.falseFlash = 0;
+    G.fauxDepartIdx = null;
+    G.shotIdx = i;
+    startShotRace();
+    return true;
   }
   function startShotRace() {
     G.raceKey = G.shotRaces[G.shotIdx];
@@ -2824,6 +2856,9 @@ import { sponsorDeLaCourse } from './panneaux';
     G.falseOut = true; G.falseOutT = 0;
     G.player.jumped = true;
     if (G.mode === 'oneshot') {
+      // L'epreuve du faux depart, pour la reprendre contre une pub ou des
+      // pieces (reprendreOneShot) : shotIdx est pousse au bout juste apres.
+      G.fauxDepartIdx = G.shotIdx;
       while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
       while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
       G.shotIdx = G.shotRaces.length;
@@ -9621,7 +9656,7 @@ import { sponsorDeLaCourse } from './panneaux';
     startLevel, continuerCarriere, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     majFerveur,
     theme, themeBrut, PEINTRE,
-    startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
+    startOneShot, recommencer, reprendreOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
     // le peloton du 400 m en salle : la place de chacun, les coups de coude, le couloir 2 (engine.ts)
     placerPeloton, coupDeCoude, changerCouloir, annoncerGeste,

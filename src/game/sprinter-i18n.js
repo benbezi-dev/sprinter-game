@@ -1477,6 +1477,18 @@
     duel_revanche_ratee_titre: ['PAS ENCORE', 'NOT YET'],
     duel_revanche_ratee: ['il fallait descendre sous {s} s pour renvoyer le défi à {n} — rien n’est parti',
                           'you needed under {s} s to send the challenge back to {n} — nothing went out'],
+    // Faux depart en one shot : la revanche se regagne par une pub (RevanchePub.tsx).
+    duel_revanche_fd_pub: ['faux départ — une pub ou des pièces pour retenter ta revanche contre {n}, sinon RECOMMENCER repart sans elle',
+                           'false start — an ad or coins to retry your rematch against {n}, otherwise RESTART goes on without it'],
+    duel_revanche_etape: ['ta revanche contre {n}', 'your rematch against {n}'],
+    // Faux depart rachetable hors revanche (OneShotEndScreen, repriseOS).
+    fd_reprise:       ['faux départ — une pub ou des pièces pour reprendre au {e}, tes chronos d’avant gardés',
+                       'false start — an ad or coins to resume at the {e}, your earlier times kept'],
+    fd_reprise_duel:  ['faux départ — une pub ou des pièces pour recourir le duel au {e} ; rien n’est encore parti chez ton adversaire',
+                       'false start — an ad or coins to rerun the duel at the {e}; nothing has been sent to your rival yet'],
+    fd_renoncer_duel: ['J’abandonne le duel', 'I give up the duel'],
+    duel_revanche_fd_perdue: ['faux départ — la revanche contre {n} est perdue, RECOMMENCER repart sur une course neuve',
+                              'false start — the rematch against {n} is lost, RESTART starts a fresh race'],
     // L'echelle des divisions. Les noms viennent de l'athletisme francais
     // plutot que des metaux : on ne monte pas de bronze en argent, on passe du
     // departemental au regional.
