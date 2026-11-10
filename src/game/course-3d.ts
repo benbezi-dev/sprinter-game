@@ -105,17 +105,16 @@ const QUALITE = Q.get('qualite');
 // ?palier=0..3 : un palier fixe, sans adaptation (pour mesurer)
 const PALIER_FORCE = Q.get('palier');
 let palier = PALIER_FORCE != null ? Math.max(0, Math.min(3, +PALIER_FORCE | 0))
-  : QUALITE === 'ultra' ? 3 : QUALITE === 'plein' ? 2 : Math.max(TELEPHONE ? 1 : 0, Math.min(TELEPHONE ? 2 : 3, palierRetenu ?? 3));
+  : QUALITE === 'ultra' ? 3 : QUALITE === 'plein' ? 2 : Math.max(0, Math.min(TELEPHONE ? 2 : 3, palierRetenu ?? 3));
 // les pieces et les boss se choisissent au chargement : pleins seulement en ULTRA
 let ULTRA = palier >= 3;
-// (24/10, « je ne veux pas de crenelage ») : au telephone, jamais sous deux pixels par point —
-// les paliers bas n'y allegent plus que les ombres
-const RATIO = TELEPHONE ? [2, 2, 2, 3] : [1, 1.5, 2, 3];
+// Les paliers bas allegent aussi le nombre de pixels sur telephone.
+// L'anticrenelage reste actif ; a 1,5 au lieu de 2, on dessine 44 % de pixels en moins.
+const RATIO = [1, 1.5, 2, 3];
 let lentes = 0, mesure = 0, fluide = 0, aBaisse = false;
-// LE PALIER NE S'EFFONDRE PLUS (« les lignes ne sont toujours pas droites », l'auteur, 24/10) : au
-// palier 0 — un pixel par point, sans ombres —, les lignes de couloir se crenelaient en escaliers.
-// Un telephone ne descend pas sous le palier 1, et ne descend que sous 30 images par seconde.
-const PALIER_MAX = TELEPHONE ? 2 : 3, PALIER_MIN = TELEPHONE ? 1 : 0, IMAGE_LENTE = 0.034;
+let qualiteApres = 0, imagePrecedente3D: number | null = null;
+// On reagit aux baisses durables sous la cadence de 60 images/s.
+const PALIER_MAX = TELEPHONE ? 2 : 3, PALIER_MIN = 0, IMAGE_LENTE = 0.022;
 function appliquerLePalier() {
   if (!renderer) return;
   renderer.setPixelRatio(Math.min(RATIO[palier], window.devicePixelRatio || 1));
@@ -127,15 +126,15 @@ function appliquerLePalier() {
   if (soleil) soleil.castShadow = OMBRES && palier > 0;
   dimensionner();
 }
-/** La cadence decide du palier : sur deux secondes et demie de course, si plus d'un cinquieme
- *  du temps passe en images de plus de 22 ms, on descend d'un palier. */
+/** Une baisse durable sur 1,5 s allege le rendu ; une image isolee ne suffit pas. */
 function tenirLaCadence(dt: number, enCourse: boolean) {
-  // un a-coup (chargement, compilation d'un shader) n'est pas une cadence perdue — et seule la
-  // course compte : le survol et le decompte chargent encore (au Galaxy Flip, ils faisaient
-  // tomber au palier 0 un appareil qui tient le palier 2 en course)
-  if (!renderer || !dt || dt > 0.1 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse) return;
+  // La premiere seconde d'un stade laisse ses shaders se compiler. Ensuite,
+  // une presentation lente doit pouvoir s'alleger avant le coup de pistolet.
+  // Un retour d'onglet (> 1 s) ne compte pas comme une cadence perdue.
+  if (!renderer || !dt || dt > 1 || QUALITE === 'ultra' || PALIER_FORCE != null || !enCourse || performance.now() < qualiteApres) return;
   mesure += dt; lentes += dt > IMAGE_LENTE ? dt : 0;
-  if (mesure < 2.5) return;
+  if (mesure < 1.5) return;
+  const dureeMesuree = mesure;
   // un cinquieme du temps en images lentes, c'est deja une course qui saccade (au Flip, en ULTRA :
   // 40 images/s, une image sur six a 33 ms)
   const part = lentes / mesure, trop = part > 0.25;
@@ -145,7 +144,7 @@ function tenirLaCadence(dt: number, enCourse: boolean) {
   // course fluide (moins d'une image lente sur trente), sans avoir baisse dans la visite : un
   // palier de plus, jusqu'a celui de l'appareil.
   if (!trop) {
-    fluide = part < 0.03 ? fluide + 2.5 : 0;
+    fluide = part < 0.03 ? fluide + dureeMesuree : 0;
     if (fluide >= 10 && !aBaisse && palier < PALIER_MAX) {
       palier++; fluide = 0;
       appliquerLePalier();
@@ -3292,7 +3291,7 @@ export function afficher(oui: boolean) {
   visible = oui;
   toile.style.display = oui ? 'block' : 'none';
   if (vignetteDe) vignetteDe.style.display = oui ? 'block' : 'none';
-  if (!oui) camPret = false;
+  if (!oui) { camPret = false; imagePrecedente3D = null; mesure = 0; lentes = 0; }
   if (!oui && videoPub) videoPub.pause();     // rendre() la relance au retour en piste
 }
 
@@ -3318,7 +3317,13 @@ const IPS = Q.get('ips') !== null;
 export function rendre(App: any, dt: number) {
   if (IPS) compterLesImages();
   const { G, C } = App;
-  tenirLaCadence(dt, G.state === 'race' && G.elapsed > 1);
+  // La qualite suit le temps reel du rendu, jamais le pas plafonne de la
+  // simulation ni le ralenti d'un tutoriel. Elle protege aussi la presentation.
+  const maintenantImage = performance.now();
+  const dtRendu = imagePrecedente3D === null ? 0 : (maintenantImage - imagePrecedente3D) / 1000;
+  imagePrecedente3D = maintenantImage;
+  tenirLaCadence(dtRendu, !G.paused && !document.hidden
+    && (G.state === 'race' || G.state === 'count' || (G.state === 'cut' && G.cut?.kind === 'intro')));
   const T = G.track;
   if (!renderer) {
     const lanes = (G.runners || []).map((r: any) => r.lane | 0);
@@ -3347,6 +3352,8 @@ export function rendre(App: any, dt: number) {
     const stadeCle = Object.keys(TH).find(k => TH[k] === b) || null;
     const affluence = force ? 0.92 : App.fouleDe ? App.fouleDe(G.levelIdx | 0) : 1;
     construireLeStade(nCouloirs, force || (App.theme ? App.theme() : {}), T, C, stadeCle, force ? 9 : G.levelIdx | 0, affluence);
+    // Une compilation initiale ne doit pas condamner la qualite de toute la partie.
+    qualiteApres = performance.now() + 1000; mesure = 0; lentes = 0;
   }
   if (!toile || toile.style.display === 'none') {
     afficher(true);

@@ -212,7 +212,9 @@ export function GameCanvas() {
     const observateur = new ResizeObserver(resize);
     observateur.observe(canvas.parentElement || canvas);
     // Filet : la densite de pixels peut changer sans que le parent ne bouge.
-    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    let orientationTimer = 0;
+    const orienter = () => { clearTimeout(orientationTimer); orientationTimer = window.setTimeout(resize, 120); };
+    window.addEventListener('orientationchange', orienter);
     
     // Initial game state setup if needed
     if (SprinterApp.G.state === 'open' && !SprinterApp.G.track) {
@@ -242,7 +244,7 @@ export function GameCanvas() {
     // game/scene-accueil.ts.
     const frame = (now: number, redessin = false) => {
       // une scene plein ecran (la ville de la carriere) couvre l'accueil : on ne le dessine pas
-      if (!redessin && dessinSuspendu() && SprinterApp.G.state === 'title') { rafRef.current = requestAnimationFrame(frame); return; }
+      if (!redessin && dessinSuspendu() && SprinterApp.G.state === 'title') { lastTime = now; rafRef.current = requestAnimationFrame(frame); return; }
       // LE TEMPO DU MONDE MULTIPLIE LE PAS, ET APRES LE PLAFOND. Plafonner
       // ensuite laisserait un ralenti relever un `dt` deja ecrete — le plafond
       // protege le moteur d'un bond apres un onglet en veille, le tempo ne doit
@@ -253,8 +255,9 @@ export function GameCanvas() {
       // jeu ralentir avec lui, et son 200 m durait vingt-trois secondes a
       // l'ecran pour dix-huit au chrono. Jusqu'a quinze images, la course
       // garde sa vraie duree ; en dessous, c'est l'onglet en veille.
+      const dtReel = redessin ? 0 : Math.max(0, (now - lastTime) / 1000);
       const dt = redessin ? 0
-        : Math.min(PAS_MAX_S, (now - lastTime) / 1000 || 0.016) * tempoDuMonde();
+        : Math.min(PAS_MAX_S, dtReel || 0.016) * tempoDuMonde();
       if (!redessin) {
         lastTime = now;
         updateLogic(dt);
@@ -265,7 +268,7 @@ export function GameCanvas() {
       // telephone tient le grain de piste et la poussiere ou s'il faut les
       // lui retirer. Voir game/rendu-premium.js.
       const Prem = (globalThis as any).RenduPremium;
-      if (Prem && !redessin) Prem.mesurer(dt);
+      if (Prem && !redessin && !document.hidden && dtReel <= 1) Prem.mesurer(dtReel);
 
       // LA DEFINITION NE CHANGE QU'AUX MENUS. Quitter l'ULTRA redimensionne la
       // toile, et l'enregistreur des revues la filme pendant la course (voir
@@ -563,6 +566,8 @@ export function GameCanvas() {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       brancherLeRedessin(null);
       observateur.disconnect();
+      window.removeEventListener('orientationchange', orienter);
+      clearTimeout(orientationTimer);
     };
   }, []);
   

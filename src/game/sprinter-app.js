@@ -1022,9 +1022,8 @@ import { sponsorDeLaCourse } from './panneaux';
      * l'accueil (engine.ts), quelques millisecondes par image. Le contexte
      * audio nait pour cela sans geste : les navigateurs le laissent alors
      * suspendu, muet, et c'est le premier geste qui le reveille (`init`). Ce
-     * qui reste a fabriquer a ce moment-la se finit d'une traite, comme
-     * avant. Memes calculs, dans le meme ordre : les memes echantillons, au
-     * bit pres.
+     * qui reste a fabriquer continue par tranches entre les evenements.
+     * Memes calculs, dans le meme ordre : les memes echantillons, au bit pres.
      */
     chantier: null,
     /** Le morceau propre a Hurdlers ou a Jumper en cours de fabrique : { cle, gen }. */
@@ -1070,9 +1069,20 @@ import { sponsorDeLaCourse } from './panneaux';
       if (this.ctx.state === 'suspended' && typeof this.ctx.resume === 'function') {
         try { const p = this.ctx.resume(); if (p && p.catch) p.catch(() => { /* muet */ }); } catch (e) { /* muet */ }
       }
+      // Un premier geste ne doit pas finir toute la synthese sur le fil
+      // des commandes. Le contexte est reveille ici, dans le geste ; les
+      // echantillons restants avancent par tranches, entre deux evenements.
+      this.continuerFabrique();
+    },
+    repriseFabrique: null,
+    continuerFabrique() {
+      if (!this.chantier || this.repriseFabrique !== null) return;
+      this.avancer(2);
       if (this.chantier) {
-        try { jusquAuBout(this.chantier); this.ok = true; } catch (e) { this.ok = false; }
-        this.chantier = null;
+        this.repriseFabrique = setTimeout(() => {
+          this.repriseFabrique = null;
+          this.continuerFabrique();
+        }, 0);
       }
     },
     /**
