@@ -137,11 +137,23 @@ garder Fable 5.2 pour les lots 2 et 3.
   matériaux inchangés ; chargés par le jeu (course en salle, stade Amsalem, palier 2),
   aucune erreur WebGL ; comparaison côte à côte avec l'original : identique à l'œil.
 - **Non convertis, volontairement** :
-  - `boss-plein/` (15 × ~90 Mo de mémoire vidéo, PNG 4096) et `amsalem/tribune-ultra`
-    (268 Mo) : consigne « sans la compression qui les arrondit » / export `--ultra`
-    « sans compression » ; l'ETC1S est avec perte. Décision de l'auteur à prendre.
   - `coureur-{homme,femme}` : texture minuscule (1,2 Mo de mémoire vidéo), et la
     réécriture touchait leurs accesseurs « sparse » (+0,2 Mo).
   - `gens/` : plus chargé par le jeu (`athlete/corps-gens.ts`).
 - Outil : `tools/assets/inventaire-textures.mjs` (poids et mémoire vidéo par GLB).
 - Non fait : mesure sur un vrai téléphone.
+
+### Lot 1, étape 5 — boss pleins et tribune ultra en KTX2 (10/11, accord de l'auteur)
+
+L'auteur a levé la réserve « sans compression » après avoir vu les comparaisons.
+- `boss-plein/` (18 fichiers) : mémoire vidéo ≈ 1 432 → 358 Mo ; **téléchargement
+  166,7 → 41,3 Mo** (PNG 4096 → ETC1S : le gain est aussi réseau).
+- `amsalem/tribune-ultra` : mémoire vidéo 268 → 67 Mo ; téléchargement 8,0 → 10,0 Mo.
+- Ensemble des GLB texturés (`inventaire-textures.mjs`) : 202,5 → 83,0 Mo sur disque,
+  mémoire vidéo ≈ 1 928 → 522 Mo.
+- Preuves : géométrie identique (19/19), animations, squelettes, matériaux et
+  extensions inchangés (les boss restent sans meshopt) ; comparaison côte à côte
+  au chargeur du jeu, visages en gros plan : identique à l'œil.
+- Encodage : toktx n'utilise qu'un cœur ; ~20 min par texture 4096 en qualité ETC1S
+  maximale. Lancer plusieurs fichiers en parallèle (`xargs -P 4 -n 1`).
+- Non fait : boss chargé dans une vraie course (palier ULTRA) ; mesure sur téléphone.
