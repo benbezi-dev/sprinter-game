@@ -614,6 +614,8 @@ function villeNeon(hasard: () => number, rS: number) {
 // les exporte en GLB, construites par les memes fonctions Blender que leurs images.
 // Une piece pas encore chargee n'est pas posee ; son arrivee refait le stade.
 const pieces3D = new Map<string, THREE.Object3D | null>();
+const PIECES_MOBILES = new Set(['halloween/maison', 'halloween/reverbere', 'halloween/poubelles', 'halloween/porte',
+  'montreuil/cabine', 'montreuil/mat']); // public/modeles/stades-mobile/
 function pieceDuStade(cleDemandee: string): THREE.Object3D | null {
   // `cle@leger` : la piece legere, quel que soit le palier (la ruelle du molosse garde les deux)
   const leger = cleDemandee.endsWith('@leger'), cle = leger ? cleDemandee.slice(0, -6) : cleDemandee;
@@ -624,9 +626,15 @@ function pieceDuStade(cleDemandee: string): THREE.Object3D | null {
     // en ULTRA, la piece pleine (tools/blender/stades_3d_glb.py --ultra), sinon la legere — et
     // la legere si la pleine manque (la copie GitHub du site ne les porte pas : son plafond)
     const charger = (dossier: string) => l.loadAsync(base + 'modeles/' + dossier + '/' + cle + '.glb');
-    // la ruelle du molosse prend toujours la piece pleine (« la qualite la plus haute », 23/10)
-    const plein = !leger && (ULTRA || /^halloween\//.test(cle));
-    (plein ? charger('stades-ultra').catch(() => charger('stades')) : charger('stades')).then(g => {
+    // LES VERSIONS MOBILES (10/11, tools/assets/version-mobile.mjs) : les six pieces Tripo de
+    // ~225 000 triangles et 6-7 Mo, simplifiees a 60 000 (1,3-1,4 Mo), silhouette et facettes
+    // gardees — hors ULTRA, a la place de la pleine (ruelle) ou de la legere a 30 000 (Montreuil).
+    // La ruelle du molosse prenait la pleine a tous les paliers (« la qualite la plus haute », 23/10) :
+    // elle la garde en ULTRA ; ses maisons lointaines restent les legeres (`@leger`).
+    const mobile = !leger && !ULTRA && PIECES_MOBILES.has(cle);
+    const plein = !leger && !mobile && (ULTRA || /^halloween\//.test(cle));
+    (mobile ? charger('stades-mobile').catch(() => charger('stades'))
+      : plein ? charger('stades-ultra').catch(() => charger('stades')) : charger('stades')).then(g => {
       // le decor recoit l'ombre des coureurs mais n'en projette pas : sa propre ombre n'existait que
       // dans les 28 m autour du joueur, et apparaissait puis disparaissait devant lui (Plage Paradis, 23/10)
       g.scene.traverse((o: any) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; } });

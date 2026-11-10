@@ -157,3 +157,22 @@ L'auteur a levé la réserve « sans compression » après avoir vu les comparai
 - Encodage : toktx n'utilise qu'un cœur ; ~20 min par texture 4096 en qualité ETC1S
   maximale. Lancer plusieurs fichiers en parallèle (`xargs -P 4 -n 1`).
 - Non fait : boss chargé dans une vraie course (palier ULTRA) ; mesure sur téléphone.
+
+### Lot 1, étape 6 — versions mobiles des pièces ultra (11/11)
+
+- Seules 6 pièces ultra sont lourdes (Tripo, ~225 000 triangles, 6-7 Mo, sans texture,
+  rendu à facettes) : `halloween/{maison,reverbere,poubelles,porte}`, `montreuil/{cabine,mat}`.
+  Les 39 autres ont la même géométrie en ultra et en léger.
+- `tools/assets/version-mobile.mjs` : soudure par position, simplification meshoptimizer à
+  60 000 triangles, normales à facettes recalculées, quantification + meshopt.
+  → `public/modeles/stades-mobile/` : **1,31-1,41 Mo** chacune (6-7 Mo en ultra ; la légère
+  actuelle fait 30 000 triangles pour 1,1 Mo). Encombrement à ≤ 4 mm de l'ultra, même matériau.
+- Jeu (`pieceDuStade`, course-3d.ts) : hors ULTRA, ces 6 pièces prennent la version mobile.
+  **Écart avec la consigne du 23/10** (« la ruelle du molosse prend toujours la pièce pleine ») :
+  hors ULTRA, la ruelle prend désormais la mobile (téléchargement 26 → 5,5 Mo, ~4× moins de
+  triangles pour les maisons proches) ; l'ULTRA garde la pleine, les maisons lointaines
+  restent les légères. Montreuil hors ULTRA passe de la légère (30 000) à la mobile (60 000).
+- Vérifié : comparaison ultra / légère / mobile (rendu identique à l'œil à l'ultra, plus net
+  que la légère) ; course dans la ruelle au palier 2 sur le build : stades-mobile + stades
+  chargés, aucune pièce ultra, maisons à la bonne échelle.
+- Non fait : course à Montreuil (même chemin de code) ; mesure sur téléphone.
