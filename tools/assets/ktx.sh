@@ -7,7 +7,8 @@
 # Au premier appel, telecharge la version officielle Linux x86_64 de KTX-Software
 # depuis les releases GitHub de KhronosGroup et la range hors du depot
 # (~/.cache/ktx-software-<version>) ; l'empreinte SHA-256 de l'archive est verifiee.
-# Sur Mac, `brew install ktx-software` donne les memes outils (ce script n'y sert pas).
+# Sur Mac : Homebrew n'a pas de paquet KTX ; bash /Volumes/MUSIQUE/BENBEZI/claude-commun/installer-ktx-mac.sh
+# (.pkg officiel Khronos, sans sudo). Ce script-ci ne sert que sous Linux.
 set -euo pipefail
 VERSION=4.4.2
 # Empreinte relevee au premier telechargement (10/11/2026), depuis l'URL ci-dessous.

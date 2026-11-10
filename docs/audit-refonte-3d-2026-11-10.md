@@ -111,10 +111,19 @@ garder Fable 5.2 pour les lots 2 et 3.
 - `npm run typecheck` et `npm run build` passent.
 - Non fait : course complète dans la ruelle, mesure sur téléphone.
 
-### En attente — textures compressées pour le GPU (KTX2)
+### Lot 1, étape 3 — textures compressées pour le GPU (KTX2), lecture branchée (10/11)
 
-L'encodeur officiel (`toktx`, KTX-Software de Khronos) a été téléchargé mais son
-exécution a été refusée par le garde-fou de la session (code téléchargé). À faire
-quand l'outil sera autorisé ou depuis le Mac (`brew install ktx-software`).
-Travail associé : chargeur KTX2 commun à tous les GLTFLoader du jeu, et
-`texture-stable.ts` à revoir (incompatible avec des textures compressées).
+- **Le jeu lit les GLB à textures KTX2** : `src/game/chargeur-gltf.ts`, un seul
+  `KTX2Loader` (Meshopt + KTX2) pour les 12 chargeurs GLB du jeu ; chaque moteur
+  (course, ville, vedette, molosse) appelle `brancherKTX2(rendu)` à la création de
+  son `WebGLRenderer`. Transcodeur Basis dans `public/basis/` (copie de three 0.180).
+- **Encodeur** : `tools/assets/textures-ktx2.mjs` (toktx 4.4.2). Couleur et
+  rugosité/occlusion en ETC1S, normales en UASTC + RDO. Sur Mac, Homebrew n'a pas
+  de paquet : `claude-commun/installer-ktx-mac.sh` sur le disque MUSIQUE.
+- **Essai sur 4 modèles** (haie, pointes, homme-tshirt, salle/extérieur), non publié :
+  chargés dans le navigateur en `CompressedTexture` (BPTC/ASTC sur Mac), mipmaps,
+  sRGB juste, aucune erreur WebGL, rendu identique à l'œil. Mémoire vidéo des
+  textures ≈ 43 Mo → ≈ 8 Mo ; **téléchargement 3,4 → 4,1 Mo** (le JPEG est plus
+  compact sur disque : le gain est en mémoire, pas en réseau).
+- Aucun modèle publié n'est encore converti. `texture-stable.ts` charge des JPG
+  hors GLB : non concerné tant qu'on ne les convertit pas.

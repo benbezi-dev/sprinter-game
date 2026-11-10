@@ -33,8 +33,7 @@
 
 import { sponsorDeLaCourse } from './panneaux';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF, brancherKTX2 } from './chargeur-gltf';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
@@ -621,8 +620,7 @@ function pieceDuStade(cleDemandee: string): THREE.Object3D | null {
   if (!pieces3D.has(cleDemandee)) {
     pieces3D.set(cleDemandee, null);
     const base = (import.meta as any).env?.BASE_URL || '/';
-    const l = new GLTFLoader();
-    l.setMeshoptDecoder(MeshoptDecoder);
+    const l = chargeurGLTF();
     // en ULTRA, la piece pleine (tools/blender/stades_3d_glb.py --ultra), sinon la legere — et
     // la legere si la pleine manque (la copie GitHub du site ne les porte pas : son plafond)
     const charger = (dossier: string) => l.loadAsync(base + 'modeles/' + dossier + '/' + cle + '.glb');
@@ -2310,6 +2308,7 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   // (24/10) et a tous les paliers : il se decide ici, une fois pour la partie — un telephone qui
   // demarrait au palier bas le perdait jusqu'au bout, et c'est au palier bas qu'il manque le plus
   renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: Q.get('aa') !== '0', powerPreference: 'high-performance' });
+  brancherKTX2(renderer);
   (globalThis as any).__palier3d = () => palier;
   // L'ULTRA (l'auteur, 23/10 : « mets le jeu en ultra ») : la definition pleine de l'ecran,
   // jusqu'a trois pixels par point, et des ombres deux fois plus fines. Comme l'ULTRA du
@@ -2412,8 +2411,7 @@ function chargerLeBloc() {
   if (blocDemande) return;
   blocDemande = true;
   const base = (import.meta as any).env?.BASE_URL || '/';
-  const l = new GLTFLoader();
-  l.setMeshoptDecoder(MeshoptDecoder);
+  const l = chargeurGLTF();
   l.loadAsync(base + 'modeles/bloc-depart.glb').then(g => {
     g.scene.updateMatrixWorld(true);
     const parMat = new Map<string, THREE.BufferGeometry[]>();
@@ -2438,8 +2436,7 @@ function chargerLeBloc() {
 function chargerLeCorps() {
   if (chargement) return;
   const base = (import.meta as any).env?.BASE_URL || '/';
-  const l = new GLTFLoader();
-  l.setMeshoptDecoder(MeshoptDecoder);
+  const l = chargeurGLTF();
   chargement = l.loadAsync(base + 'modeles/coureur-homme.glb')
     .then(g => { gabarit = g.scene; })
     .catch(() => { /* les tubes restent */ });
@@ -2618,7 +2615,7 @@ function chargerLaBete() {
   // (molosse_trellis.py --plein), la legere si elle manque
   const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/?$/, '/');
   f().then((u) => {
-    const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+    const l = chargeurGLTF();
     const leger = () => new Promise<any>((ok, ko) => l.load(u, ok, undefined, ko));
     // LE GALOP DE CHIEN (molosse_trellis.py --chien) : une foulee tous les 3,5 m. La pleine, puis sa
     // version legere (test3d ne publie pas boss-plein : sans elle, la bete en ligne gardait le
@@ -2686,7 +2683,7 @@ function maillageDe(chemin: string): THREE.Object3D | null | false {
   if (!maillages.has(chemin)) {
     maillages.set(chemin, null);
     const base = ((import.meta as any).env?.BASE_URL || '/').replace(/\/?$/, '/');
-    const l = new GLTFLoader(); l.setMeshoptDecoder(MeshoptDecoder);
+    const l = chargeurGLTF();
     const leger = () => l.loadAsync(base + chemin.replace(/^\//, ''));
     // EN ULTRA, LA PLEINE RESOLUTION (« les assets dans leur plein potentiel », 23/10) : la meme
     // vedette, texture Tripo a sa taille d'origine en PNG, sans meshopt (boss_pleine_resolution.py) ;

@@ -19,8 +19,7 @@
 // que par la nuit du molosse, et le fichier ne l'est que par lui.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF, brancherKTX2 } from './chargeur-gltf';
 
 type Bete = {
   racine: THREE.Group;
@@ -81,6 +80,7 @@ function renduWebGL(): THREE.WebGLRenderer | null {
   try {
     const cv = document.createElement('canvas');
     rendu = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true, premultipliedAlpha: true });
+    brancherKTX2(rendu);
     rendu.setPixelRatio(1);
     rendu.outputColorSpace = THREE.SRGBColorSpace;
     rendu.toneMapping = THREE.NoToneMapping;
@@ -141,8 +141,7 @@ export function charger(): Promise<Bete | null> {
   nePasJuger();
   if (!R) return Promise.resolve(null);
   enCours = fichier().then((u) => new Promise<Bete | null>((ok) => {
-    const chargeur = new GLTFLoader();
-    chargeur.setMeshoptDecoder(MeshoptDecoder);
+    const chargeur = chargeurGLTF();
     chargeur.load(u, (gltf) => {
       nePasJuger();
       let b: Bete;
