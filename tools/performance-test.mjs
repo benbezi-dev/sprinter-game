@@ -75,29 +75,46 @@ try {
   const js = (await transform(regle, { loader: 'ts' })).code;
   const cadence = (retenu = null, query = '') => new Function('retenu', 'query', `
     const Q = new URLSearchParams(query), matchMedia = () => ({ matches: true });
-    const localStorage = { getItem: () => retenu, setItem() {} };
+    const ecrits = [];
+    const localStorage = { getItem: () => retenu, setItem(k, v) { ecrits.push(v); } };
     const window = { devicePixelRatio: 3 };
     let ratio = 0, renderer = { setPixelRatio(r) { ratio = r; } }, soleil = null;
     const OMBRES = true, dimensionner = () => {};
     ${js}
-    return { image: tenirLaCadence, lire: () => ({ palier, ratio }), appliquerLePalier, grace: () => { qualiteApres = performance.now() + 1000; } };
+    return { image: tenirLaCadence, lire: () => ({ palier, ratio }), ecrits, appliquerLePalier, grace: () => { qualiteApres = performance.now() + 1000; } };
   `)(retenu, query);
+  // une course qui saccade : deux images a 16,7 ms, une a 50 ms — plus de la moitie du temps en images lentes
+  const saccade = c => { for (let i = 0; i < 40; i++) { c.image(1/60, true); c.image(1/60, true); c.image(0.05, true); } };
   let c = cadence(); c.appliquerLePalier(); assert.equal(c.lire().ratio, 2);
-  for (let i = 0; i < 100; i++) c.image(1/60, true);
+  for (let i = 0; i < 200; i++) c.image(1/60, true);
   assert.equal(c.lire().palier, 2, '60 images/s gardent la qualite');
   c.image(0.1, true); assert.equal(c.lire().palier, 2, 'une seule image lente ne suffit pas');
-  for (let i = 0; i < 65; i++) c.image(0.025, true);
+  for (let i = 0; i < 200; i++) { c.image(1/60, true); c.image(1/30, true); }
+  assert.equal(c.lire().palier, 2, '40 images/s (une image sur deux a 33 ms) gardent le palier, comme avant le 10/11');
+  saccade(c);
   assert.equal(c.lire().palier, 1); assert.equal(c.lire().ratio, 1.5);
-  for (let i = 0; i < 65; i++) c.image(0.025, true);
-  assert.equal(c.lire().palier, 0); assert.equal(c.lire().ratio, 1);
-  c = cadence('0'); assert.equal(c.lire().palier, 0, 'palier bas memorise sur telephone');
-  c = cadence(null, 'qualite=ultra'); for (let i = 0; i < 200; i++) c.image(0.04, true);
+  assert.deepEqual(c.ecrits, ['1'], 'une baisse mesuree en course est retenue');
+  saccade(c);
+  assert.equal(c.lire().palier, 0);
+  assert.equal(c.lire().ratio, 1.5, 'le telephone ne descend jamais sous 1,5 pixel par point');
+  c = cadence('0'); c.appliquerLePalier(); assert.equal(c.lire().ratio, 1.5, 'palier bas memorise, toujours a 1,5');
+  c = cadence(null, 'qualite=ultra'); for (let i = 0; i < 200; i++) c.image(0.06, true);
   assert.equal(c.lire().palier, 3, 'choix ultra explicite conserve');
-  console.log('✓ Rendu : 60 images/s, incident isole, baisse durable, resolution, memoire et choix explicite');
-  c = cadence(); for (let i = 0; i < 12; i++) c.image(0.2, true);
+  assert.ok(rendu.includes("PALIER_CLE = 'sprinter_palier3d-v4'"), 'les paliers retenus sous la regle du 10/11 repartent de zero');
+  console.log('✓ Rendu : 60 et 40 images/s gardent la qualite, baisse durable, plancher 1,5 au telephone, memoire remise a zero');
+  c = cadence(); for (let i = 0; i < 300; i++) c.image(1/30, true);
+  assert.equal(c.lire().palier, 2, 'un ecran plafonne a 30 images/s (economie d energie) ne perd pas la qualite');
+  c = cadence(); for (let i = 0; i < 20; i++) c.image(0.2, true);
   assert.ok(c.lire().palier < 2, 'une cadence de 5 images/s est comptee, pas ignoree');
-  c = cadence(); c.grace(); for (let i = 0; i < 100; i++) c.image(0.04, true);
+  c = cadence(); for (let i = 0; i < 80; i++) c.image(0.042, true);
+  assert.equal(c.lire().palier, 1, '24 images/s regulieres restent une cadence lente');
+  c = cadence(); c.grace(); for (let i = 0; i < 100; i++) c.image(0.06, true);
   assert.equal(c.lire().palier, 2, 'la compilation du nouveau stade a sa periode de grace');
+  c = cadence(); for (let i = 0; i < 100; i++) c.image(0.06, false);
+  assert.equal(c.lire().palier, 2, 'hors course (presentation, decompte), rien ne se juge');
+  c = cadence('1'); for (let i = 0; i < 700; i++) c.image(1/60, true);
+  assert.equal(c.lire().palier, 2, 'dix secondes de course fluide font remonter');
+  assert.deepEqual(c.ecrits, ['2']);
   const horlogeSource = rendu.slice(rendu.indexOf('  const maintenantImage ='), rendu.indexOf('  const T = G.track;', rendu.indexOf('  const maintenantImage =')));
   const horloge = new Function(`
     let imagePrecedente3D = null, instant = 0, dernier;
@@ -105,11 +122,13 @@ try {
     const tenirLaCadence = (dt, actif) => { dernier = { dt, actif }; };
     return (G, t) => { instant = t; ${horlogeSource} return dernier; };
   `)();
-  assert.equal(horloge({ state: 'count' }, 1000).dt, 0);
-  assert.deepEqual(horloge({ state: 'count' }, 1200), { dt: 0.2, actif: true });
-  assert.equal(horloge({ state: 'cut', cut: { kind: 'intro' } }, 1400).actif, true);
-  assert.equal(horloge({ state: 'race', paused: true }, 1600).actif, false);
-  console.log('✓ Presentation : temps reel, tres faible cadence, periode de grace et pause');
+  assert.equal(horloge({ state: 'race', elapsed: 2 }, 1000).dt, 0);
+  assert.deepEqual(horloge({ state: 'race', elapsed: 2 }, 1200), { dt: 0.2, actif: true });
+  assert.equal(horloge({ state: 'count' }, 1400).actif, false, 'le decompte ne se juge pas');
+  assert.equal(horloge({ state: 'cut', cut: { kind: 'intro' } }, 1600).actif, false, 'la presentation ne se juge pas');
+  assert.equal(horloge({ state: 'race', elapsed: 0.5 }, 1800).actif, false, 'la premiere seconde de course non plus');
+  assert.equal(horloge({ state: 'race', elapsed: 2, paused: true }, 2000).actif, false);
+  console.log('✓ Course seule : temps reel, tres faible cadence, periode de grace, pause, presentation exclue');
 
 
   const audio = lire('src/game/sprinter-app.js');
