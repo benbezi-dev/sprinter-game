@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings } from 'lucide-react';
+import { Settings, Check, Loader2 } from 'lucide-react';
 import { SprinterApp, useGameStore, toggleLang, toggleAudio, HAS_VIBRATION } from '@/game/engine';
 import { vibrationActive, poserVibration } from '@/game/reglages';
 import { gererConsentement } from '@/game/pub';
+import { sansPubs, prixSansPubs, acheterSansPubs, restaurerAchats, boutiquePossible, SANS_PUBS_CHANGE } from '@/game/achats';
 import { EST_NATIF } from '@/game/canal';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 
@@ -36,6 +37,49 @@ function Ligne({ titre, note, children }: { titre: string; note?: string; childr
  * La roue dentee de l'accueil et la fenetre qu'elle ouvre : son, vibration,
  * langue, consentement pub et liens legaux, au meme endroit.
  */
+/** L'offre « Sans pubs » : prix du store, achat, restauration (appli seulement). */
+function BlocSansPubs() {
+  const { N } = SprinterApp;
+  const [acquis, setAcquis] = useState(sansPubs);
+  const [prix, setPrix] = useState<string | null>(null);
+  const [etat, setEtat] = useState<'repos' | 'envoi' | 'rien'>('repos');
+  useEffect(() => {
+    void prixSansPubs().then(setPrix);
+    const relire = () => setAcquis(sansPubs());
+    window.addEventListener(SANS_PUBS_CHANGE, relire);
+    return () => window.removeEventListener(SANS_PUBS_CHANGE, relire);
+  }, []);
+  const acheter = async () => { setEtat('envoi'); await acheterSansPubs(); setEtat('repos'); };
+  const restaurer = async () => { setEtat('envoi'); setEtat((await restaurerAchats()) ? 'repos' : 'rien'); };
+  // Produit inconnu du store (pas encore cree, store injoignable) : rien a vendre, on ne montre rien.
+  if (!acquis && !prix) return null;
+
+  return (
+    <div className="w-full flex flex-col gap-1.5 rounded-xl bg-secondary/50 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="font-bold text-sm text-foreground/90">{N.t('sp_titre')}</div>
+          <div className="text-[10px] text-muted-foreground leading-snug">{N.t('sp_note')}</div>
+        </div>
+        {acquis ? (
+          <span className="shrink-0 flex items-center gap-1 text-xs font-bold text-primary"><Check className="w-4 h-4" />{N.t('sp_acquis')}</span>
+        ) : (
+          <button type="button" onClick={acheter} disabled={!prix || etat === 'envoi'}
+                  className="shrink-0 min-w-[4.5rem] flex items-center justify-center rounded-lg bg-primary text-background px-3 py-1.5 text-sm font-black disabled:opacity-50">
+            {etat === 'envoi' ? <Loader2 className="w-4 h-4 animate-spin" /> : (prix || N.t('sp_indispo'))}
+          </button>
+        )}
+      </div>
+      {!acquis && (
+        <button type="button" onClick={restaurer} disabled={etat === 'envoi'}
+                className="self-start text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground">
+          {etat === 'rien' ? N.t('sp_restaure_rien') : N.t('sp_restaurer')}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Ouvre la fenetre des parametres depuis un autre ecran (le profil). */
 export const OUVRIR_PARAMETRES = 'sprinter:parametres';
 
@@ -90,6 +134,8 @@ export function Parametres() {
                   </div>
                 </Ligne>
               </div>
+
+              {boutiquePossible() && <BlocSansPubs />}
 
               {EST_NATIF && (
                 <button type="button" onClick={() => { void gererConsentement(); }}
