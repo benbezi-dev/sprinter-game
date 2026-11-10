@@ -1,7 +1,11 @@
-// Cloudflare a deja recu les trois versions completes. GitHub Pages ne
-// garde que la production et des entrees vers les deux versions de test.
+// LES VERSIONS DE TEST VIVENT AILLEURS (10/11/2026, l'auteur : « deplace la partie test
+// pour alleger le jeu ») : le depot benbezi-dev/sprinter les construit et les publie
+// (.github/workflows/test.yml de ce depot-la). Le site du jeu ne garde que la production,
+// et a /test/ et /test3d/ une entree qui renvoie la-bas, chemin, parametres et ancre compris.
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
+
+export const SITE_DES_TESTS = 'https://benbezi-dev.github.io/sprinter';
 
 export function preparerGithubPages(dossier) {
   const racine = resolve(dossier);
@@ -13,8 +17,8 @@ export function preparerGithubPages(dossier) {
     writeFileSync(join(dest, 'index.html'), `<!doctype html>
 <html lang="fr"><meta charset="utf-8"><title>Sprinter — version de test</title>
 <meta name="robots" content="noindex"><script>
-location.replace(new URL(location.pathname + location.search + location.hash, 'https://sprinter-game.pages.dev').href);
-</script><a href="https://sprinter-game.pages.dev/${canal}/">Ouvrir la version de test</a></html>`);
+location.replace(${JSON.stringify(SITE_DES_TESTS)} + location.pathname + location.search + location.hash);
+</script><a href="${SITE_DES_TESTS}/${canal}/">Ouvrir la version de test</a></html>`);
   }
   const taille = d => readdirSync(d, { withFileTypes: true }).reduce((total, e) => {
     const p = join(d, e.name);

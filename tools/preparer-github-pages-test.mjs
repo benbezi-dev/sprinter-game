@@ -22,8 +22,8 @@ try {
     vm.runInNewContext(html.match(/<script>([\s\S]*?)<\/script>/)[1], {
       URL, location: { pathname: `/${canal}/`, search: '?code=A%26B', hash: '#jeu', replace: u => { cible = u; } },
     });
-    assert.equal(cible, `https://sprinter-game.pages.dev/${canal}/?code=A%26B#jeu`);
-    assert.ok(html.includes(`href="https://sprinter-game.pages.dev/${canal}/"`));
+    assert.equal(cible, `https://benbezi-dev.github.io/sprinter/${canal}/?code=A%26B#jeu`);
+    assert.ok(html.includes(`href="https://benbezi-dev.github.io/sprinter/${canal}/"`));
   }
   assert.equal(preparerGithubPages(dossier), taille, 'preparation idempotente');
   truncateSync(join(dossier, 'assets', 'jeu.js'), 1_000_000_001);
