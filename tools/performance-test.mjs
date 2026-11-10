@@ -51,6 +51,25 @@ try {
   vols.splice(0).forEach(f => f()); await essentiel;
   console.log('✓ Chargement : priorites, concurrence, pause/reprise, onglet masque et economie de donnees');
 
+  navigator.connection.saveData = false; SprinterApp.G.state = 'open';
+  const depart = appels.length;
+  const essentiels = ['/decors/tribune/a.webp','/decors/day/a.webp','/decors/materiel/a.webp','/pubs/a.webp'];
+  const reportes = ['/decors/mondiaux/a.webp','/decors/nuit/a.webp'];
+  const ouvertureSource = source.replace('const liste = { ordinaire: [], ultra: [] };',
+    'const liste = ' + JSON.stringify({ ordinaire: [...essentiels, ...reportes], ultra: [] }) + ';');
+  const ouvertureJs = (await transform(ouvertureSource, { loader: 'ts', format: 'esm' })).code;
+  const ouverture = await import('data:text/javascript;base64,' + Buffer.from(ouvertureJs).toString('base64'));
+  ouverture.lancerChargement(); await vider();
+  vols.splice(0).forEach(f => f()); await vider();
+  vols.splice(0).forEach(f => f()); await vider();
+  assert.equal(ouverture.chargementFini(), true, 'la nuit et les Mondiaux ne bloquent pas l accueil');
+  assert.deepEqual(appels.slice(depart).map(a => a.url).sort(), [...essentiels].sort());
+  SprinterApp.G.state = 'title'; await reveiller();
+  assert.deepEqual(appels.slice(depart + essentiels.length).map(a => a.url).sort(), [...reportes].sort());
+  vols.splice(0).forEach(f => f()); await vider();
+  console.log('✓ Ouverture : seuls les decors du premier accueil sont bloquants');
+
+
   const rendu = lire('src/game/course-3d.ts');
   const regle = rendu.slice(rendu.indexOf('const TELEPHONE ='), rendu.indexOf('// ?vue=survol'));
   const js = (await transform(regle, { loader: 'ts' })).code;
@@ -61,7 +80,7 @@ try {
     let ratio = 0, renderer = { setPixelRatio(r) { ratio = r; } }, soleil = null;
     const OMBRES = true, dimensionner = () => {};
     ${js}
-    return { image: tenirLaCadence, lire: () => ({ palier, ratio }), appliquerLePalier };
+    return { image: tenirLaCadence, lire: () => ({ palier, ratio }), appliquerLePalier, grace: () => { qualiteApres = performance.now() + 1000; } };
   `)(retenu, query);
   let c = cadence(); c.appliquerLePalier(); assert.equal(c.lire().ratio, 2);
   for (let i = 0; i < 100; i++) c.image(1/60, true);
@@ -75,6 +94,23 @@ try {
   c = cadence(null, 'qualite=ultra'); for (let i = 0; i < 200; i++) c.image(0.04, true);
   assert.equal(c.lire().palier, 3, 'choix ultra explicite conserve');
   console.log('✓ Rendu : 60 images/s, incident isole, baisse durable, resolution, memoire et choix explicite');
+  c = cadence(); for (let i = 0; i < 12; i++) c.image(0.2, true);
+  assert.ok(c.lire().palier < 2, 'une cadence de 5 images/s est comptee, pas ignoree');
+  c = cadence(); c.grace(); for (let i = 0; i < 100; i++) c.image(0.04, true);
+  assert.equal(c.lire().palier, 2, 'la compilation du nouveau stade a sa periode de grace');
+  const horlogeSource = rendu.slice(rendu.indexOf('  const maintenantImage ='), rendu.indexOf('  const T = G.track;', rendu.indexOf('  const maintenantImage =')));
+  const horloge = new Function(`
+    let imagePrecedente3D = null, instant = 0, dernier;
+    const performance = { now: () => instant }, document = { hidden: false };
+    const tenirLaCadence = (dt, actif) => { dernier = { dt, actif }; };
+    return (G, t) => { instant = t; ${horlogeSource} return dernier; };
+  `)();
+  assert.equal(horloge({ state: 'count' }, 1000).dt, 0);
+  assert.deepEqual(horloge({ state: 'count' }, 1200), { dt: 0.2, actif: true });
+  assert.equal(horloge({ state: 'cut', cut: { kind: 'intro' } }, 1400).actif, true);
+  assert.equal(horloge({ state: 'race', paused: true }, 1600).actif, false);
+  console.log('✓ Presentation : temps reel, tres faible cadence, periode de grace et pause');
+
 
   const audio = lire('src/game/sprinter-app.js');
   const debut = audio.indexOf('    init() {');

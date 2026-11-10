@@ -858,9 +858,9 @@ const ATTITUDES_S = 2.6;
 // au plus. Et les attitudes qui suivent ne descendent pas sous ATTITUDES_MIN_S.
 const ATTENTE_STADE_MIN_S = 0.25, ATTENTE_STADE_MAX_S = 12, ATTITUDES_MIN_S = 0.8;
 // Le public compose d'avance, par image : a l'ouverture, et a l'accueil.
-const OUVERTURE_PUBLIC_MS = 20, ACCUEIL_PUBLIC_MS = 4;
+const OUVERTURE_PUBLIC_MS = 2, ACCUEIL_PUBLIC_MS = 1;
 // Le son, fabrique de meme : voir plus bas, et Audio_.avancer (sprinter-app.js).
-const OUVERTURE_SON_MS = 8, ACCUEIL_SON_MS = 4;
+const OUVERTURE_SON_MS = 2, ACCUEIL_SON_MS = 1;
 
 /**
  * SES MAINS AVANT LES BLOCS (G.avantDepart.claps, pose par game/vedettes.ts).
@@ -1128,13 +1128,10 @@ export function updateLogic(dt: number) {
   if (G.state === 'title') avancerLesMaillages();
   // LE SON AUSSI SE FABRIQUE D'AVANCE, quelques millisecondes par image : il
   // l'etait au premier appui de la course, et le depart gelait (voir
-  // Audio_.avancer). Ces images-la ne se jugent pas : un travail qui finit,
-  // comme le public d'avance (rendu-premium.js).
+  // Audio_.avancer). Des budgets courts gardent de la place pour dessiner et
+  // traiter les commandes, y compris pendant l'ouverture.
   if (G.state === 'open' || G.state === 'title') {
-    if (Audio_.avancer(G.state === 'open' ? OUVERTURE_SON_MS : ACCUEIL_SON_MS)) {
-      const P = (globalThis as any).RenduPremium;
-      if (P) P.composeDAvance = Math.max(P.composeDAvance || 0, performance.now() + 250);
-    }
+    Audio_.avancer(G.state === 'open' ? OUVERTURE_SON_MS : ACCUEIL_SON_MS);
   }
 
   if (G.state === 'open') {

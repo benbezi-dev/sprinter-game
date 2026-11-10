@@ -94,8 +94,9 @@
 import liste from 'virtual:precharge';
 
 /** Ce que l'ouverture attend : la premiere course, ou qu'elle parte. */
-const ESSENTIEL = ['/decors/tribune/', '/decors/day/', '/decors/mondiaux/',
-                   '/decors/materiel/', '/decors/nuit/', '/pubs/'];
+// Les Mondiaux et la nuit attendent leur course (stadeEnPreparation).
+// Les telecharger ici retardait meme les joueurs qui ne les ouvrent pas.
+const ESSENTIEL = ['/decors/tribune/', '/decors/day/', '/decors/materiel/', '/pubs/'];
 const essentiel = (u: string) => ESSENTIEL.some(d => u.startsWith(d));
 /** Les nuits d'Halloween et leur materiel, au palier ordinaire comme a l'ultra. */
 const halloween = (u: string) => /^\/decors(-ultra)?\/(halloween-|materiel-a\d)/.test(u);
@@ -211,7 +212,7 @@ export function lancerChargement() {
     const P = (globalThis as any).RenduPremium;
     // un appareil qui a deja perdu l'ultra n'en telecharge plus les images
     const ultra = liste.ultra.filter(servi);
-    if (P && P.DENSE && P.ultraAttendu && ultra.length && !economiserLesDonnees()) {
+    if (P && P.DENSE && P.ultraAttendu && P.niveau >= P.PLEIN && ultra.length && !economiserLesDonnees()) {
       etat.phase = 'ultra'; etat.ultraTotal = ultra.length;
       await telecharger(ultra, () => { etat.ultraFaits++; }, true);
       if (etat.ultraFaits !== ultra.length) return;
@@ -327,8 +328,8 @@ export function avancerLePublic(G: any, ms: number) {
     revoirA = debut + 2000;
   } else {
     etat.publicAvance = null;
-    // cette image a compose : elle ne compte pas pour la regle de qualite
-    g.RenduPremium && (g.RenduPremium.composeDAvance = performance.now() + 250);
+    // La preparation est bornee ; elle ne masque plus indefiniment la
+    // cadence du menu a la regle de qualite.
   }
 }
 
