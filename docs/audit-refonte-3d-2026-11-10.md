@@ -176,3 +176,33 @@ L'auteur a levé la réserve « sans compression » après avoir vu les comparai
   que la légère) ; course dans la ruelle au palier 2 sur le build : stades-mobile + stades
   chargés, aucune pièce ultra, maisons à la bonne échelle.
 - Non fait : course à Montreuil (même chemin de code) ; mesure sur téléphone.
+
+### Lot 2, étape 1 — découpe de `course-3d.ts` et paliers selon le GPU (11/11)
+
+- **Découpe** : `src/game/course-3d.ts` (3 879 lignes) ne garde que `rendre`, `afficher`, `ecranDe`
+  (247 lignes) ; le reste est dans `src/game/course-3d/` : `reglages`, `paliers`, `gpu`, `scene`,
+  `repere`, `camera`, `stade`, `decors`, `public`, `salle-noire`, `corps`, `haies`, `bete`, `effets`.
+  Les déclarations ont été déplacées telles quelles, commentaires compris (contrôle : aucune ligne
+  du fichier d'origine ne manque). Seules retouches : la caméra de `rendre` devient `cadrer()`
+  (`camera.ts`, même code) ; les variables qu'un autre module modifiait passent par de petites
+  fonctions (`refaireLeStade`, `stadeVu`, `laisserCompiler`, `oublierLaMesure`, `lacherLaCamera`,
+  `oublierLEspace`, `retirerLaPluie`, `eclairerLesCorps(env)`).
+- **Reste gros** : `stade.ts` (1 300 lignes, dont `construireLeStade`, une seule fonction de 1 150
+  lignes) et `corps.ts` (680). Les couper demande de toucher au code, pas seulement de le déplacer.
+- **Paliers** (`gpu.ts`, `paliers.ts`) : un téléphone dont la puce est haut de gamme (Adreno ≥ 730,
+  Mali-G710 et suivants, Immortalis, Xclipse 9xx) et qui annonce au moins 8 Go quand le navigateur
+  le dit peut monter au palier 3. Il part toujours du palier 2 et n'y monte qu'après dix secondes
+  de course fluide ; les pièces et boss pleins ne se chargent qu'à la visite suivante. S'il retombe
+  du palier 3, il n'y remonte plus (`sprinter_palier3d-ultra-refuse`). Les autres téléphones :
+  palier 2 au plus, comme avant. `?palier=`, `?qualite=`, `?ips` inchangés (`?ips` affiche
+  « ultra permis » sur un téléphone retenu). Contrôle du tri : `node --experimental-strip-types
+  tools/verifier-gpu.mjs`.
+- **iPhone** : Safari répond « Apple GPU » sans modèle ni mémoire ; ils restent au palier 2.
+- **Vérifié** (Mac, Chromium, deux serveurs côte à côte : `origin/main` et la branche) : `tsc` et
+  `vite build` passent ; salle (60 m, palier 2 et automatique), stade Amsalem, ruelle au palier 2
+  et en ULTRA : mêmes GLB chargés, décor identique hors de la zone des coureurs (caméra imposée ; aucun pixel à plus de 8/255 d’écart),
+  même cadrage avec la caméra du jeu en course (ruelle, 200 m, comparée au même nombre d'images),
+  aucune erreur de script.
+- **Non vérifié** : aucun téléphone réel — ni la détection du GPU sur Android, ni la montée au
+  palier 3, ni la tenue mémoire en ULTRA. Plans `2d` et `rail`, survol d'avant-course, nuit du
+  molosse avec la bête, Carrière Légende : non comparés (code déplacé sans retouche).
