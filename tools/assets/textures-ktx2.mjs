@@ -1,6 +1,8 @@
 // TEXTURES DES GLB EN KTX2/BASIS (compressees pour le GPU : elles le restent en memoire video)
 //
-//   node tools/assets/textures-ktx2.mjs [--sortie dossier] fichier.glb...
+//   node tools/assets/textures-ktx2.mjs [--sortie dossier] [--uastc] fichier.glb...
+//   --uastc : TOUTES les textures en UASTC (quasi sans perte), pour un modele dont la qualite
+//   maximale est demandee (Meba plein, 24/10) ; plus lourd a telecharger que l ETC1S.
 //
 // Sans --sortie, chaque fichier est reecrit sur place (git garde l'original).
 // Il faut l'encodeur toktx de Khronos (KTX-Software 4.x) dans le PATH :
@@ -29,6 +31,8 @@ const args = process.argv.slice(2);
 let sortie = null;
 const i = args.indexOf('--sortie');
 if (i >= 0) { sortie = args[i + 1]; args.splice(i, 2); }
+const toutUastc = args.includes("--uastc");
+if (toutUastc) args.splice(args.indexOf("--uastc"), 1);
 if (!args.length) { console.error('usage : textures-ktx2.mjs [--sortie dossier] fichier.glb...'); process.exit(1); }
 const [toktx, ...toktxPre] = (process.env.TOKTX || 'toktx').split(' ');
 
@@ -57,9 +61,12 @@ try {
       const png = join(tmp, `t${n}.png`), ktx = join(tmp, `t${n}.ktx2`);
       await (l4 === l && h4 === h ? img : img.resize(l4, h4, { fit: 'fill' })).png().toFile(png);
       const lin = ['--assign_oetf', 'linear', '--assign_primaries', 'none'];
+      const espace = donnees ? lin : ['--assign_oetf', 'srgb'];
       const opts = normale
         ? ['--encode', 'uastc', '--uastc_quality', '2', '--uastc_rdo_l', '1', '--zcmp', '19', ...lin]
-        : ['--encode', 'etc1s', '--clevel', '4', '--qlevel', '255', ...(donnees ? lin : ['--assign_oetf', 'srgb'])];
+        : toutUastc
+          ? ['--encode', 'uastc', '--uastc_quality', '3', '--zcmp', '19', ...espace] // sans RDO : fidelite maximale
+          : ['--encode', 'etc1s', '--clevel', '4', '--qlevel', '255', ...espace];
       execFileSync(toktx, [...toktxPre, '--t2', '--genmipmap', ...opts, ktx, png], { stdio: ['ignore', 'ignore', 'inherit'] });
       tex.setImage(new Uint8Array(readFileSync(ktx))).setMimeType('image/ktx2');
       if (tex.getURI()) tex.setURI(tex.getURI().replace(/\.(png|jpe?g|webp)$/i, '.ktx2'));
