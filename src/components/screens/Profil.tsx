@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Pencil, Cloud, KeyRound, Settings, Copy, Check, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Pencil, Cloud, KeyRound, Settings, Copy, Check, Loader2, Eye, EyeOff, Award } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { savedCode, paysDe } from '@/game/identity';
@@ -10,6 +10,7 @@ import { Drapeau } from '@/components/Insignes';
 import { RecordTuile } from './RecordPerso';
 import { LiaisonQR } from './LiaisonQR';
 import { OUVRIR_PARAMETRES } from './Parametres';
+import { Succes, compteSucces } from './Succes';
 
 function coursesTerminees(): number {
   try {
@@ -38,6 +39,8 @@ export function Profil({ nom, onFermer, onModifier }: { nom: string; onFermer: (
   const [envoi, setEnvoi] = useState<'repos' | 'envoi' | 'ok' | 'ko'>('repos');
   const [voirCode, setVoirCode] = useState(false);
   const [copie, setCopie] = useState(false);
+  const [voirSucces, setVoirSucces] = useState(false);
+  const succes = compteSucces();
   const code = savedCode();
 
   useEffect(() => { paysDe(nom).then(p => setPays(p.pays)); }, [nom]);
@@ -128,10 +131,17 @@ export function Profil({ nom, onFermer, onModifier }: { nom: string; onFermer: (
         {/* Relier un autre telephone (QR) */}
         <LiaisonQR nom={nom} />
 
-        <button type="button" onClick={() => { onFermer(); window.dispatchEvent(new Event(OUVRIR_PARAMETRES)); }}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm bg-secondary/60 hover:bg-secondary transition-colors">
-          <Settings className="w-4 h-4" />{N.t('reg_titre')}
-        </button>
+        <div className="grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => setVoirSucces(true)}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm bg-secondary/60 hover:bg-secondary transition-colors">
+            <Award className="w-4 h-4" />{N.t('succ_titre')}
+            <span className="text-[11px] tabular-nums text-muted-foreground">{succes.n}/{succes.t}</span>
+          </button>
+          <button type="button" onClick={() => { onFermer(); window.dispatchEvent(new Event(OUVRIR_PARAMETRES)); }}
+                  className="flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm bg-secondary/60 hover:bg-secondary transition-colors">
+            <Settings className="w-4 h-4" />{N.t('reg_titre')}
+          </button>
+        </div>
 
         <button type="button" onClick={onFermer}
                 className="w-full py-3 rounded-xl font-black font-display text-lg tracking-widest text-background bg-primary hover:bg-primary/90
@@ -139,6 +149,7 @@ export function Profil({ nom, onFermer, onModifier }: { nom: string; onFermer: (
           {N.t('close')}
         </button>
       </motion.div>
+      {voirSucces && <Succes onFermer={() => setVoirSucces(false)} />}
     </motion.div>
   );
 }
