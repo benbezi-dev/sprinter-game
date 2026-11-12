@@ -174,16 +174,36 @@ titre('LE CARTON SE POSE SUR L IMAGE GELEE, PAS SUR LE JEU');
 titre('LE PINCEAU EST RENDU EN POINTS CSS, ET REMIS D APLOMB');
 {
   const { film, vus, montage } = await filmer({ carton: () => { } });
-  // Le montage fait 810 x 1440 pixels pour 405 points CSS de large : le carton
+  // Le montage fait 1080 x 1920 pixels pour 405 points CSS de large : le carton
   // doit raisonner en points, comme la feuille de style.
   ok('le carton mesure en points CSS', vus[0]?.l === 405 && vus[0]?.h === 720,
      `${vus[0]?.l} x ${vus[0]?.h}`);
-  ok('l echelle de l appareil est appliquee', montage._ctx.echelles.includes(2),
+  ok('l echelle Full HD est appliquee', montage._ctx.echelles.includes(1080 / 405),
      montage._ctx.echelles.slice(0, 3).join(', '));
   // Une echelle qui fuit se remultiplie a chaque image : le carton finirait en
   // un pixel. Voir le `finally` de `tracerLeCarton`.
   ok('le pinceau est remis d aplomb a chaque image', montage._ctx.profondeur === 0,
      `profondeur ${montage._ctx.profondeur}`);
+  film.jeter();
+}
+
+titre('LE FULL HD SUIT LE CADRE ET LA ROTATION');
+for (const [l, h, attenduL, attenduH] of [
+  [810, 1440, 1080, 1920], [1170, 2532, 1080, 1920],
+  [2160, 3840, 1080, 1920], [1440, 810, 1920, 1080],
+  [2532, 1170, 1920, 1080], [768, 1024, 1080, 1440],
+  [1024, 768, 1440, 1080], [900, 900, 1080, 1080],
+]) {
+  const jeu = fauxCanvas('jeu', l, h, l / 2);
+  const film = new Review(() => { });
+  film.demarrer(jeu, [], () => { });
+  const montage = canvasCrees.at(-1);
+  ok(`${l} x ${h} sort en ${attenduL} x ${attenduH}`,
+     montage.width === attenduL && montage.height === attenduH);
+  jeu.width = h; jeu.height = l;
+  await new Promise(r => setTimeout(r, 50));
+  ok('la rotation conserve le Full HD',
+     montage.width === attenduH && montage.height === attenduL);
   film.jeter();
 }
 
