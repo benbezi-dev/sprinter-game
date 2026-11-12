@@ -6,6 +6,7 @@ import { vibrationActive, poserVibration } from '@/game/reglages';
 import { gererConsentement } from '@/game/pub';
 import { sansPubs, prixSansPubs, acheterSansPubs, restaurerAchats, boutiquePossible, SANS_PUBS_CHANGE } from '@/game/achats';
 import { EST_NATIF } from '@/game/canal';
+import { tousLesBloques, debloquer } from '@/game/moderation';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 
 /** Un interrupteur on/off, lisible au pouce. */
@@ -80,6 +81,39 @@ function BlocSansPubs() {
   );
 }
 
+/** Les joueurs bloques, avec de quoi revenir sur un blocage. Rien a montrer : rien. */
+function BlocBloques() {
+  const { N } = SprinterApp;
+  const [noms, setNoms] = useState<string[]>([]);
+  const [envoi, setEnvoi] = useState<string | null>(null);
+  useEffect(() => { void tousLesBloques().then(setNoms); }, []);
+  if (!noms.length) return null;
+  const lever = async (nom: string) => {
+    setEnvoi(nom);
+    await debloquer(nom);
+    setNoms(l => l.filter(n => n !== nom));
+    setEnvoi(null);
+  };
+
+  return (
+    <div className="w-full flex flex-col gap-1.5 rounded-xl bg-secondary/50 px-3 py-2.5">
+      <div>
+        <div className="font-bold text-sm text-foreground/90">{N.t('reg_bloques')}</div>
+        <div className="text-[10px] text-muted-foreground leading-snug">{N.t('reg_bloques_note')}</div>
+      </div>
+      {noms.map(nom => (
+        <div key={nom} className="flex items-center justify-between gap-3">
+          <span className="min-w-0 truncate text-sm text-foreground/80">{nom}</span>
+          <button type="button" onClick={() => void lever(nom)} disabled={envoi !== null}
+                  className="shrink-0 min-w-[5.5rem] flex items-center justify-center rounded-lg border border-white/15 px-3 py-1.5 text-xs font-bold text-foreground/90 hover:bg-white/10 disabled:opacity-50">
+            {envoi === nom ? <Loader2 className="w-4 h-4 animate-spin" /> : N.t('reg_debloquer')}
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Ouvre la fenetre des parametres depuis un autre ecran (le profil). */
 export const OUVRIR_PARAMETRES = 'sprinter:parametres';
 
@@ -136,6 +170,8 @@ export function Parametres() {
               </div>
 
               {boutiquePossible() && <BlocSansPubs />}
+
+              <BlocBloques />
 
               {EST_NATIF && (
                 <button type="button" onClick={() => { void gererConsentement(); }}
