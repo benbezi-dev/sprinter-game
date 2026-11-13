@@ -1415,14 +1415,29 @@
   // releve est celui du cote loin de la camera, cache par le buste quand il passe devant ; melange,
   // il n'allait plus qu'a 0,21 rad devant pour 1,20 derriere, les mains collees aux hanches.
   const melangeTable = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
+  // PAS DE CYCLE ARRIERE EN PLEINE COURSE (13/11, l'auteur : « attention au cycle de course en pleine course, pas de
+  // cycle arriere, respecte bien la technique de course des sprinters »). Mesure (tools/cycle-avant-test.mjs) : a
+  // 11,8 m/s, le pied de la jambe libre remontait jusqu'a 56 cm DERRIERE la hanche, talon a 50 cm du sol, la moitie du
+  // temps de jambe libre passee derriere le corps — le genou se repliait lentement, cuisse encore en arriere. La
+  // technique du sprint : jambe presque tendue a l'impulsion, la cuisse repart aussitot vers l'avant, le talon monte
+  // sous la fesse PENDANT que le genou avance, passe au-dessus du genou d'appui, la cuisse monte pres de l'horizontale,
+  // puis le pied griffe le sol sous le bassin. L'appui (0 a 1,57) reste celui releve sur Asafa Powell ; le retour de
+  // jambe est redessine, et les jambes de chaque profil y sont calees en entier (les bras, le buste et le rebond gardent
+  // le caractere de chacun).
+  const AVANT = {
+    thigh: catmull([[0, 0.55], [0.79, 0.02], [1.45, -0.36], [1.95, -0.06], [2.45, 0.20],
+                    [3.14, 0.55], [3.93, 1.00], [4.71, 1.25], [5.50, 1.05]]),
+    knee: catmull([[0, -0.70], [0.79, -0.50], [1.45, -0.42], [1.95, -1.45], [2.45, -2.02],
+                   [3.14, -2.12], [3.93, -1.95], [4.71, -1.48], [5.50, -0.92]]),
+  };
   const SPRINT = {};
   const MODELE = GAITS.powell, SUR_LUI = 0.75;
   for (const k of Object.keys(GAITS)) {
     const P = GAITS[k];
-    SPRINT[k] = P === MODELE ? P : Object.assign({}, P, {
-      thigh: melangeTable(P.thigh, MODELE.thigh, SUR_LUI),
-      knee: melangeTable(P.knee, MODELE.knee, SUR_LUI),
-      ankle: melangeTable(P.ankle, MODELE.ankle, SUR_LUI),
+    SPRINT[k] = Object.assign({}, P, {
+      thigh: AVANT.thigh,
+      knee: AVANT.knee,
+      ankle: P === MODELE ? P.ankle : melangeTable(P.ankle, MODELE.ankle, SUR_LUI),
       lean: P.lean + (MODELE.lean - P.lean) * SUR_LUI,
       boost: 1 + (P.boost - 1) * 0.35,
     });

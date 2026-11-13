@@ -22,3 +22,16 @@ window.face = (lane, dist, sens, haut) => { clearInterval(window.__intF); window
     if (cam.parent) cam.parent.worldToLocal(o);   // (position locale au parent de la camera ; lookAt prend le monde)
     window.__camFace = [o.x, o.y, o.z, p.x, p.y, p.z]; }, 30); };
 window.libre = () => { clearInterval(window.__intF); window.__camFace = null; };
+// camera posee sur le cote d'un coureur (sens = 1 ou -1), a `dist` metres ; elle le suit dans la course
+window.cote = (lane, dist, sens, haut) => { clearInterval(window.__intF); window.__s = null; window.__vue = null; window.__cam && window.__cam.clearViewOffset();
+  window.__intF = setInterval(() => { let d = null; for (const [r, c] of window.__corps) if (r.lane === lane) d = c; if (!d) return;
+    const b = d.m.os.get('pelvis'), p = b.getWorldPosition(b.position.clone()), m = d.m.racine.matrixWorld.elements;
+    const k = (sens || 1) * dist / (Math.hypot(m[8], m[9], m[10]) || 1), h = (haut || 0) / (Math.hypot(m[4], m[5], m[6]) || 1);
+    window.__camFace = [p.x + m[8] * k + m[4] * h, p.y + m[9] * k + m[5] * h, p.z + m[10] * k + m[6] * h, p.x, p.y, p.z]; }, 5); };
+// une planche de `n` images du jeu, a `pas` ms d'ecart, posee sur la page (pour une seule capture d'ecran)
+window.planche = async (n, pas) => { document.querySelectorAll('.planche').forEach((e) => e.remove());
+  const c = [...document.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0], cols = Math.ceil(n / 2);
+  // (chaque vignette garde le milieu de l'image : le coureur suivi y est)
+  for (let i = 0; i < n; i++) { await new Promise((r) => requestAnimationFrame(() => r())); const im = document.createElement('img'); im.className = 'planche';
+    im.src = c.toDataURL('image/jpeg', 0.85); im.style.cssText = `position:fixed;z-index:99;object-fit:cover;object-position:50% 50%;background:#000;width:${100 / cols}%;height:50%;left:${(i % cols) * 100 / cols}%;top:${Math.floor(i / cols) * 50}%`;
+    document.body.append(im); await new Promise((r) => setTimeout(r, pas)); } };
