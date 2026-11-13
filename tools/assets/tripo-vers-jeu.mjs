@@ -1,6 +1,6 @@
 // UN CORPS RIGGE PAR TRIPO (squelette UE5 Mannequin) -> LE SQUELETTE ET LE REPOS DU JEU, sans Blender.
 //
-//   node tools/assets/tripo-vers-jeu.mjs <tripo-rig.glb> <reference coureur-homme.glb> <sortie.glb> [--normale 1024] [--couleur 2048] [--pied 0.06]
+//   node tools/assets/tripo-vers-jeu.mjs <tripo-rig.glb> <reference coureur-homme.glb> <sortie.glb> [--normale 1024] [--couleur 2048] [--pied 0.06] [--bras 0]
 //   puis : node tools/assets/optimiser-glb.mjs <sortie.glb> && node tools/assets/textures-ktx2.mjs <sortie.glb>
 //
 // POURQUOI (12-13/11/2026) : la chaine Blender (remaillage voxel) deformait les corps crees dans Tripo — l'auteur :
@@ -25,7 +25,7 @@ import * as THREE from 'three';
 
 const [src, ref, sortie] = process.argv.slice(2).filter((a, i, t) => !a.startsWith('--') && !t[i - 1]?.startsWith('--'));
 const opt = (n, d) => { const i = process.argv.indexOf('--' + n); return i < 0 ? d : Number(process.argv[i + 1]); };
-const COTE_NORMALE = opt('normale', 1024), COTE_COULEUR = opt('couleur', 2048), PIED = opt('pied', 0.06);
+const COTE_NORMALE = opt('normale', 1024), COTE_COULEUR = opt('couleur', 2048), PIED = opt('pied', 0.06), BRAS = opt('bras', 0);
 if (!sortie) { console.error('usage : tripo-vers-jeu.mjs <tripo-rig.glb> <reference.glb> <sortie.glb>'); process.exit(1); }
 
 await MeshoptDecoder.ready;
@@ -92,6 +92,10 @@ for (let i = 0; i < noms.length; i++) {
   if (noms[i].startsWith('tissu_')) { P0[i] = P0[p].clone().add(posRef[i].clone().sub(posRef[p])); P1[i] = P1[p].clone().add(posRef[i].clone().sub(posRef[p])); Rj[i] = Rp; continue; }
   if (fils === undefined) { Rj[i] = Rp; continue; }
   const dir = P0[fils].clone().sub(P0[i]).applyQuaternion(Rp).normalize(), cible = posRef[fils].clone().sub(posRef[i]).normalize();
+  // LES BRAS UN PEU ECARTES (--bras, degres ; 13/11, l'auteur : « les bras sont trop colles au corps ») : ces corps sont
+  // plus larges du dos que la reference, sur laquelle les poses du jeu sont reglees. Le repos garde donc le bras ouvert
+  // de quelques degres : poser() tourne a partir du repos, toutes les poses s'ouvrent d'autant.
+  if (base === 'upperarm' && BRAS) cible.setZ(cible.z + Math.sign(posRef[i].z) * Math.tan(BRAS * Math.PI / 180)).normalize();
   Rj[i] = new THREE.Quaternion().setFromUnitVectors(dir, cible).multiply(Rp);
 }
 // (la cheville a la hauteur de celle de la reference : la semelle des pointes est au sol)
@@ -191,7 +195,7 @@ const sommes = []; for (let i = 0; i < N; i++) sommes.push(WE[i * 4] + WE[i * 4 
 const droit = (a, b, c) => { const d = P1[rang.get(b)].clone().sub(P1[rang.get(a)]).normalize(); return d.dot(posRef[rang.get(b)].clone().sub(posRef[rang.get(a)]).normalize()) > 0.9999 && c; };
 console.assert(noeuds.length === 57 && noms.every((n, i) => peau.listJoints()[i].getName() === n), 'les 57 os du jeu, dans l ordre');
 console.assert(Math.max(...sommes.map((s) => Math.abs(s - 1))) < 1e-5, 'poids normalises');
-console.assert(droit('upperarm_l', 'lowerarm_l', true) && droit('thigh_r', 'calf_r', true), 'membres dans la direction de la reference');
+console.assert((BRAS || droit('upperarm_l', 'lowerarm_l', true)) && droit('thigh_r', 'calf_r', true), 'membres dans la direction de la reference');
 let haut = 0; for (let i = 0; i < N; i++) haut = Math.max(haut, V[i * 3 + 1]);
 console.log(`${sortie} : ${tris.length / 3} triangles (corps), ${N} sommets, 57 os, echelle x${ech.toFixed(4)}, sommet du crane ${haut.toFixed(3)} m, ` +
   `deplacement max de la peau pour le repos ${(ecartMax * 100).toFixed(1)} cm, pied nu retire : ${(iT.length - tris.length) / 3} triangles`);
