@@ -137,8 +137,26 @@ const acces = (type, tab) => doc.createAccessor().setType(type).setArray(tab).se
 
 const image = async (tex, cote, jpg) => { const s = sharp(tex.getImage()).resize(cote, cote, { fit: 'fill' }); return new Uint8Array(await (jpg ? s.jpeg({ quality: 88 }) : s.png()).toBuffer()); };
 const matT = prim.getMaterial();
+// LE MASQUE DU TISSU, dans l'alpha de la couleur (13/11) : la tenue Tripo est GRISE, la peau coloree. Alpha bas = tissu,
+// 255 = le reste (une texture sans alpha ne teint donc rien). Nettoye (mediane) et elargi de ~2 texels, pour avaler le
+// trait sombre du bord du vetement ; le jeu (corps.ts, tenueTripo) y pose les couleurs du coureur, le maillot du club,
+// le dossard. Cheveux noirs et blancs des yeux sont gris aussi : le jeu ne teint que le tronc et les cuisses.
+const couleurMasquee = async (tex, cote) => {
+  const { data } = await sharp(tex.getImage()).resize(cote, cote, { fit: 'fill' }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  const m = Buffer.alloc(cote * cote);
+  for (let i = 0; i < m.length; i++) {
+    const r = data[i * 3], g = data[i * 3 + 1], b = data[i * 3 + 2], hi = Math.max(r, g, b), lo = Math.min(r, g, b);
+    m[i] = hi - lo < 20 && (hi ? (hi - lo) / hi : 0) < 0.25 ? 255 : 0;
+  }
+  const brut = { raw: { width: cote, height: cote, channels: 1 } };
+  // (extractChannel a chaque passe : sharp rend sinon trois canaux, relus comme un seul)
+  const passe = (buf, f) => f(sharp(buf, brut)).extractChannel(0).raw().toBuffer();
+  const propre = await passe(m, (i) => i.median(5).blur(1.2).threshold(128));
+  const net = await passe(await passe(propre, (i) => i.blur(1.5).threshold(40)), (i) => i.blur(0.8).negate().linear(0.97, 8));   // (jamais 0 : un encodeur avec perte jette la couleur sous un alpha nul)
+  return new Uint8Array(await sharp(data, { raw: { width: cote, height: cote, channels: 3 } }).joinChannel(net, brut).png().toBuffer());
+};
 const mat = doc.createMaterial('Coureur_tripo').setRoughnessFactor(0.6).setMetallicFactor(0)
-  .setBaseColorTexture(doc.createTexture('couleur').setMimeType('image/jpeg').setImage(await image(matT.getBaseColorTexture(), COTE_COULEUR, true)))
+  .setBaseColorTexture(doc.createTexture('couleur').setMimeType('image/png').setImage(await couleurMasquee(matT.getBaseColorTexture(), COTE_COULEUR)))
   .setNormalTexture(doc.createTexture('normale').setMimeType('image/png').setImage(await image(matT.getNormalTexture(), COTE_NORMALE, false)));
 const uv = new Float32Array(N * 2); for (let i = 0; i < N; i++) aUV.getElement(i, el).forEach((x, k) => { uv[i * 2 + k] = x; });
 const corps = doc.createMesh('Coureur').addPrimitive(doc.createPrimitive().setMaterial(mat)
