@@ -95,8 +95,9 @@ for (let i = 0; i < noms.length; i++) {
   // LES BRAS UN PEU ECARTES (--bras, degres ; 13/11, l'auteur : « les bras sont trop colles au corps ») : ces corps sont
   // plus larges du dos que la reference, sur laquelle les poses du jeu sont reglees. Le repos garde donc le bras ouvert
   // de quelques degres : poser() tourne a partir du repos, toutes les poses s'ouvrent d'autant.
-  // (tout le bras — bras, avant-bras, main — sinon l'avant-bras revient a la verticale et le bras casse au coude)
-  if ((base === 'upperarm' || base === 'lowerarm' || base === 'hand') && BRAS) cible.setZ(cible.z + Math.sign(posRef[i].z) * Math.tan(BRAS * Math.PI / 180)).normalize();
+  // (le HAUT du bras seulement : l'avant-bras reprend la direction de la reference et le bras plie au coude. Essaye sur
+  // tout le bras le 13/11 — bras droit comme le modele Tripo —, l'auteur : « remets la cassure au niveau du coude »)
+  if (base === 'upperarm' && BRAS) cible.setZ(cible.z + Math.sign(posRef[i].z) * Math.tan(BRAS * Math.PI / 180)).normalize();
   Rj[i] = new THREE.Quaternion().setFromUnitVectors(dir, cible).multiply(Rp);
 }
 // (la cheville a la hauteur de celle de la reference : la semelle des pointes est au sol)
