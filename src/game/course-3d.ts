@@ -237,6 +237,8 @@ export function rendre(App: any, dt: number) {
     uFoule.uLiesse.value += (fini - uFoule.uLiesse.value) * Math.min(1, (dt || 0.016) * 1.5);
   }
   dessinerLesEffets(App);
+  (window as any).__cam = camera;
+  { const z = (window as any).__vue; if (z) { const t = renderer!.getSize(new THREE.Vector2()); camera.setViewOffset(t.x, t.y, z[0] * t.x, z[1] * t.y, z[2] * t.x, z[3] * t.y); } }   // DEMO LOCALE : gros plan
   renderer!.render(scene, camera);
   // LE FILM D'APRES COURSE (review.ts) recopie l'image 3D ici, juste apres son trace : plus tard
   // dans l'image, le navigateur a deja vide le tampon WebGL et la copie sortait noire

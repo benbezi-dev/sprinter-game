@@ -82,7 +82,8 @@ export function chargerLeCorps() {
     .catch(() => { /* les tubes restent */ });
   for (const genre of ['homme', 'femme'] as const)
     l.loadAsync(base + 'modeles/pointes-' + genre + '.glb').then(g => { pointesTripo[genre] = g.scene; }).catch(() => { /* les anciennes chaussures restent */ });
-  for (const [genre, fichier] of [['femme', 'coureur-femme']] as const)
+  // DEMO LOCALE (jamais poussee) : les 8 corps premium, un par couloir
+  for (const [genre, fichier] of [['homme', 'premium/h2v2'], ['homme', 'premium/h3v2'], ['homme', 'premium/h4v2'], ['femme', 'premium/f1v2'], ['femme', 'premium/f2v2'], ['femme', 'premium/f3v2'], ['femme', 'premium/f4v2']] as const)
     l.loadAsync(base + 'modeles/' + fichier + '.glb').then(g => { autresCorps[genre].push(g.scene); }).catch(() => { /* un corps de moins */ });
 }
 
@@ -213,6 +214,7 @@ function maillageDe(chemin: string): THREE.Object3D | null | false {
 }
 
 function corpsDe(r: any): Corps | null {
+  (window as any).__corps = corps;   // DEMO LOCALE
   let c = corps.get(r);
   if (c) return c;
   const chemin = r.look && r.look.maillage;
@@ -235,10 +237,12 @@ function corpsDe(r: any): Corps | null {
     } catch { maillages.set(chemin, false); }    // pas le squelette du jeu : le corps generique
   }
   if (!gabarit) return null;
-  const femme = r.look?.build === 'f' && autresCorps.femme.length > 0;
+  let femme = r.look?.build === 'f' && autresCorps.femme.length > 0;
   const tirage = Math.abs(hacher('corps' + String(r.name || r.lane || '')));
   const choix = femme ? autresCorps.femme : [gabarit, ...autresCorps.homme];
-  const source = choix[tirage % choix.length];
+  const huit = [gabarit, ...autresCorps.homme, ...autresCorps.femme];
+  const source = huit.length === 8 || huit.length === 7 ? huit[(r.lane ?? 0) % huit.length] : choix[tirage % choix.length];   // DEMO LOCALE
+  femme = autresCorps.femme.includes(source);   // DEMO LOCALE : les pointes suivent le corps
   const copie = clonerSquelette(source);
   doserLePhysique(copie, r.look, tirage);
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
@@ -249,6 +253,9 @@ function corpsDe(r: any): Corps | null {
       const zone = String(m.name || '').replace('Coureur_', '');
       // LE LOGO DES POINTES BENBEZI (tools/blender/chaussures_coureur.py) : sa texture, le logo du jeu, est gardee
       const n = new THREE.MeshStandardMaterial({ roughness: zone === 'peau' ? 0.55 : zone === 'semelle' || zone === 'plaque' ? 0.45 : 0.7, metalness: 0,
+        normalMap: m.normalMap ?? null, ...(m.normalMap ? { normalScale: m.normalScale } : {}),   // (GLTFLoader inverse y sans tangentes : sans lui le relief est eclaire a l'envers)
+          // le relief cuit des corps premium (athlete_premium.py) ; null sur les anciens
+        ...(zone === 'tripo' ? { map: m.map } : {}),   // corps Tripo (tripo-vers-jeu.mjs) : sa couleur, pas de teinte
         ...(zone === 'logo' ? { map: m.map, transparent: true, alphaTest: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } : {}) });
       lisere(n);
       if (EPAIS_TISSU[zone]) porterAuDessus(n, EPAIS_TISSU[zone]);
