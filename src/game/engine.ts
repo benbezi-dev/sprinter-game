@@ -152,6 +152,15 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
     const cible = dm && SprinterApp.G.ghostSet ? String(dm.cible || '') || null : null;
     import('./marques').then(m => m.envoyerCourse(race, t, trace, ctx, cible)).catch(() => { /* hors ligne */ });
   }
+  // LE DUEL DES EPREUVES : toute course de vote envoie sa trace (elle devient
+  // le fantome du joueur) ; partie de la banderole contre un fantome, elle
+  // porte sa cible et juge l'attaque. Copiee ICI pour la meme raison qu'au-dessus.
+  if ((race === '60' || race === '200s' || race === '400s') && t != null && !SprinterApp.G.rejeu) {
+    const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
+    const de = (SprinterApp.G.shotOpts || {}).duelEpreuves;
+    const cible = de && SprinterApp.G.ghostSet ? String(de.cible || '') || null : null;
+    import('./duel-epreuves').then(m => m.envoyerCourse(race, t, trace, cible)).catch(() => { /* hors ligne */ });
+  }
   // NOEL 2026 : une course partie de l'ecran de Noel (game/noel.ts) devient le
   // fantome du joueur, et juge la cible si elle en avait une. Seulement si le
   // depart portait `noel` : un 60 m ordinaire ne touche pas a l'arene.

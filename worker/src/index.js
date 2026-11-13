@@ -93,7 +93,7 @@ import { empreinteIp, sousLimite, quotaAtteint, noterCodeRate, purgerLimites } f
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
-import { noterVoix, tableauEpreuves } from './duel-epreuves.js';
+import { noterVoix, tableauEpreuves, fantomeAAffronter, noterCourseEpreuves } from './duel-epreuves.js';
 import { etapeConnue, noterEtape, etapeHalloweenPlausible, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
 import { PROFIL_MAX_OCTETS, donneesValides, appareilRelie, lireProfil, ecrireProfil } from './profil.js';
 import {
@@ -3314,6 +3314,40 @@ async function servir(request, env, ctx, porteur) {
       return json(await tableauEpreuves(env.DB, {
         test: canal.test, deviceId: isValidDeviceId(deviceId) ? deviceId : null,
       }));
+    }
+
+    // Les fantomes du duel des epreuves : celui a battre, et la course qui juge.
+    if (url.pathname === '/duel-epreuves/fantome' && request.method === 'GET') {
+      const key = cleanName(url.searchParams.get('name') || '').trim().toLowerCase();
+      const r = await fantomeAAffronter(env.DB, {
+        test: canal.test, nameKey: key && key !== 'anonyme' ? key : null,
+        epreuve: url.searchParams.get('epreuve') || '',
+        cibleKey: (url.searchParams.get('cible') || '').trim().toLowerCase().slice(0, 40) || null,
+      });
+      return json(r.corps, r.status);
+    }
+    if (url.pathname === '/duel-epreuves/course' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const name = cleanName(body.name);
+      const key = name.trim().toLowerCase();
+      if (key === 'anonyme') return json({ error: 'choisis d abord ton nom' }, 409);
+      if (!(await peutUtiliser(env.DB, key, device_id))) {
+        ctx.waitUntil(noterRefus(env.DB, { route: url.pathname, nameKey: key, deviceId: device_id }));
+        return json({ error: 'ce nom ne t appartient pas' }, 403);
+      }
+      const timeMs = Math.round(Number(body.time_ms));
+      if (!Number.isFinite(timeMs) || timeMs < MIN_TIME_MS || timeMs > MAX_TIME_MS) {
+        return json({ error: 'chrono invalide' }, 400);
+      }
+      const cible = typeof body.cible === 'string' ? body.cible.trim().toLowerCase().slice(0, 40) || null : null;
+      const r = await noterCourseEpreuves(env.DB, {
+        test: canal.test, deviceId: device_id, nameKey: key, name,
+        epreuve: String(body.race_key || ''), timeMs, trace: body.trace, cibleKey: cible,
+      });
+      return json(r.corps, r.status);
     }
 
     if (url.pathname === '/nations' && request.method === 'GET') {
