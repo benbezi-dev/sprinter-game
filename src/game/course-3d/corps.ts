@@ -174,7 +174,8 @@ export function lisere(m: THREE.MeshStandardMaterial) {
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform float uLisere, uLisereForce, uLisereFace; uniform vec3 uLisereCoul;')
       .replace('#include <opaque_fragment>', `
-float bord = pow(1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0), 2.5);
+// (normale GEOMETRIQUE : avec le relief cuit des corps Tripo, chaque pli — l'emmanchure — s'allumait en lisere)
+float bord = pow(1.0 - clamp(dot(normalize(nonPerturbedNormal), normalize(vViewPosition)), 0.0, 1.0), 2.5);
 // une lumiere de face douce, venue d'en haut a gauche de la camera : le cote qu'on voit
 float face = max(dot(normalize(normal), normalize(vec3(-0.35, 0.55, 0.75))), 0.0);
 outgoingLight += uLisere * (uLisereCoul * bord * uLisereForce + diffuseColor.rgb * (0.12 + 0.02 * uLisereFace + 0.5 * uLisereFace * face));
@@ -295,6 +296,7 @@ function corpsDe(r: any): Corps | null {
   const brassiere = tenue.startsWith('brassiere'), culotte = tenue.endsWith('culotte');
   // (une piece : le debardeur reste, le bas prend sa couleur ; la zone peinte du corps avait un bord en dents de scie)
   const bas = tenue === 'une-piece' ? maillot : rgb(L.shorts);
+  if (mats.tripo) tenueTripo(copie, mats.tripo, maillot, bas);
   mats.debardeur?.color.copy(maillot); mats.brassiere?.color.copy(maillot); mats.shortlarge?.color.copy(bas);
   if (mats.debardeur) mats.debardeur.visible = !brassiere;
   if (mats.brassiere) mats.brassiere.visible = brassiere;
@@ -432,6 +434,44 @@ if (vKitN.x > 0.2) {
 }`);
   };
   m.customProgramCacheKey = () => 'maillot-tripo';
+  m.needsUpdate = true;
+}
+// LA TENUE DES CORPS TRIPO PREND LES COULEURS DU COUREUR. Leur texture porte une tenue GRISE (debardeur ou brassiere,
+// cuissard) : entre les genoux et les epaules, ce qui est gris est du tissu, ce qui est colore est de la peau. Le gris
+// garde ses ombres et prend la couleur du maillot au-dessus de la taille, celle du short en dessous. La hauteur est
+// lue au REPOS (avant le squelette), pour que la limite ne bouge pas avec la foulee.
+function tenueTripo(copie: THREE.Object3D, m: THREE.MeshStandardMaterial, maillot: THREE.Color, bas: THREE.Color) {
+  // LE TISSU EST SUR LE TRONC ET LES CUISSES : les bras, les mains, la tete et les cheveux (une queue de cheval dans le
+  // dos, une main sombre le long de la hanche) ne se teignent pas. Part des os du tronc dans chaque sommet, une fois par
+  // geometrie (les copies d'un meme corps la partagent).
+  copie.traverse((o: any) => {
+    if (!o.isSkinnedMesh || o.material !== m || o.geometry.getAttribute('tronc')) return;
+    const si = o.geometry.getAttribute('skinIndex'), sw = o.geometry.getAttribute('skinWeight');
+    const duTronc = o.skeleton.bones.map((b: THREE.Bone) => /^(pelvis|spine_|thigh_|clavicle_)/.test(b.name));
+    const t = new Float32Array(si.count);
+    for (let i = 0; i < si.count; i++) for (let k = 0; k < 4; k++) if (duTronc[si.getComponent(i, k)]) t[i] += sw.getComponent(i, k);
+    o.geometry.setAttribute('tronc', new THREE.BufferAttribute(t, 1));
+  });
+  const avant = m.onBeforeCompile;
+  m.onBeforeCompile = (sh, r) => {
+    avant.call(m, sh, r);
+    sh.uniforms.uMaillot = { value: maillot }; sh.uniforms.uBas = { value: bas };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float tronc; varying float vReposY, vTronc;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvReposY = position.y; vTronc = tronc;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vReposY, vTronc; uniform vec3 uMaillot, uBas;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+{
+  vec3 c = diffuseColor.rgb; float hi = max(c.r, max(c.g, c.b)), lo = min(c.r, min(c.g, c.b));
+  // (gris = peu de couleur en valeur ABSOLUE : dans un gris sombre, le bruit de la compression fait une forte saturation relative)
+  float gris = (1.0 - smoothstep(0.03, 0.06, hi - lo)) * (1.0 - smoothstep(0.30, 0.45, hi > 0.0 ? (hi - lo) / hi : 0.0));
+  float tissu = gris * smoothstep(0.50, 0.56, vReposY) * (1.0 - smoothstep(1.44, 1.50, vReposY)) * smoothstep(0.35, 0.6, vTronc);
+  vec3 teinte = mix(uBas, uMaillot, smoothstep(0.94, 0.98, vReposY));
+  diffuseColor.rgb = mix(c, teinte * clamp(hi / 0.16, 0.35, 1.25), tissu);
+}`);
+  };
+  m.customProgramCacheKey = () => 'tenue-tripo';
   m.needsUpdate = true;
 }
 // Chaque pointe prend la place de la chaussure du jeu (tige, semelle, plaque, clous, logo, masques) : un maillage
