@@ -637,6 +637,9 @@ export function RaceHUD() {
           // metres, l'ecart s'inversait et le montrait « derriere » ceux
           // qu'il venait de battre.
           if (directFini) return null;
+          // Au relais, le coureur d'a cote est un COEQUIPIER : « +105 m AMADOU » le presentait
+          // comme un rival a rattraper. Le couloir de l'equipe dit ou est le temoin (CourseRelais).
+          if (SprinterApp.G.raceKey === '4x100') return null;
           const me = order.indexOf(player);
           const other = me === 0 ? order[1] : order[me - 1];
           if (other) {
