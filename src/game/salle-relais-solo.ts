@@ -82,6 +82,8 @@ export class SalleRelaisSolo {
   private moiD = 0;
   private moiT = 0;
   private moiV = 0;
+  /** Une tape du joueur que le fictif n'a pas encore pu rendre (hors zone). */
+  private tapeEnAttente = 0;
 
   moi = 'moi';
   monRelais: number;
@@ -161,6 +163,7 @@ export class SalleRelaisSolo {
       this.placerFictifs();
       if (this.maZone) this.course.placer(this.monRelais, this.marque);
       for (const f of this.fictifs) { f.v = 0; f.parti = false; f.libere = false; }
+      this.tapeEnAttente = 0;
       this.moiD = this.marque; this.moiT = 0; this.moiV = 0;
       this.finEnvoyee = false;
       this.etat();
@@ -236,7 +239,15 @@ export class SalleRelaisSolo {
     // que le fictif, lui, n'aurait pas commise.
     const z = zoneDe(p + 1);
     const dD = c.coureur(p).d, dR = c.coureur(p + 1).d;
-    if (dD < z.debut || dD > z.fin || dR < z.debut || dR > z.fin) return;
+    if (dD < z.debut || dD > z.fin || dR < z.debut || dR > z.fin) {
+      // Le fictif n'est pas encore dans la zone : il garde la tape du joueur
+      // en main et donne (ou prend) le temoin des qu'il y entre, dans la
+      // fenetre ou deux tapes vont encore ensemble — voir `pas`. Refusee sans
+      // suite, la tape laissait le joueur taper en boucle sans rien voir.
+      this.tapeEnAttente = maintenant;
+      return;
+    }
+    this.tapeEnAttente = 0;
     c.taper(moi, maintenant);
     const r = c.taper(partenaire, maintenant + 30 + Math.random() * 90);
     this.traiterTape(r);
@@ -327,12 +338,20 @@ export class SalleRelaisSolo {
 
     // PORTEUR : a pleine allure, sauf a l'approche d'un receveur humain, sur
     // qui il se cale pour lui tendre le temoin.
+    //
+    // Il vise un point, pas un ecart : un metre deux derriere le joueur, MAIS
+    // JAMAIS AVANT L'ENTREE DE LA ZONE. Un joueur qui attend a l'arret sur sa
+    // marque par defaut — l'entree meme de la zone — voyait sinon le fictif
+    // s'arreter un metre avant elle : la tape etait refusee (on ne donne pas
+    // le temoin hors zone) sans un mot, et la course restait figee.
     if (f.relais === p) {
       f.parti = true;
       if (p < TAILLE && p + 1 === this.monRelais) {
-        const ecart = c.coureur(p + 1).d - d;
-        if (ecart > 0 && ecart < 15) {
-          return Math.min(f.vmax + 1.5, Math.max(0, this.moiV + (ecart - CONTACT - 0.2) * 2));
+        const dR = c.coureur(p + 1).d;
+        const vise = Math.max(dR - CONTACT - 0.2, zoneDe(p + 1).debut + 0.3);
+        const reste = vise - d;
+        if (reste < 15) {
+          return Math.min(f.vmax + 1.5, Math.max(0, this.moiV + reste * 2));
         }
       }
       return f.vmax;
@@ -380,6 +399,26 @@ export class SalleRelaisSolo {
         const fin4 = c.terminer(TAILLE, t, t);
         if (fin4.elimine) { this.eliminer(fin4.elimine); return; }
         if (fin4.total != null) { this.finir(); return; }
+      }
+    }
+
+    // LA TAPE GARDEE EN MAIN : le joueur a tape a portee, mais le fictif
+    // n'etait pas encore dans la zone. Il la rend des qu'il y entre, tant que
+    // les deux gestes vont encore ensemble pour la salle (FENETRE_TOUCHE_MS,
+    // 600 ms dans relais-course.js). Au-dela, la tape est perimee.
+    if (this.tapeEnAttente) {
+      const p0 = c.porteur, moi = this.monRelais;
+      const partenaire = moi === p0 && p0 < TAILLE ? p0 + 1 : (moi === p0 + 1 ? p0 : 0);
+      const z = zoneDe(p0 + 1);
+      const dD = c.coureur(p0).d, dR = c.coureur(p0 + 1).d;
+      if (!partenaire || maintenant - this.tapeEnAttente > 550) this.tapeEnAttente = 0;
+      else if (dD >= z.debut && dD <= z.fin && dR >= z.debut && dR <= z.fin
+               && Math.abs(dD - dR) <= PORTEE) {
+        const a = this.tapeEnAttente;
+        this.tapeEnAttente = 0;
+        c.taper(moi, a);
+        this.traiterTape(c.taper(partenaire, maintenant));
+        if (c.finie()) return;
       }
     }
 

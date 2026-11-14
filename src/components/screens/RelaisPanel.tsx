@@ -315,6 +315,7 @@ export function RelaisPanel() {
 
   return (
     <Repliable
+      pleinEcran
       titre={N.t('relais_titre')}
       sous={N.t('relais_desc')}
       icone={<Users className="w-4 h-4" />}

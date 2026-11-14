@@ -533,6 +533,8 @@
     live_rev_attendent: ['{n} t’attendent sur la piste', '{n} are waiting for you on the track'],
     live_rev_connexion: ['retour sur la piste…', 'back to the track…'],
     // relais 4x100
+    // les modes ouverts en page plein ecran (Repliable)
+    page_retour:     ['Retour', 'Back'],
     relais_titre:    ['RELAIS 4 × 100', '4 × 100 RELAY'],
     relais_desc:     ['quatre coureurs, un témoin. Une équipe, c’est sa composition : mêmes quatre noms, même équipe.',
                       'four runners, one baton. A team is its line-up: same four names, same team.'],
@@ -612,6 +614,9 @@
     relais_prends:   ['PRENDS LE TÉMOIN', 'TAKE THE BATON'],
     relais_donne:    ['DONNE LE TÉMOIN', 'PASS THE BATON'],
     relais_approche: ['RAPPROCHE-TOI', 'GET CLOSER'],
+    // la main tendue dans le vide (BoutonTemoin) : la cle manquait, l'ecran
+    // affichait son nom brut
+    relais_trop_loin: ['TROP LOIN', 'TOO FAR'],
     relais_arrivee:  ['LE RELAIS EST BOUCLÉ', 'RELAY COMPLETE'],
     relais_elimine:  ['ÉQUIPE ÉLIMINÉE', 'TEAM ELIMINATED'],
     relais_elimine_pourquoi: ['au {r}e relais : {c}', 'on leg {r}: {c}'],
