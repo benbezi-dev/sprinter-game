@@ -519,8 +519,10 @@ export function RaceHUD() {
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Pas de « record à battre » en championnat, en direct comme en rejeu. */}
-          {isCount && rival && !rejeu && !SprinterApp.G.champDirect && (
+          {/* Pas de « record à battre » en championnat, en direct comme en rejeu.
+              Ni au relais : un chrono individuel ne s'y bat pas, et la pastille
+              se posait sur le bouton du temoin, qui tient la meme hauteur. */}
+          {isCount && rival && !rejeu && !SprinterApp.G.champDirect && SprinterApp.G.raceKey !== '4x100' && (
             <div className={`bg-black/60 px-4 py-1.5 md:px-6 md:py-2 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-1 rounded-full border max-w-[90vw] text-center
               ${ghostName ? 'border-cyan-400/40' : 'border-fuchsia-500/30'}`}>
               <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base [@media(max-height:500px)]:text-xs block truncate

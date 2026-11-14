@@ -338,8 +338,13 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
 
   if (partie) {
     return (
-      <div className="fixed inset-x-0 bottom-0 z-40 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]
-                      flex flex-col gap-2 pointer-events-none">
+      // AU-DESSUS DES DEUX PAVES, PAS DESSOUS. Les paves tactiles (TouchControls)
+      // tiennent le bas de l'ecran en z-50, sur 20 % de la hauteur en portrait,
+      // 17 % en paysage, entre 70 et 250 px. Pose en bas lui aussi, ce panneau
+      // passait dessous : sur telephone, le bouton du temoin etait invisible et
+      // le porteur restait plante au bout de sa zone (constate le 14/11/2026).
+      <div className="fixed inset-x-0 z-40 p-3 pointer-events-none flex flex-col gap-2
+                      portrait:bottom-[clamp(70px,20vh,250px)] landscape:bottom-[clamp(70px,17vh,250px)]">
         <div className="mx-auto w-full max-w-sm flex flex-col gap-2">
           <div className="rounded-xl bg-black/60 backdrop-blur-md border border-white/10
                           p-2 flex flex-col gap-1 max-h-[38vh] overflow-y-auto">
