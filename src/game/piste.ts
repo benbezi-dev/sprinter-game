@@ -18,6 +18,8 @@ import { useSyncExternalStore } from 'react';
 
 export type SurLaPiste =
   | { genre: 'relais'; equipe: string }
+  /** Seul, a la place choisie : les trois autres relayeurs sont fictifs. */
+  | { genre: 'relais_solo'; rang: number; equipe: string }
   | {
       genre: 'confrontation';
       code: string;

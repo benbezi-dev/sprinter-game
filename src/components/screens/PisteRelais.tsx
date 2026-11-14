@@ -39,6 +39,9 @@ export function PisteRelais() {
     entrerSurLaPiste(null);
   };
 
+  if (quoi.genre === 'relais_solo') {
+    return <CourseRelais equipe={quoi.equipe} solo={{ rang: quoi.rang }} onQuitter={sortir} />;
+  }
   if (quoi.genre === 'relais') {
     return <CourseRelais equipe={quoi.equipe} onQuitter={sortir} />;
   }
