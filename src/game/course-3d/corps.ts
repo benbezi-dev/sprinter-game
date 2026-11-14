@@ -11,6 +11,7 @@ import { ULTRA } from './paliers';
 import { monde } from './scene';
 import { salleActive } from './repere';
 import { c3, refaireLeStade } from './stade';
+import { SANS_PREMIUM, premiumCle, tenueTripo, reglerTenueTripo } from '../athlete/corps-gens';
 
 // --- LE CORPS EN VRAI MAILLAGE -------------------------------------------------
 //
@@ -33,21 +34,11 @@ const autresCorps: { homme: THREE.Object3D[]; femme: THREE.Object3D[] } = { homm
 // dans leur texture : le coureur prend celui de son genre dont la peau est la plus proche de la sienne ; la coiffure
 // de l'avatar ne s'y voit donc pas. Charges a la demande (2 Mo chacun) : une course n'en demande que quelques-uns.
 // Pas sur un appareil a moins de 4 Go (huit textures 1536 de plus en memoire graphique) ; ?anciens : les corps d'avant.
-const PREMIUM: { cle: string; femme: boolean; peau: number[] }[] = [
-  { cle: 'h1', femme: false, peau: [58, 38, 30] }, { cle: 'h2', femme: false, peau: [140, 92, 62] },
-  { cle: 'h3', femme: false, peau: [188, 146, 108] }, { cle: 'h4', femme: false, peau: [228, 192, 168] },
-  { cle: 'f1', femme: true, peau: [58, 38, 30] }, { cle: 'f2', femme: true, peau: [140, 92, 62] },
-  { cle: 'f3', femme: true, peau: [188, 146, 108] }, { cle: 'f4', femme: true, peau: [228, 192, 168] },
-];
-const SANS_PREMIUM = typeof navigator !== 'undefined' && (navigator as any).deviceMemory < 4
-  || typeof location !== 'undefined' && /[?&]anciens/.test(location.search);
 const premium = new Map<string, THREE.Object3D | null | false>();
 /** Le corps premium du coureur : faux s'il n'y en a pas, null tant qu'il charge. */
 function premiumDe(look: any): THREE.Object3D | null | false {
   if (SANS_PREMIUM) return false;
-  const femme = look?.build === 'f', s = look?.skin || [150, 110, 80];
-  const ecart = (p: number[]) => (p[0] - s[0]) ** 2 + (p[1] - s[1]) ** 2 + (p[2] - s[2]) ** 2;
-  const { cle } = PREMIUM.filter((p) => p.femme === femme).sort((a, b) => ecart(a.peau) - ecart(b.peau))[0];
+  const cle = premiumCle(look);
   if (!premium.has(cle)) {
     premium.set(cle, null);
     chargeurGLTF().loadAsync(((import.meta as any).env?.BASE_URL || '/') + 'modeles/premium/' + cle + 'v2.glb')
@@ -323,7 +314,7 @@ function corpsDe(r: any): Corps | null {
   const brassiere = tenue.startsWith('brassiere'), culotte = tenue.endsWith('culotte');
   // (une piece : le debardeur reste, le bas prend sa couleur ; la zone peinte du corps avait un bord en dents de scie)
   const bas = tenue === 'une-piece' ? maillot : rgb(L.shorts);
-  if (mats.tripo) tenueTripo(copie, mats.tripo, maillot, bas, femme, L.kit === 'vrac', dossardDe(((r.lane ?? 0) as number) + 1));
+  if (mats.tripo) reglerTenueTripo(tenueTripo(copie, mats.tripo), maillot, bas, femme, L.kit === 'vrac', dossardDe(((r.lane ?? 0) as number) + 1));
   mats.debardeur?.color.copy(maillot); mats.brassiere?.color.copy(maillot); mats.shortlarge?.color.copy(bas);
   if (mats.debardeur) mats.debardeur.visible = !brassiere;
   if (mats.brassiere) mats.brassiere.visible = brassiere;
@@ -467,65 +458,7 @@ if (vKitN.x > 0.2) {
 // cuissard) : entre les genoux et les epaules, ce qui est gris est du tissu, ce qui est colore est de la peau. Le gris
 // garde ses ombres et prend la couleur du maillot au-dessus de la taille, celle du short en dessous. La hauteur est
 // lue au REPOS (avant le squelette), pour que la limite ne bouge pas avec la foulee.
-function tenueTripo(copie: THREE.Object3D, m: THREE.MeshStandardMaterial, maillot: THREE.Color, bas: THREE.Color, femme: boolean, vrac: boolean, dossard: THREE.Texture) {
-  // LE TISSU EST SUR LE TRONC ET LES CUISSES : les bras, les mains, la tete et les cheveux (une queue de cheval dans le
-  // dos, une main sombre le long de la hanche) ne se teignent pas. Part des os du tronc dans chaque sommet, une fois par
-  // geometrie (les copies d'un meme corps la partagent).
-  copie.traverse((o: any) => {
-    if (!o.isSkinnedMesh || o.material !== m || o.geometry.getAttribute('tronc')) return;
-    const si = o.geometry.getAttribute('skinIndex'), sw = o.geometry.getAttribute('skinWeight');
-    const duTronc = o.skeleton.bones.map((b: THREE.Bone) => /^(pelvis|spine_|thigh_|clavicle_)/.test(b.name));
-    const t = new Float32Array(si.count);
-    for (let i = 0; i < si.count; i++) for (let k = 0; k < 4; k++) if (duTronc[si.getComponent(i, k)]) t[i] += sw.getComponent(i, k);
-    o.geometry.setAttribute('tronc', new THREE.BufferAttribute(t, 1));
-  });
-  // LE MAILLOT DU CLUB : la face et le dos dessines par l'auteur, poses a plat sur le torse (repere de repos : y la
-  // hauteur, z la largeur, le devant vers +x). Le dessin va de l'ourlet (0,96 m) au haut des epaules (1,46 m).
-  if (vrac) for (const n of ['vrac-face.jpg', 'vrac-dos.jpg']) if (!textesTripo[n]) {
-    const t = new THREE.TextureLoader().load(((import.meta as any).env?.BASE_URL || '/') + 'modeles/maillots/' + n);
-    t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; textesTripo[n] = t;
-  }
-  // LE DOSSARD, devant et dans le dos : sur le debardeur des hommes, sur le ventre des femmes (epingle sous la brassiere).
-  const bib = femme ? new THREE.Vector3(1.04, 0.14, 0.175) : new THREE.Vector3(1.03, 0.16, 0.20);   // (bas, hauteur, largeur — metres)
-  const avant = m.onBeforeCompile;
-  m.onBeforeCompile = (sh, r) => {
-    avant.call(m, sh, r);
-    sh.uniforms.uMaillot = { value: maillot }; sh.uniforms.uBas = { value: bas }; sh.uniforms.uBib = { value: bib };
-    sh.uniforms.uTaille = { value: femme ? 1.10 : 0.96 };   // (la ceinture du cuissard des femmes monte plus haut que l'ourlet du debardeur ; entre brassiere et cuissard, la peau)
-    // (la brassiere ne montre que le haut du dessin : il remonte de 6 cm, pour que le logo et la bande verte y tiennent)
-    sh.uniforms.uDecal = { value: femme ? -0.094 : 0 };
-    sh.uniforms.uVrac = { value: vrac ? 1 : 0 }; sh.uniforms.uDossard = { value: dossard };
-    sh.uniforms.uVracFace = { value: vrac ? textesTripo['vrac-face.jpg'] : dossard }; sh.uniforms.uVracDos = { value: vrac ? textesTripo['vrac-dos.jpg'] : dossard };
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nattribute float tronc; varying vec3 vRepos, vReposN; varying float vTronc;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvRepos = position; vReposN = normal; vTronc = tronc;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRepos, vReposN; varying float vTronc; uniform vec3 uMaillot, uBas, uBib; uniform float uVrac, uTaille, uDecal; uniform sampler2D uDossard, uVracFace, uVracDos;')
-      .replace('#include <map_fragment>', `#include <map_fragment>
-{
-  // (le masque du tissu est dans l'alpha de la texture — tripo-vers-jeu.mjs ; sans alpha, rien n'est teint)
-  float masque = 1.0 - smoothstep(0.15, 0.85, diffuseColor.a); diffuseColor.a = 1.0;
-  vec3 c = diffuseColor.rgb; float hi = max(c.r, max(c.g, c.b));
-  float tissu = masque * smoothstep(0.50, 0.56, vRepos.y) * (1.0 - smoothstep(1.44, 1.50, vRepos.y)) * smoothstep(0.35, 0.6, vTronc);
-  float haut = step(uTaille, vRepos.y), devant = step(0.0, vReposN.x);
-  vec3 teinte = mix(uBas, uMaillot, haut);
-  if (uVrac > 0.5 && haut > 0.5) {
-    vec2 q = vec2(0.19 + (vRepos.z + 0.20) / 0.40 * 0.62, 0.109 + uDecal + (1.46 - vRepos.y) / 0.50 * 0.806);
-    q = clamp(q, vec2(0.02, 0.11), vec2(0.98, 0.91));
-    teinte = devant > 0.5 ? texture2D(uVracFace, vec2(q.x, 1.0 - q.y)).rgb : texture2D(uVracDos, vec2(1.0 - q.x, 1.0 - q.y)).rgb;
-  }
-  vec3 couleur = teinte * clamp(hi / 0.16, 0.55, 1.25);
-  // (dossardDe ecrit en miroir : on le relit a l'envers devant)
-  diffuseColor.rgb = mix(c, couleur, tissu);
-  // LE DOSSARD est epingle : il couvre le tissu comme la peau (le ventre des femmes, sous la brassiere), sur le tronc
-  vec2 d = vec2(vRepos.z / uBib.z + 0.5, (uBib.x + uBib.y - vRepos.y) / uBib.y);
-  if (abs(vReposN.x) > 0.35 && all(greaterThan(d, vec2(0.0))) && all(lessThan(d, vec2(1.0))))
-    diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(uDossard, vec2(devant > 0.5 ? 1.0 - d.x : d.x, d.y)).rgb * clamp(hi / 0.16, 0.8, 1.1), smoothstep(0.35, 0.6, vTronc));
-}`);
-  };
-  m.customProgramCacheKey = () => 'tenue-tripo';
-  m.needsUpdate = true;
-}
+
 // Chaque pointe prend la place de la chaussure du jeu (tige, semelle, plaque, clous, logo, masques) : un maillage
 // accroche au meme os du pied, avec le meme squelette. L'eclair et le talon vert-jaune du modele prennent la couleur de
 // chaussure du coureur ; une couleur trop sombre garde le vert d'origine (sinon l'eclair disparait dans la tige noire).
