@@ -5,7 +5,7 @@ import { DefierEquipes } from './DefierEquipes';
 import { surCourrier } from '@/game/boite';
 import { ChoixCoureurs } from './ChoixCoureurs';
 import { entrerSurLaPiste } from '@/game/piste';
-import { Users, Loader2, Check, X, ArrowUpDown, Trophy, LogOut, Swords } from 'lucide-react';
+import { Users, Loader2, Check, X, ArrowUpDown, Trophy, LogOut, Swords, User } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
@@ -196,6 +196,61 @@ function Equipe({ e, onChange, onCourir, onQuitter }: {
   );
 }
 
+/**
+ * COURIR SEUL, sans attendre personne.
+ *
+ * Le relais en equipe demande quatre joueurs sur la piste au meme moment, et
+ * c'est le plus souvent ce qui manque. Ici le joueur choisit sa place — partir
+ * des blocs, prendre et donner le temoin, ou finir — et le jeu court les trois
+ * autres portions (voir salle-relais-solo.ts). Memes regles, memes zones,
+ * memes eliminations ; seul le classement des equipes n'en sait rien.
+ *
+ * La place choisie est retenue d'une fois sur l'autre : on revient souvent
+ * travailler le meme passage.
+ */
+const CLE_RANG_SOLO = 'sprinter.relais.solo.rang';
+
+function lireRangSolo(): number {
+  try {
+    const v = Number(localStorage.getItem(CLE_RANG_SOLO));
+    return v >= 1 && v <= 4 ? v : 1;
+  } catch { return 1; }
+}
+
+function CourirSeul() {
+  const { N } = SprinterApp;
+  const [rang, setRang] = useState(lireRangSolo);
+  const choisir = (r: number) => {
+    setRang(r);
+    try { localStorage.setItem(CLE_RANG_SOLO, String(r)); } catch { /* sans memoire */ }
+  };
+  return (
+    <div className="flex flex-col gap-2 p-3 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.04]">
+      <span className="flex items-center gap-1.5 text-[9px] tracking-widest text-emerald-400">
+        <User className="w-3 h-3" /> {N.t('relais_solo_titre')}
+      </span>
+      <p className="text-[10px] text-muted-foreground leading-snug">{N.t('relais_solo_desc')}</p>
+      <div className="grid grid-cols-4 gap-1.5" role="radiogroup">
+        {[1, 2, 3, 4].map(r => (
+          <button key={r} role="radio" aria-checked={rang === r} onClick={() => choisir(r)}
+            className={`flex flex-col items-center gap-0.5 py-2 rounded-xl border transition-colors
+              ${rang === r ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-300'
+                           : 'border-white/10 bg-black/25 text-muted-foreground hover:text-foreground'}`}>
+            <span className="font-black font-display text-sm tracking-wide">{N.t('relais_solo_r' + r)}</span>
+            <span className="text-[8px] tracking-wider leading-none opacity-80">{N.t('relais_solo_s' + r)}</span>
+          </button>
+        ))}
+      </div>
+      <button onClick={() => entrerSurLaPiste({
+                genre: 'relais_solo', rang, equipe: N.t('relais_solo_equipe') })}
+        className="w-full py-3 rounded-xl font-black font-display tracking-widest text-sm
+                   text-background bg-emerald-400 hover:bg-emerald-400/90">
+        {N.t('relais_solo_courir')}
+      </button>
+    </div>
+  );
+}
+
 export function RelaisPanel() {
   const { N } = SprinterApp;
   const [equipes, setEquipes] = useState<EquipeRelais[]>([]);
@@ -349,6 +404,8 @@ export function RelaisPanel() {
           ))}
         </div>
       )}
+
+      <CourirSeul />
 
       {equipes.length > 0 && (
         <div className="flex flex-col gap-2">

@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
-import { SalleRelais, TAILLE, PORTEE, type EtatRelais } from '@/game/salle-relais';
+import { SalleRelais, TAILLE, PORTEE, type EtatRelais, type UneSalleRelais } from '@/game/salle-relais';
+import { SalleRelaisSolo } from '@/game/salle-relais-solo';
 import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
 import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './relais-pieces';
 
@@ -25,8 +26,11 @@ import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './rela
  * pistolet avec tout l'ecran-titre.
  */
 
-export function CourseRelais({ equipe, onQuitter }: {
-  equipe: string; onQuitter: () => void;
+export function CourseRelais({ equipe, solo, onQuitter }: {
+  equipe: string;
+  /** Relais en solo : mon rang, les trois autres sont des relayeurs fictifs. */
+  solo?: { rang: number };
+  onQuitter: () => void;
 }) {
   const { N } = SprinterApp;
   const [e, setE] = useState<EtatRelais | null>(null);
@@ -56,7 +60,7 @@ export function CourseRelais({ equipe, onQuitter }: {
   const [bras, setBras] = useState<number | null>(null);
   /** Une main tendue dans le vide, a montrer une seconde. */
   const [rate, setRate] = useState(0);
-  const salle = useRef<SalleRelais | null>(null);
+  const salle = useRef<UneSalleRelais | null>(null);
   const porteur = useRef(1);
   /** Ou est chacun, par rang de relais — nourri par la salle, dix fois par seconde. */
   const ou = useRef<Record<number, number>>({});
@@ -88,7 +92,7 @@ export function CourseRelais({ equipe, onQuitter }: {
   };
 
   useEffect(() => {
-    const s = new SalleRelais(equipe, {
+    const ecouteurs: ConstructorParameters<typeof SalleRelais>[1] = {
       onEtat: (etat) => {
         porteur.current = etat.porteur;
         etatRef.current = etat;
@@ -207,7 +211,12 @@ export function CourseRelais({ equipe, onQuitter }: {
       },
       onFini: () => { brancherSalle(null); void arreterLeFilm('relais'); },
       onFerme: (r) => { if (r !== 'fermee') setErreur(r); },
-    });
+    };
+    // Seul, la salle est locale et les trois autres relayeurs sont fictifs ;
+    // l'ecran ne fait aucune difference.
+    const s: UneSalleRelais = solo
+      ? new SalleRelaisSolo(solo.rang, equipe, ecouteurs)
+      : new SalleRelais(equipe, ecouteurs);
     salle.current = s;
     s.connecter();
     // En sortant de la piste, le film s'en va aussi : l'ecran d'arrivee est le
@@ -219,7 +228,7 @@ export function CourseRelais({ equipe, onQuitter }: {
       SprinterApp.G.horlogeLive = null;
       brancherSalle(null); s.fermer(); jeterLeFilm('relais');
     };
-  }, [equipe]);
+  }, [equipe, solo?.rang]);
 
   // La marque part de l'entree de la zone : c'est le placement le plus sur, et
   // c'est celui qu'on veut par defaut pour qui ne touche a rien.
@@ -350,6 +359,12 @@ export function CourseRelais({ equipe, onQuitter }: {
         {e.joueurs.length < TAILLE && (
           <p className="text-[10px] text-center text-muted-foreground">
             {N.t('relais_attend_equipe', { n: String(TAILLE - e.joueurs.length) })}
+          </p>
+        )}
+
+        {solo && (
+          <p className="text-[10px] text-center text-muted-foreground leading-snug">
+            {N.t('relais_solo_note')}
           </p>
         )}
 

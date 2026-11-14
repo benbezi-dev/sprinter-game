@@ -39,7 +39,7 @@ export type EtatRelais = {
   zone?: Zone | null;
 };
 
-type Ecouteurs = {
+export type Ecouteurs = {
   onEtat?: (e: EtatRelais) => void;
   /** Le pistolet : l'attente restante, et la date du coup en temps serveur. */
   onDepart?: (dansMs: number, departA: number) => void;
@@ -78,6 +78,26 @@ export const PORTEE = 2.5;
 export const LEG = 100;
 export const TAILLE = 4;
 export const ARRIVEE = LEG * TAILLE;
+
+/**
+ * Ce que l'ecran de course demande a une salle. La salle en ligne et la salle
+ * solo (salle-relais-solo.ts, trois relayeurs fictifs) le fournissent toutes
+ * les deux.
+ */
+export type UneSalleRelais = {
+  monRelais: number;
+  maZone: Zone | null;
+  marque: number;
+  connecter(): void;
+  pret(v: boolean): void;
+  placer(d: number): void;
+  avancer(dAbs: number, c?: number): void;
+  terminer(): void;
+  temoin(): void;
+  fauxDepart(): void;
+  msCourse(): number;
+  fermer(): void;
+};
 
 export class SalleRelais {
   private lien: Liaison | null = null;
