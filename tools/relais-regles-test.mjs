@@ -82,6 +82,19 @@ console.log('\n── CE QUI ELIMINE ──────────────�
      r.elimine?.raison === 'le temoin a depasse la zone', JSON.stringify(r));
 }
 {
+  // Le jeu arrete le porteur PILE au bout de sa zone (relaisFin) : sans
+  // elimination a 130 m tout rond, celui qui ne donne pas restait plante la.
+  const c = neuve();
+  const r = c.avancer(1, 130);
+  ok('le porteur arrete au bout de la zone sans donner est elimine',
+     r.elimine?.raison === 'le temoin a depasse la zone', JSON.stringify(r));
+}
+{
+  const c = neuve();
+  const r = c.avancer(1, 129.9);
+  ok('juste avant le bout, il peut encore donner', !r.elimine, JSON.stringify(r));
+}
+{
   const c = neuve(); c.placer(2, 112); c.avancer(1, 110);
   c.taper(1, 1000);
   const r = c.taper(2, 2000);                 // une seconde plus tard

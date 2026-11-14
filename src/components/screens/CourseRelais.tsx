@@ -4,9 +4,9 @@ import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { SalleRelais, TAILLE, PORTEE, ELAN, type EtatRelais, type UneSalleRelais } from '@/game/salle-relais';
-import { SalleRelaisSolo } from '@/game/salle-relais-solo';
+import { SalleRelaisSolo, noterRecordSolo } from '@/game/salle-relais-solo';
 import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
-import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './relais-pieces';
+import { Marque, Couloir, BoutonTemoin, Fin, pourquoiElimine, Vestiaire, couleurDe, chrono } from './relais-pieces';
 
 /**
  * La course de relais d'une equipe, cote joueur.
@@ -26,11 +26,13 @@ import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './rela
  * pistolet avec tout l'ecran-titre.
  */
 
-export function CourseRelais({ equipe, solo, onQuitter }: {
+export function CourseRelais({ equipe, solo, onQuitter, onRejouer }: {
   equipe: string;
   /** Relais en solo : mon rang, les trois autres sont des relayeurs fictifs. */
   solo?: { rang: number };
   onQuitter: () => void;
+  /** Solo seulement : recourir tout de suite, a la meme place. */
+  onRejouer?: () => void;
 }) {
   const { N } = SprinterApp;
   const [e, setE] = useState<EtatRelais | null>(null);
@@ -243,6 +245,18 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
     if (z && marque === 0) setMarque(z.debut);
   }, [e]);
 
+  /**
+   * SEUL, ON PEUT RECOURIR, ET IL Y A UN TEMPS A BATTRE. Un relais en equipe ne
+   * se rejoue pas (il faudrait rassembler quatre personnes) ; seul, si — et
+   * c'est apres une elimination qu'on en a le plus envie. Le record perso de
+   * la place est note une fois, a l'arrivee.
+   */
+  const [record, setRecord] = useState<{ nouveau: boolean; avant: number | null } | null>(null);
+  const totalSolo = solo && e && !e.elimine ? e.total : null;
+  useEffect(() => {
+    if (solo && totalSolo != null) setRecord(noterRecordSolo(solo.rang, totalSolo));
+  }, [totalSolo]);
+
   if (!e) {
     return (
       <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#05070d]/80">
@@ -276,12 +290,33 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
         <Fin
           rate={!!e.elimine}
           titre={N.t(e.elimine ? 'relais_elimine' : 'relais_arrivee')}
-          detail={e.elimine ? N.t('relais_elimine_pourquoi', {
-            r: String(e.elimine.relais), c: e.elimine.raison,
-          }) : ''}
+          detail={e.elimine ? pourquoiElimine(e.elimine) : ''}
           temps={e.total}
           passes={e.passes}
           onFermer={onQuitter}
+          enfants={solo ? (
+            <div className="flex flex-col items-center gap-2">
+              {record?.nouveau && (
+                <span className="px-3 py-1 rounded-full text-[10px] font-black tracking-widest
+                                 text-background bg-primary">
+                  {N.t('relais_solo_nouveau')}
+                </span>
+              )}
+              {record && !record.nouveau && record.avant != null && (
+                <span className="text-[11px] text-muted-foreground">
+                  {N.t('relais_solo_record', { t: chrono(record.avant) })}
+                </span>
+              )}
+              {onRejouer && (
+                <button onClick={onRejouer}
+                  className="px-6 py-2.5 rounded-xl font-black font-display tracking-widest text-sm
+                             text-emerald-300 border border-emerald-400/50 bg-emerald-400/10
+                             hover:bg-emerald-400/20">
+                  {N.t('relais_solo_rejouer')}
+                </button>
+              )}
+            </div>
+          ) : undefined}
         />
       </AnimatePresence>
     );
@@ -343,7 +378,7 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
             {e.equipe}
           </span>
           <span className="font-mono text-[10px] text-muted-foreground">
-            {N.t('relais_mon_rang', { n: String(mon) })}
+            {N.t('relais_mon_rang', { n: N.ord(mon) })}
           </span>
         </div>
 
