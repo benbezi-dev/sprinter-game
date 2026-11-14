@@ -215,6 +215,34 @@ export function BoutonTemoin({ role, arme, bras, portee, rate, pars, onTaper }: 
 
 export type FinPasse = { de: number; vers: number; note: number };
 
+/**
+ * La raison d'une elimination, dite au joueur dans sa langue.
+ *
+ * La salle la nomme en francais sans accents (worker/src/relais-course.js) :
+ * l'afficher telle quelle donnait « temoin donne avant la zone » a un joueur
+ * anglophone. Une raison inconnue passe telle quelle plutot que de disparaitre.
+ */
+const RAISONS: Record<string, string> = {
+  'faux depart': 'relais_r_faux_depart',
+  'sortie de zone sans le temoin': 'relais_r_sortie_zone',
+  'le temoin a depasse la zone': 'relais_r_depasse_zone',
+  'temoin passe hors de la zone': 'relais_r_hors_zone',
+  'temoin donne avant la zone': 'relais_r_avant_zone',
+  'vitesse impossible': 'relais_r_vitesse',
+  'arrivee impossible': 'relais_r_arrivee',
+  'temps depasse': 'relais_r_temps',
+};
+
+/** « au 2e relais : témoin donné avant la zone ». */
+export function pourquoiElimine(el: { raison: string; relais: number | null }): string {
+  const { N } = SprinterApp;
+  const cle = RAISONS[el.raison];
+  return N.t('relais_elimine_pourquoi', {
+    r: el.relais ? N.ord(el.relais) : '?',
+    c: cle ? N.t(cle) : el.raison,
+  });
+}
+
 export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfants }: {
   titre: string;
   rate: boolean;

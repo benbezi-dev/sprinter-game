@@ -202,7 +202,13 @@ export class CourseEquipe {
     }
     if (this.porteur < TAILLE && relais === this.porteur) {
       const z = zoneDe(this.porteur + 1);
-      if (c.d > z.fin) {
+      // AU BOUT DE LA ZONE, ET NON AU-DELA. Le jeu arrete le porteur pile sur
+      // la fin de sa zone (`relaisFin`, sprinter-core.js) : il n'en depasse
+      // jamais le bout. Avec `>` seul, un porteur qui ne donnait pas le
+      // temoin restait plante a 130 m sans etre elimine, et la course ne
+      // finissait plus. Le temoin non donne dans la zone est hors zone, et
+      // l'equipe est eliminee (l'auteur, 14/11/2026).
+      if (c.d >= z.fin) {
         return { elimine: this.eliminer('le temoin a depasse la zone', relais) };
       }
     }

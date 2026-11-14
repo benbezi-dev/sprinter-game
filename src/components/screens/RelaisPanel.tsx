@@ -5,6 +5,7 @@ import { DefierEquipes } from './DefierEquipes';
 import { surCourrier } from '@/game/boite';
 import { ChoixCoureurs } from './ChoixCoureurs';
 import { entrerSurLaPiste } from '@/game/piste';
+import { recordSolo } from '@/game/salle-relais-solo';
 import { Users, Loader2, Check, X, ArrowUpDown, Trophy, LogOut, Swords, User } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
@@ -238,6 +239,12 @@ function CourirSeul() {
                            : 'border-white/10 bg-black/25 text-muted-foreground hover:text-foreground'}`}>
             <span className="font-black font-display text-sm tracking-wide">{N.t('relais_solo_r' + r)}</span>
             <span className="text-[8px] tracking-wider leading-none opacity-80">{N.t('relais_solo_s' + r)}</span>
+            {/* Le record perso de la place, quand il existe : ce qu'on vient battre. */}
+            {recordSolo(r) != null && (
+              <span className="font-mono text-[9px] tabular-nums leading-none text-foreground/80">
+                {(recordSolo(r)! / 1000).toFixed(2)}
+              </span>
+            )}
           </button>
         ))}
       </div>
