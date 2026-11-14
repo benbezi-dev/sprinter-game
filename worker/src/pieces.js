@@ -2,7 +2,8 @@
  * LES PIECES — le porte-monnaie du joueur, tenu par le serveur.
  *
  * On gagne des pieces en gagnant des duels, en reussissant l'Objectif du
- * jour et en remportant un titre de championnat ; on les depense pour un
+ * jour, en gagnant les etapes de la carriere (doublees par une pub au sacre)
+ * et en remportant un titre de championnat ; on les depense pour un
  * « Continue » en carriere, qui fait repartir de l'etape perdue au lieu de
  * l'etape 1.
  *
@@ -52,6 +53,33 @@ export const BAREME = {
  * a l'etape 1 comme avant. Pour l'equilibrage, c'est la seule ligne a toucher.
  */
 export const COUTS_CONTINUE = [10, 20, 40];
+
+/**
+ * Ce que rapporte une etape de carriere GAGNEE, dans l'ordre des six etapes :
+ * tours 1 a 5, puis la finale ZEZE. 27 pieces pour une carriere complete,
+ * 54 si le joueur regarde la pub du sacre (voir doublerCarriere).
+ *
+ * A CHAQUE VICTOIRE, PAS A LA PREMIERE SEULEMENT, et il faut gagner l'etape :
+ * se qualifier ne suffit pas. Une etape ne paie qu'une fois par carriere
+ * (reference `parcours:course:etape`).
+ *
+ * POURQUOI SI PEU (decision du 14/11/2026). Les pieces et la pub rachetent
+ * la meme chose : une defaite. Un bareme genereux (75 par carriere) payait
+ * sept Continue d'un coup et dispensait les bons joueurs de toute pub. Ici une
+ * carriere paie a peu pres un Continue, et la pub du sacre en double le gain :
+ * la pub y gagne une vue au lieu d'en perdre.
+ */
+export const GAINS_CARRIERE = [1, 1, 2, 3, 5, 15];
+
+/**
+ * Plafond quotidien, par joueur (jour UTC), des pieces de carriere — et, a
+ * part, autant pour leur doublement par la pub.
+ *
+ * La victoire est declaree par le jeu, la pub regardee aussi, et un
+ * identifiant de carriere se tire a volonte : le plafond borne ce qu'on
+ * gagnerait a les inventer. 50, c'est un peu moins de deux carrieres.
+ */
+export const PLAFOND_CARRIERE_PAR_JOUR = 50;
 
 /**
  * Plafond quotidien des pieces de duel, par joueur (jour UTC).
@@ -117,15 +145,20 @@ export async function crediter(db, nom, motif, ref, montant, { deviceId = null, 
     await ensurePieces(db);
     const maintenant = Date.now();
 
-    // Le plafond des duels se lit AVANT d'ecrire : depasse d'une piece par
-    // deux courses simultanees, il resterait un plafond.
-    if (motif === 'duel') {
+    // Les plafonds se lisent AVANT d'ecrire : depasse d'une piece par deux
+    // courses simultanees, il resterait un plafond.
+    const plafond = motif === 'duel' ? PLAFOND_DUELS_PAR_JOUR
+      : (motif === 'carriere' || motif === 'carriere_x2') ? PLAFOND_CARRIERE_PAR_JOUR : null;
+    if (plafond != null) {
       const minuit = new Date(maintenant); minuit.setUTCHours(0, 0, 0, 0);
       const r = await db.prepare(
         `SELECT COALESCE(SUM(montant), 0) AS n FROM pieces_mouvements
-          WHERE name_key = ? AND motif = 'duel' AND cree_le >= ?`
-      ).bind(nameKey, minuit.getTime()).first();
-      if (r && r.n >= PLAFOND_DUELS_PAR_JOUR) return 0;
+          WHERE name_key = ? AND motif = ? AND cree_le >= ?`
+      ).bind(nameKey, motif, minuit.getTime()).first();
+      const deja = (r && r.n) || 0;
+      if (deja >= plafond) return 0;
+      // Le dernier gain du jour paie ce qui reste sous le plafond, pas plus.
+      montant = Math.min(montant, plafond - deja);
     }
 
     const condition = deviceId
@@ -146,6 +179,39 @@ export async function crediter(db, nom, motif, ref, montant, { deviceId = null, 
 export function creditDuTitre(echelon) {
   const motif = 'titre_' + echelon;
   return BAREME[motif] ? { motif, montant: BAREME[motif] } : null;
+}
+
+/** Ce que rapporte l'etape `etape` (0 a 5) gagnee, ou null si elle n'existe pas. */
+export function gainDeLEtape(etape) {
+  return Number.isInteger(etape) && etape >= 0 && etape < GAINS_CARRIERE.length
+    ? GAINS_CARRIERE[etape] : null;
+}
+
+/**
+ * LE DOUBLEMENT PAR LA PUB, au sacre d'une carriere : credite une seconde
+ * fois ce que les six etapes de CETTE carriere ont reellement rapporte (lu
+ * dans le journal, jamais dans la requete). Une fois par carriere.
+ *
+ * Exige que la finale ait paye : sans ligne pour l'etape ZEZE, la carriere
+ * n'est pas gagnee (ou le plafond du jour etait deja atteint, et il n'y a
+ * rien a doubler).
+ *
+ * Rend { ok, credite } ; `raison` dit pourquoi rien n'a ete credite.
+ */
+export async function doublerCarriere(db, nom, parcours, course, { deviceId = null, test = false } = {}) {
+  const nameKey = cleDe(nom);
+  if (!nameKey) return { ok: false, raison: 'nom', credite: 0 };
+  await ensurePieces(db);
+  const refs = GAINS_CARRIERE.map((_, e) => `${parcours}:${course}:${e}`);
+  const r = await db.prepare(
+    `SELECT COALESCE(SUM(montant), 0) AS total,
+            SUM(CASE WHEN ref = ? THEN 1 ELSE 0 END) AS finale
+       FROM pieces_mouvements
+      WHERE name_key = ? AND motif = 'carriere' AND ref IN (${refs.map(() => '?').join(',')})`
+  ).bind(refs[refs.length - 1], nameKey, ...refs).first();
+  if (!r || !r.finale) return { ok: false, raison: 'inachevee', credite: 0 };
+  const credite = await crediter(db, nameKey, 'carriere_x2', `${parcours}:${course}`, r.total, { deviceId, test });
+  return { ok: true, credite };
 }
 
 /** Combien de Continue cette carriere a deja achetes. */

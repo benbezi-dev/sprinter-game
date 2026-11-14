@@ -17,6 +17,7 @@ export { Presence } from './presence.js';
 import { sonner } from './boite.js';
 import {
   BAREME as PIECES, COUTS_CONTINUE, PLAFOND_DUELS_PAR_JOUR,
+  GAINS_CARRIERE, PLAFOND_CARRIERE_PAR_JOUR, gainDeLEtape, doublerCarriere,
   crediter as crediterPieces, soldeDe, acheterContinue, piecesOuvertes,
 } from './pieces.js';
 import { identifiantsTurn } from './turn.js';
@@ -1650,7 +1651,40 @@ async function servir(request, env, ctx, porteur) {
         bareme: PIECES,
         couts_continue: COUTS_CONTINUE,
         plafond_duels_par_jour: PLAFOND_DUELS_PAR_JOUR,
+        gains_carriere: GAINS_CARRIERE,
+        plafond_carriere_par_jour: PLAFOND_CARRIERE_PAR_JOUR,
       });
+    }
+
+    // LA CARRIERE : une etape gagnee (/pieces/etape), puis le doublement par
+    // la pub du sacre (/pieces/doubler). Le montant se lit ici, jamais dans la
+    // requete. Il faut un nom reserve ET cet appareil lie a lui (`crediter`
+    // le verifie quand on lui passe deviceId) ; sinon rien n'est credite.
+    if ((url.pathname === '/pieces/etape' || url.pathname === '/pieces/doubler')
+        && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const nom = cleanName(body?.nom || '').trim();
+      const cle = nom.toLowerCase();
+      const deviceId = body?.device_id;
+      const parcours = String(body?.parcours || '');
+      const course = String(body?.course || '');
+      if (!cle) return json({ error: 'nom requis' }, 400);
+      if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!/^[a-zA-Z0-9-]{8,64}$/.test(parcours)) return json({ error: 'parcours invalide' }, 400);
+      if (!/^[a-zA-Z0-9_-]{0,24}$/.test(course)) return json({ error: 'course invalide' }, 400);
+      await ensurePlayerTables(env.DB);
+      const opts = { deviceId, test: canal.test };
+      if (url.pathname === '/pieces/doubler') {
+        const r = await doublerCarriere(env.DB, cle, parcours, course, opts);
+        return json({ ...r, solde: await soldeDe(env.DB, cle) });
+      }
+      const etape = Number(body?.etape);
+      const gain = gainDeLEtape(etape);
+      if (gain == null) return json({ error: 'etape invalide' }, 400);
+      const credite = await crediterPieces(env.DB, cle, 'carriere',
+        `${parcours}:${course}:${etape}`, gain, opts);
+      return json({ ok: true, credite, solde: await soldeDe(env.DB, cle) });
     }
 
     if (url.pathname === '/pieces/continue' && request.method === 'POST') {

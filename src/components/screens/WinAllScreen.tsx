@@ -11,6 +11,7 @@ import { LeaderboardScreen } from './LeaderboardScreen';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
 import { TenirDansLEcran } from '@/components/TenirDansLEcran';
+import { GainsCarriere } from './GainsCarriere';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -159,6 +160,9 @@ export function WinAllScreen() {
               {runRank === 1 ? N.t('best_run') : runRank <= 3 ? N.t('top3_runs') : N.t('top10_runs')}
             </motion.div>
           )}
+
+          {/* Les pieces de la carriere, et leur doublement par une pub */}
+          <GainsCarriere />
 
           {/* Classement mondial TOP 500 */}
           <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-2 md:gap-3">
