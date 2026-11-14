@@ -608,6 +608,7 @@
     relais_spectateur: ['LA COURSE DES AUTRES', 'THE OTHERS ARE RUNNING'],
     relais_porte:    ['PORTE', 'CARRIES'],
     relais_attends_temoin: ['ATTENDS', 'WAIT'],
+    relais_pars:     ['PARS !', 'GO!'],
     relais_prends:   ['PRENDS LE TÉMOIN', 'TAKE THE BATON'],
     relais_donne:    ['DONNE LE TÉMOIN', 'PASS THE BATON'],
     relais_approche: ['RAPPROCHE-TOI', 'GET CLOSER'],

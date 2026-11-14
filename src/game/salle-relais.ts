@@ -80,6 +80,14 @@ export const TAILLE = 4;
 export const ARRIVEE = LEG * TAILLE;
 
 /**
+ * LA MARQUE D'ELAN : a combien de metres derriere sa place le receveur pose
+ * son repere au sol. Quand le porteur l'atteint, le receveur s'elance. Les
+ * relayeurs fictifs du solo partent a cette distance, la piste la dessine
+ * pour chaque receveur, et le bouton du temoin dit « PARS ! » a cet instant.
+ */
+export const ELAN = 8;
+
+/**
  * Ce que l'ecran de course demande a une salle. La salle en ligne et la salle
  * solo (salle-relais-solo.ts, trois relayeurs fictifs) le fournissent toutes
  * les deux.
@@ -97,6 +105,8 @@ export type UneSalleRelais = {
   fauxDepart(): void;
   msCourse(): number;
   fermer(): void;
+  /** Les marques d'elan des receveurs, quand la salle les connait (le solo). */
+  marquesElan?(): { relais: number; d: number }[];
 };
 
 export class SalleRelais {

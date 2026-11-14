@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
-import { SalleRelais, TAILLE, PORTEE, type EtatRelais, type UneSalleRelais } from '@/game/salle-relais';
+import { SalleRelais, TAILLE, PORTEE, ELAN, type EtatRelais, type UneSalleRelais } from '@/game/salle-relais';
 import { SalleRelaisSolo } from '@/game/salle-relais-solo';
 import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
 import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './relais-pieces';
@@ -139,8 +139,14 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
         const mesEquipiers = (etatRef.current?.joueurs || [])
           .filter(j => j.relais !== s.monRelais)
           .map(j => ({ id: j.id, nom: j.nom, relais: j.relais }));
+        // Les marques d'elan : toutes en solo, ou la salle connait chacun ;
+        // en equipe, la mienne seulement — celles des autres ne sont pas
+        // transmises par le serveur.
+        const marquesElan = s.marquesElan
+          ? s.marquesElan()
+          : (s.monRelais > 1 ? [{ relais: s.monRelais, d: s.marque - ELAN }] : []);
         SprinterApp.startRelais({
-          relais: s.monRelais, marque: s.marque, autres: [], equipiers: mesEquipiers,
+          relais: s.monRelais, marque: s.marque, autres: [], equipiers: mesEquipiers, marquesElan,
         });
         SprinterApp.liveDepart(dansMs, departA);
         // Au coup de pistolet, le temoin est dans la main du premier.
@@ -302,6 +308,7 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
             <BoutonTemoin role={jeDonne ? 'donne' : 'recoit'}
                           arme={aPortee}
                           bras={bras} portee={PORTEE} rate={rate}
+                          pars={jeRecois && bras != null && bras <= ELAN}
                           onTaper={() => salle.current?.temoin()} />
           ) : (
             <div className="rounded-xl bg-black/60 backdrop-blur-md border border-white/10

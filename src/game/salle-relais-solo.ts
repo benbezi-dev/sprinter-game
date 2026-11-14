@@ -20,7 +20,7 @@ import {
   CourseEquipe, zoneDe, PORTEE as PORTEE_SERVEUR, TAILLE as TAILLE_SERVEUR, ARRIVEE as ARRIVEE_SERVEUR,
   // @ts-ignore — module JavaScript du worker, sans declaration de types.
 } from '../../worker/src/relais-course.js';
-import { LEG, type EtatRelais, type Ecouteurs, type JoueurRelais, type Zone } from './salle-relais';
+import { LEG, ELAN, type EtatRelais, type Ecouteurs, type JoueurRelais, type Zone } from './salle-relais';
 
 const TAILLE: number = TAILLE_SERVEUR;
 const ARRIVEE: number = ARRIVEE_SERVEUR;
@@ -58,7 +58,6 @@ type Fictif = {
 
 const TAU = 1.0;            // s, constante d'acceleration
 const REACTION_S = 0.16;    // temps de reaction du premier dans les blocs
-const ELAN = 8;             // m : le receveur s'elance quand le porteur est a cette distance
 const MARQUE_FICTIF = 5;    // m dans la zone, ou le receveur fictif attend
 const CONTACT = 1.0;        // m : deux fictifs se passent le temoin a cette distance
 
@@ -248,6 +247,20 @@ export class SalleRelaisSolo {
       const el = this.course.eliminer('faux depart', 1);
       if (el) this.eliminer(el);
     }
+  }
+
+  /**
+   * Ou chaque receveur de l'equipe pose sa marque d'elan : la sienne pour le
+   * joueur (sa place moins ELAN), celles des fictifs a leur place a eux. La
+   * piste les dessine, pour qu'on voie ou chacun partira.
+   */
+  marquesElan(): { relais: number; d: number }[] {
+    const m: { relais: number; d: number }[] = [];
+    for (let r = 2; r <= TAILLE; r++) {
+      const place = r === this.monRelais ? this.marque : zoneDe(r).debut + MARQUE_FICTIF;
+      m.push({ relais: r, d: place - ELAN });
+    }
+    return m;
   }
 
   fermer() { this.arreter(); }
