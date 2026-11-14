@@ -28,7 +28,7 @@ import {
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
-  charger, sauver, semaineSuivante, partirALaCompetition, conclureLaCourse,
+  charger, sauver, semaineSuivante, passerLaSemaine, siLaSemaineATourne, partirALaCompetition, conclureLaCourse,
   chargerCalendrier, jourDeLAthlete, forfait, agir,
   rangerLaCourse, aRouvrir, demanderReouverture, partirAuMeeting,
 } from '@/game/athlete/carriere';
@@ -834,7 +834,7 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
           <span className="w-1 self-stretch rounded-full bg-white/20" />
           <span className="flex-1 text-[10px] font-black tracking-widest text-white/70">{mot('dimanche')} · {leJour ? mot('competition') : mot('repos').toUpperCase()}</span>
         </div>
-        <Bouton className="py-3 mt-1" disabled={leJour || !!ev} onClick={() => changer(() => { soulager(a, Math.max(0, 7 - (a.nuits || 0)) * 6); semaineSuivante(a); a.jour = 0; a.heure = REVEIL; })}>{mot('fin_semaine')}</Bouton>
+        <Bouton className="py-3 mt-1" disabled={leJour || !!ev} onClick={() => changer(() => { passerLaSemaine(a); })}>{mot('fin_semaine')}</Bouton>
       </Carte>
 
       {/* le corps : l'usure, les soins, le certificat (sante.ts) */}
@@ -958,7 +958,9 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
   const ville = useRef<Ville | null>(null);
   const changer = (f: () => void) => { f(); sauver(a); maj(); };
 
-  // la ville : construite une fois, detruite en sortant
+  // la ville : construite une fois, detruite en sortant ; reconstruite si son fichier n'a pas pu etre lu
+  const [essai, setEssai] = useState(0);
+  const [erreurVille, setErreurVille] = useState(false);
   useEffect(() => {
     if (!hote.current) return;
     const v = new Ville(hote.current, {
@@ -969,11 +971,12 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
       surLieu: l => (AMENAGEMENT[l] ? setDedans(l) : setLieu(l)),
       surPosition: p => { a.position = p; },
       surPret: () => setPret(true),
+      surErreur: () => setErreurVille(true),
       surPersonne: id => { setLieu(null); setTel(null); setPersonne(id as Personne); },
     });
     ville.current = v;
     return () => { sauver(a); v.detruire(); ville.current = null; };
-  }, []);
+  }, [essai]);
   useEffect(() => { chargerCalendrier().then(maj); }, []);
 
   const ev = evenement(a.evenement);
@@ -998,7 +1001,10 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
       // un trajet a pied ne mange pas la journee : l'horloge passe au quart pendant la marche ;
       // courir coute : 100 m courus, un point d'energie et un d'hygiene
       const couru = ville.current?.metresCourus() || 0;
+      const s = a.semaine;
       const quoi = avancer(a, ville.current?.enMarche() ? vitesse / 4 : vitesse, couru ? { energie: -couru / 100, hygiene: -couru / 100 } : {});
+      // minuit passe le dimanche : la semaine a tourne (regles.ts, jourSuivant)
+      siLaSemaineATourne(a, s);
       ville.current?.heure(heureDe(a));
       // plus d'energie : on rentre se coucher, comme un Sim qui s'effondre
       if (quoi.includes('epuise')) {
@@ -1061,8 +1067,11 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
             {dans(['TOUT CE QU’ON FAIT ICI', 'EVERYTHING HERE'])}</button>
         </Feuille>
       )}
-      {!pret && <div className="absolute inset-0 flex items-center justify-center bg-[#0A1410] text-white/70 text-sm">
-        {dans(['Val-de-Reuil se dessine…', 'Drawing Val-de-Reuil…'])}</div>}
+      {!pret && <div className="absolute inset-0 flex flex-col gap-3 items-center justify-center bg-[#0A1410] text-white/70 text-sm">
+        {erreurVille ? <>
+          {dans(['Impossible de charger la ville. Vérifie ta connexion.', 'Couldn’t load the town. Check your connection.'])}
+          <Bouton plein onClick={() => { setErreurVille(false); setEssai(n => n + 1); }}>{dans(['RÉESSAYER', 'TRY AGAIN'])}</Bouton>
+        </> : dans(['Val-de-Reuil se dessine…', 'Drawing Val-de-Reuil…'])}</div>}
 
       {/* le bandeau du haut : qui, quand, combien */}
       <div className="absolute top-0 inset-x-0 px-[max(env(safe-area-inset-left),0.5rem)] pr-[max(env(safe-area-inset-right),0.5rem)] pt-[max(env(safe-area-inset-top),0.5rem)] pointer-events-none">

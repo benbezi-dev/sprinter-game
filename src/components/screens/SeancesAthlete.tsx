@@ -825,7 +825,11 @@ function SeanceDessinee({ jour, a, onFin, ex }: { jour: Jour; a: Athlete; onFin:
   const scene = useRef<EtatScene>(nouvelEtat(look.current, decor));
   const [phase, setPhase] = useState<'pret' | 'jeu' | 'fini'>('pret');
   const [res, setRes] = useState<{ score: number; r: ResultatSeance | null } | null>(null);
+  // commencee puis quittee : la seance compte, a zero (sinon on la rejouait a volonte, sans fatigue ni usure)
+  const enCours = useRef(false);
+  useEffect(() => () => { if (enCours.current) { enCours.current = false; faireLaSeance(a, jour, 0, Math.random, bonusDeSeance(a)); sauverAthlete(a); } }, []);
   const finir = (s: number) => {
+    enCours.current = false;
     const score = borne(s);
     // le conseil du coach, la seance a deux, la confiance du coach : la seance rend plus
     setRes({ score, r: faireLaSeance(a, jour, score, Math.random, bonusDeSeance(a)) });
@@ -865,6 +869,7 @@ function SeanceDessinee({ jour, a, onFin, ex }: { jour: Jour; a: Athlete; onFin:
                   const c = scene.current.corps;
                   c.debout = 0; c.enBloc = 0;
                   if (ex !== 'muscu' && ex !== 'gainage') c.posture = { w: 0 };
+                  enCours.current = true;
                   setPhase('jeu');
                 }}
                         className="rounded-2xl px-12 py-4 text-xl font-black tracking-widest text-black shadow-2xl" style={{ background: VERT }}>
@@ -918,6 +923,8 @@ export function DepartsEnPiste({ a, jour, onFin }: { a: Athlete; jour: Jour; onF
   const [res, setRes] = useState<{ score: number; r: ResultatSeance | null } | null>(null);
   const scores = useRef<number[]>([]);
   const traite = useRef(false);
+  // la seance a ete comptee (au bilan ou en quittant) : une fois seulement
+  const traite2 = useRef(false);
 
   const lancer = () => { traite.current = false; setDernier(null); demarrerSequence({ geste: 'depart', tempo: 1, demo: false }); };
   useEffect(() => {
@@ -938,6 +945,7 @@ export function DepartsEnPiste({ a, jour, onFin }: { a: Athlete; jour: Jour; onF
           setEssai(n);
           if (n < ESSAIS) { lancer(); return; }
           figerLaPiste();
+          traite2.current = true;
           const score = scores.current.reduce((x, y) => x + y, 0) / ESSAIS;
           setRes({ score, r: faireLaSeance(a, jour, score, Math.random, bonusDeSeance(a)) });
           sauverAthlete(a);
@@ -947,7 +955,16 @@ export function DepartsEnPiste({ a, jour, onFin }: { a: Athlete; jour: Jour; onF
     };
     raf = requestAnimationFrame(pas);
     // la piste rendue en partant, et le corps de l'athlete retire : rien ne doit le suivre ailleurs
-    return () => { cancelAnimationFrame(raf); clearTimeout(minuteur); rangerLeTuto(); G.reglagesJoueur = null; };
+    return () => {
+      cancelAnimationFrame(raf); clearTimeout(minuteur); rangerLeTuto(); G.reglagesJoueur = null;
+      // quittee en route (Pause > Accueil) : la seance compte, les essais manquants a zero
+      const n = scores.current.length;
+      if (n > 0 && !traite2.current) {
+        traite2.current = true;
+        faireLaSeance(a, jour, scores.current.reduce((x, y) => x + y, 0) / ESSAIS, Math.random, bonusDeSeance(a));
+        sauverAthlete(a);
+      }
+    };
   }, []);
 
   return (

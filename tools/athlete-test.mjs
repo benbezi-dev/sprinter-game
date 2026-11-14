@@ -481,5 +481,42 @@ titre('la garde-robe');
   ok('on part avec une tenue pour chaque moment', ['ville', 'entrainement', 'competition', 'nuit'].every(m => R.GARDE_ROBE_DE_DEPART.possede.includes(R.GARDE_ROBE_DE_DEPART.porte[m])));
 }
 
+titre('la semaine, la nuit, le travail (lot 1, 14/11)');
+{
+  // minuit passe le dimanche : la semaine tourne quand meme (loyer, seances remises a zero)
+  const a = R.nouvelAthlete('S', 'modeste', 'polyvalent', null, undefined, 19);
+  a.jour = R.DIMANCHE; a.heure = 23 * 60 + 30; a.faites = ['lundi']; a.prochaine = a.semaine + 5;
+  const s0 = a.semaine, argent0 = a.argent;
+  R.avancer(a, 60);
+  ok('minuit le dimanche : la semaine tourne', a.semaine === s0 + 1 && R.jourDe(a) === 0, `semaine ${a.semaine}, jour ${R.jourDe(a)}`);
+  ok('… le loyer tombe', a.argent === argent0 - R.LOYER, `${argent0} → ${a.argent}`);
+  ok('… et le lundi n’est plus bloque', a.faites.length === 0);
+  // competition manquee a minuit : forfait, une fois
+  const b = R.nouvelAthlete('F', 'aisee', 'polyvalent', null);
+  b.jour = R.DIMANCHE; b.heure = 23 * 60; b.prochaine = b.semaine;
+  R.avancer(b, 90);
+  ok('competition non courue a minuit : forfait', b.journal.some(l => /^Forfait/.test(l.fr)) && b.prochaine > b.semaine);
+  // se coucher apres minuit
+  const c = R.nouvelAthlete('N', 'aisee', 'polyvalent', null);
+  c.jour = 2; c.heure = 60;
+  ok('dormir a 1 h du matin est permis', R.actionPossible(c, 'dormir') === null, R.actionPossible(c, 'dormir'));
+  R.faireUneAction(c, 'dormir');
+  ok('… reveil a 7 h le meme jour', R.heureDe(c) === R.REVEIL && R.jourDe(c) === 2);
+  c.heure = 15 * 60;
+  ok('dormir a 15 h reste refuse', R.actionPossible(c, 'dormir') === 'heure');
+  // dormir le dimanche soir tourne la semaine une seule fois
+  const d = R.nouvelAthlete('D', 'aisee', 'polyvalent', null);
+  d.jour = R.DIMANCHE; d.heure = 22 * 60; d.prochaine = d.semaine + 5;
+  const sd = d.semaine; R.faireUneAction(d, 'dormir');
+  ok('dormir le dimanche soir : une semaine de plus, lundi', d.semaine === sd + 1 && R.jourDe(d) === 0);
+  // le samedi n'est plus obligatoire : trois seances suffisent pour monter un peu l'endurance
+  const g = R.gainDeSeance(R.nouvelAthlete('V', 'aisee', 'polyvalent', null), 'vendredi', 0.8);
+  ok('le vendredi fait aussi l’endurance', (g.endurance || 0) > 0, JSON.stringify(g));
+  // radio apres guerison : refusee
+  const h = R.nouvelAthlete('H', 'aisee', 'polyvalent', null);
+  h.blessure = 0; h.blessureType = 'cheville'; h.diagnostic = { examen: false };
+  ok('radio refusee une fois gueri', R.soinPossible(h, 'radio') !== null);
+}
+
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
 process.exit(e ? 1 : 0);

@@ -66,6 +66,8 @@ export function soinPossible(a: Athlete, s: Soin): Texte | null {
   if (a.argent < resteACharge(a, s)) return ['Pas assez d’argent', 'Not enough money'];
   if (s === 'osteo' && a.osteo) return ['Déjà vu cette semaine', 'Already seen this week'];
   if (s === 'radio' || s === 'irm') {
+    // gueri entre-temps (le kine) : l'examen n'a plus d'objet, et il recreait une semaine d'arret
+    if (a.blessure <= 0) return ['Plus de blessure', 'No injury left'];
     const d = a.diagnostic;
     if (!d || !a.blessureType || EXAMEN[a.blessureType] !== s) return ['Sur prescription du médecin', 'Needs a doctor’s prescription'];
     if (d.examen) return ['Déjà fait', 'Already done'];

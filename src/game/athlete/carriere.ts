@@ -18,6 +18,7 @@ import {
   faireUneAction, avancer, heureDe, DIMANCHE, payer, tirerLeCorps, BLESSURES,
   type RendezVousReel, type Tour, apresLeTour, HEURE_DU_TOUR, SEMAINES_AVANT_FRANCE, rendezVousAvantFrance,
   conclureLeMeeting, meetingDe, DEPLACEMENT_MEETING, type Course, enSalle, libelleEpreuve,
+  etape, SALAIRE, soulager, jourDe, REVEIL, BESOINS_PLEINS,
 } from './regles';
 import { tirerLaSemaine } from './recit';
 import { MOTS } from './mots';
@@ -60,20 +61,52 @@ export function sauver(a: Athlete | null) {
 export function agir(a: Athlete, id: string): null | string {
   const s = a.semaine;
   const r = faireUneAction(a, id);
-  if (!r && a.semaine !== s) {
-    laSemainePasse(a);
-    if (!a.evenement) a.evenement = tirerLaSemaine(a, Math.random);
-  }
+  if (!r) siLaSemaineATourne(a, s);
   // au reveil, le telephone vibre : le coach, Ines, la famille (telephone.ts)
   if (!r && id === 'dormir') messagesDuReveil(a);
   sauver(a);
   return r;
 }
 
+/**
+ * Ce qui suit le passage d'une semaine, d'ou qu'il vienne (le coucher du
+ * dimanche, minuit passe en ville, le tableau) : les relations retombent,
+ * les parents redonnent, la vie du club tire son evenement. `avant` : la
+ * semaine d'avant l'action.
+ */
+export function siLaSemaineATourne(a: Athlete, avant: number, alea: () => number = Math.random) {
+  if (a.semaine === avant) return;
+  laSemainePasse(a);
+  if (!a.evenement) a.evenement = tirerLaSemaine(a, alea);
+}
+
 /** Tourner la semaine, tirer son evenement, et ranger. */
 export function semaineSuivante(a: Athlete, alea: () => number = Math.random) {
+  const s = a.semaine;
   finirLaSemaine(a);
-  if (!a.evenement) a.evenement = tirerLaSemaine(a, alea);
+  siLaSemaineATourne(a, s, alea);
+  sauver(a);
+}
+
+/**
+ * « Fin de semaine » au tableau : la semaine se passe sans la ville. Ce que la
+ * ville aurait donne est donne ici — les nuits pas dormies (usure, fatigue,
+ * besoins), et pour un adulte les journees de travail qui restaient — puis la
+ * semaine tourne et l'on se reveille lundi.
+ */
+export function passerLaSemaine(a: Athlete) {
+  const nuits = Math.max(0, 7 - (a.nuits || 0));
+  soulager(a, nuits * 6);
+  // une nuit de 8 h en ville : -0,6 de fatigue par heure (dormir, regles.ts)
+  a.fatigue = Math.max(0, a.fatigue - nuits * 8 * 0.6);
+  a.besoins = { ...BESOINS_PLEINS };
+  if (etape(a) === 'adulte') {
+    // du jour ou l'on est jusqu'au vendredi ; la journee deja travaillee ne se repaie pas
+    const j = jourDe(a), restants = j < 5 ? 5 - j - (a.cours ? 1 : 0) : 0;
+    if (restants > 0) payer(a, SALAIRE * restants, 'Salaire', 'Wages');
+  }
+  semaineSuivante(a);
+  a.jour = 0; a.heure = REVEIL; a.cours = false;
   sauver(a);
 }
 
@@ -141,6 +174,11 @@ export function demanderReouverture() { rouvrir = true; }
 export function partirALaCompetition(a: Athlete, epreuve: Epreuve, tour?: 'demie' | 'finale'): boolean {
   if (!CARRIERE_ATHLETE_OUVERTE) return false;
   if (a.blessure > 0) return false;
+  // qualifie ce dimanche puis sorti avant le tour suivant : on le reprend, sans repayer ni recourir la serie
+  const reprise = !tour && a.tourAttendu && a.tourAttendu.semaine === a.semaine ? a.tourAttendu : null;
+  if (reprise) { tour = reprise.tour; epreuve = reprise.epreuve; }
+  // le tour part : quitte en route, c'est un forfait (rangerLaCourse), pas une reprise
+  delete a.tourAttendu;
   if (!tour) {
     const cout = coutDuDeplacement(a, a.niveau);
     if (a.argent < cout || !jourDeLAthlete(a).jour || certificatRequis(a)) return false;
@@ -225,6 +263,7 @@ export function conclureLaCourse(a: Athlete): Resultat | null {
              `${nen}: P${place} in ${moi!.toFixed(2)} s — through to ${ven}${suite.auTemps ? ' on time' : ''}.`);
     // le tour suivant a son heure, celle du dimanche du direct
     avancer(a, Math.max(30, HEURE_DU_TOUR[suite.suivant] - heureDe(a)), { energie: -10 });
+    if (!blesse) a.tourAttendu = { epreuve: enCourse.epreuve as Epreuve, tour: suite.suivant as 'demie' | 'finale', semaine: a.semaine };
     sauver(a);
     enCourse = null; concluPour = G.runners; dernier = r;
     return r;

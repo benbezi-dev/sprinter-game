@@ -61,7 +61,10 @@ export type Donnees = {
 let donnees: Promise<Donnees> | null = null;
 export function chargerVille(): Promise<Donnees> {
   const base = (import.meta as any).env?.BASE_URL || '/';
-  return (donnees ||= fetch(base + 'athlete/val-de-reuil.json').then(r => r.json()));
+  // un echec n'est pas garde : sinon une coupure reseau laissait la ville vide toute la visite
+  return (donnees ||= fetch(base + 'athlete/val-de-reuil.json')
+    .then(r => { if (!r.ok) throw new Error('ville ' + r.status); return r.json(); })
+    .catch(e => { donnees = null; throw e; }));
 }
 
 /* ----------------------------------------------------------------- les lieux */
@@ -661,6 +664,8 @@ type Options = {
   surPosition?: (p: P2) => void;
   /** La ville est prete (le fichier lu, la scene construite). */
   surPret?: () => void;
+  /** Le fichier de la ville n'a pas pu etre lu (reseau) : proposer de reessayer. */
+  surErreur?: () => void;
   /** Un adulte : son appartement a la place de la maison, ses parents chez eux. */
   adulte?: boolean;
   /** On a touche quelqu'un (gens.ts). */
@@ -712,6 +717,7 @@ export class Ville {
   private dernierAppui = 0;
   private arrete = false;
   private enPause = false;
+  private construite = false;
   private lent = 0;
   private pointeurs = new Map<number, { x: number; y: number }>();
   private pince = 0;
@@ -762,9 +768,10 @@ export class Ville {
     chargerVille().then((d: Donnees) => {
       if (this.arrete) return;
       this.construire(d);
+      this.construite = true;
       this.o.surPret?.();
-      this.id = requestAnimationFrame(this.boucle);
-    });
+      if (!this.enPause) this.id = requestAnimationFrame(this.boucle);
+    }, () => { if (!this.arrete) this.o.surErreur?.(); });
   }
 
   detruire() {
@@ -784,7 +791,17 @@ export class Ville {
   }
 
   habiller(look: any) { this.moi?.habiller(look); }
-  pause(oui: boolean) { this.enPause = oui; if (oui && this.moi) { this.moi.route = []; this.touches.clear(); } }
+  /**
+   * Figer la ville (un lieu, une piece, le telephone, une seance par-dessus) :
+   * plus d'entrees, et plus de rendu — la boucle s'arrete, sinon une piece
+   * ouverte faisait deux rendus 3D par image. La derniere image reste a l'ecran.
+   */
+  pause(oui: boolean) {
+    this.enPause = oui;
+    if (oui && this.moi) { this.moi.route = []; this.touches.clear(); }
+    if (oui) { cancelAnimationFrame(this.id); this.id = 0; }
+    else if (!this.id && this.construite && !this.arrete) { this.dernier = 0; this.id = requestAnimationFrame(this.boucle); }
+  }
   tourner(sens: 1 | -1) { this.azimutVise += sens * Math.PI / 2; }
   /** La camera active : la vue de dessus, ou derriere le joueur. */
   private get cam(): THREE.Camera { return this.vue === 'derriere' ? this.dos : this.camera; }
@@ -1220,6 +1237,8 @@ export class Ville {
     this.camera.top = vue / asp / 2; this.camera.bottom = -vue / asp / 2;
     this.camera.updateProjectionMatrix();
     this.dos.aspect = asp; this.dos.updateProjectionMatrix();
+    // figee, la boucle ne tourne pas : redessiner une fois a la nouvelle taille
+    if (this.enPause && this.construite) this.rendu.render(this.scene, this.cam);
   };
 
   private solSous(e: { clientX: number; clientY: number }): THREE.Vector3 | null {
@@ -1406,7 +1425,7 @@ export class Ville {
       this.rendu.shadowMap.enabled = false;
       this.scene.traverse(o => { const m = o as THREE.Mesh; if (m.material) (Array.isArray(m.material) ? m.material : [m.material]).forEach(x => (x.needsUpdate = true)); });
     }
-    this.id = requestAnimationFrame(this.boucle);
+    this.id = this.enPause ? 0 : requestAnimationFrame(this.boucle);
   };
 
   private lesEtiquettes() {

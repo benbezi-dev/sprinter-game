@@ -136,6 +136,8 @@ export type Athlete = {
   position?: [number, number];
   /** Le dernier vrai championnat (id d'edition) couru ou declare forfait : on ne le court qu'une fois. */
   rendezVous?: string | null;
+  /** Qualifie pour la demie ou la finale de ce dimanche : on la reprend sans repayer (carriere.ts). */
+  tourAttendu?: { epreuve: Epreuve; tour: 'demie' | 'finale'; semaine: number };
   /** L'evenement qui attend une reponse, ou null. */
   evenement: string | null;
   vus: string[];
@@ -150,7 +152,8 @@ export type Athlete = {
 export const SEANCES: Record<Jour, { stat: Stat; secondaire: Stat; fatigue: number }> = {
   lundi:    { stat: 'vitesse',   secondaire: 'technique', fatigue: 18 },
   mercredi: { stat: 'force',     secondaire: 'vitesse',   fatigue: 22 },
-  vendredi: { stat: 'technique', secondaire: 'force',     fatigue: 14 },
+  // l'endurance aussi le vendredi (le virage) : sans quoi le samedi, un bonus, devenait obligatoire pour monter
+  vendredi: { stat: 'technique', secondaire: 'endurance', fatigue: 14 },
   samedi:   { stat: 'endurance', secondaire: 'force',     fatigue: 20 },
 };
 
@@ -796,6 +799,7 @@ export function finirLaSemaine(a: Athlete) {
   a.boulots = [];
   a.kine = false;
   a.footing = false;
+  delete a.tourAttendu;
 }
 
 /* ------------------------------------------------------------ la journee */
@@ -846,12 +850,27 @@ export function avancer(a: Athlete, minutes: number, effets: Partial<Record<Beso
     else noter(a, e === 'lycee' ? 'Absent au lycée : la vie scolaire a appelé tes parents.' : 'Absent au collège : le CPE a appelé à la maison.', e === 'lycee' ? 'Missed school: the office called your parents.' : 'Missed school: the office called home.');
     out.push('absence');
   }
-  while (h >= 24 * 60) { h -= 24 * 60; a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
+  while (h >= 24 * 60) { h -= 24 * 60; jourSuivant(a); }
   a.heure = h;
   if (b.energie <= 0) out.push('epuise');
   // un ventre vide et une tete fatiguee pesent sur le moral
   if (b.faim < 15 || b.energie < 15) a.moral = borne(a.moral - minutes / 60, 0, 100);
   return out;
+}
+
+/**
+ * Passer au jour suivant (minuit, ou le reveil d'une nuit commencee avant
+ * minuit). Apres le dimanche, la semaine tourne — meme si l'on veille ou si
+ * l'on s'effondre apres minuit : sinon le loyer sautait et le lundi restait
+ * bloque. Une competition non courue devient un forfait.
+ */
+function jourSuivant(a: Athlete) {
+  if (jourDe(a) === DIMANCHE) {
+    if (jourDeCompetition(a)) declarerForfait(a);
+    finirLaSemaine(a);
+  }
+  a.jour = (jourDe(a) + 1) % 7;
+  a.cours = false;
 }
 
 /** La fenetre d'entrainement : apres les cours en semaine, en journee le samedi. */
@@ -872,12 +891,13 @@ export type Action = {
   effets: Partial<Record<Besoin, number>>;
   moral?: number;
   /** Quand c'est possible : [debut, fin] en minutes, et en semaine seulement ? */
+  /** Debut et fin en minutes ; un debut apres la fin passe minuit. */
   quand?: [number, number];
   semaine?: boolean;
 };
 
 export const ACTIONS: Action[] = [
-  { id: 'dormir', lieu: 'maison', duree: 'nuit', effets: {}, quand: [20 * 60, 24 * 60 - 1] },
+  { id: 'dormir', lieu: 'maison', duree: 'nuit', effets: {}, quand: [20 * 60, REVEIL - 30] },
   { id: 'sieste', lieu: 'maison', duree: 60, effets: { energie: 16 } },
   { id: 'manger', lieu: 'maison', duree: 30, effets: { faim: 60, social: 6 } },
   { id: 'douche', lieu: 'maison', duree: 15, effets: { hygiene: 85 } },
@@ -905,7 +925,8 @@ export function actionPossible(a: Athlete, id: string): null | 'heure' | 'argent
   if (x.semaine && !enSemaine(a)) return 'week-end';
   if (x.duree === 'cours' && a.cours) return 'fait';
   const h = heureDe(a);
-  if (x.quand && (h < x.quand[0] || h > x.quand[1])) return 'heure';
+  // une fenetre qui passe minuit (dormir : 20 h – 6 h 30) a son debut apres sa fin
+  if (x.quand && (x.quand[0] <= x.quand[1] ? h < x.quand[0] || h > x.quand[1] : h < x.quand[0] && h > x.quand[1])) return 'heure';
   if (x.cout && a.argent < x.cout) return 'argent';
   return null;
 }
@@ -940,7 +961,6 @@ export function faireUneAction(a: Athlete, id: string): null | string {
 export function dormir(a: Athlete) {
   const b = besoinsDe(a), h = heureDe(a);
   const duree = h <= REVEIL ? REVEIL - h : 24 * 60 - h + REVEIL;
-  const dimanche = jourDe(a) === DIMANCHE && h > REVEIL;
   // la nuit : la faim baisse doucement, l'energie remonte, les muscles recuperent
   b.energie = borne(b.energie + duree / 60 * 12.5, 0, 100);
   b.faim = borne(b.faim - duree / 60 * 2.5, 0, 100);
@@ -949,15 +969,11 @@ export function dormir(a: Athlete) {
   // la nuit repare : 4 points d'usure par zone, mieux apres 8 h, moins sous 6 h
   soulager(a, 4 * (duree >= 8 * 60 ? 1.5 : duree < 6 * 60 ? 0.5 : 1));
   if (duree < 7 * 60) a.moral = borne(a.moral - 4, 0, 100);
-  if (h > REVEIL) { a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
-  a.faitAujourdhui = [];
+  // couche avant minuit : le jour change au reveil (et la semaine apres le dimanche) ; apres minuit, c'est deja fait
   a.nuits = (a.nuits || 0) + 1;
+  if (h > REVEIL) jourSuivant(a);
+  a.faitAujourdhui = [];
   a.heure = REVEIL;
-  // le dimanche soir, la semaine tourne ; une competition manquee est un forfait
-  if (dimanche) {
-    if (jourDeCompetition(a)) declarerForfait(a);
-    finirLaSemaine(a);
-  }
 }
 
 /* ------------------------------------------------------------ le corps */
