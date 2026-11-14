@@ -2656,7 +2656,7 @@ import { sponsorDeLaCourse } from './panneaux';
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.etiquette = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
-    G.runId = nouveauParcours(); G.runContinues = 0; G.runPubs = 0;
+    G.runId = nouveauParcours(); G.runContinues = 0; G.runPubs = 0; G.runPieces = 0;
     startLevel(0);
   }
   // LA TOUTE PREMIERE COURSE PART SANS CINEMATIQUE (game/premiers-pas.ts) : un
@@ -3915,6 +3915,13 @@ import { sponsorDeLaCourse } from './panneaux';
       G.runTraces.push(G.recTrace || []);
       G.runTime += G.player.finishTime;
       G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey] || 0, G.levelIdx + 1);
+      // CHAQUE ETAPE GAGNEE RAPPORTE DES PIECES (1, 1, 2, 3, 5, puis 15 pour
+      // les ZEZE — le bareme vit sur le serveur, worker/src/pieces.js). Une
+      // carriere seulement, pas un rejeu. Le crochet ne doit rien casser.
+      if (G.mode === 'campaign' && !G.rejeu && G.onEtapeGagnee && G.runId
+          && G.levelIdx < NB_ETAPES) {
+        try { G.onEtapeGagnee(G.runId, String(G.raceKey), G.levelIdx); } catch (e) { /* pieces perdues, course intacte */ }
+      }
       if (G.levelIdx + 1 >= NB_ETAPES) {
         // Une carriere reprise par un Continue n'entre pas aux meilleurs
         // parcours : son cumul ne compte que les courses gagnees, la

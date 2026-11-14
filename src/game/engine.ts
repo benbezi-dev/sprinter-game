@@ -69,6 +69,7 @@ import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
 import { DUEL_MARQUES_OUVERT, NOEL_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
+import { crediterEtape } from './pieces';
 import { jouerLeFauxDepart, rangerLeFauxDepart } from './faux-depart';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
          courseLancee } from './chargement';
@@ -176,6 +177,16 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
 // ouvre la Legende (game/legende/compte.ts). Il tourne sur les deux canaux —
 // la Legende, elle, ne se voit que sur celui de test (canal.ts).
 SprinterApp.G.onCarriereGagnee = (race: string) => { compterCarriere(race); };
+
+// Et pour CHAQUE ETAPE de carriere gagnee : les pieces (game/pieces.ts). Ce
+// qu'elles rapportent s'ajoute a G.runPieces, que l'ecran du sacre affiche
+// (GainsCarriere.tsx) — seulement si la carriere n'a pas change entre-temps.
+SprinterApp.G.onEtapeGagnee = (parcours: string, race: string, etape: number) => {
+  void crediterEtape(parcours, race, etape).then(n => {
+    const G = SprinterApp.G;
+    if (n > 0 && G.runId === parcours) G.runPieces = (G.runPieces || 0) + n;
+  });
+};
 
 // ...ET CELLES D'AVANT CE COMPTE, retrouvees une fois par appareil dans ce qu'il
 // a garde (un minimum : voir estimerLesCarrieresDAvant). Apres le chargement de
