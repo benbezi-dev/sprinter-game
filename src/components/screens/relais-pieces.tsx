@@ -162,9 +162,12 @@ export function Couloir({ nom, code, d, porteur, couleur, moi, elimine, total, f
  * montre une seconde, sinon deux coureurs hors de portee tapent en boucle
  * sans comprendre que c'est la distance qui les separe, et non le minutage.
  */
-export function BoutonTemoin({ role, arme, bras, portee, rate, onTaper }: {
+export function BoutonTemoin({ role, arme, bras, portee, rate, pars, onTaper }: {
   role: 'donne' | 'recoit'; arme: boolean;
-  bras?: number | null; portee?: number; rate?: number; onTaper: () => void;
+  bras?: number | null; portee?: number; rate?: number;
+  /** Receveur : le porteur a atteint ma marque d'elan, c'est le moment de partir. */
+  pars?: boolean;
+  onTaper: () => void;
 }) {
   const { N } = SprinterApp;
   const donne = role === 'donne';
@@ -196,12 +199,13 @@ export function BoutonTemoin({ role, arme, bras, portee, rate, onTaper }: {
         disabled={!arme}
         className={`w-full py-5 rounded-2xl font-black font-display tracking-widest text-lg
           pointer-events-auto transition-colors
-          ${!arme ? 'bg-white/5 text-white/25 border border-white/10'
+          ${!arme && pars && !donne ? 'bg-amber-400/25 text-amber-200 border-2 border-amber-300 animate-pulse'
+            : !arme ? 'bg-white/5 text-white/25 border border-white/10'
             : donne ? 'bg-primary text-background animate-pulse'
                     : 'bg-emerald-400 text-background animate-pulse'}`}>
         <Hand className="w-6 h-6 mx-auto mb-1" />
         {N.t(donne ? (arme ? 'relais_donne' : 'relais_approche')
-                   : (arme ? 'relais_prends' : 'relais_attends_temoin'))}
+                   : (arme ? 'relais_prends' : pars ? 'relais_pars' : 'relais_attends_temoin'))}
       </button>
     </div>
   );

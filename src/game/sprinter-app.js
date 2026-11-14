@@ -3085,6 +3085,10 @@ import { sponsorDeLaCourse } from './panneaux';
       p.reaction = 0;
     }
     G.relaisRang = relais;
+    // Les marques d'elan des receveurs, a dessiner sur la piste (voir le
+    // dessin des zones). Remises a zero a chaque depart : celles d'un relais
+    // precedent n'ont rien a faire sur celui-ci.
+    G.relaisMarques = Array.isArray(opts.marquesElan) ? opts.marquesElan : [];
     return marque;
   }
 
@@ -7895,6 +7899,22 @@ import { sponsorDeLaCourse } from './panneaux';
           tick(z0, e, 'rgba(255,206,0,0.92)', 2.4);
           tick(z0 + C.RELAY_LAUNCH, e, 'rgba(255,206,0,0.92)', 2.4);
           tick(z0 + 20, e, 'rgba(255,206,0,0.45)', 1.4);
+        }
+      }
+      // LA MARQUE D'ELAN DE CHAQUE RECEVEUR, dans le couloir de l'equipe.
+      //
+      // Sur une vraie piste, le receveur colle un ruban au sol quelques
+      // metres avant sa place : quand le porteur y arrive, il part. Le jeu
+      // n'en montrait rien — on voyait les zones, pas QUAND s'elancer, ni ou
+      // les coequipiers prendraient le leur (l'auteur, 14/11/2026). Posees par
+      // startRelais (`marquesElan`), en cyan pour ne pas se confondre avec le
+      // jaune des zones, un trait epais barre d'un second plus fin.
+      const marques = G.relaisMarques || [];
+      if (marques.length && G.player) {
+        const e = Math.round(G.player.lane);
+        for (const m of marques) {
+          tick(m.d, e, 'rgba(70,230,255,0.95)', 4.2);
+          tick(m.d - 0.6, e, 'rgba(70,230,255,0.55)', 1.8);
         }
       }
     }
