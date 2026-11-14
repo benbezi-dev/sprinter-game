@@ -867,7 +867,11 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
   const scene = useRef<EtatScene>(nouvelEtat(look.current, decor));
   const [phase, setPhase] = useState<'pret' | 'jeu' | 'fini'>('pret');
   const [res, setRes] = useState<{ score: number; r: ResultatSeance | null } | null>(null);
+  // commencee puis quittee : la seance compte, a zero (sinon on la rejouait a volonte, sans fatigue ni usure)
+  const enCours = useRef(false);
+  useEffect(() => () => { if (enCours.current) { enCours.current = false; faireLaSeance(a, jour, 0, Math.random, bonusDeSeance(a)); sauverAthlete(a); } }, []);
   const finir = (s: number) => {
+    enCours.current = false;
     const score = borne(s);
     // le conseil du coach, la seance a deux, la confiance du coach : la seance rend plus
     setRes({ score, r: faireLaSeance(a, jour, score, Math.random, bonusDeSeance(a)) });
@@ -908,6 +912,7 @@ export function SeanceJeu({ jour, a, onFin, exercice }: { jour: Jour; a: Athlete
                   const c = scene.current.corps;
                   if (ex !== 'departs') { c.debout = 0; c.enBloc = 0; }
                   if (ex !== 'muscu' && ex !== 'gainage') c.posture = { w: 0 };
+                  enCours.current = true;
                   setPhase('jeu');
                 }}
                         className="rounded-2xl px-12 py-4 text-xl font-black tracking-widest text-black shadow-2xl" style={{ background: VERT }}>
