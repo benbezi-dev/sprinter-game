@@ -3013,6 +3013,35 @@ import { sponsorDeLaCourse } from './panneaux';
       // corps, et un temoin a moitie cache ne raconte rien.
       r.temoin = (r.relaisRang === rang) ? -1 : null;
     }
+    // La camera suit le temoin quand je ne l'ai pas (voir cibleRelais).
+    G.relaisPorteur = rang;
+  }
+
+  /**
+   * AU RELAIS, LA CAMERA SUIT LE TEMOIN, PAS SEULEMENT MOI.
+   *
+   * Elle ne montre qu'une poignee de metres autour de sa cible. Collee au
+   * joueur, elle le regardait attendre a sa marque sans rien montrer du
+   * porteur qui arrivait, puis le regardait ralentir au bout de sa zone
+   * pendant que les coequipiers couraient le reste du relais hors champ
+   * (l'auteur, 14/11/2026 : « on ne voit pas les autres participants de
+   * notre equipe »). Elle suit donc le porteur tant que ce n'est pas moi, et
+   * revient sur moi quand il arrive a ma hauteur : la transmission se joue
+   * la, et c'est moi qui tape. Renvoie la distance a viser, ou null hors
+   * relais.
+   */
+  function cibleRelais() {
+    if (!G.liveOn || G.raceKey !== '4x100' || !G.player || G.player.relaisRang == null) return null;
+    const moi = G.player.relaisRang, p = G.relaisPorteur || 1;
+    if (p === moi) return null;
+    const porteur = G.runners.find(r => r !== G.player && r.relaisRang === p);
+    if (!porteur) return null;
+    // Il arrive sur moi : on cadre entre nous deux, puis sur moi.
+    if (p === moi - 1) {
+      const ecart = G.player.d - porteur.d;
+      if (ecart <= 12) return Math.max(porteur.d, G.player.d - Math.max(0, ecart) * 0.5);
+    }
+    return porteur.d;
   }
 
   function armRelayeurs(autres, monRelais) {
@@ -3089,6 +3118,7 @@ import { sponsorDeLaCourse } from './panneaux';
     // dessin des zones). Remises a zero a chaque depart : celles d'un relais
     // precedent n'ont rien a faire sur celui-ci.
     G.relaisMarques = Array.isArray(opts.marquesElan) ? opts.marquesElan : [];
+    G.relaisPorteur = 1;
     return marque;
   }
 
@@ -4628,7 +4658,8 @@ import { sponsorDeLaCourse } from './panneaux';
     // chasse, et la camera va dans SON couloir. Au couloir 3, une camera aussi
     // basse le laissait au bord de l'ecran, a moitie dehors.
     const lane = G.spectateur && G.suivi && G.pasMolosse ? G.suivi.lane : 3;
-    const T = G.track, s = vise ? vise.d : 0;
+    const relais = G.spectateur ? null : cibleRelais();
+    const T = G.track, s = relais != null ? relais : (vise ? vise.d : 0);
     // La camera vise la position exacte du joueur (pas de decalage vers
     // l'avant) : combine a l'origine centree, il reste au milieu de l'ecran.
     //
