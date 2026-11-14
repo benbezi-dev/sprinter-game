@@ -365,7 +365,7 @@ export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfan
 
 /** La liste des relayeurs et leur etat de preparation. */
 export function Vestiaire({ joueurs, monRelais }: {
-  joueurs: { id: string; nom: string; relais: number; pret: boolean }[];
+  joueurs: { id: string; nom: string; relais: number; pret: boolean; fictif?: boolean }[];
   monRelais: number;
 }) {
   const { N } = SprinterApp;
@@ -383,6 +383,13 @@ export function Vestiaire({ joueurs, monRelais }: {
               ${rang === monRelais ? 'text-emerald-300' : 'text-foreground'}`}>
               {j ? j.nom : '—'}
             </span>
+            {/* Un fictif court pour la place que personne ne tient. */}
+            {j?.fictif && (
+              <span className="text-[8px] tracking-widest text-muted-foreground/70 border border-white/10
+                               rounded px-1 py-px">
+                {N.t('relais_fictif')}
+              </span>
+            )}
             <span className={`text-[9px] tracking-widest
               ${j?.pret ? 'text-emerald-400' : 'text-muted-foreground'}`}>
               {j ? N.t(j.pret ? 'live_ready' : 'live_notready') : ''}

@@ -11,7 +11,7 @@ import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
 import {
-  mesEquipes, creerEquipe, repondre, ordonner, classementRelais, mesDefis,
+  mesEquipes, creerEquipe, repondre, ordonner, classementRelais, mesDefis, ouvrirSalon,
   titulaires, ceQuiManque,
   type EquipeRelais, type LigneRelais, type DefiRelais,
 } from '@/game/relais';
@@ -221,6 +221,16 @@ function lireRangSolo(): number {
 function CourirSeul() {
   const { N } = SprinterApp;
   const [rang, setRang] = useState(lireRangSolo);
+  const [code, setCode] = useState('');
+  const [occupe, setOccupe] = useState(false);
+  const [erreur, setErreur] = useState('');
+  const ouvrir = async () => {
+    setOccupe(true); setErreur('');
+    const r: any = await ouvrirSalon();
+    setOccupe(false);
+    if (!r || r.error || !r.id) { setErreur(N.t('relais_salon_erreur')); return; }
+    entrerSurLaPiste({ genre: 'relais_salon', code: String(r.id).toUpperCase(), rang });
+  };
   const choisir = (r: number) => {
     setRang(r);
     try { localStorage.setItem(CLE_RANG_SOLO, String(r)); } catch { /* sans memoire */ }
@@ -254,6 +264,37 @@ function CourirSeul() {
                    text-background bg-emerald-400 hover:bg-emerald-400/90">
         {N.t('relais_solo_courir')}
       </button>
+
+      {/* A PLUSIEURS, A LA MEME PLACE CHOISIE. Un salon s'ouvre par un code qu'on
+          envoie aux autres ; chacun y prend sa place, et celles que personne ne
+          prend sont courues par des fictifs — deux joueurs et deux fictifs,
+          trois et un. Voir worker/src/salle-relais.js, le salon. */}
+      <div className="flex flex-col gap-1.5 pt-2 border-t border-white/8">
+        <span className="text-[9px] tracking-widest text-emerald-400">{N.t('relais_salon_titre')}</span>
+        <p className="text-[10px] text-muted-foreground leading-snug">{N.t('relais_salon_desc')}</p>
+        <button onClick={ouvrir} disabled={occupe}
+          className="w-full py-2.5 rounded-xl font-black font-display tracking-widest text-xs
+                     text-emerald-300 border border-emerald-400/50 bg-emerald-400/10 hover:bg-emerald-400/20
+                     disabled:opacity-40 flex items-center justify-center gap-2">
+          {occupe && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          {N.t('relais_salon_ouvrir')}
+        </button>
+        <div className="flex gap-1.5">
+          <input value={code} maxLength={10}
+            onChange={ev => setCode(ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+            placeholder={N.t('relais_salon_saisir')}
+            className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono
+                       tracking-widest text-foreground placeholder:text-muted-foreground placeholder:tracking-normal
+                       placeholder:font-sans focus:outline-none focus:border-emerald-400/50" />
+          <button onClick={() => code.length >= 4 && entrerSurLaPiste({ genre: 'relais_salon', code, rang })}
+            disabled={code.length < 4}
+            className="shrink-0 px-3 py-2 rounded-xl font-black font-display tracking-widest text-xs
+                       text-background bg-emerald-400 disabled:opacity-40">
+            {N.t('relais_salon_rejoindre')}
+          </button>
+        </div>
+        {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}
+      </div>
     </div>
   );
 }

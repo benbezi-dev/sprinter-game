@@ -24,6 +24,7 @@
 
 import { enregistrerRelais, equipe as chargerEquipe } from './relais.js';
 import { CourseEquipe, zoneDe, TAILLE, LEG } from './relais-course.js';
+import { Fictifs, tirerNoms, PAS_MS } from './relais-fictifs.js';
 import { avantDepart } from './depart.js';
 
 // Le temps de se mettre en place — quatre joueurs, quatre relais. Le depart
@@ -56,6 +57,69 @@ export class SalleRelais {
     this.course = null;                // pose au premier appel, avec le code
     this.minuteur = null;
     this.ne = Date.now();
+    /**
+     * LE SALON : une salle sans equipe, ouverte par un code. Chacun y choisit
+     * sa place, et les places que personne ne prend sont courues par des
+     * relayeurs fictifs (relais-fictifs.js) — deux joueurs et deux fictifs,
+     * trois et un. Rien n'y est ecrit au classement des equipes.
+     */
+    this.salon = false;
+    /** Les fictifs des places libres, poses au pistolet. */
+    this.fictifs = null;
+    /** Les noms des fictifs, gardes tant que la composition ne change pas. */
+    this.nomsFictifs = null;
+    /** Le minuteur qui les fait courir. */
+    this.simulation = null;
+  }
+
+  /** Les places que personne ne tient. */
+  placesLibres() {
+    const prises = new Set([...this.joueurs.values()].map(j => j.relais));
+    return [1, 2, 3, 4].filter(r => !prises.has(r));
+  }
+
+  /**
+   * Les fictifs du salon, tels qu'ils courraient maintenant. Recrees quand la
+   * composition change avant le pistolet ; leurs noms, eux, ne bougent pas
+   * d'une course a l'autre tant que les memes places restent libres.
+   */
+  preparerFictifs() {
+    if (!this.salon) return null;
+    const libres = this.placesLibres();
+    const cle = libres.join(',');
+    if (!this.nomsFictifs || this.nomsFictifs.cle !== cle) {
+      this.nomsFictifs = { cle, noms: tirerNoms(libres.length, [...this.joueurs.values()].map(j => j.nom)) };
+    }
+    this.fictifs = new Fictifs(this.laCourse(), libres, this.nomsFictifs.noms);
+    return this.fictifs;
+  }
+
+  arreterSimulation() {
+    if (this.simulation) clearInterval(this.simulation);
+    this.simulation = null;
+  }
+
+  /** Les fictifs courent, du pistolet a la fin de la course. */
+  lancerSimulation() {
+    this.arreterSimulation();
+    if (!this.fictifs || !this.fictifs.liste.length) return;
+    this.simulation = setInterval(() => {
+      if (!this.departA) { this.arreterSimulation(); return; }
+      const encore = this.fictifs.pas(Date.now(), this.departA, {
+        pos: (relais, d, t) => this.diffuser({ t: 'pos', relais, d: Math.round(d * 100) / 100, c: Math.round(t) }),
+        passe: (p) => this.diffuser({ t: 'passe', ...p, ...this.vue() }),
+        elimine: (el) => {
+          this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
+          this.diffuser({ t: 'elimine', ...el, ...this.vue() });
+        },
+        fini: (total) => {
+          const c = this.laCourse();
+          this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
+          this.diffuser({ t: 'fini', total, passes: c.passes, ...this.vue() });
+        },
+      });
+      if (!encore) this.arreterSimulation();
+    }, PAS_MS);
   }
 
   /** La course de l'equipe, creee a la volee. */
@@ -76,7 +140,17 @@ export class SalleRelais {
         d: distances.get(j.relais)?.d ?? 0,
         fini: distances.get(j.relais)?.fini ?? false,
       }));
+    // Au salon, les places libres sont tenues par des fictifs : on les montre
+    // comme des coequipiers, toujours prets.
+    if (this.salon && this.fictifs) {
+      for (const f of this.fictifs.liste) {
+        joueurs.push({ id: f.id, nom: f.nom, relais: f.relais, pret: true, fictif: true,
+                       d: distances.get(f.relais)?.d ?? 0, fini: distances.get(f.relais)?.fini ?? false });
+      }
+      joueurs.sort((a, b) => a.relais - b.relais);
+    }
     return {
+      salon: this.salon,
       equipe: this.equipe, epreuve: this.epreuve, joueurs,
       depart_a: this.departA, horloge: Date.now(),
       porteur: c.porteur, temoin_d: Math.round(c.temoinD * 10) / 10,
@@ -104,6 +178,7 @@ export class SalleRelais {
    * fallait-il que la declaration precedente cesse de valoir.
    */
   cloreLaCourse(delai, raison) {
+    this.arreterSimulation();
     this.departA = null;
     for (const j of this.joueurs.values()) j.pret = false;
     this.programmerFermeture(delai, raison);
@@ -159,6 +234,7 @@ export class SalleRelais {
     this.equipe = this.equipe || (url.searchParams.get('team') || '').toUpperCase();
     // Le canal est pose par le worker, jamais par le client.
     if (url.searchParams.get('canal') === 'test') this.test = true;
+    if (url.searchParams.get('salon') === '1') this.salon = true;
 
     if (url.pathname.endsWith('/etat')) {
       return new Response(JSON.stringify({ existe: this.joueurs.size > 0, ...this.vue() }),
@@ -175,9 +251,19 @@ export class SalleRelais {
     const cle = nom.trim().toLowerCase();
 
     // Le relais de chacun vient de l'equipe, pas du client : on ne choisit
-    // pas son rang en se connectant.
+    // pas son rang en se connectant. SAUF AU SALON, ou l'on demande sa place
+    // (`relais`) : on l'obtient si elle est libre, sinon la premiere libre.
     let relais = 0;
-    if (this.base() && this.equipe) {
+    if (this.salon) {
+      if (this.departA) return new Response('course en cours', { status: 409 });
+      const libres = this.placesLibres();
+      const voulu = parseInt(url.searchParams.get('relais') || '', 10);
+      relais = libres.includes(voulu) ? voulu : libres[0];
+      if (!relais) return new Response('salle complete', { status: 409 });
+      // On revient apres une arrivee (REJOUER) : le salon repart sur une
+      // course neuve, sinon le revenant tomberait sur l'ecran d'arrivee.
+      if (this.laCourse().finie()) this.laCourse().reinitialiser();
+    } else if (this.base() && this.equipe) {
       const e = await chargerEquipe(this.base(), this.equipe);
       const m = e && e.membres.find(x => x.cle === cle && x.etat === 'in');
       if (!m || !m.relais) return new Response('pas dans cette equipe', { status: 403 });
@@ -196,6 +282,7 @@ export class SalleRelais {
     const j = { id: crypto.randomUUID().slice(0, 8), nom, cle, relais, pret: false };
     this.joueurs.set(serveur, j);
     this.laCourse();
+    this.preparerFictifs();
     this.vivante();
 
     serveur.addEventListener('message', ev => this.recu(serveur, ev.data));
@@ -215,6 +302,7 @@ export class SalleRelais {
     const j = this.joueurs.get(ws);
     if (!j) return;
     this.joueurs.delete(ws);
+    if (this.salon && !this.departA) this.preparerFictifs();
     // Un relais ne se court pas a trois : si quelqu'un part en pleine course,
     // l'equipe ne peut pas finir.
     const c = this.laCourse();
@@ -224,7 +312,10 @@ export class SalleRelais {
     this.diffuser({ t: 'sorti', nom: j.nom, relais: j.relais, ...this.vue() });
     // Plus personne : on eteint le minuteur. Un setTimeout en attente suffit a
     // maintenir l'objet eveille, et donc facture, pour rien.
-    if (this.joueurs.size === 0) { clearTimeout(this.minuteur); this.minuteur = null; }
+    if (this.joueurs.size === 0) {
+      clearTimeout(this.minuteur); this.minuteur = null;
+      this.arreterSimulation();
+    }
   }
 
   eliminer(raison, relais) {
@@ -251,11 +342,20 @@ export class SalleRelais {
       case 'pret': {
         j.pret = !!m.pret;
         this.vivante();
-        const tous = this.joueurs.size === TAILLE &&
-                     [...this.joueurs.values()].every(x => x.pret);
+        // Au salon, il suffit que les joueurs presents soient prets : les
+        // places libres sont tenues par des fictifs.
+        const complet = this.salon ? this.joueurs.size >= 1 : this.joueurs.size === TAILLE;
+        const tous = complet && [...this.joueurs.values()].every(x => x.pret);
         if (tous && !this.departA) {
           this.departA = Date.now() + avantDepart(this.test, AVANT_DEPART_MS);
           c.reinitialiser();
+          if (this.salon) {
+            // Les marques des joueurs survivent a la remise a zero de la course.
+            for (const x of this.joueurs.values()) if (x.marque != null) c.placer(x.relais, x.marque);
+            this.preparerFictifs();
+            this.fictifs.reinitialiser(Date.now());
+            this.lancerSimulation();
+          }
           // Les instants de course repartent de zero avec le pistolet.
           for (const x of this.joueurs.values()) { x.dch = 0; x.ch = null; }
         }
@@ -271,7 +371,22 @@ export class SalleRelais {
       // Le receveur se place dans sa zone avant le depart.
       case 'marque': {
         if (this.departA) return;
-        if (c.placer(j.relais, m.d)) this.etat();
+        if (c.placer(j.relais, m.d)) { j.marque = c.coureur(j.relais).d; this.etat(); }
+        return;
+      }
+
+      // Au salon, changer de place avant le pistolet, vers une place libre.
+      case 'place': {
+        if (!this.salon || this.departA) return;
+        const r = parseInt(m.relais, 10);
+        if (!this.placesLibres().includes(r)) return;
+        j.relais = r; j.marque = null; j.pret = false;
+        this.preparerFictifs();
+        try {
+          ws.send(JSON.stringify({ t: 'bienvenue', moi: j.id, relais: j.relais,
+                                   zone: r > 1 ? zoneDe(r) : null, ...this.vue() }));
+        } catch (e) { /* deja fermee */ }
+        this.etat();
         return;
       }
 
@@ -282,6 +397,7 @@ export class SalleRelais {
         // par ce qu'il a pu courir — voir VITESSE_MAX dans relais-course.js.
         if (!this.departA) return;
         const r = c.avancer(j.relais, m.d, Date.now() - this.departA, m.c);
+        if (this.fictifs) this.fictifs.noterHumain(j.relais, Number(m.d), Date.now() - this.departA);
         if (r.elimine) {
           this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
           this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });
@@ -308,7 +424,10 @@ export class SalleRelais {
 
       // Les deux touchent : le serveur date, verifie la geometrie, et tranche.
       case 'temoin': {
-        const r = c.taper(j.relais, Date.now());
+        // Au salon, un fictif tend la main avec le joueur : Fictifs.tapeHumaine.
+        // Entre deux joueurs, la salle attend les deux tapes, comme toujours.
+        const rf = this.fictifs && this.departA ? this.fictifs.tapeHumaine(j.relais, Date.now()) : null;
+        const r = rf || c.taper(j.relais, Date.now());
         // Les deux mains se sont tendues ensemble, mais trop loin l'une de
         // l'autre. Ce n'est pas une faute — on le DIT, sinon les deux
         // coureurs tapent dans le vide sans comprendre pourquoi le temoin ne
@@ -337,6 +456,8 @@ export class SalleRelais {
         if (r.total == null) return;
         this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
         this.diffuser({ t: 'fini', total: r.total, passes: c.passes, ...this.vue() });
+        // Le salon ne s'inscrit pas au classement des equipes.
+        if (this.salon) return;
         const ecrire = this.ecrire();
         if (this.state.waitUntil) this.state.waitUntil(ecrire); else ecrire.catch(() => {});
         return;

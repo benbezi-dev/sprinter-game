@@ -20,6 +20,8 @@ export type SurLaPiste =
   | { genre: 'relais'; equipe: string }
   /** Seul, a la place choisie : les trois autres relayeurs sont fictifs. */
   | { genre: 'relais_solo'; rang: number; equipe: string }
+  /** Un salon de relais : des joueurs a leur place, des fictifs aux places libres. */
+  | { genre: 'relais_salon'; code: string; rang: number }
   | {
       genre: 'confrontation';
       code: string;

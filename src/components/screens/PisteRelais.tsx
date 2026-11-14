@@ -51,6 +51,17 @@ export function PisteRelais() {
     return <CourseRelais equipe={solo.equipe} solo={{ rang: solo.rang }}
                          onQuitter={sortir} onRejouer={rejouer} />;
   }
+  if (quoi.genre === 'relais_salon') {
+    // Recourir au salon : on en sort et on y rentre, a la meme place si elle
+    // est encore libre. Les autres joueurs restent dans le meme salon.
+    const sal = quoi;
+    const rejouer = () => {
+      sortir();
+      setTimeout(() => entrerSurLaPiste({ ...sal }), 0);
+    };
+    return <CourseRelais equipe={sal.code} salon={{ rang: sal.rang }}
+                         onQuitter={sortir} onRejouer={rejouer} />;
+  }
   if (quoi.genre === 'relais') {
     return <CourseRelais equipe={quoi.equipe} onQuitter={sortir} />;
   }
