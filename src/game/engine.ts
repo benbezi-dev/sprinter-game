@@ -872,9 +872,13 @@ function pousserPosition() {
   if (!finEnvoyee && G.player.finished && G.player.finishTime != null) {
     finEnvoyee = true;
     salleLive.position(G.track.total, G.player.finishTime * 1000);
-    salleLive.fini(G.player.finishTime * 1000);
+    // La salle peut se debrancher ENTRE ces deux appels : le relais solo
+    // (salle-relais-solo.ts) est local, il boucle le relais des la ligne
+    // franchie et son onFini rappelle brancherSalle(null) sur-le-champ. Une
+    // salle en ligne, elle, ne repond qu'apres un aller-retour reseau.
+    salleLive?.fini(G.player.finishTime * 1000);
   }
-  if (G.elapsed >= prochainEnvoi) {
+  if (salleLive && G.elapsed >= prochainEnvoi) {
     prochainEnvoi = G.elapsed + 0.1;
     salleLive.position(G.player.d, G.elapsed * 1000);
   }
