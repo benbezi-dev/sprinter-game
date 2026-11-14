@@ -260,9 +260,11 @@ export class SalleRelais {
       const voulu = parseInt(url.searchParams.get('relais') || '', 10);
       relais = libres.includes(voulu) ? voulu : libres[0];
       if (!relais) return new Response('salle complete', { status: 409 });
-      // On revient apres une arrivee (REJOUER) : le salon repart sur une
-      // course neuve, sinon le revenant tomberait sur l'ecran d'arrivee.
-      if (this.laCourse().finie()) this.laCourse().reinitialiser();
+      // Revenir apres une arrivee (REJOUER) ne remet PAS la course a zero : les
+      // autres liraient encore leur ecran d'arrivee, qui disparaitrait sous
+      // leurs yeux. La course repart au prochain pistolet (`pret`) ; le
+      // revenant, lui, ne prend pour arrivee que celle d'une course qu'il a
+      // vue partir (CourseRelais).
     } else if (this.base() && this.equipe) {
       const e = await chargerEquipe(this.base(), this.equipe);
       const m = e && e.membres.find(x => x.cle === cle && x.etat === 'in');
@@ -307,7 +309,22 @@ export class SalleRelais {
     // l'equipe ne peut pas finir.
     const c = this.laCourse();
     if (this.departA && !c.finie()) {
-      this.eliminer('un relayeur a quitte la course', j.relais);
+      if (this.salon) {
+        // AU SALON, UN FICTIF REPREND SA PLACE. Celui qui a deja donne le temoin
+        // n'a plus rien a courir ; celui qui part avant le pistolet, en cours de
+        // portion ou en attendant la sienne laisse un fictif finir pour lui.
+        // Eliminer trois joueurs pour le reseau d'un quatrieme serait les punir
+        // de ce qui ne depend pas d'eux.
+        if (j.relais >= c.porteur) {
+          if (!this.fictifs) this.fictifs = new Fictifs(c, [], []);
+          this.fictifs.prendreLaPlace(j.relais, {
+            id: j.id, nom: j.nom, v: this.fictifs.vitesseDe(j.relais),
+          });
+          if (!this.simulation) { this.fictifs.dernierPas = Date.now(); this.lancerSimulation(); }
+        }
+      } else {
+        this.eliminer('un relayeur a quitte la course', j.relais);
+      }
     }
     this.diffuser({ t: 'sorti', nom: j.nom, relais: j.relais, ...this.vue() });
     // Plus personne : on eteint le minuteur. Un setTimeout en attente suffit a
@@ -365,7 +382,9 @@ export class SalleRelais {
 
       // Faux depart du premier relayeur : l'equipe est eliminee.
       case 'faux_depart':
-        if (j.relais === 1) this.eliminer('faux depart', 1);
+        // Seulement pendant une course : avant le pistolet ou apres l'arrivee,
+        // un appui n'est pas un faux depart.
+        if (j.relais === 1 && this.departA && !c.finie()) this.eliminer('faux depart', 1);
         return;
 
       // Le receveur se place dans sa zone avant le depart.
@@ -391,13 +410,15 @@ export class SalleRelais {
       }
 
       case 'pos': {
-        this.vivante();
         // Hors course, personne n'avance : la marque se pose par `marque`.
         // Et pendant la course, la salle borne ce que le telephone annonce
         // par ce qu'il a pu courir — voir VITESSE_MAX dans relais-course.js.
+        // Une position tardive, apres l'arrivee, ne repousse pas la fermeture.
         if (!this.departA) return;
+        this.vivante();
         const r = c.avancer(j.relais, m.d, Date.now() - this.departA, m.c);
-        if (this.fictifs) this.fictifs.noterHumain(j.relais, Number(m.d), Date.now() - this.departA);
+        // La position retenue par la course, bornee — pas celle annoncee.
+        if (this.fictifs && r.d != null) this.fictifs.noterHumain(j.relais, r.d, Date.now() - this.departA);
         if (r.elimine) {
           this.cloreLaCourse(APRES_COURSE_MS, 'course terminee');
           this.diffuser({ t: 'elimine', ...r.elimine, ...this.vue() });

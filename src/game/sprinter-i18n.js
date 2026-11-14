@@ -628,6 +628,8 @@
     relais_r_avant_zone: ['témoin donné avant la zone', 'baton passed before the zone'],
     relais_r_vitesse: ['vitesse impossible', 'impossible speed'],
     relais_r_arrivee: ['arrivée impossible', 'impossible finish'],
+    relais_r_quitte: ['un relayeur a quitté la course', 'a runner left the race'],
+    relais_salon_refusee: ['la {a} place était prise : tu cours en {n}', 'the {a} leg was taken: you run the {n}'],
     relais_r_temps: ['course arrêtée, plus rien ne bougeait', 'race stopped, nothing was moving'],
     relais_solo_rejouer: ['REJOUER', 'RUN AGAIN'],
     relais_fictif:   ['FICTIF', 'BOT'],

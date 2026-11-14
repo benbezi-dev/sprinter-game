@@ -64,10 +64,32 @@ export class Fictifs {
       }));
     /** La vitesse des humains, par rang, tiree de leurs positions. */
     this.humains = new Map();
+    /** La derniere position annoncee de chaque fictif : on ne repete pas l'immobile. */
+    this.annonce = new Map();
     this.dernierPas = 0;
   }
 
   estFictif(r) { return this.liste.some(f => f.relais === r); }
+
+  /**
+   * UN FICTIF REPREND LA PLACE D'UN JOUEUR PARTI EN COURSE (salon). Il garde son
+   * identifiant, pour que les ecrans continuent de faire avancer le meme
+   * coureur, et repart d'ou il etait, a sa vitesse : le porteur garde son
+   * elan, un receveur attend a sa marque.
+   */
+  prendreLaPlace(r, { id, nom, v = 0 } = {}) {
+    if (this.estFictif(r)) return;
+    const c = this.course;
+    this.liste.push({
+      id: id || 'fictif-' + r, nom: nom || 'RELAIS ' + r, relais: r,
+      vmax: 10.6 + Math.random() * 0.6,
+      v: Math.max(0, Number(v) || 0),
+      parti: r === c.porteur || (r === 1 && c.temoinD > 0),
+      libere: r < c.porteur,
+    });
+    this.liste.sort((a, b) => a.relais - b.relais);
+    this.humains.delete(r);
+  }
 
   /** Avant le pistolet : chacun a sa marque, tout le monde a l'arret. */
   reinitialiser(maintenant = 0) {
@@ -76,6 +98,7 @@ export class Fictifs {
       if (f.relais > 1) this.course.placer(f.relais, zoneDe(f.relais).debut + MARQUE_FICTIF);
     }
     this.humains.clear();
+    this.annonce.clear();
     this.dernierPas = maintenant;
   }
 
@@ -91,6 +114,7 @@ export class Fictifs {
    * positions arrivent par paquets.
    */
   noterHumain(r, d, t) {
+    if (!Number.isFinite(d) || !Number.isFinite(t)) return;
     const h = this.humains.get(r) || { d, t, v: 0 };
     if (t > h.t && d >= h.d) {
       const inst = (d - h.d) / ((t - h.t) / 1000);
@@ -184,7 +208,16 @@ export class Fictifs {
       const tk = Math.max(0, t - k * dt * 1000);
       if (!this.petitPas(dt, tk, maintenant - k * dt * 1000, ev)) return false;
     }
-    for (const f of this.liste) ev.pos?.(f.relais, c.coureur(f.relais).d, t);
+    // Une position par fictif et par tour, et seulement quand il a bouge (plus
+    // une par seconde pour qui attend) : un fictif arrete n'a rien a redire, et
+    // chaque message part vers chaque telephone du salon.
+    for (const f of this.liste) {
+      const d = c.coureur(f.relais).d;
+      const a = this.annonce.get(f.relais);
+      if (a && Math.abs(a.d - d) < 0.01 && maintenant - a.at < 1000) continue;
+      this.annonce.set(f.relais, { d, at: maintenant });
+      ev.pos?.(f.relais, d, t);
+    }
     return true;
   }
 

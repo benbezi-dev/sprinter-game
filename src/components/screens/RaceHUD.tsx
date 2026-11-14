@@ -322,7 +322,11 @@ export function RaceHUD() {
       {/* Mode fantome : le seul repere qui compte pendant un duel. Il occupe
           la bande libre sous le HUD, la ou l'oeil revient naturellement entre
           deux foulees, et il disparait des que la course est finie. */}
-      {isRace && ghostOn && !player?.finished && !rejeu && (
+      {/* PAS AU RELAIS : les autres coureurs y sont des COEQUIPIERS, et ce panneau
+          les presentait comme un fantome a battre (« MODE FANTOME +46 m » sur un
+          relayeur de sa propre equipe). Le relais a son propre bandeau, le couloir
+          de l'equipe et la position du temoin (CourseRelais). */}
+      {isRace && ghostOn && !player?.finished && !rejeu && SprinterApp.G.raceKey !== '4x100' && (
         <div className="absolute top-[104px] landscape:top-[46px] w-full flex justify-center
                         px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] z-10">
           <div className={`w-full max-w-[300px] rounded-2xl border backdrop-blur-md px-3 py-1.5

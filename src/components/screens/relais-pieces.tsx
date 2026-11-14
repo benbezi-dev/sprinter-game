@@ -231,6 +231,7 @@ const RAISONS: Record<string, string> = {
   'vitesse impossible': 'relais_r_vitesse',
   'arrivee impossible': 'relais_r_arrivee',
   'temps depasse': 'relais_r_temps',
+  'un relayeur a quitte la course': 'relais_r_quitte',
 };
 
 /** « au 2e relais : témoin donné avant la zone ». */

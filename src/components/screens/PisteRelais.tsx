@@ -55,9 +55,11 @@ export function PisteRelais() {
     // Recourir au salon : on en sort et on y rentre, a la meme place si elle
     // est encore libre. Les autres joueurs restent dans le meme salon.
     const sal = quoi;
-    const rejouer = () => {
+    // A la place qu'on tenait a l'arrivee, pas a celle demandee en entrant :
+    // on a pu en changer dans la salle d'attente.
+    const rejouer = (rang: number) => {
       sortir();
-      setTimeout(() => entrerSurLaPiste({ ...sal }), 0);
+      setTimeout(() => entrerSurLaPiste({ ...sal, rang }), 0);
     };
     return <CourseRelais equipe={sal.code} salon={{ rang: sal.rang }}
                          onQuitter={sortir} onRejouer={rejouer} />;

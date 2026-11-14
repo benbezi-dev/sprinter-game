@@ -36,8 +36,8 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
    */
   salon?: { rang: number };
   onQuitter: () => void;
-  /** Solo seulement : recourir tout de suite, a la meme place. */
-  onRejouer?: () => void;
+  /** Solo et salon : recourir tout de suite, a la place qu'on tient (`rang`). */
+  onRejouer?: (rang: number) => void;
 }) {
   const { N } = SprinterApp;
   const [e, setE] = useState<EtatRelais | null>(null);
@@ -68,6 +68,13 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
   /** Une main tendue dans le vide, a montrer une seconde. */
   const [rate, setRate] = useState(0);
   const salle = useRef<UneSalleRelais | null>(null);
+  /**
+   * Un pistolet a-t-il retenti depuis qu'on est entre ? Au salon, revenir apres
+   * une arrivee (REJOUER) retrouve la course precedente, close, telle que le
+   * serveur la garde pour les autres : sans ce drapeau on tomberait aussitot
+   * sur son ecran d'arrivee, au lieu de la salle d'attente.
+   */
+  const departVu = useRef(false);
   const porteur = useRef(1);
   /** Ou est chacun, par rang de relais — nourri par la salle, dix fois par seconde. */
   const ou = useRef<Record<number, number>>({});
@@ -129,6 +136,7 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
         majBras();
       },
       onDepart: (dansMs, departA) => {
+        departVu.current = true;
         // Le coup de pistolet est celui de TOUT LE MONDE, pas seulement du
         // premier relayeur. Les quatre entrent en course a la meme seconde :
         // les trois autres sont debout dans leur zone, libres de s'elancer
@@ -255,6 +263,11 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
     if (z && marque === 0) setMarque(z.debut);
   }, [e]);
 
+  /** Au salon, la place demandee etait prise : on le dit, au lieu de basculer en silence. */
+  const placeDemandee = useRef(salon?.rang || 0);
+  const placeRefusee = !!salon && !!e && placeDemandee.current > 0
+    && (salle.current?.monRelais || 0) > 0 && salle.current!.monRelais !== placeDemandee.current;
+
   /** Le code du salon, copie pour l'envoyer aux autres. */
   const [copie, setCopie] = useState(false);
   const copierCode = async () => {
@@ -285,7 +298,7 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
   const mon = salle.current?.monRelais || 0;
   const zone = salle.current?.maZone || null;
   const partie = !!e.depart_a;
-  const fini = e.total != null || !!e.elimine;
+  const fini = (e.total != null || !!e.elimine) && (!salon || departVu.current);
   const jeRecois = partie && mon === e.porteur + 1;
   const jeDonne = partie && mon === e.porteur && mon < TAILLE;
   /**
@@ -325,7 +338,7 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
                 </span>
               )}
               {onRejouer && (
-                <button onClick={onRejouer}
+                <button onClick={() => onRejouer(salle.current?.monRelais || solo?.rang || salon?.rang || 1)}
                   className="px-6 py-2.5 rounded-xl font-black font-display tracking-widest text-sm
                              text-emerald-300 border border-emerald-400/50 bg-emerald-400/10
                              hover:bg-emerald-400/20">
@@ -423,14 +436,19 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
                 {N.t(copie ? 'relais_salon_copie' : 'relais_salon_copier')}
               </span>
             </button>
+            {placeRefusee && (
+              <p className="text-[10px] text-center text-amber-300 leading-snug">
+                {N.t('relais_salon_refusee', { a: N.ord(placeDemandee.current), n: N.ord(mon) })}
+              </p>
+            )}
             <div className="grid grid-cols-4 gap-1.5">
               {[1, 2, 3, 4].map(r => {
                 const j = e.joueurs.find(x => x.relais === r);
                 const autre = !!j && !j.fictif && r !== mon;
                 return (
                   <button key={r} disabled={autre || r === mon}
-                    onClick={() => salle.current && 'choisirPlace' in salle.current
-                      && (salle.current as SalleRelais).choisirPlace(r)}
+                    onClick={() => { placeDemandee.current = r; if (salle.current && 'choisirPlace' in salle.current)
+                      (salle.current as SalleRelais).choisirPlace(r); }}
                     className={`flex flex-col items-center gap-0.5 py-1.5 rounded-xl border text-[10px]
                       ${r === mon ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-300'
                         : autre ? 'border-white/8 bg-black/20 text-muted-foreground/50'
