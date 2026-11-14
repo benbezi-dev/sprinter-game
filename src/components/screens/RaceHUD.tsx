@@ -191,7 +191,10 @@ export function RaceHUD() {
 
   // Une egalite partage la place : on compte ceux qui sont arrives strictement
   // avant, pas ceux que le tri a poses devant.
-  const pos = player?.finished && player.finishTime != null
+  // Au relais, la place est celle de l'EQUIPE parmi les equipes adverses (CourseRelais, G.relaisPlace),
+  // pas le rang du coureur parmi les relayeurs : « 11e » ne voulait rien dire.
+  const placeRelais = SprinterApp.G.raceKey === '4x100' ? SprinterApp.G.relaisPlace : null;
+  const pos = placeRelais != null ? placeRelais : player?.finished && player.finishTime != null
     ? 1 + runners.filter((r: any) => r !== player && r.finished && msDe(r) < msDe(player)).length
     : order.indexOf(player) + 1;
   /**
@@ -322,7 +325,11 @@ export function RaceHUD() {
       {/* Mode fantome : le seul repere qui compte pendant un duel. Il occupe
           la bande libre sous le HUD, la ou l'oeil revient naturellement entre
           deux foulees, et il disparait des que la course est finie. */}
-      {isRace && ghostOn && !player?.finished && !rejeu && (
+      {/* PAS AU RELAIS : les autres coureurs y sont des COEQUIPIERS, et ce panneau
+          les presentait comme un fantome a battre (« MODE FANTOME +46 m » sur un
+          relayeur de sa propre equipe). Le relais a son propre bandeau, le couloir
+          de l'equipe et la position du temoin (CourseRelais). */}
+      {isRace && ghostOn && !player?.finished && !rejeu && SprinterApp.G.raceKey !== '4x100' && (
         <div className="absolute top-[104px] landscape:top-[46px] w-full flex justify-center
                         px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] z-10">
           <div className={`w-full max-w-[300px] rounded-2xl border backdrop-blur-md px-3 py-1.5
@@ -633,6 +640,9 @@ export function RaceHUD() {
           // metres, l'ecart s'inversait et le montrait « derriere » ceux
           // qu'il venait de battre.
           if (directFini) return null;
+          // Au relais, le coureur d'a cote est un COEQUIPIER : « +105 m AMADOU » le presentait
+          // comme un rival a rattraper. Le couloir de l'equipe dit ou est le temoin (CourseRelais).
+          if (SprinterApp.G.raceKey === '4x100') return null;
           const me = order.indexOf(player);
           const other = me === 0 ? order[1] : order[me - 1];
           if (other) {

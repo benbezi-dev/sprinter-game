@@ -10,6 +10,7 @@ import {
 } from '@/game/salle-confrontation';
 import {
   Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe, chrono,
+  pourquoiElimine,
 } from './relais-pieces';
 import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
 
@@ -292,9 +293,7 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         <Fin
           rate={!!mienne.elimine}
           titre={N.t(mienne.elimine ? 'relais_elimine' : 'relais_arrivee')}
-          detail={mienne.elimine ? N.t('relais_elimine_pourquoi', {
-            r: String(mienne.elimine.relais), c: mienne.elimine.raison,
-          }) : ''}
+          detail={mienne.elimine ? pourquoiElimine(mienne.elimine) : ''}
           temps={mienne.total}
           place={place}
           passes={mienne.passes}
@@ -393,7 +392,7 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
             <Swords className="w-3.5 h-3.5" /> {code}
           </span>
           <span className="font-mono text-[10px] text-muted-foreground">
-            {N.t('relais_mon_rang', { n: String(mon) })}
+            {N.t('relais_mon_rang', { n: N.ord(mon) })}
           </span>
         </div>
 

@@ -2742,8 +2742,39 @@ async function servir(request, env, ctx, porteur) {
         const cible = new URL(request.url);
         cible.pathname = tail === 'etat' ? '/etat' : '/ws';
         cible.searchParams.set('team', code);
+        // LES DRAPEAUX DE LA SALLE SONT POSES ICI, JAMAIS PAR LE CLIENT. Recopies
+        // tels quels, `salon=1` faisait d'une salle d'equipe un salon (plus de
+        // controle d'appartenance, plus d'inscription au classement), et
+        // `canal=test` l'envoyait ecrire dans la base de test.
+        for (const k of ['salon', 'relais', 'canal']) cible.searchParams.delete(k);
         if (canal.test) cible.searchParams.set('canal', 'test');
         const id = env.SALLES_RELAIS.idFromName((canal.test ? 'RT-' : 'R-') + code);
+        const rep = await env.SALLES_RELAIS.get(id).fetch(new Request(cible, request));
+        if (rep.status === 101) return rep;
+        return cors(new Response(rep.body, { status: rep.status,
+          headers: { 'Content-Type': 'application/json' } }));
+      }
+
+      // LE SALON DE RELAIS : un code, et chacun choisit sa place. Les places
+      // que personne ne prend sont courues par des relayeurs fictifs
+      // (relais-fictifs.js) : on court a deux avec deux fictifs, a trois avec
+      // un. Ni equipe a monter ni classement : c'est le relais entre amis.
+      if (sous === 'salon' && request.method === 'POST') {
+        return json({ id: makeCode() });
+      }
+      if (sous.startsWith('salon/')) {
+        const reste = sous.slice('salon/'.length);
+        const [brut, tail] = reste.split('/');
+        const code = (brut || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        if (!env.SALLES_RELAIS) return json({ error: 'relais indisponible' }, 503);
+        const cible = new URL(request.url);
+        cible.pathname = tail === 'etat' ? '/etat' : '/ws';
+        cible.searchParams.set('team', code);
+        cible.searchParams.delete('canal');
+        cible.searchParams.set('salon', '1');
+        if (canal.test) cible.searchParams.set('canal', 'test');
+        const id = env.SALLES_RELAIS.idFromName((canal.test ? 'RST-' : 'RS-') + code);
         const rep = await env.SALLES_RELAIS.get(id).fetch(new Request(cible, request));
         if (rep.status === 101) return rep;
         return cors(new Response(rep.body, { status: rep.status,
@@ -2766,6 +2797,7 @@ async function servir(request, env, ctx, porteur) {
         const cible = new URL(request.url);
         cible.pathname = tail === 'etat' ? '/etat' : '/ws';
         cible.searchParams.set('conf', code);
+        cible.searchParams.delete('canal');   // le canal vient du worker, jamais du client
         if (canal.test) cible.searchParams.set('canal', 'test');
         const id = env.CONFRONTATIONS.idFromName((canal.test ? 'CT-' : 'C-') + code);
         const rep = await env.CONFRONTATIONS.get(id).fetch(new Request(cible, request));
@@ -3017,7 +3049,10 @@ async function servir(request, env, ctx, porteur) {
       cible.pathname = sous === 'etat' ? '/etat' : '/ws';
       cible.searchParams.set('code', code);
       // Le canal voyage jusqu'a la salle : c'est elle qui ecrit le resultat du
-      // duel, et elle doit l'ecrire dans la bonne base.
+      // duel, et elle doit l'ecrire dans la bonne base. Celui du client est
+      // retire d'abord : `?canal=test` envoyait sinon le resultat — celui de
+      // l'adversaire compris — dans la base de test, hors du classement reel.
+      cible.searchParams.delete('canal');
       if (canal.test) cible.searchParams.set('canal', 'test');
 
       // Deux salles portant le meme code, une de test et une de production, ne

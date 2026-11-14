@@ -56,6 +56,7 @@ import { voute, pluie, filante } from './course-3d/decors';
 import { videoPub, stade, themeVu, formeVue, stadeVu, construireLeStade, ruelle, pubAnim, hologrammes } from './course-3d/stade';
 import { chargerLeCorps, chargerLeBloc, corps, poserLeCorps } from './course-3d/corps';
 import { poserLesHaies } from './course-3d/haies';
+import { poserLeRelais } from './course-3d/relais';
 import { chargerLaBete, poserLaBete } from './course-3d/bete';
 import { initialiserLesEffets, dessinerLesEffets } from './course-3d/effets';
 import { lacherLaCamera, cadrer } from './course-3d/camera';
@@ -141,6 +142,7 @@ export function rendre(App: any, dt: number) {
     if (tous.indexOf(r) < 0) { monde.remove(c.m.racine); corps.delete(r); }
   }
   poserLesHaies(G, T, C);
+  poserLeRelais(G, T, C);
   let n = 0, nj = 0;
   for (const r of tous) {
     if (!r || !r.look) continue;
@@ -152,7 +154,25 @@ export function rendre(App: any, dt: number) {
     // le saut d'une haie : c'est l'obstacle qui pose la posture, a chaque image (drawRunner, sprinter-app.js)
     if (G.obstacles && G.obstacles.haies3D) G.obstacles.preparer(r, G, C);
     const caps = App.personCapsules(r, cap, lean, false, false, r === G.player ? 0 : 1);
-    if (poserLeCorps(App, r, p, cap, lean, k)) continue;
+    // LE TEMOIN, MEME DANS LA MAIN D'UN VRAI CORPS. La pose du jeu le range parmi les troncs, dans la
+    // main qui le tient (`r.temoin`, sprinter-core.js) ; le corps en maillage, lui, n'a pas de temoin :
+    // on garde ce seul tronc-la, jaune, et on le pose par-dessus (l'auteur, 14/11 : le relais en 3D).
+    if (poserLeCorps(App, r, p, cap, lean, k)) {
+      if (r.temoin != null) for (const cp of caps) if (cp[0][0] === 250 && cp[0][1] === 206 && cp[0][2] === 62) {
+        if (n >= MAX_TRONCS) break;
+        const [col, e0, e1] = cp;
+        _a.set(p[0] + e0[0] * k, p[1] + e0[1] * k, e0[2] * k);
+        _b.set(p[0] + e1[0] * k, p[1] + e1[1] * k, e1[2] * k);
+        _d.subVectors(_b, _a);
+        const L = _d.length();
+        if (L <= 1e-4) continue;
+        _c.setRGB(col[0] / 255, col[1] / 255, col[2] / 255, THREE.SRGBColorSpace);
+        _q.setFromUnitVectors(AXE_Y, _d.divideScalar(L));
+        _m.compose(_s.addVectors(_a, _b).multiplyScalar(0.5), _q, _d.set(1, L, 1));
+        troncs.setMatrixAt(n, _m); aR.setXY(n, e0[3] * k, e1[3] * k); troncs.setColorAt(n, _c); n++;
+      }
+      continue;
+    }
     for (const [col, e0, e1] of caps) {
       if (n >= MAX_TRONCS || nj >= MAX_TRONCS - 1) break;
       _a.set(p[0] + e0[0] * k, p[1] + e0[1] * k, e0[2] * k);

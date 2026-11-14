@@ -131,6 +131,14 @@ export const fantomesRelais = (race = '4x100') =>
   lire<{ race: string; fantomes: FantomeRelais[] }>(
     '/relay/ghosts?race=' + encodeURIComponent(race));
 
+/**
+ * Ouvre un salon de relais et renvoie son code. On y court a deux, trois ou
+ * quatre : chacun choisit sa place, et les places libres sont courues par des
+ * relayeurs fictifs. Ni equipe a monter, ni classement.
+ */
+export const ouvrirSalon = () =>
+  poster<{ id: string }>('/relay/salon', {});
+
 /** Ouvre une confrontation et renvoie son code, a partager comme un salon. */
 export const ouvrirConfrontation = () =>
   poster<{ id: string }>('/relay/confrontation', {});

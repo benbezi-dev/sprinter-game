@@ -4,9 +4,10 @@ import { MONTEE } from '@/lib/mouvement';
 import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { SalleRelais, TAILLE, PORTEE, ELAN, type EtatRelais, type UneSalleRelais } from '@/game/salle-relais';
-import { SalleRelaisSolo } from '@/game/salle-relais-solo';
+import { SalleRelaisSolo, noterRecordSolo } from '@/game/salle-relais-solo';
+import { simulerEquipesAdverses, graine, indexDe, temoinDe, type EquipeAdverse } from '@/game/relais-adverses';
 import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
-import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './relais-pieces';
+import { Marque, Couloir, BoutonTemoin, Fin, pourquoiElimine, Vestiaire, couleurDe, chrono } from './relais-pieces';
 
 /**
  * La course de relais d'une equipe, cote joueur.
@@ -26,11 +27,18 @@ import { Marque, Couloir, BoutonTemoin, Fin, Vestiaire, couleurDe } from './rela
  * pistolet avec tout l'ecran-titre.
  */
 
-export function CourseRelais({ equipe, solo, onQuitter }: {
+export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
   equipe: string;
   /** Relais en solo : mon rang, les trois autres sont des relayeurs fictifs. */
   solo?: { rang: number };
+  /**
+   * Salon de relais : `equipe` est son code. On y court a deux, trois ou
+   * quatre, et les places libres sont courues par des fictifs du serveur.
+   */
+  salon?: { rang: number };
   onQuitter: () => void;
+  /** Solo et salon : recourir tout de suite, a la place qu'on tient (`rang`). */
+  onRejouer?: (rang: number) => void;
 }) {
   const { N } = SprinterApp;
   const [e, setE] = useState<EtatRelais | null>(null);
@@ -61,6 +69,18 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
   /** Une main tendue dans le vide, a montrer une seconde. */
   const [rate, setRate] = useState(0);
   const salle = useRef<UneSalleRelais | null>(null);
+  /**
+   * Un pistolet a-t-il retenti depuis qu'on est entre ? Au salon, revenir apres
+   * une arrivee (REJOUER) retrouve la course precedente, close, telle que le
+   * serveur la garde pour les autres : sans ce drapeau on tomberait aussitot
+   * sur son ecran d'arrivee, au lieu de la salle d'attente.
+   */
+  const departVu = useRef(false);
+  /** Ou est notre temoin, en direct : il sert au classement des equipes. */
+  const temoinVu = useRef(0);
+  /** Les equipes adverses de cette course, calculees au pistolet (relais-adverses.ts). */
+  const adverses = useRef<EquipeAdverse[]>([]);
+  const rejeuAdverses = useRef<ReturnType<typeof setInterval> | null>(null);
   const porteur = useRef(1);
   /** Ou est chacun, par rang de relais — nourri par la salle, dix fois par seconde. */
   const ou = useRef<Record<number, number>>({});
@@ -99,7 +119,7 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
         // Le temoin change de main : le dessin le lit sur le coureur, et
         // c'est la salle qui dit lequel l'a.
         SprinterApp.porteurDuTemoin(etat.porteur);
-        setTemoinD(etat.temoin_d);
+        setTemoinD(etat.temoin_d); temoinVu.current = etat.temoin_d;
         setE(etat);
         majBras();
       },
@@ -112,7 +132,7 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
       // distance qui nous separe, celle dont depend la transmission.
       onPos: (relais, d, c) => {
         ou.current[relais] = d;
-        if (relais === porteur.current) setTemoinD(d);
+        if (relais === porteur.current) { setTemoinD(d); temoinVu.current = d; }
         const j = (etatRef.current?.joueurs || []).find(x => x.relais === relais);
         // Avec l'instant de SA course, quand la salle le transmet : le
         // coequipier est dessine ou il en est a notre instant, et non ou il
@@ -122,6 +142,7 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
         majBras();
       },
       onDepart: (dansMs, departA) => {
+        departVu.current = true;
         // Le coup de pistolet est celui de TOUT LE MONDE, pas seulement du
         // premier relayeur. Les quatre entrent en course a la meme seconde :
         // les trois autres sont debout dans leur zone, libres de s'elancer
@@ -149,6 +170,34 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
           relais: s.monRelais, marque: s.marque, autres: [], equipiers: mesEquipiers, marquesElan,
         });
         SprinterApp.liveDepart(dansMs, departA);
+        // LES EQUIPES ADVERSES, une par couloir voisin (relais-adverses.ts). Calculees ici, au
+        // pistolet, d'une graine tiree de sa date et du code : les quatre telephones d'une equipe —
+        // ou d'un salon — voient les memes adversaires courir la meme course.
+        {
+          const moiLane = Math.round(SprinterApp.G.player?.lane ?? 3);
+          const nl = SprinterApp.C.LANE_COUNT || 8;
+          const voisins = Array.from({ length: nl }, (_, i) => i).filter(i => i !== moiLane);
+          adverses.current = simulerEquipesAdverses(graine(departA, equipe), voisins);
+          SprinterApp.armerEquipesAdverses(adverses.current);
+          if (rejeuAdverses.current) clearInterval(rejeuAdverses.current);
+          const porteurs = new Map<number, number>();
+          rejeuAdverses.current = setInterval(() => {
+            const t = s.msCourse();
+            if (t < 0) return;
+            for (const eq of adverses.current) {
+              const k = indexDe(t, eq);
+              eq.membres.forEach((m, r) => SprinterApp.liveDistDe(m.id, eq.traces[r][k], t));
+              const p = eq.porteur[k];
+              if (porteurs.get(eq.lane) !== p) { porteurs.set(eq.lane, p); SprinterApp.temoinAdverse(eq.lane, p); }
+            }
+            // LA PLACE, CELLE DE L'EQUIPE : combien de temoins adverses sont devant le notre (ou deja
+            // arrives). Le haut de l'ecran la montre au lieu du rang de chaque coureur.
+            const total = etatRef.current?.total;
+            SprinterApp.G.relaisPlace = 1 + adverses.current.filter(eq =>
+              total != null ? (eq.total != null && eq.total < total)
+                : (eq.total != null && eq.total <= t) || temoinDe(eq, t) > temoinVu.current).length;
+          }, 50);
+        }
         // Au coup de pistolet, le temoin est dans la main du premier.
         SprinterApp.porteurDuTemoin(1);
         // L'HORLOGE DU RELAIS EST CELLE DE LA SALLE. Le temps de l'equipe se
@@ -164,7 +213,7 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
           position: (d) => {
             s.avancer(d, Math.max(0, s.msCourse()));
             ou.current[s.monRelais] = d;
-            if (s.monRelais === porteur.current) setTemoinD(d);
+            if (s.monRelais === porteur.current) { setTemoinD(d); temoinVu.current = d; }
             majBras();
           },
           fini: () => s.terminer(),
@@ -222,26 +271,58 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
     // l'ecran ne fait aucune difference.
     const s: UneSalleRelais = solo
       ? new SalleRelaisSolo(solo.rang, equipe, ecouteurs)
-      : new SalleRelais(equipe, ecouteurs);
+      : new SalleRelais(equipe, ecouteurs, salon ? { salon: true, relais: salon.rang } : {});
     salle.current = s;
     s.connecter();
     // En sortant de la piste, le film s'en va aussi : l'ecran d'arrivee est le
     // seul a le proposer, et un fichier que plus personne ne peut voir n'a
     // aucune raison d'occuper la memoire de l'onglet pendant deux heures.
     return () => {
+      if (rejeuAdverses.current) clearInterval(rejeuAdverses.current);
+      rejeuAdverses.current = null;
+      SprinterApp.G.relaisPlace = null;
       // L'horloge de la salle part avec elle : une course suivante reporterait
       // ses adversaires sur une salle fermee.
       SprinterApp.G.horlogeLive = null;
       brancherSalle(null); s.fermer(); jeterLeFilm('relais');
     };
-  }, [equipe, solo?.rang]);
+  }, [equipe, solo?.rang, !!salon]);
 
   // La marque part de l'entree de la zone : c'est le placement le plus sur, et
   // c'est celui qu'on veut par defaut pour qui ne touche a rien.
+  // Au salon, changer de place change de zone : la marque repart de l'entree
+  // de la nouvelle.
+  const placeVue = useRef(0);
   useEffect(() => {
     const z = salle.current?.maZone;
+    const r = salle.current?.monRelais || 0;
+    if (r !== placeVue.current) { placeVue.current = r; setPret(false); setMarque(z ? z.debut : 0); return; }
     if (z && marque === 0) setMarque(z.debut);
   }, [e]);
+
+  /** Au salon, la place demandee etait prise : on le dit, au lieu de basculer en silence. */
+  const placeDemandee = useRef(salon?.rang || 0);
+  const placeRefusee = !!salon && !!e && placeDemandee.current > 0
+    && (salle.current?.monRelais || 0) > 0 && salle.current!.monRelais !== placeDemandee.current;
+
+  /** Le code du salon, copie pour l'envoyer aux autres. */
+  const [copie, setCopie] = useState(false);
+  const copierCode = async () => {
+    try { await navigator.clipboard.writeText(equipe); setCopie(true); setTimeout(() => setCopie(false), 1500); }
+    catch { /* le code reste affiche */ }
+  };
+
+  /**
+   * SEUL, ON PEUT RECOURIR, ET IL Y A UN TEMPS A BATTRE. Un relais en equipe ne
+   * se rejoue pas (il faudrait rassembler quatre personnes) ; seul, si — et
+   * c'est apres une elimination qu'on en a le plus envie. Le record perso de
+   * la place est note une fois, a l'arrivee.
+   */
+  const [record, setRecord] = useState<{ nouveau: boolean; avant: number | null } | null>(null);
+  const totalSolo = solo && e && !e.elimine ? e.total : null;
+  useEffect(() => {
+    if (solo && totalSolo != null) setRecord(noterRecordSolo(solo.rang, totalSolo));
+  }, [totalSolo]);
 
   if (!e) {
     return (
@@ -254,7 +335,7 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
   const mon = salle.current?.monRelais || 0;
   const zone = salle.current?.maZone || null;
   const partie = !!e.depart_a;
-  const fini = e.total != null || !!e.elimine;
+  const fini = (e.total != null || !!e.elimine) && (!salon || departVu.current);
   const jeRecois = partie && mon === e.porteur + 1;
   const jeDonne = partie && mon === e.porteur && mon < TAILLE;
   /**
@@ -276,12 +357,36 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
         <Fin
           rate={!!e.elimine}
           titre={N.t(e.elimine ? 'relais_elimine' : 'relais_arrivee')}
-          detail={e.elimine ? N.t('relais_elimine_pourquoi', {
-            r: String(e.elimine.relais), c: e.elimine.raison,
-          }) : ''}
+          detail={e.elimine ? pourquoiElimine(e.elimine) : ''}
           temps={e.total}
           passes={e.passes}
+          // la place de l'equipe parmi les adverses, quand le relais est boucle
+          place={!e.elimine && e.total != null && adverses.current.length
+            ? 1 + adverses.current.filter(eq => eq.total != null && eq.total < e.total!).length : null}
           onFermer={onQuitter}
+          enfants={(solo || salon) ? (
+            <div className="flex flex-col items-center gap-2">
+              {record?.nouveau && (
+                <span className="px-3 py-1 rounded-full text-[10px] font-black tracking-widest
+                                 text-background bg-primary">
+                  {N.t('relais_solo_nouveau')}
+                </span>
+              )}
+              {record && !record.nouveau && record.avant != null && (
+                <span className="text-[11px] text-muted-foreground">
+                  {N.t('relais_solo_record', { t: chrono(record.avant) })}
+                </span>
+              )}
+              {onRejouer && (
+                <button onClick={() => onRejouer(salle.current?.monRelais || solo?.rang || salon?.rang || 1)}
+                  className="px-6 py-2.5 rounded-xl font-black font-display tracking-widest text-sm
+                             text-emerald-300 border border-emerald-400/50 bg-emerald-400/10
+                             hover:bg-emerald-400/20">
+                  {N.t('relais_solo_rejouer')}
+                </button>
+              )}
+            </div>
+          ) : undefined}
         />
       </AnimatePresence>
     );
@@ -343,7 +448,7 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
             {e.equipe}
           </span>
           <span className="font-mono text-[10px] text-muted-foreground">
-            {N.t('relais_mon_rang', { n: String(mon) })}
+            {N.t('relais_mon_rang', { n: N.ord(mon) })}
           </span>
         </div>
 
@@ -355,6 +460,48 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
           <p className="text-[11px] text-muted-foreground text-center leading-snug">
             {N.t('relais_premier')}
           </p>
+        )}
+
+        {/* LE SALON : son code a partager, et les quatre places. Une place
+            tenue par un fictif se prend d'un doigt ; celle d'un autre joueur,
+            non. Le fictif garde les places que personne ne prend. */}
+        {salon && (
+          <div className="flex flex-col gap-2">
+            <button onClick={copierCode}
+              className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl
+                         border border-emerald-400/30 bg-emerald-400/[0.06]">
+              <span className="text-[10px] tracking-widest text-muted-foreground">{N.t('relais_salon_code')}</span>
+              <span className="font-mono font-black tracking-[0.3em] text-emerald-300">{equipe}</span>
+              <span className="text-[9px] tracking-widest text-emerald-400">
+                {N.t(copie ? 'relais_salon_copie' : 'relais_salon_copier')}
+              </span>
+            </button>
+            {placeRefusee && (
+              <p className="text-[10px] text-center text-amber-300 leading-snug">
+                {N.t('relais_salon_refusee', { a: N.ord(placeDemandee.current), n: N.ord(mon) })}
+              </p>
+            )}
+            <div className="grid grid-cols-4 gap-1.5">
+              {[1, 2, 3, 4].map(r => {
+                const j = e.joueurs.find(x => x.relais === r);
+                const autre = !!j && !j.fictif && r !== mon;
+                return (
+                  <button key={r} disabled={autre || r === mon}
+                    onClick={() => { placeDemandee.current = r; if (salle.current && 'choisirPlace' in salle.current)
+                      (salle.current as SalleRelais).choisirPlace(r); }}
+                    className={`flex flex-col items-center gap-0.5 py-1.5 rounded-xl border text-[10px]
+                      ${r === mon ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-300'
+                        : autre ? 'border-white/8 bg-black/20 text-muted-foreground/50'
+                        : 'border-white/10 bg-black/25 text-muted-foreground hover:text-foreground'}`}>
+                    <span className="font-black font-display text-xs">{N.t('relais_solo_r' + r)}</span>
+                    <span className="text-[8px] tracking-wider leading-none truncate max-w-full px-1">
+                      {r === mon ? N.t('relais_salon_toi') : autre ? j!.nom : N.t('relais_salon_libre')}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         <Vestiaire joueurs={e.joueurs} monRelais={mon} />
@@ -374,9 +521,9 @@ export function CourseRelais({ equipe, solo, onQuitter }: {
           </p>
         )}
 
-        {solo && (
+        {(solo || salon) && (
           <p className="text-[10px] text-center text-muted-foreground leading-snug">
-            {N.t('relais_solo_note')}
+            {N.t(solo ? 'relais_solo_note' : 'relais_salon_note')}
           </p>
         )}
 

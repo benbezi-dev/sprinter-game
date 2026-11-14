@@ -40,7 +40,29 @@ export function PisteRelais() {
   };
 
   if (quoi.genre === 'relais_solo') {
-    return <CourseRelais equipe={quoi.equipe} solo={{ rang: quoi.rang }} onQuitter={sortir} />;
+    // Recourir : on sort de la piste comme pour CONTINUER — le moteur revient a
+    // l'accueil — puis on y rentre aussitot, a la meme place, avec une salle
+    // neuve et trois nouveaux coequipiers.
+    const solo = quoi;
+    const rejouer = () => {
+      sortir();
+      setTimeout(() => entrerSurLaPiste({ ...solo }), 0);
+    };
+    return <CourseRelais equipe={solo.equipe} solo={{ rang: solo.rang }}
+                         onQuitter={sortir} onRejouer={rejouer} />;
+  }
+  if (quoi.genre === 'relais_salon') {
+    // Recourir au salon : on en sort et on y rentre, a la meme place si elle
+    // est encore libre. Les autres joueurs restent dans le meme salon.
+    const sal = quoi;
+    // A la place qu'on tenait a l'arrivee, pas a celle demandee en entrant :
+    // on a pu en changer dans la salle d'attente.
+    const rejouer = (rang: number) => {
+      sortir();
+      setTimeout(() => entrerSurLaPiste({ ...sal, rang }), 0);
+    };
+    return <CourseRelais equipe={sal.code} salon={{ rang: sal.rang }}
+                         onQuitter={sortir} onRejouer={rejouer} />;
   }
   if (quoi.genre === 'relais') {
     return <CourseRelais equipe={quoi.equipe} onQuitter={sortir} />;

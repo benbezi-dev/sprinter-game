@@ -9,6 +9,7 @@ import { ouCourt, capIci, virageApres, ici, sx, salleActive } from './repere';
 import { presente, finCam, presenteOu, finVise } from './salle-noire';
 import { profilBas, finaleVue, toitsStade, cameraSalle, blocsSalle, amsalemActif } from './stade';
 import { nCouloirs } from '../course-3d';
+import { suiviDuRelais } from './relais';
 
 // LES PLANS DE CAMERA (« plusieurs plans de camera sur les courses, choisis au hasard » ;
 // « garde cette vue aussi », « alterne entre les vues », l'auteur, 23/10) : la camera 3D (a la
@@ -45,7 +46,8 @@ let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
 export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
   // LA CAMERA, derriere le joueur dans l'axe de son couloir, un peu en hauteur
   // (en meute, un mordu regarde la poursuite : la camera suit sa proie, `G.suivi`, comme le 2D)
-  const pl = G.spectateur && G.suivi ? G.suivi : G.player;
+  // AU RELAIS, LA CAMERA SUIT LE TEMOIN quand le joueur ne l'a pas (relais.ts, comme le 2D)
+  const pl = (G.spectateur && G.suivi ? G.suivi : null) || suiviDuRelais(G) || G.player;
   // un plan par course : la piste est neuve a chaque depart (le moteur 3D ne voit pas les ecrans d'entre deux)
   if ((G.state === 'count' || G.state === 'race') && planPour !== G.track) {
     planPour = G.track;
