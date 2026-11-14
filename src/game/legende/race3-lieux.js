@@ -13,6 +13,7 @@
 //               par mesure, joue par un instrument synthetise avec les memes
 //               briques (`tone`) — voir INSTRUMENTS dans sprinter-app.js ;
 //   contretemps les accords plaques sur les contretemps (skank reggae) ;
+//   (nom        le nom de la piste dans le MIDI pour Logic, legende-midi.mjs)
 //   aura        l'Olympe et l'apotheose : choeur, halo, harpe et grande
 //               reverberation par-dessus (aura.js ; 1 = le dosage de base).
 // Un fichier de donnees pur : le jeu le lit (Audio_.buildRace) et
@@ -73,31 +74,31 @@ const LIEUX = {
     stabSemi: 7, claps: [1, 3, 3.5], clapAmp: 1.1,
     couches: [
       // le riff de cuivres, le refrain qui reste en tete
-      { instrument: 'anche', octave: 4, amp: 0.20, melodie: [
+      { nom: 'Cuivres', instrument: 'anche', octave: 4, amp: 0.20, melodie: [
         [[7, 0, .5], [7, .75, .25], [9, 1, .5], [7, 1.5, .5], [4, 2, .75], [2, 2.75, .25], [4, 3, 1]],
         [[9, 0, .5], [9, .75, .25], [12, 1, .5], [9, 1.5, .5], [4, 2, .75], [2, 2.75, .25], [4, 3, 1]],
         [[5, 0, .5], [5, .75, .25], [9, 1, .5], [12, 1.5, .5], [14, 2, .75], [12, 2.75, .25], [9, 3, 1]],
         [[11, 0, .5], [9, .5, .5], [7, 1, .5], [4, 1.5, .5], [7, 2, .25], [9, 2.25, .25], [11, 2.5, .5], [14, 3, .5], [12, 3.5, .5]],
       ] },
       // la sebene : doubles-croches dans l'aigu, tierce majeure ou mineure selon l'accord
-      { instrument: 'pincee', octave: 4, amp: 0.10, melodie: (() => {
+      { nom: 'Guitare sebene', instrument: 'pincee', octave: 4, amp: 0.10, melodie: (() => {
         const sebene = (r, t) => [12, 19, 12 + t, 19, 24, 19, 12 + t, 19, 14, 19, 12 + t, 19, 12, 12 + t, 19, 24]
           .map((n, i) => [r + n - 12, i * 0.25, 0.25]);
         return [sebene(0, 4), sebene(-3, 3), sebene(5, 4), sebene(7, 4)];
       })() },
       // la 2e guitare, en croches sur les contretemps
-      { instrument: 'pincee', octave: 3, amp: 0.13, melodie: [
+      { nom: 'Guitare 2', instrument: 'pincee', octave: 3, amp: 0.13, melodie: [
         [[16, .5, .5], [12, 1.5, .5], [19, 2.5, .5], [16, 3.5, .5]],
         [[12, .5, .5], [9, 1.5, .5], [16, 2.5, .5], [12, 3.5, .5]],
         [[17, .5, .5], [14, 1.5, .5], [21, 2.5, .5], [17, 3.5, .5]],
         [[19, .5, .5], [16, 1.5, .5], [23, 2.5, .5], [20, 3.5, .5]],
       ] },
       // la cloche : la clave qui tient le groove
-      { instrument: 'cloche', octave: 6, amp: 0.035, melodie: [
+      { nom: 'Cloche', instrument: 'cloche', octave: 6, amp: 0.035, melodie: [
         [[0, 0, .1], [0, .75, .1], [0, 1.5, .1], [0, 2.5, .1], [0, 3, .1]],
       ] },
       // le sifflet de l'atalaku : deux coups secs puis un long ; relance a la 3e mesure
-      { instrument: 'souffle', octave: 6, amp: 0.10, melodie: [
+      { nom: 'Sifflet atalaku', instrument: 'souffle', octave: 6, amp: 0.10, melodie: [
         [[7, 0, .2], [7, .5, .2], [7, 1, .9]], [], [[7, 3, .15], [7, 3.25, .15], [7, 3.5, .4]], [],
       ] },
     ],
