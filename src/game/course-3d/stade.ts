@@ -1304,5 +1304,14 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
       else if (!manque) legendeEssais = 0;
     }
   }
-  for (const l of [lMarche, lContre, lSiege, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille, lFilet, lFilet2]) l.finir(stade);
+  // SEULS LES COUREURS PROJETTENT, ICI AUSSI (l'auteur, 14/11/2026, captures a l'appui : « les couloirs
+  // changent de couleur a certains endroits », au 400 m plat comme en haies). Ces lots sont rendus APRES
+  // le `traverse` qui eteint les ombres du stade, plus haut : le toit, les pylones de 48 m et les arbres
+  // gardaient donc la leur. Le soleil descend vers la camera pour prendre les coureurs de face
+  // (camera.ts) : un pylone de 1,4 m de section etirait alors une longue bande sombre a bords droits a
+  // travers les couloirs, coupee net par la boite d'ombre de 28 m autour du joueur (scene.ts).
+  for (const l of [lMarche, lContre, lSiege, lToit, lBeton, lBlanc, lVitre, lMetal, lBloc, lTronc, lFeuille, lFilet, lFilet2]) {
+    const im = l.finir(stade);
+    if (im) im.castShadow = false;
+  }
 }
