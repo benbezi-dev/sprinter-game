@@ -87,7 +87,7 @@ export function suiviDuRelais(G: any): any {
   if (G.raceKey !== '4x100' || !G.player || G.player.relaisRang == null || G.spectateur) return null;
   const moi = G.player.relaisRang, p = G.relaisPorteur || 1;
   if (p === moi) return null;
-  const porteur = (G.runners || []).find((r: any) => r !== G.player && r.relaisRang === p);
+  const porteur = (G.runners || []).find((r: any) => r !== G.player && !r.adverse && r.relaisRang === p);
   if (!porteur) return null;
   if (p === moi - 1 && G.player.d - porteur.d <= 14) return null;
   return porteur;

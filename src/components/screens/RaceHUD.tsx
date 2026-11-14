@@ -191,7 +191,10 @@ export function RaceHUD() {
 
   // Une egalite partage la place : on compte ceux qui sont arrives strictement
   // avant, pas ceux que le tri a poses devant.
-  const pos = player?.finished && player.finishTime != null
+  // Au relais, la place est celle de l'EQUIPE parmi les equipes adverses (CourseRelais, G.relaisPlace),
+  // pas le rang du coureur parmi les relayeurs : « 11e » ne voulait rien dire.
+  const placeRelais = SprinterApp.G.raceKey === '4x100' ? SprinterApp.G.relaisPlace : null;
+  const pos = placeRelais != null ? placeRelais : player?.finished && player.finishTime != null
     ? 1 + runners.filter((r: any) => r !== player && r.finished && msDe(r) < msDe(player)).length
     : order.indexOf(player) + 1;
   /**

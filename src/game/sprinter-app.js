@@ -3008,7 +3008,8 @@ import { sponsorDeLaCourse } from './panneaux';
    */
   function porteurDuTemoin(rang) {
     for (const r of G.runners) {
-      if (r.relaisRang == null) continue;
+      // les equipes adverses ont leur propre temoin (temoinAdverse)
+      if (r.relaisRang == null || r.adverse) continue;
       // La main du cote de la camera : de dos, l'autre est masquee par le
       // corps, et un temoin a moitie cache ne raconte rien.
       r.temoin = (r.relaisRang === rang) ? -1 : null;
@@ -3034,7 +3035,7 @@ import { sponsorDeLaCourse } from './panneaux';
     if (!G.liveOn || G.raceKey !== '4x100' || !G.player || G.player.relaisRang == null) return null;
     const moi = G.player.relaisRang, p = G.relaisPorteur || 1;
     if (p === moi) return null;
-    const porteur = G.runners.find(r => r !== G.player && r.relaisRang === p);
+    const porteur = G.runners.find(r => r !== G.player && !r.adverse && r.relaisRang === p);
     if (!porteur) return null;
     // Il arrive sur moi : on cadre entre nous deux, puis sur moi.
     if (p === moi - 1) {
@@ -3084,6 +3085,48 @@ import { sponsorDeLaCourse } from './panneaux';
     }
   }
 
+  /**
+   * LES EQUIPES ADVERSES DU RELAIS (game/relais-adverses.ts). Quatre relayeurs par couloir voisin,
+   * chacun dans SA moitie de couloir, attendus a sa marque — comme nos coequipiers (armRelayeurs),
+   * mais sans repere ni nom au-dessus de la tete : ce sont des adversaires, ils ne se suivent pas.
+   * Leurs positions arrivent par liveDistDe, rejouees depuis une course calculee d'avance.
+   */
+  // UN MAILLOT PAR EQUIPE : la couleur dit a quelle equipe appartient un relayeur, la silhouette
+  // (carnation, gabarit, cheveux) reste celle de chacun. Pas de jaune : c'est la couleur du joueur.
+  const MAILLOTS_ADVERSES = [[64, 178, 235], [236, 92, 88], [176, 108, 235], [46, 206, 190],
+                             [246, 166, 52], [226, 96, 168], [236, 238, 244], [120, 200, 90]];
+  function armerEquipesAdverses(equipes) {
+    if (!G.lives) G.lives = new Map();
+    const pool = LEVELS[G.levelIdx].pool;
+    (equipes || []).forEach((eq, i) => {
+      const maillot = MAILLOTS_ADVERSES[i % MAILLOTS_ADVERSES.length];
+      for (const a of eq.membres) {
+        const r = new Runner('', eq.lane, {
+          maxSpeed: G.race.maxSpeed, total: G.track.total, pool,
+        });
+        r.look = Object.assign({}, K.lookFor(a.nom || a.id, pool), {
+          jersey: maillot, shorts: maillot.map(c => Math.round(c * 0.35)),
+        });
+        r.isGhost = true; r.isLive = true; r.adverse = true; r.relaisRang = a.relais;
+        r.demi = demiCouloir(a.relais);
+        r.relaisFin = a.relais < 4 ? a.relais * 100 + 30 : null;
+        r.d = Math.max(0, (a.relais - 1) * 100);
+        r.v = 0;
+        r.temoin = a.relais === 1 ? -1 : null;
+        G.runners.push(r);
+        G.lives.set(a.id, suiviLive(r, 0, { equipier: true }));
+      }
+    });
+  }
+
+  /** Le temoin d'une equipe adverse change de main. */
+  function temoinAdverse(lane, rang) {
+    for (const r of G.runners) {
+      if (!r.adverse || Math.round(r.lane) !== lane) continue;
+      r.temoin = r.relaisRang === rang ? -1 : null;
+    }
+  }
+
   function startRelais(opts) {
     opts = opts || {};
     const relais = Math.max(1, Math.min(4, opts.relais || 1));
@@ -3091,7 +3134,11 @@ import { sponsorDeLaCourse } from './panneaux';
     startLive(['4x100'], {
       levelIdx: opts.levelIdx == null ? 4 : opts.levelIdx,
       adversaire: '', autres: opts.autres || [],
+      // PAS DE COUREURS DE L'ORDINATEUR SEULS SUR 400 M A COTE D'UN RELAIS : les couloirs voisins
+      // recoivent des equipes adverses (armerEquipesAdverses), ou les autres equipes d'une confrontation.
+      sansOrdinateur: true,
     });
+    G.relaisPlace = null;
     // APRES `startLive`, qui a monte la piste et arme d'eventuels adversaires :
     // les coequipiers viennent par-dessus, dans mon couloir a moi.
     if (opts.equipiers && opts.equipiers.length) armRelayeurs(opts.equipiers, relais);
@@ -9721,7 +9768,7 @@ import { sponsorDeLaCourse } from './panneaux';
     armLive, liveDist, armLives, majLives, liveDistDe, liveFiniDe, photoPourHud,
     startLive, liveDepart,
     rappelChamp, stepRappel, finRappelChamp, suivreCoureurChamp,
-    armRelayeurs, porteurDuTemoin,
+    armRelayeurs, porteurDuTemoin, armerEquipesAdverses, temoinAdverse,
     // Le rejeu d'une course de championnat repeint les huit couloirs avec les
     // noms et les chronos d'une course qui a deja eu lieu : il lui faut la
     // meme couleur de repere que celle que la piste pose d'elle-meme, sans

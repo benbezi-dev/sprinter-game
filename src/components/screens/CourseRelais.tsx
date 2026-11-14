@@ -5,6 +5,7 @@ import { Loader2, Eye } from 'lucide-react';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { SalleRelais, TAILLE, PORTEE, ELAN, type EtatRelais, type UneSalleRelais } from '@/game/salle-relais';
 import { SalleRelaisSolo, noterRecordSolo } from '@/game/salle-relais-solo';
+import { simulerEquipesAdverses, graine, indexDe, temoinDe, type EquipeAdverse } from '@/game/relais-adverses';
 import { programmerLeFilm, arreterLeFilm, jeterLeFilm } from '@/game/film-course';
 import { Marque, Couloir, BoutonTemoin, Fin, pourquoiElimine, Vestiaire, couleurDe, chrono } from './relais-pieces';
 
@@ -75,6 +76,11 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
    * sur son ecran d'arrivee, au lieu de la salle d'attente.
    */
   const departVu = useRef(false);
+  /** Ou est notre temoin, en direct : il sert au classement des equipes. */
+  const temoinVu = useRef(0);
+  /** Les equipes adverses de cette course, calculees au pistolet (relais-adverses.ts). */
+  const adverses = useRef<EquipeAdverse[]>([]);
+  const rejeuAdverses = useRef<ReturnType<typeof setInterval> | null>(null);
   const porteur = useRef(1);
   /** Ou est chacun, par rang de relais — nourri par la salle, dix fois par seconde. */
   const ou = useRef<Record<number, number>>({});
@@ -113,7 +119,7 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
         // Le temoin change de main : le dessin le lit sur le coureur, et
         // c'est la salle qui dit lequel l'a.
         SprinterApp.porteurDuTemoin(etat.porteur);
-        setTemoinD(etat.temoin_d);
+        setTemoinD(etat.temoin_d); temoinVu.current = etat.temoin_d;
         setE(etat);
         majBras();
       },
@@ -126,7 +132,7 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
       // distance qui nous separe, celle dont depend la transmission.
       onPos: (relais, d, c) => {
         ou.current[relais] = d;
-        if (relais === porteur.current) setTemoinD(d);
+        if (relais === porteur.current) { setTemoinD(d); temoinVu.current = d; }
         const j = (etatRef.current?.joueurs || []).find(x => x.relais === relais);
         // Avec l'instant de SA course, quand la salle le transmet : le
         // coequipier est dessine ou il en est a notre instant, et non ou il
@@ -164,6 +170,34 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
           relais: s.monRelais, marque: s.marque, autres: [], equipiers: mesEquipiers, marquesElan,
         });
         SprinterApp.liveDepart(dansMs, departA);
+        // LES EQUIPES ADVERSES, une par couloir voisin (relais-adverses.ts). Calculees ici, au
+        // pistolet, d'une graine tiree de sa date et du code : les quatre telephones d'une equipe —
+        // ou d'un salon — voient les memes adversaires courir la meme course.
+        {
+          const moiLane = Math.round(SprinterApp.G.player?.lane ?? 3);
+          const nl = SprinterApp.C.LANE_COUNT || 8;
+          const voisins = Array.from({ length: nl }, (_, i) => i).filter(i => i !== moiLane);
+          adverses.current = simulerEquipesAdverses(graine(departA, equipe), voisins);
+          SprinterApp.armerEquipesAdverses(adverses.current);
+          if (rejeuAdverses.current) clearInterval(rejeuAdverses.current);
+          const porteurs = new Map<number, number>();
+          rejeuAdverses.current = setInterval(() => {
+            const t = s.msCourse();
+            if (t < 0) return;
+            for (const eq of adverses.current) {
+              const k = indexDe(t, eq);
+              eq.membres.forEach((m, r) => SprinterApp.liveDistDe(m.id, eq.traces[r][k], t));
+              const p = eq.porteur[k];
+              if (porteurs.get(eq.lane) !== p) { porteurs.set(eq.lane, p); SprinterApp.temoinAdverse(eq.lane, p); }
+            }
+            // LA PLACE, CELLE DE L'EQUIPE : combien de temoins adverses sont devant le notre (ou deja
+            // arrives). Le haut de l'ecran la montre au lieu du rang de chaque coureur.
+            const total = etatRef.current?.total;
+            SprinterApp.G.relaisPlace = 1 + adverses.current.filter(eq =>
+              total != null ? (eq.total != null && eq.total < total)
+                : (eq.total != null && eq.total <= t) || temoinDe(eq, t) > temoinVu.current).length;
+          }, 50);
+        }
         // Au coup de pistolet, le temoin est dans la main du premier.
         SprinterApp.porteurDuTemoin(1);
         // L'HORLOGE DU RELAIS EST CELLE DE LA SALLE. Le temps de l'equipe se
@@ -179,7 +213,7 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
           position: (d) => {
             s.avancer(d, Math.max(0, s.msCourse()));
             ou.current[s.monRelais] = d;
-            if (s.monRelais === porteur.current) setTemoinD(d);
+            if (s.monRelais === porteur.current) { setTemoinD(d); temoinVu.current = d; }
             majBras();
           },
           fini: () => s.terminer(),
@@ -244,6 +278,9 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
     // seul a le proposer, et un fichier que plus personne ne peut voir n'a
     // aucune raison d'occuper la memoire de l'onglet pendant deux heures.
     return () => {
+      if (rejeuAdverses.current) clearInterval(rejeuAdverses.current);
+      rejeuAdverses.current = null;
+      SprinterApp.G.relaisPlace = null;
       // L'horloge de la salle part avec elle : une course suivante reporterait
       // ses adversaires sur une salle fermee.
       SprinterApp.G.horlogeLive = null;
@@ -323,6 +360,9 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
           detail={e.elimine ? pourquoiElimine(e.elimine) : ''}
           temps={e.total}
           passes={e.passes}
+          // la place de l'equipe parmi les adverses, quand le relais est boucle
+          place={!e.elimine && e.total != null && adverses.current.length
+            ? 1 + adverses.current.filter(eq => eq.total != null && eq.total < e.total!).length : null}
           onFermer={onQuitter}
           enfants={(solo || salon) ? (
             <div className="flex flex-col items-center gap-2">
