@@ -125,8 +125,9 @@ const PresentationBoss = /* @__PURE__ */ lazy(() => import('@/components/screens
 const FinDeCourseAthlete = /* @__PURE__ */ lazy(() => import('@/components/screens/CarriereAthlete')
   .then(m => ({ default: m.FinDeCourseAthlete })));
 // Les departs en blocs de la carriere, sur la piste du jeu (game/athlete/departs.ts).
-const DepartsEnPiste = /* @__PURE__ */ lazy(() => import('@/components/screens/SeancesAthlete')
-  .then(m => ({ default: m.DepartsEnPiste })));
+// hors canal de test, la carriere est absente : le module des seances ne part pas dans le build public
+const DepartsEnPiste = CARRIERE_ATHLETE_OUVERTE ? /* @__PURE__ */ lazy(() => import('@/components/screens/SeancesAthlete')
+  .then(m => ({ default: m.DepartsEnPiste }))) : null;
 // Le duel des marques : ce qu'un duel contre un fantome change a la bataille
 // (K.O., revanche), annonce par-dessus l'ecran de fin. Charge a la demande.
 const AnnonceDuelMarques = /* @__PURE__ */ lazy(() => import('@/components/screens/DuelMarques')
@@ -464,7 +465,7 @@ function MainGame() {
           et le reste de sa surface laisse passer les appuis. */}
       {tutoHaies && <TutorialHaies onClose={fermerLeTutoHaies} />}
       {tutoSprint && <Tutorial onClose={fermerLeTutoSprint} />}
-      {departs && <Suspense fallback={null}>
+      {departs && DepartsEnPiste && <Suspense fallback={null}>
         <DepartsEnPiste a={departs.a} jour={departs.jour} onFin={fermerLesDeparts} />
       </Suspense>}
 
