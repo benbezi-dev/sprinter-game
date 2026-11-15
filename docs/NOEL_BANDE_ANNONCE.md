@@ -39,9 +39,8 @@ Bande-annonce de l'événement de Noël 2026 (calendrier de l'Avent, histoire da
 
 Les illustrations (Givre, Marthe, l'étoile qui s'allume, le renne qui
 s'envole, le Père Noël qui sort des blocs) montrent l'histoire, pas le jeu. Aujourd'hui, aucune de ces scènes
-n'existe en 3D, et le calendrier de 24 cases n'est pas encore construit (voir
-« Suggestions pour l'intégration » dans `docs/NOEL_HISTOIRE.md`). Le stade,
-lui, est dans le jeu.
+n'existe en 3D. Le stade et le calendrier de 24 cases, eux, sont dans le jeu
+(voir « Dans le jeu » dans `docs/NOEL_HISTOIRE.md`).
 
 ## Refaire le montage
 

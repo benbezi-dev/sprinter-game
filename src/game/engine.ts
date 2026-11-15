@@ -171,6 +171,12 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
     const cible = noel.cible && SprinterApp.G.ghostSet ? String(noel.cible) : null;
     import('./noel').then(m => m.envoyerCourse(t, trace, cible)).catch(() => { /* hors ligne */ });
   }
+  // LE CALENDRIER DE L'AVENT (game/avent.ts) : une course partie d'une case se juge
+  // contre son chrono a battre ; la victoire ouvre le chapitre et la case suivante.
+  const avent = (SprinterApp.G.shotOpts || {}).avent;
+  if (NOEL_OUVERT && avent && Number.isInteger(avent.n) && t != null && !SprinterApp.G.rejeu) {
+    import('./avent').then(m => m.arrivee(avent.n, t)).catch(() => { /* */ });
+  }
 };
 
 // Meme crochet, pour une CARRIERE gagnee de bout en bout : le compte qui

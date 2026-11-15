@@ -495,24 +495,32 @@ Aucune ne nomme Marthe : elles peuvent tomber avant le chapitre 7.
 
 ---
 
-## Suggestions pour l'intégration dans le jeu
+## Dans le jeu : le calendrier est construit
 
-Rien de ce qui suit n'est construit. Ce sont des propositions.
+Le calendrier de l'Avent se joue dans le jeu, du 1er au 25 décembre (même
+fenêtre que l'événement Noël, `NOEL_OUVERT`).
 
-- **Le calendrier** : 24 cases, du 1er au 24 décembre, chacune ouverte à 22 h,
-  heure de Paris, comme les nuits d'Halloween. On peut reprendre le module
-  `halloween-calendrier.ts` en changeant les dates, le nombre de cases et la
-  bascule de fuseau : il n'y a pas de changement d'heure en décembre, ce qui
-  simplifie le calcul.
-- **La course du jour** : un sprint de nuit avec Givre derrière toi, qui ne
-  menace pas mais suit. Il faut tenir un chrono. On peut faire monter la
-  distance par acte : 60 m pendant l'acte 1, puis 100 m, 200 m, et 400 m pour
-  la case 24.
-- **Le décor** : le stade dédié existe, le **Village de l'Étoile**
-  (`src/game/noel-3d.ts`, thème `noel`) : sol enneigé de nuit, grand sapin
-  au centre avec son étoile (éteinte par défaut, allumée par
-  `globalThis.__ETOILE_NOEL`), chalets du marché, guirlandes le long de la
-  ligne droite, sapins enneigés autour, neige qui tombe. Il manque encore la
-  colline et la chapelle.
-- **Le lien avec la bataille de boules de neige** : les fantômes de l'arène
-  deviennent « ceux qui courent derrière toi » à partir de la case 13.
+| Pièce | Fichier |
+|---|---|
+| Les 24 chapitres, l'épilogue et les soirs perdus, en français et en anglais | `src/game/avent-chapitres.ts` |
+| Les dates (le n décembre à 22 h, heure de Paris) et le double verrou date + victoire | `src/game/avent-calendrier.ts` |
+| Les 24 courses, leurs chronos à battre, le carnet (sur l'appareil), l'arrivée | `src/game/avent.ts` |
+| La bannière, la grille des cases, le détail d'une case, la lecture, l'écran de fin, le chrono à battre pendant la course | `src/components/screens/Avent.tsx` |
+| Le harnais : dates, verrous, et chaque chrono tenu par le vrai moteur | `tools/avent-test.mjs` |
+
+- **Chaque case est une course au Village de l'Étoile** (100, 200 ou 400 m),
+  avec un chrono à battre. La case 24, la Course de l'Étoile, est un 400 m.
+- **Les chronos sont mesurés sur le vrai moteur**, comme ceux d'Halloween : la
+  case 1 demande 7,75 appuis/s, la case 24 en demande 11 (automate
+  parfaitement alterné ; un vrai doigt fait moins bien).
+- **Le temps** est celui du serveur quand il répond (l'heure du tableau de
+  Noël) ; hors ligne, un cliquet empêche d'ouvrir une case en avançant sa
+  montre.
+- **Sur le canal de test**, la date ne bloque rien ; `?avent_jour=N` rejoue la
+  date du N décembre à 22 h.
+- **Le carnet** (cases gagnées, meilleurs chronos, tentatives) est rangé sur
+  l'appareil (`sprinter_avent_v1`), comme celui d'Halloween. Il n'y a pas de
+  classement serveur du calendrier.
+
+Ce qui manque encore : la colline et la chapelle dans le décor, et Givre en 3D
+qui suivrait le coureur.
