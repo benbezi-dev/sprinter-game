@@ -20,7 +20,7 @@ import { monde, texteCanvas, scene, hemi, soleil, renderer } from './scene';
 import { salleActive, ici, milieu, capIci } from './repere';
 import { chargerLaPlage, uFoule, atlasPlage, atlasPublic, P_SIL, P_GESTES, laFoule } from './public';
 import { carteNeon, retirerLaPluie, oublierLEspace, espaceAutour, pieceDuStade, planetesSousLaPiste, voute, villeNeon, poserLesPieces } from './decors';
-import { lExtinction, presente, presenteTexte, lesLampesDuPublic, laPresentationAuSol, DUREE_EXTINCTION, lesLignesRouges, lArriveeEnOr } from './salle-noire';
+import { lExtinction, presente, presenteTexte, presenteMoi, lesLampesDuPublic, laPresentationAuSol, DUREE_EXTINCTION, lesLignesRouges, lArriveeEnOr } from './salle-noire';
 import { uLisere, eclairerLesCorps, uLisereCoul, uLisereForce, uLisereFace, blocLots, _T } from './corps';
 import { soleilDecal } from './camera';
 
@@ -348,7 +348,7 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
         if (finaleVue && presente >= 0) {
           matG.map = tE;
           const img = Math.floor(t * 30); if (img === imageE) return; imageE = img;
-          const w = 1024, h = 512, moi = presenteTexte === 'TOI';
+          const w = 1024, h = 512, moi = presenteMoi;
           ce.globalCompositeOperation = 'source-over';
           const fond = ce.createLinearGradient(0, 0, w, h); fond.addColorStop(0, '#020616'); fond.addColorStop(1, '#0a1640');
           ce.fillStyle = fond; ce.fillRect(0, 0, w, h);
@@ -360,6 +360,10 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
           ce.font = '900 110px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 250, w - 300);
           ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 38px Outfit, system-ui, sans-serif';
           ce.fillText('CHAMPIONNAT DE FRANCE · SALLE', 274, 360, w - 300);
+          // (le drapeau en pied d'ecran, comme les habillages des championnats nationaux a la television)
+          ce.fillStyle = '#1f4fe0'; ce.fillRect(0, h - 22, w / 3, 22);
+          ce.fillStyle = '#f4f6fb'; ce.fillRect(w / 3, h - 22, w / 3, 22);
+          ce.fillStyle = '#e8202f'; ce.fillRect(2 * w / 3, h - 22, w - 2 * w / 3, 22);
           // le liseré qui balaie l'ecran
           const x = ((t % 3) / 3 * 1.6 - 0.3) * w, g = ce.createLinearGradient(x - 90, 0, x + 90, 0);
           g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, 'rgba(255,255,255,0.12)'); g.addColorStop(1, 'rgba(255,255,255,0)');
@@ -412,7 +416,7 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
     }
     finaleVue = finaleNoire;
     // (en serie, la presentation attend la fin de l'extinction)
-    if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches, tourChamp === 'serie' ? DUREE_EXTINCTION : 0));
+    if (finaleNoire) pubAnim.push(laPresentationAuSol(T, salle.interieur, salle.fleches, tourChamp === 'serie' ? DUREE_EXTINCTION : 0, salle.lignes));
     if (finaleNoire) pubAnim.push(lesLignesRouges(salle.alerte), lArriveeEnOr(T, salle.interieur));
     // UNE SEULE PASSE POUR LES LUMIERES ADDITIVES (mesure du 8/11 : la salle noire perdait la moitie de ses images) :
     // three dessine une matiere transparente double face en deux passes, dos puis face, en la marquant a recompiler
