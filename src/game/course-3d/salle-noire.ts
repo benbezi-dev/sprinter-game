@@ -13,7 +13,9 @@ import { nCouloirs } from '../course-3d';
 // vitesse de son chrono, puis tout se retire (« ils sont la pour la presentation puis se retirent »).
 // Le joueur : « TOI », en or. Au pistolet, plus rien sur la piste — on court dans le noir, lignes allumees.
 const PRES_PAS = 3;
-export let presente = -1, presenteTexte = '';
+export let presente = -1, presenteTexte = '', presenteMoi = false;
+/** « TOI » dans la langue du joueur (YOU en anglais). */
+const toi = () => { try { return String((globalThis as any).SprinterApp?.N?.t('you') || 'TOI').toUpperCase(); } catch { return 'TOI'; } };
 export const presenteOu = new THREE.Vector3(), finCam = new THREE.Vector3(), finVise = new THREE.Vector3();
 function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: number, h: number) => void) {
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
@@ -146,7 +148,10 @@ export function lesLampesDuPublic(groupe: THREE.Group, pos: number[], hasard: ()
     g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.18, 'rgba(255,255,255,1)'); g.addColorStop(0.45, 'rgba(220,235,255,0.35)'); g.addColorStop(1, 'rgba(200,220,255,0)');
     c.fillStyle = g; c.fillRect(0, 0, w, h);
   });
-  const mat = new THREE.PointsMaterial({ size: 2.4, map: tache, vertexColors: true, transparent: true, depthWrite: false,
+  // (taille en metres, la perspective l'applique : une lampe et son halo font une soixantaine de centimetres. A 2,4 m,
+  // chaque point couvrait une quarantaine de pixels a 25 m sur un telephone : le public disparaissait sous une nappe
+  // blanche)
+  const mat = new THREE.PointsMaterial({ size: 0.6, map: tache, vertexColors: true, transparent: true, depthWrite: false,
     blending: THREE.AdditiveBlending, toneMapped: false, sizeAttenuation: true });
   const pts = new THREE.Points(geo, mat); pts.renderOrder = 4; pts.frustumCulled = false;
   groupe.add(pts);
@@ -237,7 +242,8 @@ export function lArriveeEnOr(T: any, groupe: THREE.Group) {
     matB.opacity = 0.85 * a; matC.opacity = a;
   };
 }
-export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0) {
+export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0,
+  lignes?: (k: number, a: number, bleu: number) => void) {
   const n = T.lanes || nCouloirs, cw = (T.salle && T.salle.couloir) || LANE_W;
   type Couloir = { nom: THREE.Mesh; mat: THREE.MeshBasicMaterial; trace: THREE.Mesh; tmat: THREE.MeshBasicMaterial; ecrit: string };
   const couloirs: Couloir[] = [];
@@ -288,22 +294,45 @@ export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: n
       // (le monde est en miroir, monde.scale.y = -1 : on ecrit retourne pour lire a l'endroit)
       x.translate(0, h); x.scale(1, -1);
       x.font = '900 104px Outfit, system-ui, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-      x.shadowColor = moi ? 'rgba(255,200,60,0.9)' : 'rgba(150,215,255,0.9)'; x.shadowBlur = 22;
-      x.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
-      x.fillText(texte, w / 2, h / 2 + 4, w * 0.94);
+      // (le nom en rouge neon, la couleur du drapeau qui manquait aux lignes ; TOI garde son or)
+      x.shadowColor = moi ? 'rgba(255,200,60,0.9)' : 'rgba(255,30,50,0.95)'; x.shadowBlur = 22;
+      x.fillStyle = moi ? '#ffd34a' : '#ff3a46';
+      x.fillText(texte, w / 2, h / 2 - 6, w * 0.94);
+      // LE CHAMPIONNAT DE FRANCE SOUS CHAQUE NOM : un filet bleu, blanc, rouge, de la largeur du nom
+      const lw = Math.min(w * 0.94, x.measureText(texte).width), y = h - 14, tiers = lw / 3, x0 = (w - lw) / 2;
+      x.shadowBlur = 12;
+      ([['#2a5bff', 'rgba(40,90,255,0.9)'], ['#ffffff', 'rgba(220,230,255,0.9)'], ['#ff2a3a', 'rgba(255,30,50,0.9)']] as const)
+        .forEach(([coul, halo], i) => { x.shadowColor = halo; x.fillStyle = coul; x.fillRect(x0 + i * tiers, y, tiers, 8); });
     });
     c.mat.needsUpdate = true;
   };
-  let debut = -1;
+  // LA SALLE AUX COULEURS DU DRAPEAU, LE TEMPS DE LA PRESENTATION SEULEMENT (l'auteur, 15/11) : au premier nom, les
+  // fleches LED de l'anneau s'eteignent et les lignes passent au bleu ; apres le dernier, tout revient. Un fondu de
+  // FONDU_DRAPEAU secondes, adouci aux deux bouts (« l'extinction doit etre fluide, pas seche ») : `avance` progresse
+  // a vitesse constante, `drapeau` en est la courbe en S.
+  const FONDU_DRAPEAU = 1.4;
+  let debut = -1, plateau: any = null, avance = 0, drapeau = 0, vuT = -1;
+  const lisser = (t: number, vers: number) => {
+    const dt = vuT < 0 ? 0 : Math.min(0.1, Math.max(0, t - vuT)); vuT = t;
+    avance = vers > avance ? Math.min(vers, avance + dt / FONDU_DRAPEAU) : Math.max(vers, avance - dt / FONDU_DRAPEAU);
+    drapeau = avance * avance * avance * (avance * (avance * 6 - 15) + 10);
+  };
   return (t: number) => {
     const G = (globalThis as any).SprinterApp?.G;
+    // (une nouvelle course sans image entre deux, relancee pendant la presentation : elle repart du premier nom,
+    // au lieu de se croire finie et de laisser partir le pistolet aussitot)
+    if (G?.runners !== plateau) { plateau = G?.runners; debut = -1; }
     // AU VRAI CHAMPIONNAT, la presentation est celle de la salle (champ-direct.ts) : meme ordre (par couloir), memes
     // 3 s par athlete (salle-championnat.js), et le premier nom quand la salle le dit (dansMs) ; la serie s'est
     // eteinte des l'entree dans la salle (lExtinction part au decompte suspendu).
     const pc = G?.champDirect ? presentationCourante() : undefined;
     const avant = pc !== undefined ? !!pc && G.state === 'count'
       : !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
-    if (!avant) { debut = -1; presente = -1; for (let k = 0; k < n; k++) { couloirs[k].mat.opacity = couloirs[k].tmat.opacity = 0; fleches?.(k, 1); } return; }
+    if (!avant) {
+      debut = -1; presente = -1; presenteMoi = false; lisser(t, 0); lignes?.(-1, 0, drapeau);
+      for (let k = 0; k < n; k++) { couloirs[k].mat.opacity = couloirs[k].tmat.opacity = 0; fleches?.(k, 1 - drapeau); }
+      return;
+    }
     if (debut < 0) debut = t;
     const e = t - debut - (pc ? pc.presentation.dansMs / 1000 : retard), i = e < 0 ? -1 : Math.floor(e / PRES_PAS), dans = e - i * PRES_PAS;
     const ordre = (G.runners || []).slice().sort((a: any, b: any) => (a.lane | 0) - (b.lane | 0));
@@ -312,20 +341,27 @@ export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: n
     const avD = G.avantDepart; if (G.state === 'count' && avD?.attitudes) avD.reste = Math.max(avD.reste, ordre.length * PRES_PAS + 0.5 - e);
     const avantP = presente;
     presente = lui ? (lui.lane | 0) : -1;
-    presenteTexte = lui ? (lui.isPlayer ? 'TOI' : String(lui.name || '').toUpperCase()) : '';
+    presenteMoi = !!lui?.isPlayer;
+    presenteTexte = lui ? (lui.isPlayer ? toi() : String(lui.name || '').toUpperCase()) : '';
     if (presente >= 0 && presente !== avantP) sonDeSalle.ovation(!!lui?.isPlayer);   // le public salue chaque nom
+    lisser(t, lui ? 1 : 0);
     if (lui) { const q = ici(T.posDemi(D_NOM, presente, milieu(T, presente))); presenteOu.set(q[0], q[1], 0); }
+    else lignes?.(-1, 0, drapeau);
     for (let k = 0; k < n; k++) {
       const c = couloirs[k], r = lui && (lui.lane | 0) === k ? lui : null;
-      if (!r) { c.mat.opacity = c.tmat.opacity = 0; fleches?.(k, 1); continue; }
-      ecrire(c, r.isPlayer ? 'TOI' : String(r.name || '').toUpperCase(), !!r.isPlayer);
+      if (!r) { c.mat.opacity = c.tmat.opacity = 0; fleches?.(k, 1 - drapeau); continue; }
+      ecrire(c, r.isPlayer ? toi() : String(r.name || '').toUpperCase(), !!r.isPlayer);
       const fondu = Math.min(1, dans / 0.35, (PRES_PAS - dans) / 0.45);
       c.mat.opacity = Math.max(0, fondu);
+      lignes?.(k, Math.max(0, fondu), drapeau);
       // le nom prend la place des fleches de lumiere de son couloir, qui reviennent quand il se retire (l'auteur, 8/11)
-      fleches?.(k, 1 - Math.max(0, fondu));
+      fleches?.(k, (1 - Math.max(0, fondu)) * (1 - drapeau));
       plier(c.nom, k, D_NOM, 1, Math.PI);   // (le nom se lit depuis la tribune : retourne d'un demi-tour)
-      // le fantome : 60 m au chrono annonce (ou 6,9 s), parti 0,4 s apres le nom
-      const chrono = +(r.announced || r.chrono || r.pb || 0) || 6.9, d = Math.max(0, (dans - 0.4) * (60 / chrono));
+      // le fantome : sa vitesse moyenne sur l'epreuve courue (sa distance, son chrono vise), parti 0,4 s apres le nom.
+      // (les coureurs portent `target` et `total` ; `announced`, `chrono`, `pb` n'existaient pas : tous filaient a
+      // 60 m en 6,9 s, au 200 et au 400 m compris)
+      const dist = +(r.total || T.total || 60), chrono = +(r.announced || r.target || 0);
+      const vit = chrono > 0 && dist > 0 ? Math.min(11, dist / chrono) : 60 / 6.9, d = Math.max(0, (dans - 0.4) * vit);
       // (la trainee nait au bout du nom : additive et blanche, elle fondait les lettres qu'elle traversait)
       const queue = Math.max(D_NOM + LN / 2, d - 7), lt = d - queue;
       c.tmat.opacity = lt > 0 ? Math.max(0, fondu) : 0;

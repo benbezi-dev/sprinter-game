@@ -449,6 +449,13 @@ export function construireSalle(ctx: ContexteSalle) {
     return m;
   };
   const NEON_FROID = () => neon([255, 255, 255], [140, 196, 255]);
+  // LES LIGNES DE LA PISTE COURUE, CHACUNE SA MATIERE (la presentation les colore une a une : `lignes`), sur le meme
+  // tube que NEON_FROID ; `teinte` est leur couleur de repos, que le faux depart vire au rouge (`alerte`)
+  const lignesCourues: THREE.MeshBasicMaterial[] = [];
+  const ligneCourue = (k: number) => {
+    const m = NEON_FROID().clone(); m.userData.neon = 1; m.userData.teinte = new THREE.Color(1, 1, 1);
+    lignesCourues[k] = m; return m;
+  };
   const drapeau = (k: number, n: number) => {
     const f = (k + 0.5) / n;
     return f < 1 / 3 ? neon([225, 233, 255], [30, 80, 255]) : f < 2 / 3 ? neon([255, 255, 255], [232, 238, 255]) : neon([255, 228, 228], [255, 26, 46]);
@@ -488,7 +495,7 @@ export function construireSalle(ctx: ContexteSalle) {
   for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? tartanAnthracite : tartanBleu, true, 'sol');
   for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - LIGNE / 2, RS + k * CW + LIGNE / 2, 0.008), ligne, false, 'sol');
   // (en competition, le tube de neon par-dessus : il s'allume quand la salle s'eteint)
-  if (ctx.finale) for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - NEON_L / 2, RS + k * CW + NEON_L / 2, 0.009), ctx.droite ? drapeau(k, NC + 1) : NEON_FROID(), false);
+  if (ctx.finale) for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - NEON_L / 2, RS + k * CW + NEON_L / 2, 0.009), ctx.droite ? drapeau(k, NC + 1) : ligneCourue(k), false);
   // la corde : une lisse blanche en saillie au bord interieur
   ajouter(murAnneau(RS - 0.06, () => 0, () => 0.05), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.5 }), false);
 
@@ -509,7 +516,7 @@ export function construireSalle(ctx: ContexteSalle) {
   for (let k = 0; k < NC_DROITE; k++) entreLesVirages(yD + k * CW_DROITE, yD + (k + 1) * CW_DROITE, 0.004, k % 2 ? tartanAnthracite : tartanBleu);
   for (let k = 0; k <= NC_DROITE; k++) { const y = yD + k * CW_DROITE; entreLesVirages(y - LIGNE / 2, y + LIGNE / 2, 0.008, ligne, ''); }
   if (ctx.finale) for (let k = 0; k <= NC_DROITE; k++) {
-    const y = yD + k * CW_DROITE, m = entreLesVirages(y - NEON_L / 2, y + NEON_L / 2, 0.009, ctx.droite ? NEON_FROID() : drapeau(k, NC_DROITE + 1), '');
+    const y = yD + k * CW_DROITE, m = entreLesVirages(y - NEON_L / 2, y + NEON_L / 2, 0.009, ctx.droite ? ligneCourue(k) : drapeau(k, NC_DROITE + 1), '');
     // (les UV de ShapeGeometry sont x, y du monde : v recale sur le bord de la bande)
     const uv = m.geometry.getAttribute('uv') as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) - (y - NEON_L / 2));
@@ -1176,6 +1183,24 @@ export function construireSalle(ctx: ContexteSalle) {
   let nl = 0;
   for (let x = X0 + 7.5; x < X1; x += 7.5) for (let y = Y0 + 6; y < Y1 - 3; y += 8) { M.makeRotationX(Math.PI / 2).setPosition(x, y, H_TOIT - 2.3); lampes.setMatrixAt(nl++, M); }
   lampes.count = nl; toit.add(lampes);
+  // LES PLAFONNIERS S'ETEIGNENT AUSSI (la competition dans le noir) : ils restaient blancs sous un toit noir. Trois
+  // rangees le long de la halle, chacune sa couleur par instance, que `eteindre` coupe l'une apres l'autre
+  // (la couleur d'instance multiplie celle de la matiere : blanc pour allume)
+  const rangeeLampe: number[] = [], _lampeOn = new THREE.Color(1, 1, 1), _lampeOff = new THREE.Color(0.035, 0.035, 0.035);
+  for (let i = 0; i < nl; i++) {
+    lampes.getMatrixAt(i, M); const x = M.elements[12];
+    rangeeLampe.push(Math.min(2, Math.floor(3 * (x - X0) / (X1 - X0))));
+    lampes.setColorAt(i, _lampeOn);
+  }
+  let lampesVues = -1;
+  /** `lumiere` : 1 toutes allumees, 2/3 la derniere rangee eteinte, 1/3 la seule premiere, 0 toutes eteintes. */
+  const plafonniers = (lumiere: number) => {
+    const n = Math.round(lumiere * 3);
+    if (n === lampesVues) return;
+    lampesVues = n;
+    for (let i = 0; i < nl; i++) lampes.setColorAt(i, rangeeLampe[i] < n ? _lampeOn : _lampeOff);
+    lampes.instanceColor!.needsUpdate = true;
+  };
 
   // LES BANDEROLES BLEU CIEL de la ville, accrochees a la lisse de la coursive (le nom de la ville, aucune marque)
   const banderole = toile(1024, 256, (c, w, h) => {
@@ -1269,7 +1294,14 @@ export function construireSalle(ctx: ContexteSalle) {
       if (m.userData.neon) materiaux.neons.add(m);
     }
   });
-  let neonsAllumes = 1;
+  let neonsAllumes = 1, alerteVue = 0, lignesVues = '';
+  /** La couleur d'un tube : sa teinte de repos (blanc sans elle), viree au rouge du faux depart. */
+  // (le bleu du drapeau donne en sRGB : en valeurs lineaires, la sortie ecran les palissait en bleu ciel)
+  const _rouge = new THREE.Color(1, 0.03, 0.03), _blancVif = new THREE.Color(1.35, 1.35, 1.35), _blanc = new THREE.Color(1, 1, 1);
+  const _bleu = new THREE.Color().setRGB(0.1, 0.33, 1, THREE.SRGBColorSpace).multiplyScalar(1.4);
+  const peindre = (m: THREE.MeshBasicMaterial) => {
+    m.color.copy(m.userData.teinte || _blanc).lerp(_rouge, alerteVue);
+  };
   const voileCouloir: number[] = [];
   return {
     /** L'interieur (la foule s'y range aussi : cachee avec lui quand on survole dehors). */
@@ -1284,9 +1316,33 @@ export function construireSalle(ctx: ContexteSalle) {
     },
     /** La lumiere des fleches du couloir k, de 0 (eteinte : un nom s'y ecrit) a 1. */
     fleches: (k: number, a: number) => { voileCouloir[k] = a; for (const m of flechesCouloir[k] || []) m.opacity = a * neonsAllumes; },
+    /**
+     * LA PRESENTATION AUX COULEURS DU DRAPEAU (Championnat de France ; l'auteur, 15/11) : `bleu` (0..1) passe toutes les
+     * lignes de la piste courue en bleu le temps de la presentation ; les deux du couloir k presente (-1 : aucun)
+     * s'allument en blanc vif selon `a`, son fondu. Le nom, lui, s'ecrit en rouge (salle-noire.ts) : bleu, blanc, rouge.
+     */
+    lignes: (k: number, a: number, bleu: number) => {
+      if (!lignesCourues.length) return;
+      const cle = k + '/' + a.toFixed(3) + '/' + bleu.toFixed(3);
+      if (cle === lignesVues) return;
+      lignesVues = cle;
+      // (le trait blanc peint sous les tubes brille aussi : il s'efface sous le bleu, sinon le coeur des lignes reste blanc)
+      if (ctx.finale) ligne.emissiveIntensity = ligne.userData.emissif * neonsAllumes * (1 - 0.85 * bleu);
+      lignesCourues.forEach((m, i) => {
+        const t: THREE.Color = m.userData.teinte;
+        t.copy(_blanc).lerp(_bleu, bleu);
+        if (k >= 0 && (i === k || i === k + 1)) t.lerp(_blancVif, a);
+        peindre(m);
+      });
+    },
     /** LE FAUX DEPART : les tubes des lignes virent au rouge, de 0 (leur couleur) a 1 (rouge vif). */
     alerte: (k: number) => {
-      for (const m of neons.values()) m.color.setRGB(1, 1 - 0.97 * k, 1 - 0.97 * k);
+      // (appelee a chaque image : rien a faire tant que la teinte ne bouge pas)
+      if (k === alerteVue) return;
+      alerteVue = k;
+      for (const m of materiaux.neons) peindre(m as THREE.MeshBasicMaterial);
+      // les fleches LED des couloirs virent au rouge avec les lignes
+      for (const l of flechesCouloir) for (const m of (l || []) as THREE.MeshBasicMaterial[]) m.color.setRGB(1, 1 - 0.97 * k, 1 - 0.97 * k);
       // (les traits blancs qui brillent sont emissifs : leur couleur d'origine est gardee pour y revenir)
       for (const m of materiaux.emissifs as Set<THREE.MeshStandardMaterial>) {
         const b: THREE.Color = m.userData.emissiveBase ??= m.emissive.clone();
@@ -1299,6 +1355,7 @@ export function construireSalle(ctx: ContexteSalle) {
      * fleches, les logos, le tapis et les traits blancs qui brillent). course-3d.ts regle le ciel et les lumieres.
      */
     eteindre: (lumiere: number, neons: number) => {
+      plafonniers(lumiere);
       const lm = 0.07 + 0.93 * lumiere;
       for (const m of materiaux.cuites) (m as any).lightMapIntensity = m.userData.cuite * lm;
       for (const m of materiaux.emissifs) (m as THREE.MeshStandardMaterial).emissiveIntensity = m.userData.emissif * neons;

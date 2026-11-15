@@ -40,7 +40,7 @@ const volDepart = new THREE.Vector3(), volVise0 = new THREE.Vector3();
 let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
-let finActive = false;
+let finActive = false, champNom = 0;
 let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
 /** La camera de l'image : ou elle se tient, ce qu'elle vise, le soleil qui la suit. Rend le coureur suivi. */
 export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
@@ -268,10 +268,21 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // de cote (la tribune), comme les plans de Doha — mais au ras de la salle
     if (finaleVue && presente >= 0 && (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro'))) {
       const h = capIci(T.heading(7, presente)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
-      // en portrait le champ est etroit : plus loin, plus haut, plus en arriere, sinon le nom (9 m) sort du cadre
-      const recul = camera.aspect < 1 ? 9 : 5, cote = camera.aspect < 1 ? 12 : 9, haut = camera.aspect < 1 ? 10 : 6.5;
+      // LE NOM ENTIER DANS LE CADRE : la distance se deduit du champ horizontal de la camera, pour que ses 9 m et une
+      // marge tiennent en largeur, quel que soit l'ecran. (Les reculs fixes d'avant coupaient la fin du nom en paysage,
+      // « FONTAIN », sa derniere lettre passant sous la camera, posee 5 m en arriere du centre.) La camera regarde le
+      // centre du nom, de cote (la tribune), en arriere et en plongee — la direction d'avant (5, 9, 6,5), qui passe
+      // au-dessus des agres de la perche ; jamais plus pres que ses 12,2 m, jamais plus haut que 9,5 m (les fermes du
+      // toit descendent a 10,4 m), jamais plus loin que 19 m (au-dela, la coursive et son public passent devant) : en portrait, ou il le
+      // faudrait, c'est le champ qui s'elargit (champNom, pose d'un coup : c'est un plan coupe).
+      const LARGE = 9 / 2 + 1.6;
+      let demiChampH = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), loin = LARGE / Math.tan(demiChampH);
+      champNom = camera.fov;
+      if (loin > 19) { loin = 19; demiChampH = Math.atan(LARGE / 19); champNom = 2 * Math.atan(Math.tan(demiChampH) / camera.aspect) * 180 / Math.PI; }
+      loin = Math.max(12.2, loin);
+      const nrm = Math.hypot(5, 9, 6.5), recul = loin * 5 / nrm, cote = loin * 9 / nrm, haut = Math.min(9.5, loin * 6.5 / nrm);
       finCam.set(presenteOu.x - ax * recul + ex * cote, -(presenteOu.y - ay * recul + ey * cote), haut);
-      finVise.set(presenteOu.x + ax * 1, -(presenteOu.y + ay * 1), 0);
+      finVise.set(presenteOu.x, -presenteOu.y, 0);
       finActive = true;
     } else finActive = false;
     // (le tapis du 60 m s'enfonce sous ceux qui le frappent)
@@ -341,7 +352,12 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // le toit des tribunes s'efface quand la camera le survole (vue 2D), jamais pendant le survol d'avant-course
     if (toitsStade.length) for (const t of toitsStade) t.obj.visible = survol || camera.position.z < t.zTop - 0.3;
     // (y retourne : voir monde) — l'exterieur ne se montre qu'au survol, camera dehors
-    if (salleActive && cameraSalle) cameraSalle(camera.position.x, -camera.position.y, camera.position.z, survol, camera, camVise);
+    // (sous le cadrage d'un nom, le survol d'avant-course peut encore tourner en coulisse ses 1,8 premieres secondes :
+    // la camera n'est pas en survol, et les agres entre elle et le nom s'effacent — sinon les poteaux de la cage de
+    // lancer cachaient tout le nom du premier couloir)
+    // (et la camera y est deja tournee vers le nom : au changement de couloir, le champ de l'image precedente laissait
+    // passer une image avec les agres)
+    if (salleActive && cameraSalle) { if (finActive) camera.lookAt(camVise); cameraSalle(camera.position.x, -camera.position.y, camera.position.z, survol && !finActive, camera, camVise); }
     if (salleActive && blocsSalle.length) {
       const partis = !!T.salle && G.state !== 'count' && G.state !== 'cut' && (G.runners || []).every((r: any) => (r.d || 0) > 3);
       for (const b of blocsSalle) b.visible = !partis;
@@ -361,7 +377,8 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     if (fo > 0) camera.lookAt(camVise.x, camVise.y, camVise.z + fo * fo * (3 - 2 * fo) * 0.2 * camera.position.distanceTo(camVise));
     else camera.lookAt(camVise);
     const fov = plan2D ? CHAMP_2D : rail ? (camera.aspect < 1 ? 40 : 32) : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
-    if (Math.abs(camera.fov - fov) > 0.05) camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3);
+    if (finActive && champNom > 0) camera.fov = champNom;
+    else if (Math.abs(camera.fov - fov) > 0.05) camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3);
     // LE PIXEL DU 2D N'EST PAS CARRE (vue.py) : un metre en largeur y vaut cos.racine2/racine(2 sin2+1)
     // fois un metre en hauteur — 1,07 au sprint, 1,38 a la nuit du molosse a 7°. Le plan 2D etire
     // donc l'image d'autant ; les autres plans gardent un pixel carre.
