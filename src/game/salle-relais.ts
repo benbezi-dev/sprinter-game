@@ -89,7 +89,9 @@ export const ARRIVEE = LEG * TAILLE;
  * relayeurs fictifs du solo partent a cette distance, la piste la dessine
  * pour chaque receveur, et le bouton du temoin dit « PARS ! » a cet instant.
  */
-export const ELAN = 8;
+export { ELAN } from '../../worker/src/relais-fictifs.js';
+// (une seule valeur pour tout le monde : celle du pilote des fictifs, 10,5 m depuis le 15/11 — voir
+// worker/src/relais-fictifs.js. Le joueur recoit le meme conseil que ses coequipiers suivent.)
 
 /**
  * Ce que l'ecran de course demande a une salle. La salle en ligne et la salle
