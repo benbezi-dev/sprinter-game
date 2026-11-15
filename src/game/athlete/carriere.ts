@@ -17,7 +17,7 @@ import {
   conclureLaCompetition, finirLaSemaine, noter, declarerForfait, jourCale, type Resultat,
   faireUneAction, avancer, heureDe, DIMANCHE, payer, tirerLeCorps, BLESSURES,
   type RendezVousReel, type Tour, apresLeTour, HEURE_DU_TOUR, SEMAINES_AVANT_FRANCE, rendezVousAvantFrance,
-  conclureLeMeeting, meetingDe, DEPLACEMENT_MEETING, type Course, enSalle, libelleEpreuve,
+  conclureLeMeeting, meetingDe, DEPLACEMENT_MEETING, type Course, enSalle, libelleEpreuve, saisonEnSalle,
   etape, SALAIRE, soulager, jourDe, REVEIL, BESOINS_PLEINS,
 } from './regles';
 import { tirerLaSemaine } from './recit';
@@ -201,6 +201,8 @@ export function partirALaCompetition(a: Athlete, epreuve: Epreuve, tour?: 'demie
 /** Partir au meeting du dimanche (meetingPossible, regles.ts) : une course unique au plateau du niveau. */
 export function partirAuMeeting(a: Athlete, epreuve: Course): boolean {
   if (!CARRIERE_ATHLETE_OUVERTE) return false;
+  // la salle n'ouvre que l'hiver (regles.ts, saisonEnSalle)
+  if (enSalle(epreuve) && !saisonEnSalle(a)) return false;
   a.meeting = a.semaine;
   payer(a, -DEPLACEMENT_MEETING, meetingDe(a)[0], meetingDe(a)[1]);
   sauver(a);

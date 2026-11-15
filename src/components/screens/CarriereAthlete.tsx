@@ -17,7 +17,7 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
   type Athlete, type Jour, type Stat, type Epreuve, type Origine, type Voie,
-  moyenneDes, exigePourMonter, EPREUVES_SALLE, libelleEpreuve, type Course, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
+  moyenneDes, exigePourMonter, EPREUVES_SALLE, saisonEnSalle, niveauMaxDe, ageQuiOuvre, semainesAvantLaSalle, libelleEpreuve, type Course, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
   bonusMateriel, coutDuDeplacement, picDeForme,
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
@@ -769,7 +769,11 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
           </p>
         )}
         {/* les stats liberent les niveaux : la moyenne a atteindre, en plus du podium */}
-        {a.niveau < COMPETITIONS.length - 1 && (() => {
+        {/* au plafond de sa categorie d'age (regles.ts, niveauMaxDe) : la suite attend l'anniversaire */}
+        {a.niveau < COMPETITIONS.length - 1 && a.niveau >= niveauMaxDe(a.age ?? 14) && (
+          <span className="text-[11px] text-white/70">{dans([`Plus haut championnat de ta catégorie. ${mot(COMPETITIONS[a.niveau + 1].cle)} : à ${ageQuiOuvre(a.niveau)} ans.`, `Top championship of your age group. ${mot(COMPETITIONS[a.niveau + 1].cle)}: at ${ageQuiOuvre(a.niveau)}.`])}</span>
+        )}
+        {a.niveau < COMPETITIONS.length - 1 && a.niveau < niveauMaxDe(a.age ?? 14) && (() => {
           const m = moyenneDes(a), exige = exigePourMonter(a.niveau), pret = m >= exige;
           return (
             <div className="flex flex-col gap-1">
@@ -803,8 +807,9 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
               {/* LA PISTE COUVERTE DE VAL-DE-REUIL : le 60 m sur la ligne droite, le 200 et le 400 sur l'anneau releve */}
               <span className="text-xs font-black mt-1">{dans(['En salle · stade couvert Jesse Owens', 'Indoor · Jesse Owens hall'])}</span>
               <span className="text-[10px] text-white/55">{dans(['L’anneau de 200 m aux virages relevés : le 400 m, c’est deux tours.', 'The 200 m banked ring: the 400 m is two laps.'])}</span>
+              {!saisonEnSalle(a) && <span className="text-[10px] text-amber-300/80">{dans([`Saison en salle dans ${semainesAvantLaSalle(a)} semaine${semainesAvantLaSalle(a) > 1 ? 's' : ''} (douze semaines d’hiver).`, `Indoor season in ${semainesAvantLaSalle(a)} week${semainesAvantLaSalle(a) > 1 ? 's' : ''} (twelve winter weeks).`])}</span>}
               <div className="flex gap-2">{EPREUVES_SALLE.map(e => (
-                <Bouton key={e} className="flex-1" disabled={!!refus || !!ev} onClick={() => { auDimanche(); if (partirAuMeeting(a, e)) demanderReouverture(); }}>
+                <Bouton key={e} className="flex-1" disabled={!!refus || !!ev || !saisonEnSalle(a)} onClick={() => { auDimanche(); if (partirAuMeeting(a, e)) demanderReouverture(); }}>
                   {libelleEpreuve(e).replace(' salle', '')}
                 </Bouton>
               ))}</div>
@@ -1790,6 +1795,8 @@ export function FinDeCourseAthlete() {
             {!r.suivant && !r.meeting && (
               <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
                 {suivant ? mot('qualifie', { c: mot(suivant.cle) })
+                  : r.tropJeune ? dans([`Sur le podium ! Mais en ${categorie(r.tropJeune - 1)[0]}, c’est le plus haut championnat. ${mot(COMPETITIONS[r.niveau + 1].cle)} : à ${r.tropJeune} ans. D’ici là, cours, gagne, prépare-toi.`,
+                      `On the podium! But in ${categorie(r.tropJeune - 1)[1]}, this is the top championship. ${mot(COMPETITIONS[r.niveau + 1].cle)}: at ${r.tropJeune}. Until then, race, win, get ready.`])
                   : r.pasPret ? dans([`Sur le podium, mais pas encore prêt·e pour la suite : il faut ${exigePourMonter(r.niveau)} de moyenne dans tes stats. Entraîne-toi, et retente dans ${ecart(r.niveau)} semaines.`, `On the podium, but not ready for the next level yet: you need a ${exigePourMonter(r.niveau)} stat average. Train, and try again in ${ecart(r.niveau)} weeks.`])
                   : !r.sommet ? mot('pas_qualifie', { n: ecart(r.niveau) }) : null}
               </span>
