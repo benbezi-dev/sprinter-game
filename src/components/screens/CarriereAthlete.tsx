@@ -17,6 +17,7 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
   type Athlete, type Jour, type Stat, type Epreuve, type Origine, type Voie,
+  MONDE, JEUX, SELECTION_JEUX, SEMAINE_DES_JEUX, semaineDesProchainsJeux, anneeDesJeux, semaineDeSaison, changerDeDiscipline, garderSaDiscipline,
   moyenneDes, exigePourMonter, EPREUVES_SALLE, saisonEnSalle, niveauMaxDe, ageQuiOuvre, semainesAvantLaSalle, libelleEpreuve, type Course, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
   bonusMateriel, coutDuDeplacement, picDeForme,
@@ -782,6 +783,23 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
 
       <Carte><Barres a={a} /></Carte>
 
+      {/* apres les Grands Jeux : changer de discipline (regles.ts, changerDeDiscipline) */}
+      {a.apresJeux && (
+        <Carte titre={dans(['Après les Grands Jeux', 'After the Grand Games'])} icone={Trophy}>
+          <p className="text-[11px] text-white/70 leading-relaxed">{dans([
+            'Tu peux changer de discipline : tu repars des Championnats de France, tes qualités à 80 %, et tu vises les prochains Jeux dans cette épreuve.',
+            'You can switch events: you go back to the national championships, your qualities at 80%, and aim for the next Games in that event.'])}</p>
+          <div className="flex gap-2">
+            {EPREUVES.filter(e => e !== a.specialite).map(e => (
+              <Bouton key={e} plein disabled={!!ev} className="flex-1" onClick={() => changer(() => changerDeDiscipline(a, e))}>{e} m</Bouton>
+            ))}
+            <Bouton disabled={!!ev} className="flex-1" onClick={() => changer(() => garderSaDiscipline(a))}>
+              {a.specialite ? dans([`Garder le ${a.specialite} m`, `Keep the ${a.specialite} m`]) : dans(['Rester polyvalent·e', 'Stay all-round'])}
+            </Bouton>
+          </div>
+        </Carte>
+      )}
+
       {/* la competition : le championnat du niveau, ou un meeting de club les autres dimanches */}
       <Carte titre={mot('competition')} icone={Trophy}>
         <div className="flex items-baseline justify-between gap-2">
@@ -801,7 +819,19 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
         {a.niveau < COMPETITIONS.length - 1 && a.niveau >= niveauMaxDe(a.age ?? 14) && (
           <span className="text-[11px] text-white/70">{dans([`Plus haut championnat de ta catégorie. ${mot(COMPETITIONS[a.niveau + 1].cle)} : à ${ageQuiOuvre(a.niveau)} ans.`, `Top championship of your age group. ${mot(COMPETITIONS[a.niveau + 1].cle)}: at ${ageQuiOuvre(a.niveau)}.`])}</span>
         )}
-        {a.niveau < COMPETITIONS.length - 1 && a.niveau < niveauMaxDe(a.age ?? 14) && (() => {
+        {a.niveau === MONDE && niveauMaxDe(a.age ?? 14) >= JEUX && (() => {
+          const m = moyenneDes(a), pret = m >= SELECTION_JEUX, n = semaineDesProchainsJeux(a.semaine) - a.semaine;
+          const cette = anneeDesJeux(a.semaine) && semaineDeSaison(a) < SEMAINE_DES_JEUX;
+          return (
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-white/70">{dans([
+                `Grands Jeux dans ${n} semaines. ${cette ? 'C’est leur saison : un podium aux Mondes et' : 'La sélection se joue aux Mondes de leur saison : un podium et'} ${SELECTION_JEUX} de moyenne`,
+                `Grand Games in ${n} weeks. ${cette ? 'It’s their season: a podium at the Worlds and' : 'Selection happens at the Worlds of their season: a podium and'} a ${SELECTION_JEUX} average`])} · <span className="font-black tabular-nums" style={{ color: pret ? VERT : '#F5A623' }}>{m.toFixed(1)}</span></span>
+              <Jauge v={Math.min(m, SELECTION_JEUX)} max={SELECTION_JEUX} couleur={pret ? VERT : '#F5A623'} />
+            </div>
+          );
+        })()}
+        {a.niveau < MONDE && a.niveau < niveauMaxDe(a.age ?? 14) && (() => {
           const m = moyenneDes(a), exige = exigePourMonter(a.niveau), pret = m >= exige;
           return (
             <div className="flex flex-col gap-1">
@@ -1809,7 +1839,7 @@ export function FinDeCourseAthlete() {
             <span className={`font-black font-display text-3xl sm:text-4xl uppercase tracking-tight leading-[0.95]
                               ${r.chrono !== null && (r.place <= 3 || r.suivant) ? 'text-white' : 'text-destructive'}`}>
               {r.suivant ? `${dans(['QUALIFIÉ·E', 'THROUGH'])}${r.auTemps ? dans([' AU TEMPS', ' ON TIME']) : ''} ${dans(['POUR', 'TO'])} ${dans(vers)}`
-                : r.sommet ? mot('sommet') : r.chrono === null ? mot('faux')
+                : r.sommet ? mot('sommet') : r.mondial ? mot('mondial') : r.chrono === null ? mot('faux')
                 : r.tour === 'serie' ? dans(['ÉLIMINÉ·E EN SÉRIE', 'OUT IN THE HEATS']) : r.tour === 'demie' ? dans(['ÉLIMINÉ·E EN DEMI-FINALE', 'OUT IN THE SEMI-FINALS'])
                 : mot('place', { o: ordPlace(r.place) })}
             </span>
@@ -1823,7 +1853,12 @@ export function FinDeCourseAthlete() {
             {r.blessure && <span className="text-sm font-bold text-red-400">{dans(BLESSURES[r.blessure].nom)} · {dans(['va voir le médecin du sport', 'see the sports doctor'])}</span>}
             {!r.suivant && !r.meeting && (
               <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
-                {suivant ? mot('qualifie', { c: mot(suivant.cle) })
+                {r.selection ? `${mot('qualifie', { c: mot(suivant!.cle) })} · ${dans([`dans ${r.avantLesJeux} semaines`, `in ${r.avantLesJeux} weeks`])}`
+                  : r.jeux ? dans(['Les Grands Jeux sont passés. Tu peux changer de discipline, au tableau de bord.', 'The Grand Games are over. You can switch events, on your dashboard.'])
+                  : r.niveau === MONDE && r.chrono !== null && r.place <= 3 && r.avantLesJeux !== undefined ? dans([
+                      `Prochains Grands Jeux dans ${r.avantLesJeux} semaines. La sélection se joue aux Mondes de leur saison : un podium et ${SELECTION_JEUX} de moyenne.`,
+                      `Next Grand Games in ${r.avantLesJeux} weeks. Selection happens at the Worlds of their season: a podium and a ${SELECTION_JEUX} average.`])
+                  : suivant ? mot('qualifie', { c: mot(suivant.cle) })
                   : r.tropJeune ? dans([`Sur le podium ! Mais en ${categorie(r.tropJeune - 1)[0]}, c’est le plus haut championnat. ${mot(COMPETITIONS[r.niveau + 1].cle)} : à ${r.tropJeune} ans. D’ici là, cours, gagne, prépare-toi.`,
                       `On the podium! But in ${categorie(r.tropJeune - 1)[1]}, this is the top championship. ${mot(COMPETITIONS[r.niveau + 1].cle)}: at ${r.tropJeune}. Until then, race, win, get ready.`])
                   : r.pasPret ? dans([`Sur le podium, mais pas encore prêt·e pour la suite : il faut ${exigePourMonter(r.niveau)} de moyenne dans tes stats. Entraîne-toi, et retente dans ${ecart(r.niveau)} semaines.`, `On the podium, but not ready for the next level yet: you need a ${exigePourMonter(r.niveau)} stat average. Train, and try again in ${ecart(r.niveau)} weeks.`])

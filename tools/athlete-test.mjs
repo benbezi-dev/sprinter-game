@@ -125,9 +125,9 @@ titre('les competitions');
   const f = R.conclureLaCompetition(a, '100', 1, null);
   ok('un faux depart ne qualifie pas', !f.qualifie && a.niveau === 1);
   a.niveau = 3; R.conclureLaCompetition(a, '100', 1, 10.2);
-  ok('au national, 4 semaines de preparation', a.prochaine === a.semaine + 4);
+  ok('au national, 6 semaines de preparation (4 avant le 15/11)', a.prochaine === a.semaine + 6);
   a.niveau = 5;
-  ok('premier aux mondiaux : le sommet', R.conclureLaCompetition(a, '100', 1, 9.9).sommet);
+  ok('premier aux mondiaux : champion du monde (le sommet, ce sont les Grands Jeux)', R.conclureLaCompetition(a, '100', 1, 9.9).mondial);
 }
 
 titre('l\'histoire');
@@ -520,9 +520,9 @@ titre('la semaine, la nuit, le travail (lot 1, 14/11)');
 
 titre('grandir : plafond par age, salle d hiver, rivaux (lot 3, 15/11)');
 {
-  ok('plafond : Minime regionaux, Cadet France, Junior Europe, Senior Monde',
-     R.niveauMaxDe(14) === 2 && R.niveauMaxDe(16) === 3 && R.niveauMaxDe(19) === 4 && R.niveauMaxDe(23) === 5);
-  ok('les France s ouvrent a 16 ans, le Monde a 23', R.ageQuiOuvre(2) === 16 && R.ageQuiOuvre(4) === 23 && R.ageQuiOuvre(5) === null);
+  ok('plafond : Minime regionaux, Cadet France, Junior Europe, Senior Monde et Grands Jeux',
+     R.niveauMaxDe(14) === 2 && R.niveauMaxDe(16) === 3 && R.niveauMaxDe(19) === 4 && R.niveauMaxDe(23) === R.JEUX);
+  ok('les France s ouvrent a 16 ans, le Monde a 23', R.ageQuiOuvre(2) === 16 && R.ageQuiOuvre(4) === 23 && R.ageQuiOuvre(6) === null);
   // un minime pret, sur le podium des regionaux : il reste aux regionaux
   const m = R.nouvelAthlete('M', 'aisee', 'polyvalent', null, undefined, 14);
   m.niveau = 2; for (const k of R.STATS) m.stats[k] = 60;
@@ -557,6 +557,46 @@ titre('grandir : plafond par age, salle d hiver, rivaux (lot 3, 15/11)');
   const saisons = semaines / R.SAISON;
   console.log(`      14 ans, bien entraine, toujours vainqueur : champion du monde apres ${semaines} semaines (${saisons.toFixed(1)} saisons, a ${a.age} ans)`);
   ok('une carriere au sommet dure entre 6 et 12 saisons (plus jamais une seule)', saisons >= 6 && saisons <= 12, saisons.toFixed(1));
+}
+
+titre('les Grands Jeux et le changement de discipline (testeur, 15/11 : « fini en moins d une semaine »)');
+{
+  const J = R.semaineDesProchainsJeux(1);
+  ok('les premiers Jeux : la 4e saison, semaine 30', J === 3 * R.SAISON + R.SEMAINE_DES_JEUX + 1 && R.anneeDesJeux(J) && !R.anneeDesJeux(J - R.SAISON), String(J));
+  ok('puis tous les quatre saisons', R.semaineDesProchainsJeux(J + 1) === J + 4 * R.SAISON);
+  const fort = () => { const a = R.nouvelAthlete('J', 'aisee', 'specialiste', '200', undefined, 25); a.evenement = null; for (const k of R.STATS) a.stats[k] = 95; a.niveau = R.MONDE; return a; };
+  const a = fort(); a.semaine = 10;
+  let r = R.conclureLaCompetition(a, '200', 1, 20.1);
+  ok('champion du monde hors saison des Jeux : titre, pas de selection', r.mondial && !r.selection && a.niveau === R.MONDE && r.avantLesJeux === J - 10);
+  const b = fort(); b.semaine = J - 6;
+  r = R.conclureLaCompetition(b, '200', 2, 20.2);
+  ok('podium aux Mondes la saison des Jeux : selectionne, la date des Jeux', r.selection && b.niveau === R.JEUX && b.prochaine === J);
+  b.semaine = J; r = R.conclureLaCompetition(b, '200', 1, 19.9);
+  ok('les Jeux courus : champion, retour aux Mondes, la discipline peut changer', r.sommet && r.jeux && b.niveau === R.MONDE && b.apresJeux && b.jeux.length === 1);
+  R.changerDeDiscipline(b, '400');
+  ok('changer de discipline : specialiste du 400, aux France, qualites a 80 %', b.specialite === '400' && b.niveau === R.NATIONAL && b.stats.vitesse === 76 && !b.apresJeux);
+  const c = fort(); c.semaine = J + 2;
+  r = R.conclureLaCompetition(c, '200', 1, 20.0);
+  ok('les Mondes apres les Jeux ne selectionnent pas', !r.selection && c.niveau === R.MONDE);
+  // la duree : un adulte de 23 ans, bien entraine, toujours vainqueur ; trois disciplines, trois Jeux
+  const d = R.nouvelAthlete('D', 'aisee', 'specialiste', '100', undefined, 23); d.evenement = null; d.coach = true;
+  let w = 0, auxMondes = 0, jeux = [];
+  while (jeux.length < 3 && w < 2000) {
+    w++; d.semaine++; d.fatigue = 0; d.moral = 80;
+    if (d.semaine % R.SAISON === 0) d.age++;
+    for (const j of ['lundi', 'mercredi', 'vendredi', 'samedi']) {
+      const g = R.gainDeSeance(d, j, 0.8), pl = R.COMPETITIONS[d.niveau].plafond;
+      for (const k of Object.keys(g)) d.stats[k] = Math.min(pl, Math.max(d.stats[k], d.stats[k] + g[k]));
+    }
+    if (d.semaine >= d.prochaine) {
+      const n = d.niveau; R.conclureLaCompetition(d, d.specialite, 1, 10);
+      if (!auxMondes && d.niveau >= R.MONDE) auxMondes = w;
+      if (n === R.JEUX) { jeux.push(w); R.changerDeDiscipline(d, ['200', '400', '100'][jeux.length - 1]); }
+    }
+  }
+  console.log(`      adulte de 23 ans, toujours vainqueur : aux Mondes en ${auxMondes} semaines, Grands Jeux aux semaines ${jeux.join(', ')} (${(w / R.SAISON).toFixed(1)} saisons)`);
+  ok('aux Mondes en plus de deux saisons (1,2 avant le 15/11)', auxMondes > 2 * R.SAISON, String(auxMondes));
+  ok('trois disciplines et trois Jeux : au moins dix saisons', jeux.length === 3 && w >= 10 * R.SAISON, String(w));
 }
 
 titre('les quatre categories d athletes (video de l auteur, 15/11)');
