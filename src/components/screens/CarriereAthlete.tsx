@@ -3,7 +3,7 @@ import { POSTURES } from '@/game/athlete/postures';
 import { charger as chargerMaillage, pret, dessiner } from '@/game/vedette-3d';
 import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, MotionConfig } from 'motion/react';
 import {
   Footprints, ChevronRight, ChevronLeft, X, Trophy, Wallet, HeartPulse, BatteryMedium,
   Briefcase, ShoppingBag, Users, BookOpen, Flag, Star, Smartphone, MapPin, RotateCcw, RotateCw,
@@ -125,8 +125,9 @@ export function PanneauAthlete() {
   const cree = (n: Athlete) => { messagesDeBienvenue(n); messagesDuReveil(n); courant = n; sauver(n); setA(n); setCreation(false); setOuvert(true); };
   const efface = () => { courant = null; sauver(null); setA(null); setOuvert(false); };
 
+  // les animations suivent le reglage « reduire les animations » du telephone (portails compris : le contexte React les suit)
   return (
-    <>
+    <MotionConfig reducedMotion="user">
       <div className="rounded-2xl p-3 md:p-5 shadow-2xl flex flex-col gap-2 md:gap-3 border"
            style={{ borderColor: `${VERT}80`, background: 'linear-gradient(160deg, #0F2A1EF2, #0A1410E6)' }}>
         {a ? (
@@ -153,7 +154,7 @@ export function PanneauAthlete() {
       </button>
       {creation && <Creation onFini={cree} onFermer={() => setCreation(false)} />}
       {ouvert && a && <TableauDeBord a={a} onFermer={() => setOuvert(false)} onEffacer={efface} />}
-    </>
+    </MotionConfig>
   );
 }
 
@@ -328,7 +329,7 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
     <Voile>
       <div className="flex items-center justify-between">
         <h2 className="font-black font-display text-2xl tracking-wide" style={{ color: VERT }}>{mot('titre')}</h2>
-        <button onClick={onFermer} aria-label={mot('fermer')} className="p-2 text-white/70 hover:text-white"><X size={20} /></button>
+        <button onClick={onFermer} aria-label={mot('fermer')} className="p-3 -m-1 text-white/70 hover:text-white"><X size={20} /></button>
       </div>
 
       {etape === 'corps' ? (
@@ -351,8 +352,8 @@ function Creation({ onFini, onFermer }: { onFini: (a: Athlete) => void; onFermer
                     className="w-full rounded-xl bg-white/[0.06] border border-white/15 px-3 py-2.5 text-sm font-bold text-white">
               {DEPARTEMENTS.map(([c, n]) => <option key={c} value={c} className="text-black">{c} · {n}</option>)}
             </select>
-            <p className="text-xs text-white/65">{dans([`Départementaux et régionaux en direct contre les athlètes du ${dep} puis de la région ${REGIONS[regionDe(dep)!]}.`,
-              `County and regional meets, live, against athletes from ${dep} then the ${REGIONS[regionDe(dep)!]} region.`])}</p>
+            <p className="text-xs text-white/65">{dans([`Tes départementaux dans le ${dep}, puis tes régionaux en ${REGIONS[regionDe(dep)!]}.`,
+              `Your county meets in ${dep}, then your regionals in ${REGIONS[regionDe(dep)!]}.`])}</p>
           </Carte>
           <Carte titre={mot('famille')}>
             {(['aisee', 'modeste'] as Origine[]).map(o => (
@@ -722,7 +723,7 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
             {a.club ? ` · ${nomDuClub(a.club, mot(a.club)).toUpperCase()}` : ''}
           </p>
         </div>
-        <button onClick={onFermer} aria-label={mot('fermer')} className="p-2 text-white/70 hover:text-white"><X size={20} /></button>
+        <button onClick={onFermer} aria-label={mot('fermer')} className="p-3 -m-1 text-white/70 hover:text-white"><X size={20} /></button>
       </div>
 
       <div className="grid grid-cols-3 gap-2 text-xs">
@@ -993,7 +994,8 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
       const l = ouEst(a, p);
       return l ? [{ id: p, nom: dans(GENS[p].nom(a)), lieu: l as Lieu, look: lookDePersonne(a, p) }] : [];
     }));
-  });
+    // au quart d'heure (les horaires de gens.ts tombent sur des quarts) et non a chaque rendu, chaque seconde
+  }, [pret, a.semaine, a.jour, Math.floor(heureDe(a) / 15), a.club, etape(a)]);
   useEffect(() => {
     if (fige || !vitesse || !pret) return;
     let n = 0;
@@ -1114,26 +1116,26 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
             {!lieu && !tel && <Guide a={a} competition={leJour} aller={allerVite} />}
           </div>
           <div className="flex flex-col gap-1.5">
-            <button onClick={onFermer} aria-label={mot('fermer')} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><X size={18} /></button>
-            <button onClick={() => { setLieu(null); setTel('accueil'); }} aria-label={dans(['Téléphone', 'Phone'])} className="relative w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center">
+            <button onClick={onFermer} aria-label={mot('fermer')} className="w-11 h-11 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><X size={18} /></button>
+            <button onClick={() => { setLieu(null); setTel('accueil'); }} aria-label={dans(['Téléphone', 'Phone'])} className="relative w-11 h-11 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center">
               <Smartphone size={18} />
               {nonLus(a) > 0 && <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center">{nonLus(a)}</span>}
             </button>
-            <button onClick={() => { setLieu(null); setTel('carte'); }} aria-label={dans(['Carte', 'Map'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><MapPin size={18} /></button>
+            <button onClick={() => { setLieu(null); setTel('carte'); }} aria-label={dans(['Carte', 'Map'])} className="w-11 h-11 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><MapPin size={18} /></button>
             <motion.button whileTap={{ scale: 0.9 }} onClick={() => { const v = !course; setCourse(v); ville.current?.courir(v); }}
                            aria-label={dans(['Courir', 'Run'])} aria-pressed={course}
-                           className={`w-10 h-10 rounded-xl flex flex-col items-center justify-center ${course ? 'text-black' : 'bg-[rgba(8,18,14,0.86)] text-white/80'}`}
+                           className={`w-11 h-11 rounded-xl flex flex-col items-center justify-center ${course ? 'text-black' : 'bg-[rgba(8,18,14,0.86)] text-white/80'}`}
                            style={course ? { background: VERT } : undefined}>
               <Footprints size={16} /><span className="text-[7px] font-black leading-none mt-0.5">{dans(['COURIR', 'RUN'])}</span>
             </motion.button>
             <motion.button whileTap={{ scale: 0.9 }} onClick={() => { const v = vue === 'dessus' ? 'derriere' : 'dessus'; setVue(v); ville.current?.changerDeVue(v); }}
                            aria-label={dans(['Changer de vue', 'Switch view'])}
-                           className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex flex-col items-center justify-center">
+                           className="w-11 h-11 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex flex-col items-center justify-center">
               {vue === 'dessus' ? <Video size={16} /> : <Plan size={16} />}
               <span className="text-[7px] font-black leading-none mt-0.5">{vue === 'dessus' ? dans(['DERRIÈRE', 'BEHIND']) : dans(['DESSUS', 'ABOVE'])}</span>
             </motion.button>
-            <button onClick={() => ville.current?.tourner(-1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCcw size={16} /></button>
-            <button onClick={() => ville.current?.tourner(1)} aria-label={dans(['Tourner', 'Rotate'])} className="w-10 h-10 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCw size={16} /></button>
+            <button onClick={() => ville.current?.tourner(-1)} aria-label={dans(['Tourner à gauche', 'Rotate left'])} className="w-11 h-11 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCcw size={16} /></button>
+            <button onClick={() => ville.current?.tourner(1)} aria-label={dans(['Tourner à droite', 'Rotate right'])} className="w-11 h-11 rounded-xl bg-[rgba(8,18,14,0.86)] text-white/80 flex items-center justify-center"><RotateCw size={16} /></button>
           </div>
         </div>
       </div>
@@ -1390,7 +1392,7 @@ function Feuille({ titre, sous, onFermer, children }: { titre: string; sous?: st
             <h3 className="font-black font-display text-xl tracking-wide" style={{ color: VERT }}>{titre}</h3>
             {sous && <p className="text-[10px] font-bold tracking-widest text-white/50">{sous}</p>}
           </div>
-          <button onClick={onFermer} aria-label={mot('fermer')} className="p-1.5 text-white/70 hover:text-white"><X size={18} /></button>
+          <button onClick={onFermer} aria-label={mot('fermer')} className="p-3 -m-1.5 text-white/70 hover:text-white"><X size={18} /></button>
         </div>
         {children}
       </motion.div>

@@ -18,7 +18,7 @@
 // des partenaires reels (docs/carriere-athlete.md). Ce fichier n'importe que
 // les regles, et rien qui dessine.
 
-import { type Athlete, type Epreuve, type Objectif, club, noter, NATIONAL, payer } from './regles';
+import { type Athlete, type Epreuve, type Objectif, club, noter, NATIONAL, payer, etape } from './regles';
 
 type Texte = [string, string];
 
@@ -149,7 +149,9 @@ export const EVENEMENTS: Evenement[] = [
                   '“We’ve seen your results. We’ll supply your spikes for the season and €60 a week, in exchange for our logo on your vest and two posts a month.”'],
     choix: [
       { t: ['Signer', 'Sign'], d: ['+60 €/semaine, déplacements payés', '+€60/week, travel paid'],
-        faire: a => { a.sponsors.push('equipementier'); a.abonnes += 300; } },
+        faire: a => { a.sponsors.push('equipementier'); a.abonnes += 300;
+          // les pointes promises : au moins la paire du milieu, sans reprendre une meilleure
+          if (!a.materiel.some(x => x === 'pointes2' || x === 'pointes3')) { a.materiel = a.materiel.filter(x => x !== 'pointes1'); a.materiel.push('pointes2'); } } },
       { t: ['Attendre mieux', 'Wait for better'], d: ['Moral +5', 'Morale +5'], faire: a => moral(a, 5) },
     ],
   },
@@ -183,7 +185,8 @@ export const EVENEMENTS: Evenement[] = [
   /* ------------------------------------------------ la vie de la semaine, avant le club */
   {
     id: 'controle',
-    tirable: a => a.chapitre === 'debut',
+    // un adulte n'a ni college ni parents qui le font reviser
+    tirable: a => a.chapitre === 'debut' && etape(a) !== 'adulte',
     repetable: true,
     qui: ['Le collège', 'School'],
     texte: () => ['Contrôle de maths vendredi. Tes parents veulent que tu révises.', 'Maths test on Friday. Your parents want you to revise.'],
