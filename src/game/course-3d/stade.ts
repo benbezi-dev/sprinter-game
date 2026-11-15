@@ -581,7 +581,15 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
   if (palais) { (ligne as any).toneMapped = false; ligne.color.multiplyScalar(1.15); }
   for (const y0 of peinte ? [] : [0, yOppose]) {
     plan(LD, W + 1.6, matA, XD, y0 + W / 2, 0);
-    for (let k = 1; k < nCouloirs; k += 2) plan(LD, LANE_W, matB, XD, y0 + (k + 0.5) * LANE_W, 0.001);
+    // LES COULOIRS ALTERNES SE COMPTENT DEPUIS LA CORDE, SUR LES DEUX LIGNES DROITES (l'auteur, 15/11/2026 :
+    // « devant le sprinter on voit la piste avec les couleurs decalees, sur toutes les courses de 400 m en
+    // exterieur »). La ligne droite d'en face part de son bord EXTERIEUR (yOppose) : compte depuis la, le
+    // couloir k y tombait a la place du couloir nCouloirs-1-k, et avec huit couloirs les bandes foncees
+    // passaient d'un couloir a l'autre au raccord des virages. Le couloir 1 est cote pelouse, partout.
+    for (let k = 1; k < nCouloirs; k += 2) {
+      const y = y0 === 0 ? (k + 0.5) * LANE_W : yOppose + W - (k + 0.5) * LANE_W;
+      plan(LD, LANE_W, matB, XD, y, 0.001);
+    }
     for (let k = 0; k <= nCouloirs; k++) plan(LD, largeL, ligne, XD, y0 + k * LANE_W, 0.002);
   }
   // (sur le fondu, les lignes de couloir en filets de lumiere translucides ; departs et arrivee restent nets, `ligne`)
