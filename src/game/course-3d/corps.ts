@@ -33,7 +33,6 @@ const autresCorps: { homme: THREE.Object3D[]; femme: THREE.Object3D[] } = { homm
 // UE5 chez Tripo), ramenes au squelette du jeu par tools/assets/tripo-vers-jeu.mjs. Peau, visage et cheveux sont CUITS
 // dans leur texture : le coureur prend celui de son genre dont la peau est la plus proche de la sienne ; la coiffure
 // de l'avatar ne s'y voit donc pas. Charges a la demande (2 Mo chacun) : une course n'en demande que quelques-uns.
-// Pas sur un appareil a moins de 4 Go (huit textures 1536 de plus en memoire graphique) ; ?anciens : les corps d'avant.
 const premium = new Map<string, THREE.Object3D | null | false>();
 /** Le corps premium du coureur : faux s'il n'y en a pas, null tant qu'il charge. */
 function premiumDe(look: any): THREE.Object3D | null | false {

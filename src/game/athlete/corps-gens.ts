@@ -55,15 +55,16 @@ function silhouetteDe(look: any): string {
 // MakeHuman (public/modeles/gens), que rien ne charge plus.
 // LES CORPS PREMIUM (13/11, course-3d/corps.ts ; 14/11 « remplace les avatars actuels du jeu par les nouveaux crees ») :
 // huit athletes Tripo, peau, visage et cheveux CUITS dans la texture. Le look prend celui de son genre dont la peau est
-// la plus proche ; la coiffure choisie ne s'y voit donc pas. Pas sous 4 Go de memoire ; ?anciens : les corps d'avant.
+// la plus proche ; la coiffure choisie ne s'y voit donc pas.
 const PREMIUM: { cle: string; femme: boolean; peau: number[] }[] = [
   { cle: 'h1', femme: false, peau: [58, 38, 30] }, { cle: 'h2', femme: false, peau: [140, 92, 62] },
   { cle: 'h3', femme: false, peau: [188, 146, 108] }, { cle: 'h4', femme: false, peau: [228, 192, 168] },
   { cle: 'f1', femme: true, peau: [58, 38, 30] }, { cle: 'f2', femme: true, peau: [140, 92, 62] },
   { cle: 'f3', femme: true, peau: [188, 146, 108] }, { cle: 'f4', femme: true, peau: [228, 192, 168] },
 ];
-export const SANS_PREMIUM = typeof navigator !== 'undefined' && (navigator as any).deviceMemory < 4
-  || typeof location !== 'undefined' && /[?&]anciens/.test(location.search);
+// (15/11, l'auteur : « je ne veux plus de ces sprites dans le jeu » : plus de repli vers les anciens corps, ni sous 4 Go
+// ni par ?anciens ; ils ne servent plus que si le fichier premium ne se charge pas)
+export const SANS_PREMIUM = false;
 /** La cle du corps premium de ce look (h1..h4, f1..f4). */
 export function premiumCle(look: any): string {
   const femme = look?.build === 'f', s = look?.skin || [150, 110, 80];
