@@ -10,6 +10,7 @@ import {
   type Athlete, type Epreuve, type Resultat, type Jour,
   COMPETITIONS, JOURS, JOUR_DE, DIMANCHE, EPREUVES,
   exerciceDuJour, lieuDeLExercice, jourDeCompetition, jourDe, heureDe, besoinsDe, avancer, payer, etape, categorie,
+  semaineDeSaison, SAISON,
 } from './regles';
 import { type Personne, lienDe } from './gens';
 import { EXOS, MOTS } from './mots';
@@ -112,9 +113,14 @@ export function classement(a: Athlete, e: Epreuve): { lignes: Ligne[]; moi: Lign
   const cat = categorie(a.age ?? 14), f = (a.apparence?.corps || 'f') === 'f';
   const base = MEILLEUR_100[cat[0]] * FACTEUR[e] * (f ? 1.1 : 1), ecart = 2.8 * FACTEUR[e];
   const graine = cat[0].length * 101 + EPREUVES.indexOf(e) * 7 + (f ? 3 : 0);
+  // LES RIVAUX PROGRESSENT (lot 3 de l'audit) : chacun part de la saison 1,5 a 3 % au-dessus de son
+  // meilleur niveau et s'en approche semaine apres semaine, a son rythme (un tirage fixe : pas de hasard
+  // d'une ouverture a l'autre). Le classement bouge sans que tu coures.
+  const avance = semaineDeSaison(a) / (SAISON - 1);
+  const forme = (i: number) => 1 + (0.015 + 0.015 * fixe(graine + i * 5 + 2)) * (1 - Math.min(1, avance * (0.7 + 0.6 * fixe(graine + i * 7 + 4))));
   const autres: Ligne[] = Array.from({ length: 39 }, (_, i) => ({
     nom: `${(f ? PRENOMS_F : PRENOMS)[Math.floor(fixe(graine + i) * 20)]} ${NOMS[Math.floor(fixe(graine + i + 50) * NOMS.length)]}.`,
-    temps: Math.round((base + ecart * Math.pow(fixe(graine + i * 3 + 1), 0.8)) * 100) / 100,
+    temps: Math.round((base + ecart * Math.pow(fixe(graine + i * 3 + 1), 0.8)) * forme(i) * 100) / 100,
     rang: 0,
   }));
   const record = a.records?.[e] ?? null;

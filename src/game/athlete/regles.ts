@@ -383,6 +383,29 @@ export const etape = (a: Athlete): Etape => ((a.age ?? 14) <= 14 ? 'college' : (
 export const LOYER = 110;
 export const SALAIRE = 65;
 
+/**
+ * GRANDIR (lot 3 de l'audit, accepte par l'auteur le 15/11) : le plus haut championnat ouvert a
+ * chaque categorie d'age. Benjamin et Minime : les regionaux ; Cadet : les France ; Junior et
+ * Espoir : l'Europe ; Senior : le Monde. Un podium au plafond de sa categorie attend l'anniversaire.
+ * Une sauvegarde deja plus haut garde son niveau : on ne redescend jamais.
+ */
+export const niveauMaxDe = (age: number) => (age <= 15 ? 2 : age <= 17 ? 3 : age <= 22 ? 4 : 5);
+/** L'age ou la categorie ouvre le niveau au-dessus de `niveau` (null au sommet). */
+export function ageQuiOuvre(niveau: number): number | null {
+  for (let age = 10; age <= 40; age++) if (niveauMaxDe(age) > niveau) return age;
+  return null;
+}
+
+/**
+ * LA SAISON EN SALLE : les semaines 13 a 24 de chaque saison de 36 (decembre a fevrier si la
+ * saison part en septembre, comme la saison d'athletisme). Hors de la, pas de meeting en salle.
+ */
+export const semaineDeSaison = (a: Athlete) => (((a.semaine - 1) % SAISON) + SAISON) % SAISON;
+export const SALLE_DEBUT = 12, SALLE_FIN = 24;
+export const saisonEnSalle = (a: Athlete) => semaineDeSaison(a) >= SALLE_DEBUT && semaineDeSaison(a) < SALLE_FIN;
+/** Semaines avant la prochaine saison en salle (0 pendant). */
+export const semainesAvantLaSalle = (a: Athlete) => (saisonEnSalle(a) ? 0 : (SALLE_DEBUT - semaineDeSaison(a) + SAISON) % SAISON);
+
 export function categorie(age: number): [string, string] {
   if (age <= 13) return ['Benjamin', 'Under-14'];
   if (age <= 15) return ['Minime', 'Under-16'];
@@ -473,14 +496,16 @@ const reste = (v: number) => Math.max(0.08, 1 - v / 115);
  */
 export function gainDeSeance(a: Athlete, j: Jour, score: number, bonus = 0): Partial<Record<Stat, number>> {
   const s = SEANCES[j];
-  const q = 0.25 + 0.75 * borne(score, 0, 1);
+  // bien jouer compte : sous 40 % de reussite, la seance ne rapporte presque rien (lot 3 de l'audit)
+  const sc = borne(score, 0, 1), q = sc < 0.4 ? 0.1 : sc;
   const c = club(a.club);
   const encadrement = a.coach && c ? c.bonus : 1;
   const forme = 1 - Math.max(0, a.fatigue - 50) / 100;
   const outil = a.materiel.some(id => piece(id)?.seance === j) ? 1.15 : 1;
   const moral = 0.85 + 0.3 * (a.moral / 100);
-  // 7 : sur l'echelle de 0 a 100 (26/10), on sort du scolaire en 7 a 8 semaines d'entrainement suivi
-  const base = 7 * q * encadrement * forme * outil * moral * formeDuJour(a) * (1 + bonus);
+  // 2,5 (7 jusqu'au 15/11 : champion du monde en moins d'une saison) : avec le plafond par age
+  // (niveauMaxDe), une carriere de 14 ans au sommet dure environ six saisons
+  const base = 2.5 * q * encadrement * forme * outil * moral * formeDuJour(a) * (1 + bonus);
   const cles = a.specialite ? CLES_EPREUVE[a.specialite] : [];
   const spe = (st: Stat) => (a.voie === 'specialiste' && cles.includes(st) ? 1.2 : 1);
   // Le polyvalent gagne moins vite sur l'essentiel mais plus sur le reste.
@@ -626,6 +651,8 @@ export type Resultat = {
   auTemps?: boolean;
   /** Sur le podium, mais les stats n'ont pas encore la moyenne du niveau suivant (pretPourLaSuite). */
   pasPret?: boolean;
+  /** Sur le podium au plafond de sa categorie d'age (niveauMaxDe) : l'age qui ouvre la suite. */
+  tropJeune?: number;
   /** Un meeting de club (ne qualifie pour rien) : son nom. */
   meeting?: [string, string];
   /** Blesse pendant la course ? */
@@ -673,12 +700,15 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   const sommet = niveau === COMPETITIONS.length - 1 && place === 1 && chrono !== null;
   // LE PODIUM ET LES STATS (l'auteur, 26/10 : « au depart les stats sont bridees sur le niveau
   // scolaire et les stats liberent les niveaux ») : on ne monte que les deux reunis.
-  const enHaut = niveau >= COMPETITIONS.length - 1, pret = pretPourLaSuite(a);
+  const auSommet = niveau >= COMPETITIONS.length - 1;
+  const tropJeune = !auSommet && niveau >= niveauMaxDe(a.age ?? 14);
+  const enHaut = auSommet || tropJeune, pret = pretPourLaSuite(a);
   if (podium && pret && !enHaut) a.niveau += 1;
   a.prochaine = a.semaine + ecart(a.niveau);
   // Un nouveau cycle commence : l'assiduite se recompte jusqu'a la prochaine.
   a.assiduite = { proposees: 0, faites: 0 };
-  return { niveau, epreuve, place, chrono, qualifie: podium && pret && !enHaut, pasPret: podium && !pret && !enHaut, prime, reputation: rep, sommet, record, vent, homologue };
+  return { niveau, epreuve, place, chrono, qualifie: podium && pret && !enHaut, pasPret: podium && !pret && !enHaut,
+           tropJeune: podium && tropJeune ? ageQuiOuvre(niveau) ?? undefined : undefined, prime, reputation: rep, sommet, record, vent, homologue };
 }
 
 /**

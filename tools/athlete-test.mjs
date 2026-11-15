@@ -513,5 +513,46 @@ titre('la semaine, la nuit, le travail (lot 1, 14/11)');
   ok('radio refusee une fois gueri', R.soinPossible(h, 'radio') !== null);
 }
 
+titre('grandir : plafond par age, salle d hiver, rivaux (lot 3, 15/11)');
+{
+  ok('plafond : Minime regionaux, Cadet France, Junior Europe, Senior Monde',
+     R.niveauMaxDe(14) === 2 && R.niveauMaxDe(16) === 3 && R.niveauMaxDe(19) === 4 && R.niveauMaxDe(23) === 5);
+  ok('les France s ouvrent a 16 ans, le Monde a 23', R.ageQuiOuvre(2) === 16 && R.ageQuiOuvre(4) === 23 && R.ageQuiOuvre(5) === null);
+  // un minime pret, sur le podium des regionaux : il reste aux regionaux
+  const m = R.nouvelAthlete('M', 'aisee', 'polyvalent', null, undefined, 14);
+  m.niveau = 2; for (const k of R.STATS) m.stats[k] = 60;
+  const r = R.conclureLaCompetition(m, '100', 1, 11.0);
+  ok('minime vainqueur des regionaux : pas de France avant 16 ans', m.niveau === 2 && r.tropJeune === 16 && !r.qualifie && !r.pasPret, JSON.stringify({ n: m.niveau, t: r.tropJeune }));
+  m.age = 16; R.conclureLaCompetition(m, '100', 1, 11.0);
+  ok('… a 16 ans, le meme podium ouvre les France', m.niveau === 3);
+  ok('une seance ratee (score 0,2) rend bien moins qu une reussie',
+     (R.gainDeSeance(R.nouvelAthlete('Q', 'aisee', 'polyvalent', null), 'lundi', 0.2).vitesse || 0) * 4 < (R.gainDeSeance(R.nouvelAthlete('Q', 'aisee', 'polyvalent', null), 'lundi', 0.9).vitesse || 0));
+  const s = R.nouvelAthlete('S', 'aisee', 'polyvalent', null);
+  s.semaine = 1; const hors = R.saisonEnSalle(s), avant = R.semainesAvantLaSalle(s);
+  s.semaine = 14; const pendant = R.saisonEnSalle(s);
+  s.semaine = 30; const apres = R.saisonEnSalle(s);
+  ok('la salle : l hiver seulement (semaines 13 a 24 de la saison)', !hors && avant === 12 && pendant && !apres, `${hors} ${avant} ${pendant} ${apres}`);
+  // les rivaux s approchent de leur meilleur niveau au fil de la saison
+  const c = R.nouvelAthlete('C', 'aisee', 'polyvalent', null, undefined, 16);
+  c.semaine = 1; const debut = R.classement(c, '100').lignes.filter(l => !l.moi).reduce((t, l) => t + l.temps, 0);
+  c.semaine = 35; const fin = R.classement(c, '100').lignes.filter(l => !l.moi).reduce((t, l) => t + l.temps, 0);
+  ok('les rivaux vont plus vite en fin de saison', fin < debut, `${debut.toFixed(2)} → ${fin.toFixed(2)}`);
+  // la duree d une carriere : 14 ans, quatre seances reussies par semaine, toujours vainqueur quand il court
+  const a = R.nouvelAthlete('D', 'aisee', 'specialiste', '100', undefined, 14); a.evenement = null; a.coach = true;
+  let semaines = 0;
+  while (a.niveau < 5 && semaines < 600) {
+    semaines++; a.semaine++; a.fatigue = 0; a.moral = 80;
+    if (a.semaine % R.SAISON === 0) a.age++;
+    for (const j of ['lundi', 'mercredi', 'vendredi', 'samedi']) {
+      const g = R.gainDeSeance(a, j, 0.8), pl = R.COMPETITIONS[a.niveau].plafond;
+      for (const k of Object.keys(g)) a.stats[k] = Math.min(pl, Math.max(a.stats[k], a.stats[k] + g[k]));
+    }
+    if (a.semaine >= a.prochaine) R.conclureLaCompetition(a, '100', 1, 10.5);
+  }
+  const saisons = semaines / R.SAISON;
+  console.log(`      14 ans, bien entraine, toujours vainqueur : champion du monde apres ${semaines} semaines (${saisons.toFixed(1)} saisons, a ${a.age} ans)`);
+  ok('une carriere au sommet dure entre 6 et 12 saisons (plus jamais une seule)', saisons >= 6 && saisons <= 12, saisons.toFixed(1));
+}
+
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
 process.exit(e ? 1 : 0);
