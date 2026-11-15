@@ -79,6 +79,8 @@ export type Athlete = {
   abonnes: number;
   relations: { coach: number; club: number; rival: number };
   sponsors: string[];
+  /** La categorie de la semaine derniere (statutDe), pour annoncer un changement. */
+  statut?: Statut;
   chapitre: Chapitre;
   /** LA JOURNEE (game/athlete/regles.ts, « la journee ») : le jour (0 = lundi), l'heure en minutes. */
   jour?: number;
@@ -196,7 +198,8 @@ export function lieuDeLExercice(a: Athlete, ex: Exercice): 'stade' | 'cote' | 'p
 
 /** Le kine : une seance par semaine, moitie prise par le club. */
 export const KINE = 40;
-export const prixDuKine = (a: Athlete) => (a.club ? KINE / 2 : KINE);
+// la part de l'athlete selon sa categorie (statutDe, plus bas) ; le kine n'est pas rembourse
+export const prixDuKine = (a: Athlete) => deTaPoche(a, KINE, false);
 
 /**
  * Une seance chez le kine : la fatigue tombe, une blessure guerit d'une
@@ -561,14 +564,14 @@ export function achatPossible(a: Athlete, id: string): null | 'possede' | 'argen
   if (!p) return 'inconnu';
   if (a.materiel.includes(id) || MATERIEL.some(q => q.remplace === id && a.materiel.includes(q.id))) return 'possede';
   if (p.remplace && !a.materiel.includes(p.remplace)) return 'avant';
-  if (a.argent < p.prix) return 'argent';
+  if (a.argent < prixDuMateriel(a, p.prix)) return 'argent';
   return null;
 }
 
 export function acheter(a: Athlete, id: string): boolean {
   if (achatPossible(a, id)) return false;
   const p = piece(id)!;
-  payer(a, -p.prix, 'Matériel', 'Kit');
+  payer(a, -prixDuMateriel(a, p.prix), 'Matériel', 'Kit');
   if (p.remplace) a.materiel = a.materiel.filter(x => x !== p.remplace);
   a.materiel.push(id);
   return true;
@@ -584,13 +587,53 @@ export function bonusMateriel(a: Athlete): Record<Stat, number> {
   return b;
 }
 
-/** Ce que coute le deplacement a l'athlete, apres parents, club et sponsors. */
+/* ----------------------------------------------- les quatre categories d'athletes */
+
+/**
+ * LES QUATRE CATEGORIES (video envoyee par l'auteur le 15/11 : « les 4 categories d'athletes de
+ * haut niveau ») : ce qui separe les athletes, c'est QUI PAIE LEUR SPORT, et ils courent pourtant
+ * les memes competitions pour les memes objectifs.
+ *  1. Professionnel·le : le sport est son metier (contrat, aides) ; il ou elle s'y consacre a 110 %.
+ *  2. Soutenu·e : le sport fait 50 a 70 % de ses revenus, mais pas de quoi s'y donner a 100 %.
+ *  3. Aide·e : 30 a 40 % de la saison sort de sa poche, le reste vient du club ou d'un sponsor ;
+ *     un travail alimentaire a cote.
+ *  4. Laisse·e pour compte : le travail paie la vie ET 100 % du sport (materiel, deplacements, soins).
+ * La categorie se deduit de ce que l'athlete a obtenu : club, sponsors, niveau. Rien n'est tire au hasard.
+ */
+export type Statut = 1 | 2 | 3 | 4;
+export const STATUTS: Record<Statut, { nom: [string, string]; phrase: [string, string] }> = {
+  1: { nom: ['professionnel·le', 'professional'], phrase: ['Ton sport est ton métier : tu peux t’y donner à 110 %.', 'Your sport is your job: you can give it 110%.'] },
+  2: { nom: ['soutenu·e', 'supported'], phrase: ['Le sport fait plus de la moitié de tes revenus, mais pas de quoi t’y consacrer à 100 %.', 'Sport is over half your income, but not enough to commit 100%.'] },
+  3: { nom: ['aidé·e', 'helped'], phrase: ['Club et sponsor paient une partie : 35 % de ta saison sort de ta poche, il te faut un travail à côté.', 'Club and sponsor cover part: 35% of your season comes out of your pocket, you need a job on the side.'] },
+  4: { nom: ['laissé·e pour compte', 'left behind'], phrase: ['Ton travail paie ta vie ET 100 % de ton sport : matériel, déplacements, soins.', 'Your job pays for your life AND 100% of your sport: kit, travel, care.'] },
+};
+export function statutDe(a: Athlete): Statut {
+  const s = a.sponsors.length;
+  if (s >= 2 && a.niveau >= 4) return 1;            // deux contrats et l'Europe : on vit du sport
+  if (s >= 1 && a.niveau >= NATIONAL) return 2;     // un sponsor au niveau national, et les aides qui vont avec
+  if (s >= 1 || a.club) return 3;
+  return 4;
+}
+/** La part de ses depenses de sport que l'athlete paie lui-meme, par categorie. */
+export const PART_DE_TA_POCHE: Record<Statut, number> = { 1: 0, 2: 0.1, 3: 0.35, 4: 1 };
+/** Les parents aises d'un mineur paient sa part ; sinon, `prix` × sa part. */
+export const deTaPoche = (a: Athlete, prix: number, parents = true) =>
+  parents && etape(a) !== 'adulte' && a.origine === 'aisee' ? 0 : Math.round(prix * PART_DE_TA_POCHE[statutDe(a)]);
+/** Ce que le sport rapporte chaque semaine : un salaire en categorie 1, sponsors et aides ensuite. */
+export function revenuDuSport(a: Athlete): number {
+  const st = statutDe(a);
+  return st === 1 ? 300 : st === 2 ? 150 : a.sponsors.length * 60;
+}
+/** En categorie 1, le sport est le metier : plus d'obligation d'aller au travail. */
+export const vitDuSport = (a: Athlete) => statutDe(a) === 1;
+
+/** Ce que coute le deplacement a l'athlete, apres parents, club et sponsors (sa categorie). */
 export function coutDuDeplacement(a: Athlete, niveau: number): number {
   const c = COMPETITIONS[borne(niveau, 0, COMPETITIONS.length - 1)];
-  if (a.origine === 'aisee') return 0;               // les parents paient
-  if (a.sponsors.length) return 0;                   // le sponsor paie
-  return a.club ? Math.round(c.deplacement / 2) : c.deplacement;   // le club en prend la moitie
+  return deTaPoche(a, c.deplacement);
 }
+/** Le materiel : fourni en partie selon la categorie (les parents ne l'achetent pas). */
+export const prixDuMateriel = (a: Athlete, prix: number) => deTaPoche(a, prix, false);
 
 /* ------------------------------------------------------------ la course */
 
@@ -723,6 +766,8 @@ export const MEETINGS: [string, string][] = [
   ['Meeting des Falaises', 'Cliffs meet'], ['Meeting d’automne du club', 'Club autumn meet'],
 ];
 export const DEPLACEMENT_MEETING = 10;
+/** Le meeting, selon la categorie (et les parents d'un mineur aise). */
+export const coutDuMeeting = (a: Athlete) => deTaPoche(a, DEPLACEMENT_MEETING);
 export const meetingDe = (a: Athlete) => MEETINGS[a.semaine % MEETINGS.length];
 /** Un meeting est-il possible ce jour-ci ? Rend la raison sinon. */
 export function meetingPossible(a: Athlete, championnatAujourdhui: boolean): [string, string] | null {
@@ -731,7 +776,7 @@ export function meetingPossible(a: Athlete, championnatAujourdhui: boolean): [st
   if (championnatAujourdhui) return ['Aujourd’hui, c’est le championnat', 'Today is the championship'];
   if (a.meeting === a.semaine) return ['Déjà couru ce dimanche', 'Already raced this Sunday'];
   if (a.blessure > 0) return ['Blessé·e', 'Injured'];
-  if (a.argent < DEPLACEMENT_MEETING) return ['Pas assez d’argent', 'Not enough money'];
+  if (a.argent < coutDuMeeting(a)) return ['Pas assez d’argent', 'Not enough money'];
   return null;
 }
 export function conclureLeMeeting(a: Athlete, epreuve: Course, place: number, chrono: number | null, vent: number | null): Resultat {
@@ -805,7 +850,10 @@ export function finirLaSemaine(a: Athlete) {
   a.fatigue = borne(a.fatigue - 45 - recup, 0, 100);
   if (a.origine === 'aisee' && etape(a) !== 'adulte') payer(a, ARGENT_DE_POCHE, 'Argent de poche', 'Pocket money');
   if (etape(a) === 'adulte') payer(a, -LOYER, 'Loyer', 'Rent');
-  payer(a, a.sponsors.length * 60, 'Sponsors', 'Sponsors');
+  const st = statutDe(a), gagne = revenuDuSport(a);
+  payer(a, gagne, st === 1 ? 'Contrat : tu vis de ton sport' : st === 2 ? 'Sponsors et aides' : 'Sponsors', st === 1 ? 'Contract: you live off your sport' : st === 2 ? 'Sponsors and grants' : 'Sponsors');
+  if (a.statut && a.statut !== st) noter(a, `Tu passes en catégorie ${st} : ${STATUTS[st].nom[0]}. ${STATUTS[st].phrase[0]}`, `You move to category ${st}: ${STATUTS[st].nom[1]}. ${STATUTS[st].phrase[1]}`);
+  a.statut = st;
   // une nouvelle saison : un an de plus, peut-etre une nouvelle categorie
   if (a.semaine % SAISON === 0) a.age = (a.age ?? 14) + 1;
   // Trois seances proposees par semaine (le samedi reste un bonus).
@@ -865,7 +913,8 @@ export function avancer(a: Athlete, minutes: number, effets: Partial<Record<Beso
   const h0 = heureDe(a);
   for (const k of BESOINS) b[k] = borne(b[k] - BAISSE[k] * minutes / 60 + (effets[k] || 0), 0, 100);
   let h = h0 + minutes;
-  if (enSemaine(a) && h0 < 9 * 60 && h >= 9 * 60 && !a.cours) {
+  // en categorie 1, le sport est le metier : personne n'attend l'athlete au bureau
+  if (enSemaine(a) && h0 < 9 * 60 && h >= 9 * 60 && !a.cours && !(etape(a) === 'adulte' && vitDuSport(a))) {
     a.ecole = borne((a.ecole ?? 60) - 5, 0, 100);
     a.moral = borne(a.moral - 3, 0, 100);
     const e = etape(a);

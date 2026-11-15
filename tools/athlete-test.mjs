@@ -89,7 +89,7 @@ titre('l\'argent');
   ok('l\'aisee ne paie pas ses deplacements', R.coutDuDeplacement(riche, 3) === 0);
   ok('la modeste paie le sien', R.coutDuDeplacement(pauvre, 3) === 150);
   pauvre.club = 'quartier';
-  ok('le club en prend la moitie', R.coutDuDeplacement(pauvre, 3) === 75);
+  ok('le club : categorie 3, 35 % de sa poche (video du 15/11)', R.coutDuDeplacement(pauvre, 3) === 53);
   ok('un boulot rapporte', R.prendreUnBoulot(pauvre, 'marche') && pauvre.argent === 80);
   ok('un seul par semaine', !R.prendreUnBoulot(pauvre, 'livraison'));
   ok('le marche prend le samedi', R.seancePossible(pauvre, 'samedi') === 'boulot');
@@ -163,7 +163,7 @@ titre('les exercices, le kine, le parc');
   ok('la muscu a la salle du club', R.lieuDeLExercice(a, 'muscu') === 'club_quartier');
   ok('les departs au stade', R.lieuDeLExercice(a, 'departs') === 'stade');
   a.argent = 100; a.fatigue = 60; a.blessure = 2;
-  ok('le kine : la moitie payee par le club', R.chezLeKine(a) === null && a.argent === 80);
+  ok('le kine : 35 % de sa poche en categorie 3', R.chezLeKine(a) === null && a.argent === 100 - Math.round(R.KINE * 0.35));
   ok('il soulage et fait guerir plus vite', a.fatigue === 35 && a.blessure === 1);
   ok('une fois par semaine', R.chezLeKine(a) === 'fait');
   a.blessure = 0;
@@ -552,6 +552,30 @@ titre('grandir : plafond par age, salle d hiver, rivaux (lot 3, 15/11)');
   const saisons = semaines / R.SAISON;
   console.log(`      14 ans, bien entraine, toujours vainqueur : champion du monde apres ${semaines} semaines (${saisons.toFixed(1)} saisons, a ${a.age} ans)`);
   ok('une carriere au sommet dure entre 6 et 12 saisons (plus jamais une seule)', saisons >= 6 && saisons <= 12, saisons.toFixed(1));
+}
+
+titre('les quatre categories d athletes (video de l auteur, 15/11)');
+{
+  const a = R.nouvelAthlete('C', 'modeste', 'polyvalent', null, undefined, 20); a.evenement = null; a.club = null; a.sponsors = []; a.niveau = 2;
+  ok('sans club ni sponsor : categorie 4, tout de sa poche', R.statutDe(a) === 4 && R.coutDuDeplacement(a, 3) === R.COMPETITIONS[3].deplacement && R.prixDuKine(a) === R.KINE);
+  a.club = 'horizon';
+  ok('un club : categorie 3, 35 % de sa poche', R.statutDe(a) === 3 && R.coutDuDeplacement(a, 3) === Math.round(R.COMPETITIONS[3].deplacement * 0.35));
+  a.sponsors = ['equipementier']; a.niveau = R.NATIONAL;
+  ok('un sponsor et les France : categorie 2, 150 €/semaine', R.statutDe(a) === 2 && R.revenuDuSport(a) === 150);
+  a.sponsors.push('marque'); a.niveau = 4;
+  ok('deux contrats et l Europe : categorie 1, rien de sa poche', R.statutDe(a) === 1 && R.coutDuDeplacement(a, 5) === 0 && R.resteACharge(a, 'irm') === 0 && R.prixDuMateriel(a, 450) === 0);
+  // en categorie 1, pas d'absence au travail
+  a.jour = 1; a.heure = 8 * 60; a.cours = false; const n0 = a.journal.length; R.avancer(a, 120);
+  ok('categorie 1 : personne ne l attend au travail', !a.journal.slice(0, a.journal.length - n0).some(l => /Absent au travail/.test(l.fr)));
+  // le passage d'une categorie a l'autre est annonce a la fin de la semaine
+  const b = R.nouvelAthlete('B', 'modeste', 'polyvalent', null, undefined, 20); b.evenement = null; b.club = null; b.statut = 4; b.club = 'horizon';
+  R.finirLaSemaine(b);
+  ok('changer de categorie se note au journal', b.statut === 3 && b.journal.some(l => /catégorie 3/.test(l.fr)));
+  const m = R.nouvelAthlete('M', 'aisee', 'polyvalent', null, undefined, 14);
+  ok('un mineur aise : ses parents paient deplacement et meeting, pas le materiel', R.coutDuDeplacement(m, 3) === 0 && R.coutDuMeeting(m) === 0 && R.prixDuMateriel(m, 100) === 100);
+  const lst = R.classement(R.nouvelAthlete('L', 'aisee', 'polyvalent', null, undefined, 20), '100').lignes;
+  ok('au classement senior, les quatre categories se melangent', [1, 2, 3, 4].every(c => lst.some(l => l.statut === c)));
+  ok('pas de categorie chez les Minimes', R.classement(m, '100').lignes.every(l => l.statut === undefined));
 }
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');

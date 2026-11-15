@@ -148,7 +148,7 @@ export const EVENEMENTS: Evenement[] = [
     texte: () => ['« On a vu tes résultats. On te fournit les pointes de la saison et 60 € par semaine, contre ton logo sur le maillot et deux posts par mois. »',
                   '“We’ve seen your results. We’ll supply your spikes for the season and €60 a week, in exchange for our logo on your vest and two posts a month.”'],
     choix: [
-      { t: ['Signer', 'Sign'], d: ['+60 €/semaine, déplacements payés', '+€60/week, travel paid'],
+      { t: ['Signer', 'Sign'], d: ['+60 €/semaine, une bonne part des déplacements et des soins payée', '+€60/week, a good share of travel and care paid'],
         faire: a => { a.sponsors.push('equipementier'); a.abonnes += 300;
           // les pointes promises : au moins la paire du milieu, sans reprendre une meilleure
           if (!a.materiel.some(x => x === 'pointes2' || x === 'pointes3')) { a.materiel = a.materiel.filter(x => x !== 'pointes1'); a.materiel.push('pointes2'); } } },
