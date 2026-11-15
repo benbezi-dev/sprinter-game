@@ -46,7 +46,7 @@ marcher. Et dans la hotte, il reste un dernier paquet. Il porte ton nom.
 
 ### Les personnages
 
-- **Le Père Noël.** Un grand athlète noir, la soixantaine, barbe blanche, épaules
+- **Le Père Noël.** Un grand athlète noir sans âge, barbe blanche, épaules
   de lanceur de poids, rire qui fait trembler les vitres. Ancien sprinteur
   invaincu. Généreux, vantard, drôle, et plus fragile qu'il ne le montre. Il
   court en maillot rouge, dossard 1, bonnet compris. Dans le jeu, c'est le
@@ -102,10 +102,10 @@ rouillé et finit plus rapide que toi.
 > Il me reste deux jambes. Montre-moi les tiennes. »
 >
 > *Course :* 100 m contre le Père Noël, rouillé. Il n'a pas couru depuis
-> cinquante ans.
+> des siècles.
 >
-> *Après la victoire :* « Ho ho… ho. Tu m'as battu. Ça n'était pas arrivé
-> depuis 1974. Reviens demain. »
+> *Après la victoire :* « Ho ho… ho. Tu m'as battu. Ça n'était jamais
+> arrivé. Reviens demain. »
 
 **Jour 2 — LE CALCUL**
 > *Lettre :* Lilou, 6 ans, Marseille. « Cher Père Noël, cette année je veux
@@ -125,13 +125,14 @@ rouillé et finit plus rapide que toi.
 > c'est des bêtises ? »
 >
 > **Père Noël :** Il ouvre la malle. Dedans : des pointes usées, une médaille,
-> une photo en noir et blanc d'un jeune homme qui franchit une ligne, bras
-> levés. « Avant la barbe, Amadou, il y avait ça. »
+> une photo si jaunie qu'on ne sait plus de quand elle date : un jeune
+> homme qui franchit une ligne, bras levés. « Avant la barbe, Amadou, il y avait ça. »
 >
 > *Course :* 200 m.
 >
 > *Après la victoire :* « J'avais vingt ans sur cette photo. Personne ne
-> m'a jamais battu sur cent mètres. Sur deux cents… on n'en parle pas. »
+> m'avait jamais battu sur cent mètres avant toi. Sur deux cents… on n'en
+> parle pas. »
 
 **Jour 4 — LA PISTE DES LUTINS**
 > *Lettre :* Mei, 7 ans, Séoul. « Je cours vite moi aussi. On fait la
