@@ -457,7 +457,7 @@ function gabaritDe(look: any): THREE.Object3D | null {
   }
   return gabarits.get(chemin) || null;
 }
-function corps3D(look: any): { m: Modele; teinte: Teinte; cle: string; hauteur: number } | null {
+export function corps3D(look: any): { m: Modele; teinte: Teinte; cle: string; hauteur: number } | null {
   const gabarit = gabaritDe(look);
   if (!gabarit) return null;
   const copie = clonerSquelette(gabarit);

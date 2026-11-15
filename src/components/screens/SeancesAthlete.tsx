@@ -16,6 +16,7 @@ import { ouvrirLesDeparts } from '@/game/athlete/departs';
 import { sauver as sauverAthlete, demanderReouverture } from '@/game/athlete/carriere';
 import { demarrerSequence, pasDuTuto, rangerLeTuto, figerLaPiste } from '@/game/sprint-tuto.js';
 import { CLUB_PARTENAIRE, logoDuClub } from '@/game/athlete/partenaires';
+import { Seance3D, webglPossible, type Pinceaux } from '@/game/athlete/seance-3d';
 
 /* ---------------------------------------------------------------------------
    LES SEANCES : UN MINI-JEU PAR VRAI EXERCICE, JOUE PAR L'ATHLETE
@@ -118,9 +119,16 @@ const LOGO: HTMLImageElement | null = (() => { const s = logoDuClub(); if (!s ||
 
 function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  const hote = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const cv = ref.current!; const c = cv.getContext('2d')!;
     const A = SprinterApp as any;
+    // LE LIEU EN 3D (seance-3d.ts) ; la 2D ne garde que les effets par-dessus. Sans WebGL : tout en 2D.
+    let s3: Seance3D | null = null;
+    if (webglPossible()) {
+      try { s3 = new Seance3D(etat.current.decor, etat.current.corps.look, PINCEAUX); hote.current!.appendChild(s3.toile); }
+      catch { s3 = null; }
+    }
     let id = 0, avant = 0, piedAvant = 0, sol0: number | null = null;
     const parts: Particule[] = [];
     const tic = (ms: number) => {
@@ -132,12 +140,16 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
       c.setTransform(dpr, 0, 0, dpr, 0, 0);
       const e = etat.current;
       const allonge = e.decor === 'tapis';
-      const k = Math.min(H * 0.3, W * 0.42) * (allonge ? 0.72 : 1);   // l'echelle du corps : ~1,45 k de haut
-      const ppm = k * 0.8;                                             // pixels par metre
-      const sol = H * 0.8 + e.couloir * H * 0.05;
-      const ax = W * (allonge ? 0.62 : 0.42);
-
-      decor(c, e, W, H, ppm, sol, ax, ms / 1000);
+      let k = Math.min(H * 0.3, W * 0.42) * (allonge ? 0.72 : 1);   // l'echelle du corps : ~1,45 k de haut
+      let ppm = k * 0.8;                                             // pixels par metre
+      let sol = H * 0.8 + e.couloir * H * 0.05;
+      let ax = W * (allonge ? 0.62 : 0.42);
+      let corps3d = false;
+      if (s3) {
+        const p = s3.rendre(e, ms / 1000, W, H);
+        ({ ax, sol, ppm } = p); k = ppm / 0.8; corps3d = p.corps;
+        c.clearRect(0, 0, W, H);
+      } else decor(c, e, W, H, ppm, sol, ax, ms / 1000);
 
       // le corps : ses volumes, poses sur le sol par leur point le plus bas
       const caps = A.personCapsules(e.corps, e.cap, e.incline, false, false, A.niveauDetail(k));
@@ -147,6 +159,7 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
       }
       const leve = (plusBas(caps) - sol0) * k;
       const y = sol + leve - e.vol * ppm;
+      if (!corps3d) {
       // l'ombre, qui s'ecarte quand on vole
       const o = Math.max(0.3, 1 - e.vol * 0.8);
       c.fillStyle = `rgba(0,0,0,${0.28 * o})`;
@@ -157,6 +170,7 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
       if (!(chemin && pret(chemin) && dessiner(c, chemin, e.corps.squelette || null,
         A.repereDuCoureur(e.corps, e.cap, e.incline, false, false), ax, y, k, e.corps.look))) A.drawFacetFigure(c, caps, ax, y, k);
       if (e.barre !== null) barre(c, xBarre, yBarre, k, true);
+      }
 
       // la poussiere a chaque appui, les traits de vitesse, la sueur
       const v = e.corps.v || 0;
@@ -201,9 +215,14 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
       id = requestAnimationFrame(tic);
     };
     id = requestAnimationFrame(tic);
-    return () => cancelAnimationFrame(id);
+    return () => { cancelAnimationFrame(id); if (s3) { s3.toile.remove(); s3.detruire(); } };
   }, []);
-  return <canvas ref={ref} className="absolute inset-0 w-full h-full" />;
+  return (
+    <>
+      <div ref={hote} className="absolute inset-0" />
+      <canvas ref={ref} className="absolute inset-0 w-full h-full" />
+    </>
+  );
 }
 
 /** La barre de squat vue de trois quarts : les disques devant et derriere le corps. */
@@ -657,6 +676,29 @@ function decor(c: CanvasRenderingContext2D, e: EtatScene, W: number, H: number, 
     }
   }
 }
+
+/** Les peintures 2D, reprises comme textures par la 3D (seance-3d.ts). */
+const PINCEAUX: Pinceaux = {
+  tribune: peindreTribune,
+  ciel(c, w, h, lieu) {
+    const [haut, bas] = lieu === 'cote' ? ['#4F93D3', '#F3E7CF'] : lieu === 'parc' ? ['#4E94D5', '#E6F1F8'] : ['#3F86CC', '#CFE6F5'];
+    ciel(c, w, h, haut, bas, [w * 0.78, h * 0.1]); nuages(c, w, h, 0);
+  },
+  montagnes(c, w, h) {
+    crete(c, w, h, h * 0.7, h * 0.32, 150, 0, '#A9BDD2');
+    crete(c, w, h, h * 0.86, h * 0.18, 80, 60, '#8FAEB0');
+  },
+  affiche(c, w, h) {
+    c.fillStyle = '#1D2A44'; c.fillRect(0, 0, w, h);
+    const ox = w / 2, oy = h * 0.42, rx = w * 0.38, ry = h * 0.24;
+    c.fillStyle = '#C8553D'; c.beginPath(); c.ellipse(ox, oy, rx, ry, 0, 0, TOUR); c.fill();
+    c.fillStyle = '#4E9A4A'; c.beginPath(); c.ellipse(ox, oy, rx * 0.66, ry * 0.5, 0, 0, TOUR); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,0.8)'; c.lineWidth = 2;
+    for (const f of [0.75, 0.84, 0.92]) { c.beginPath(); c.ellipse(ox, oy, rx * f, ry * (0.5 + (f - 0.66) * 1.47), 0, 0, TOUR); c.stroke(); }
+    c.fillStyle = '#FFD23F'; c.font = `900 ${Math.round(h * 0.1)}px system-ui`; c.textAlign = 'center'; c.fillText('SPRINT', ox, h * 0.86);
+    c.strokeStyle = '#E9E4D8'; c.lineWidth = 10; c.strokeRect(0, 0, w, h);
+  },
+};
 
 /* ================================================================ les entrees */
 
