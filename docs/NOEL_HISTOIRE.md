@@ -47,6 +47,16 @@ sont les autres joueurs, les fantômes de la bataille de boules de neige.
 
 Au matin de Noël, un grelot t'attend sur ton paillasson. Il sonne, cette fois.
 
+**Le Père Noël est un athlète.** Il court au Village de l'Étoile, le stade de
+l'événement, dossard 1, tenue rouge, bonnet et barbe blanche
+(`sprinter-core.js`, VEDETTES ; `course-3d/corps.ts`, `habillerPereNoel`). Dans
+l'histoire, il rejoint la Course de l'Étoile le soir du 24 et laisse son
+dossard au matin (case 24).
+
+**La ville est diverse**, comme le public et les athlètes du jeu : les
+illustrations de la bande-annonce le montrent (Marthe, la foule, la coureuse à
+la lanterne, le Père Noël).
+
 ### Les quatre actes
 
 | Cases | Acte | Ce qui se passe |
@@ -433,6 +443,7 @@ Au matin de Noël, un grelot t'attend sur ton paillasson. Il sonne, cette fois.
 > Tu as allumé la lanterne au cierge. L'écharpe d'Émile au cou.
 > En bas, la ville entière : mille bougies aux fenêtres.
 > Tu as couru. Et derrière toi, tout le monde a couru.
+> Même un vieil athlète à barbe blanche, en maillot rouge. Il allait très vite.
 
 > À chaque foulée, une lueur. Le grelot sonnait, sonnait.
 > Au pied du sapin, tu as levé la lanterne.
@@ -448,6 +459,8 @@ Au matin de Noël, un grelot t'attend sur ton paillasson. Il sonne, cette fois.
 
 > Au matin, sur ton paillasson, un grelot d'argent.
 > Tu l'as ramassé. Il a sonné, clair, joyeux.
+> À côté, un dossard rouge, numéro 1. Au dos, une écriture ronde :
+> « Merci d'avoir couru avec moi. Rendez-vous l'an prochain. — P. N. »
 > Dans la neige, devant chez toi, des traces de sabots
 > qui s'arrêtent au milieu de la rue. Comme un envol.
 >

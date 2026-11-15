@@ -609,8 +609,9 @@
       foule: 0.9,
       plateau: { '60': [6.55, 6.85], '100': [10.15, 10.60], '200': [20.50, 21.50],
                  '400': [45.80, 47.80], '4x100': [39.20, 40.60] },
-      names: ['Noe Fabre', 'Gabriel Hiver', 'Elio Marchand', 'Leon Sapin',
-              'Timeo Valois', 'Nael Givry', 'Jules Etienne'] },
+      // le Pere Noel est au depart (VEDETTES) : il court ici, et il va vite
+      names: ['Père Noël', 'Noe Fabre', 'Awa Diarra', 'Leon Sapin',
+              'Yuki Tanaka', 'Nael Givry', 'Ines Benali'] },
 
     // LE DEFI AUREL MANGA — l'evenement qui annonce Hurdlers.
     //
@@ -1608,7 +1609,9 @@
       facettes: o.facettes || 0,
       // `lisse` : un corps d'un seul tenant — deltoides qui suivent le bras,
       //           fessiers ronds, rotules a la taille du membre (voir pose).
-      lisse: !!o.lisse
+      lisse: !!o.lisse,
+      // `pereNoel` : le bonnet et la barbe du Pere Noel, en 3D (course-3d/corps.ts).
+      pereNoel: !!o.pereNoel
     };
   }
 
@@ -1661,6 +1664,11 @@
   //   - la carnation, relevee sur leurs photos et non choisie dans une liste ;
   //   - la tenue, et la foulee.
   const VEDETTES = {
+    // LE PERE NOEL EST UN ATHLETE (l'auteur, 15/11) : il court au Village de l'Etoile (stade `noel`). Tenue
+    // rouge, pointes noires ; le bonnet et la barbe sont poses sur son corps en 3D (course-3d/corps.ts,
+    // habillerPereNoel). Un grand gabarit, une foulee de puissance : il a du chemin a faire cette nuit-la.
+    'Père Noël': look({ build: 'm', skin: 'cacao', jersey: [196, 30, 42], shorts: [196, 30, 42], shoe: [24, 22, 24],
+      hair: 'ras', hairCol: [236, 236, 232], h: 1.88, gait: 'power', pereNoel: true }),
     // AUREL MANGA — 110 m haies, equipe de France. Bronze mondial en salle du
     // 60 m haies (Birmingham, 2018), bronze europeen en salle (Glasgow, 2019).
     //
