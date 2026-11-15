@@ -17,7 +17,7 @@ import {
   conclureLaCompetition, finirLaSemaine, noter, declarerForfait, jourCale, type Resultat,
   faireUneAction, avancer, heureDe, DIMANCHE, payer, tirerLeCorps, BLESSURES,
   type RendezVousReel, type Tour, apresLeTour, HEURE_DU_TOUR, SEMAINES_AVANT_FRANCE, rendezVousAvantFrance,
-  conclureLeMeeting, meetingDe, DEPLACEMENT_MEETING, type Course, enSalle, libelleEpreuve, saisonEnSalle,
+  conclureLeMeeting, meetingDe, coutDuMeeting, type Course, enSalle, libelleEpreuve, saisonEnSalle,
   etape, SALAIRE, soulager, jourDe, REVEIL, BESOINS_PLEINS,
 } from './regles';
 import { tirerLaSemaine } from './recit';
@@ -204,7 +204,7 @@ export function partirAuMeeting(a: Athlete, epreuve: Course): boolean {
   // la salle n'ouvre que l'hiver (regles.ts, saisonEnSalle)
   if (enSalle(epreuve) && !saisonEnSalle(a)) return false;
   a.meeting = a.semaine;
-  payer(a, -DEPLACEMENT_MEETING, meetingDe(a)[0], meetingDe(a)[1]);
+  payer(a, -coutDuMeeting(a), meetingDe(a)[0], meetingDe(a)[1]);
   sauver(a);
   const G = SprinterApp.G;
   // en salle, pas de vent

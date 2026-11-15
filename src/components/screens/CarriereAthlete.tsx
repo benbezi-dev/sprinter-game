@@ -24,7 +24,7 @@ import {
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
   soulager, REVEIL, boulotFait, BOULOTS_PAR_SEMAINE, paieDu, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
-  meetingPossible, meetingDe, DEPLACEMENT_MEETING,
+  meetingPossible, meetingDe, coutDuMeeting, prixDuMateriel, statutDe, STATUTS, PART_DE_TA_POCHE, revenuDuSport, KINE, type Statut,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
@@ -170,6 +170,34 @@ function Voile({ children }: { children: React.ReactNode }) {
       <motion.div {...PANNEAU} className="w-full max-w-lg mx-auto flex flex-col gap-3">{children}</motion.div>
     </div>,
     document.body,
+  );
+}
+
+/**
+ * TON STATUT : la categorie de l'athlete (regles.ts, statutDe), d'apres la video de l'auteur du 15/11 :
+ * qui paie son sport, ce qui sort de sa poche, et comment monter d'une categorie.
+ */
+function CarteStatut({ a }: { a: Athlete }) {
+  const st = statutDe(a), S = STATUTS[st], poche = Math.round(PART_DE_TA_POCHE[st] * 100), gagne = revenuDuSport(a);
+  const COULEUR: Record<Statut, string> = { 1: VERT, 2: '#7FD1FF', 3: '#F5A623', 4: '#FF7A7A' };
+  const suite: [string, string] | null = st === 4 ? ['Un club ou un sponsor te fait passer en catégorie 3.', 'A club or a sponsor moves you to category 3.']
+    : st === 3 ? ['Un sponsor et les France te font passer en catégorie 2.', 'A sponsor and the nationals move you to category 2.']
+    : st === 2 ? ['Deux contrats et l’Europe : la catégorie 1, vivre de ton sport.', 'Two deals and the Europeans: category 1, living off your sport.'] : null;
+  return (
+    <Carte titre={dans(['TON STATUT D’ATHLÈTE', 'YOUR ATHLETE STATUS'])} icone={Briefcase}>
+      <div className="flex items-center gap-3">
+        <span className="shrink-0 w-11 h-11 rounded-xl flex items-center justify-center font-black text-xl text-black" style={{ background: COULEUR[st] }}>{st}</span>
+        <span className="flex flex-col min-w-0">
+          <span className="font-black uppercase" style={{ color: COULEUR[st] }}>{dans(['Catégorie', 'Category'])} {st} · {dans(S.nom)}</span>
+          <span className="text-xs text-white/70 leading-snug">{dans(S.phrase)}</span>
+        </span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 text-center">
+        <div className="rounded-xl bg-white/5 py-2"><div className="text-[11px] text-white/55">{dans(['De ta poche', 'Out of pocket'])}</div><div className="font-black tabular-nums">{poche} %</div></div>
+        <div className="rounded-xl bg-white/5 py-2"><div className="text-[11px] text-white/55">{dans(['Le sport te rapporte', 'Sport pays you'])}</div><div className="font-black tabular-nums">{gagne} €/{dans(['sem.', 'wk'])}</div></div>
+      </div>
+      <p className="text-[11px] text-white/55 leading-snug">{dans(['Matériel, déplacements, soins, kiné : ta part suit ta catégorie. Les quatre catégories courent les mêmes compétitions.', 'Kit, travel, care, physio: your share follows your category. All four categories race the same meets.'])}{suite ? ` ${dans(suite)}` : ''}</p>
+    </Carte>
   );
 }
 
@@ -848,6 +876,7 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
         {!sante ? <Bouton onClick={() => setSante(true)}>{dans(['ESPACE SANTÉ', 'HEALTH SPACE'])} ›</Bouton> : <EspaceSante a={a} ev={!!ev} changer={changer} />}
       </Carte>
 
+      <CarteStatut a={a} />
       <Carte titre={mot('boulots')} icone={Briefcase}>
         {(
           <div className="grid grid-cols-3 gap-2">
@@ -882,7 +911,7 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
               </span>
               {r === 'possede'
                 ? <span className="text-[10px] font-black tracking-widest" style={{ color: VERT }}>{mot('possede')}</span>
-                : <Bouton disabled={!!r} onClick={() => changer(() => { acheter(a, p.id); })}>{p.prix} €</Bouton>}
+                : <Bouton disabled={!!r} onClick={() => changer(() => { acheter(a, p.id); })}>{prixDuMateriel(a, p.prix)} €</Bouton>}
             </div>
           );
         })}
@@ -1247,7 +1276,7 @@ function EspaceSante({ a, ev, changer }: { a: Athlete; ev: boolean; changer: (f:
         <div className="flex items-center gap-2">
           <span className="flex-1 min-w-0 flex flex-col">
             <span className="text-xs font-black">{dans(['Kiné', 'Physio'])}</span>
-            <span className="text-[10px] text-white/55">{dans(['Massage, rééducation : fatigue −25, une semaine d’arrêt de moins', 'Massage, rehab: fatigue −25, one week less out'])} · 45 min · {prixDuKine(a)} €{a.club ? dans([' (moitié club)', ' (club pays half)']) : ''}</span>
+            <span className="text-[10px] text-white/55">{dans(['Massage, rééducation : fatigue −25, une semaine d’arrêt de moins', 'Massage, rehab: fatigue −25, one week less out'])} · 45 min · {prixDuKine(a)} €{prixDuKine(a) < KINE ? dans([` (catégorie ${statutDe(a)} : le reste est payé)`, ` (category ${statutDe(a)}: the rest is covered)`]) : ''}</span>
             {kineRefus && <span className="text-[10px] text-amber-300/80">{kineRefus === 'fait' ? dans(['Déjà vu cette semaine', 'Already seen this week']) : dans(['Pas assez d’argent', 'Not enough money'])}</span>}
           </span>
           <Bouton plein disabled={!!kineRefus || ev} onClick={() => changer(() => { if (!chezLeKine(a)) avancer(a, 45, { plaisir: 4 }); setBulle(['« On relâche tout ça. Étire-toi ce soir. »', '“Let’s loosen all that. Stretch tonight.”']); })}>{dans(['OK', 'GO'])}</Bouton>
@@ -1522,7 +1551,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
               return (
                 <div className="rounded-xl bg-white/[0.05] p-2.5 flex flex-col gap-1.5">
                   <span className="text-xs font-black">{dans(nom)} · {dans(['meeting de club', 'club meet'])}</span>
-                  <span className="text-[10px] text-white/55">{dans(['Le dimanche, au plateau de ton niveau : ne qualifie pour rien, compte pour ton record.', 'On Sundays, at your level: no qualification, counts for your PB.'])} · {DEPLACEMENT_MEETING} €</span>
+                  <span className="text-[10px] text-white/55">{dans(['Le dimanche, au plateau de ton niveau : ne qualifie pour rien, compte pour ton record.', 'On Sundays, at your level: no qualification, counts for your PB.'])} · {coutDuMeeting(a)} €</span>
                   {refus && <span className="text-[10px] text-amber-300/80">{dans(refus)}</span>}
                   {!refus && !a.specialite && <div className="flex gap-2">{EPREUVES.map(e => <Bouton key={e} plein={epreuve === e} onClick={() => setEpreuve(e)} className="flex-1">{e} m</Bouton>)}</div>}
                   <Bouton plein disabled={!!refus || ev} onClick={() => { if (partirAuMeeting(a, ep)) demanderReouverture(); }}>{dans(['COURIR LE MEETING', 'RUN THE MEET'])} · {ep} m</Bouton>
@@ -1601,7 +1630,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
               </span>
               {r === 'possede'
                 ? <span className="text-[10px] font-black tracking-widest" style={{ color: VERT }}>{mot('possede')}</span>
-                : <Bouton disabled={!!r} onClick={() => changer(() => { acheter(a, p.id); })}>{p.prix} €</Bouton>}
+                : <Bouton disabled={!!r} onClick={() => changer(() => { acheter(a, p.id); })}>{prixDuMateriel(a, p.prix)} €</Bouton>}
             </div>
           );
         })}

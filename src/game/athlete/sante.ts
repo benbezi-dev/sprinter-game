@@ -17,7 +17,7 @@
 // mineur de famille modeste paie une petite part ; un adulte paie le reste a
 // charge.
 
-import { type Athlete, type TypeBlessure, BLESSURES, SAISON, avancer, payer, noter, etape, soulager } from './regles';
+import { type Athlete, type TypeBlessure, BLESSURES, SAISON, avancer, payer, noter, etape, soulager, statutDe, PART_DE_TA_POCHE } from './regles';
 
 export type Texte = [string, string];
 export type Soin = 'medecin' | 'radio' | 'irm' | 'osteo';
@@ -41,7 +41,8 @@ export function resteACharge(a: Athlete, s: Soin): number {
   if (mineur && a.origine === 'aisee') return 0;
   // l'osteopathe n'est pas rembourse ; le reste l'est en grande partie
   const part = s === 'osteo' ? 1 : mineur ? 0.15 : 0.35;
-  return Math.round(PRIX[s] * part);
+  // puis la categorie (regles.ts, statutDe) : le club ou la structure d'un pro prend les soins en charge
+  return Math.round(PRIX[s] * part * PART_DE_TA_POCHE[statutDe(a)]);
 }
 
 export const saisonDe = (a: Athlete) => Math.floor((a.semaine - 1) / SAISON);
