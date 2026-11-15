@@ -68,6 +68,7 @@ function Cinematique({ nom, duree, creer, onFin, voile: avecVoile = true }:
     const t0 = performance.now();
     let raf = 0;
     const finir = () => { if (fini.current) return; fini.current = true; surFin.current(); };
+    let tombe = false;
     const image = (now: number) => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const W = window.innerWidth, H = window.innerHeight;
@@ -78,7 +79,11 @@ function Cinematique({ nom, duree, creer, onFin, voile: avecVoile = true }:
       const t = (now - t0) / 1000;
       if (t >= duree) { finir(); return; }
       ctx.save();
-      peindre(ctx, W, H, t);
+      // UN DESSIN QUI TOMBE NE FIGE PAS LE VOYAGE (14/11) : sans ce garde, une seule erreur de dessin arretait la
+      // boucle pour de bon — plus d'image, plus de fin, le joueur bloque devant une image fixe. On la signale une
+      // fois et l'on continue : au pire le voyage s'acheve a sa duree et l'etape part.
+      try { peindre(ctx, W, H, t); }
+      catch (e) { if (!tombe) { tombe = true; console.error('cinematique ' + nom + ' : dessin tombe', e); } }
       ctx.restore();
       ctx.textAlign = 'center';
       ctx.font = `600 ${Math.round(Math.max(10, H * 0.014))}px system-ui, sans-serif`;
@@ -1401,7 +1406,9 @@ function peintreRoute(rang: number, o: { local?: boolean; duree?: number; depart
     traitsDeVitesse(ctx, W, H, yR0 - H * 0.12, yR1, t, vite * (transport === 'velo' ? 0.5 : 1));
     if (transport === 'velo') {
       for (let i = 0; i < 10; i++) {
-        const age = (t * 3 + i / 10) % 1;
+        // (modulo toujours positif : au tout debut du voyage `t` est negatif, l'age aussi, et un rayon negatif fait
+        //  tomber `arc` — la cinematique restait figee sur sa premiere image, 14/11)
+        const age = (((t * 3 + i / 10) % 1) + 1) % 1;
         ctx.fillStyle = `rgba(236,214,170,${0.4 * (1 - age) * vite})`;
         ctx.beginPath(); ctx.arc(xv - 30 * k - age * 60 * k, yPied - 0.007 * H - 3 - age * 10, 3 + age * 6, 0, Math.PI * 2); ctx.fill();
       }

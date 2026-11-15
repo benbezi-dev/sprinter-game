@@ -131,6 +131,8 @@ function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Re
     // siens. Les tubes restent sa doublure le temps qu'il charge.
     'Kouassi': look({ build: 'm', skin: [122, 65, 47], jersey: [244, 130, 34], shorts: [244, 244, 240],
       shoe: [122, 65, 47], hair: 'shaved', h: 1.60, gait: 'sharp',
+      // (chaussure couleur de peau = pieds nus : c'est aussi a cela que course-3d/corps.ts reconnait qu'il ne faut
+      //  pas le chausser — sa fiche le dit, « toujours pieds nus »)
       chaine: [238, 230, 210], ...corps(kouassiGlb, 0.73, 1.14) }),
     'Sora Kanzaki': look({ build: 'm', skin: 'clair', jersey: [246, 244, 240], shorts: [222, 58, 34],
       shoe: [230, 66, 38], hair: 'crop', hairCol: [24, 20, 22], h: 1.76, gait: 'sharp',
