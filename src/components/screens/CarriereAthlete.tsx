@@ -783,9 +783,9 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
 
       <Carte><Barres a={a} /></Carte>
 
-      {/* apres les Grands Jeux : changer de discipline (regles.ts, changerDeDiscipline) */}
+      {/* apres les 0.Games : changer de discipline (regles.ts, changerDeDiscipline) */}
       {a.apresJeux && (
-        <Carte titre={dans(['Après les Grands Jeux', 'After the Grand Games'])} icone={Trophy}>
+        <Carte titre={dans(['Après les 0.Games', 'After the 0.Games'])} icone={Trophy}>
           <p className="text-[11px] text-white/70 leading-relaxed">{dans([
             'Tu peux changer de discipline : tu repars des Championnats de France, tes qualités à 80 %, et tu vises les prochains Jeux dans cette épreuve.',
             'You can switch events: you go back to the national championships, your qualities at 80%, and aim for the next Games in that event.'])}</p>
@@ -825,8 +825,8 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
           return (
             <div className="flex flex-col gap-1">
               <span className="text-[11px] text-white/70">{dans([
-                `Grands Jeux dans ${n} semaines. ${cette ? 'C’est leur saison : un podium aux Mondes et' : 'La sélection se joue aux Mondes de leur saison : un podium et'} ${SELECTION_JEUX} de moyenne`,
-                `Grand Games in ${n} weeks. ${cette ? 'It’s their season: a podium at the Worlds and' : 'Selection happens at the Worlds of their season: a podium and'} a ${SELECTION_JEUX} average`])} · <span className="font-black tabular-nums" style={{ color: pret ? VERT : '#F5A623' }}>{m.toFixed(1)}</span></span>
+                `0.Games dans ${n} semaines. ${cette ? 'C’est leur saison : un podium aux Mondes et' : 'La sélection se joue aux Mondes de leur saison : un podium et'} ${SELECTION_JEUX} de moyenne`,
+                `0.Games in ${n} weeks. ${cette ? 'It’s their season: a podium at the Worlds and' : 'Selection happens at the Worlds of their season: a podium and'} a ${SELECTION_JEUX} average`])} · <span className="font-black tabular-nums" style={{ color: pret ? VERT : '#F5A623' }}>{m.toFixed(1)}</span></span>
               <Jauge v={Math.min(m, SELECTION_JEUX)} max={SELECTION_JEUX} couleur={pret ? VERT : '#F5A623'} />
             </div>
           );
@@ -1854,10 +1854,10 @@ export function FinDeCourseAthlete() {
             {!r.suivant && !r.meeting && (
               <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
                 {r.selection ? `${mot('qualifie', { c: mot(suivant!.cle) })} · ${dans([`dans ${r.avantLesJeux} semaines`, `in ${r.avantLesJeux} weeks`])}`
-                  : r.jeux ? dans(['Les Grands Jeux sont passés. Tu peux changer de discipline, au tableau de bord.', 'The Grand Games are over. You can switch events, on your dashboard.'])
+                  : r.jeux ? dans(['Les 0.Games sont passés. Tu peux changer de discipline, au tableau de bord.', 'The 0.Games are over. You can switch events, on your dashboard.'])
                   : r.niveau === MONDE && r.chrono !== null && r.place <= 3 && r.avantLesJeux !== undefined ? dans([
-                      `Prochains Grands Jeux dans ${r.avantLesJeux} semaines. La sélection se joue aux Mondes de leur saison : un podium et ${SELECTION_JEUX} de moyenne.`,
-                      `Next Grand Games in ${r.avantLesJeux} weeks. Selection happens at the Worlds of their season: a podium and a ${SELECTION_JEUX} average.`])
+                      `Prochains 0.Games dans ${r.avantLesJeux} semaines. La sélection se joue aux Mondes de leur saison : un podium et ${SELECTION_JEUX} de moyenne.`,
+                      `Next 0.Games in ${r.avantLesJeux} weeks. Selection happens at the Worlds of their season: a podium and a ${SELECTION_JEUX} average.`])
                   : suivant ? mot('qualifie', { c: mot(suivant.cle) })
                   : r.tropJeune ? dans([`Sur le podium ! Mais en ${categorie(r.tropJeune - 1)[0]}, c’est le plus haut championnat. ${mot(COMPETITIONS[r.niveau + 1].cle)} : à ${r.tropJeune} ans. D’ici là, cours, gagne, prépare-toi.`,
                       `On the podium! But in ${categorie(r.tropJeune - 1)[1]}, this is the top championship. ${mot(COMPETITIONS[r.niveau + 1].cle)}: at ${r.tropJeune}. Until then, race, win, get ready.`])

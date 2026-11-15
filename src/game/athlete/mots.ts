@@ -63,7 +63,7 @@ export const MOTS: Record<string, [string, string]> = {
   france:       ['Championnats de France', 'French championships'],
   europe:       ['Championnats d’Europe', 'European championships'],
   monde:        ['Championnats du Monde', 'World championships'],
-  jeux:         ['Grands Jeux', 'Grand Games'],
+  jeux:         ['0.Games', '0.Games'],
   // l'argent
   boulots:      ['PETITS BOULOTS', 'ODD JOBS'],
   boulot_pris:  ['Fait cette semaine', 'Done this week'],
@@ -125,7 +125,7 @@ export const MOTS: Record<string, [string, string]> = {
   pas_qualifie: ['Pas de podium. Prochaine chance dans {n} semaines.', 'No podium. Next chance in {n} weeks.'],
   prime:        ['Prime : {n} €', 'Prize: €{n}'],
   rep_plus:     ['Réputation +{n}', 'Reputation +{n}'],
-  sommet:       ['CHAMPION·NE DES GRANDS JEUX', 'GRAND GAMES CHAMPION'],
+  sommet:       ['CHAMPION·NE DES 0.GAMES', '0.GAMES CHAMPION'],
   mondial:      ['CHAMPION·NE DU MONDE', 'WORLD CHAMPION'],
   place:        ['{o} place', '{o} place'],
   faux:         ['FAUX DÉPART', 'FALSE START'],

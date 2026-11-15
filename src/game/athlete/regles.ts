@@ -328,7 +328,7 @@ export const COMPETITIONS: Competition[] = [
 ];
 
 /**
- * LES GRANDS JEUX (l'auteur, 15/11 : « d'autres etapes apres les Mondes, genre JO », puis « pouvoir
+ * LES 0.GAMES (l'auteur, 15/11 : « d'autres etapes apres les Mondes, genre JO », puis « pouvoir
  * changer de discipline apres les J.O »). Nom generique : « Jeux olympiques », « olympique » et
  * « olympiade » sont proteges en France (Code du sport, art. L141-5), comme on ne cite pas la FFA.
  * Tous les quatre saisons (la 4e, la 8e…), la semaine 30 de la saison, en ete. La selection se joue
