@@ -35,6 +35,8 @@ import { sponsorDeLaCourse } from './panneaux';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF, brancherKTX2 } from './chargeur-gltf';
+import { SANS_PREMIUM, premiumCle, tenueTripo, reglerTenueTripo } from './athlete/corps-gens';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from './vedette-3d';
@@ -2295,6 +2297,7 @@ function initialiser(nCouloirs: number, toileDuJeu: HTMLCanvasElement | null) {
   // (24/10) et a tous les paliers : il se decide ici, une fois pour la partie — un telephone qui
   // demarrait au palier bas le perdait jusqu'au bout, et c'est au palier bas qu'il manque le plus
   renderer = new THREE.WebGLRenderer({ canvas: toile, antialias: Q.get('aa') !== '0', powerPreference: 'high-performance' });
+  brancherKTX2(renderer);
   (globalThis as any).__palier3d = () => palier;
   // L'ULTRA (l'auteur, 23/10 : « mets le jeu en ultra ») : la definition pleine de l'ecran,
   // jusqu'a trois pixels par point, et des ombres deux fois plus fines. Comme l'ULTRA du
@@ -2692,6 +2695,20 @@ function maillageDe(chemin: string): THREE.Object3D | null | false {
   return maillages.get(chemin)!;
 }
 
+// LES 8 CORPS PREMIUM (public/modeles/premium, 15/11) : genre + teinte de peau la plus proche (corps-gens.ts)
+const premium = new Map<string, THREE.Object3D | null | false>();
+/** Le corps premium du coureur : faux s'il n'y en a pas, null tant qu'il charge. */
+function premiumDe(look: any): THREE.Object3D | null | false {
+  if (SANS_PREMIUM) return false;
+  const cle = premiumCle(look);
+  if (!premium.has(cle)) {
+    premium.set(cle, null);
+    chargeurGLTF().loadAsync(((import.meta as any).env?.BASE_URL || '/') + 'modeles/premium/' + cle + 'v2.glb')
+      .then((g) => { premium.set(cle, g.scene); }).catch(() => { premium.set(cle, false); });
+  }
+  return premium.get(cle)!;
+}
+
 function corpsDe(r: any): Corps | null {
   let c = corps.get(r);
   if (c) return c;
@@ -2715,10 +2732,13 @@ function corpsDe(r: any): Corps | null {
     } catch { maillages.set(chemin, false); }    // pas le squelette du jeu : le corps generique
   }
   if (!gabarit) return null;
-  const femme = r.look?.build === 'f' && autresCorps.femme.length > 0;
+  let femme = r.look?.build === 'f' && autresCorps.femme.length > 0;
   const tirage = Math.abs(hacher('corps' + String(r.name || r.lane || '')));
   const choix = femme ? autresCorps.femme : [gabarit, ...autresCorps.homme];
-  const source = choix[tirage % choix.length];
+  const pr = premiumDe(r.look);
+  if (pr === null) return null;                // il charge : les tubes en attendant
+  const source = pr || choix[tirage % choix.length];
+  if (pr) femme = r.look?.build === 'f';       // (les pointes et la taille du maillot suivent le corps)
   const copie = clonerSquelette(source);
   doserLePhysique(copie, r.look, tirage);
   const mats: Record<string, THREE.MeshStandardMaterial> = {};
@@ -2729,7 +2749,9 @@ function corpsDe(r: any): Corps | null {
       const zone = String(m.name || '').replace('Coureur_', '');
       // LE LOGO DES POINTES BENBEZI (tools/blender/chaussures_coureur.py) : sa texture, le logo du jeu, est gardee
       const n = new THREE.MeshStandardMaterial({ roughness: zone === 'peau' ? 0.55 : zone === 'semelle' || zone === 'plaque' ? 0.45 : 0.7, metalness: 0,
-        ...(zone === 'logo' ? { map: m.map, transparent: true, alphaTest: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } : {}) });
+        ...(zone === 'logo' ? { map: m.map, transparent: true, alphaTest: 0.3, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 } : {}),
+        normalMap: m.normalMap ?? null, ...(m.normalMap ? { normalScale: m.normalScale } : {}),   // le relief cuit des corps premium ; null sur les anciens
+        ...(zone === 'tripo' ? { map: m.map } : {}) });   // corps premium : sa couleur, pas de teinte
       lisere(n);
       if (EPAIS_TISSU[zone]) porterAuDessus(n, EPAIS_TISSU[zone]);
       mats[zone] = n;
@@ -2768,6 +2790,7 @@ function corpsDe(r: any): Corps | null {
   const brassiere = tenue.startsWith('brassiere'), culotte = tenue.endsWith('culotte');
   // (une piece : le debardeur reste, le bas prend sa couleur ; la zone peinte du corps avait un bord en dents de scie)
   const bas = tenue === 'une-piece' ? maillot : rgb(L.shorts);
+  if (mats.tripo) reglerTenueTripo(tenueTripo(copie, mats.tripo), maillot, bas, femme, L.kit === 'vrac', dossardDe(((r.lane ?? 0) as number) + 1));
   mats.debardeur?.color.copy(maillot); mats.brassiere?.color.copy(maillot); mats.shortlarge?.color.copy(bas);
   if (mats.debardeur) mats.debardeur.visible = !brassiere;
   if (mats.brassiere) mats.brassiere.visible = brassiere;
