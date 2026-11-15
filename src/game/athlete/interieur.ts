@@ -632,9 +632,16 @@ export class Interieur {
     this.fini = true;
     cancelAnimationFrame(this.id);
     for (const [t, f] of this.ecoute) window.removeEventListener(t, f);
-    this.scene.traverse((o: any) => { o.geometry?.dispose?.(); });
+    // les matieres et leurs images aussi, puis le contexte WebGL lui-meme : chaque piece en ouvre
+    // un neuf, et iOS n'en tolere qu'une poignee avant l'ecran noir
+    this.scene.traverse((o: any) => {
+      o.geometry?.dispose?.();
+      // pas leurs images : celles des corps sont partagees avec la ville
+      for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) m.dispose?.();
+    });
     for (const g of this.gens) g.el?.remove();
     this.rendu.dispose();
+    this.rendu.forceContextLoss();
     this.rendu.domElement.remove();
   }
 }

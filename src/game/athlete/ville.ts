@@ -31,6 +31,7 @@ import * as THREE from 'three';
 import { SprinterApp, SprinterCore } from '../engine';
 import { chargeurGLTF, brancherKTX2 } from '../chargeur-gltf';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { poser, type Modele } from '../vedette-3d';
 import { tenueDeVilleDe } from './garde-robe';
 import { cheminDe, habiller, teindre, origineDe, type Teinte } from './corps-gens';
@@ -322,6 +323,7 @@ const HAUT: number[] = [0, 1, 0];
 // est coupe en tuiles de TUILE metres, chacune avec sa sphere englobante : three.js ne dessine
 // que celles que la camera (ou la lumiere des ombres) voit.
 const TUILE = 150;
+const _E = new THREE.Vector3();
 const cleTuile = (x: number, z: number) => `${Math.floor(x / TUILE)},${Math.floor(z / TUILE)}`;
 /** Un tampon coupe en tuiles, triangle par triangle, selon son centre. */
 function enTuiles(t: Tampon): Tampon[] {
@@ -555,7 +557,12 @@ export class Personne {
     this.m3.m.racine.matrixWorldNeedsUpdate = true;
   }
   /** Le retirer de la ville (affiche, ombre, corps). */
-  retirer() { this.scene.remove(this.sprite, this.ombre); if (this.m3) this.scene.remove(this.m3.m.racine); }
+  retirer() {
+    this.scene.remove(this.sprite, this.ombre); if (this.m3) this.scene.remove(this.m3.m.racine);
+    // sa toile de 256 px et son ombre sont a lui seul : sans ca, chaque heure qui passe en laissait en memoire
+    this.tex.dispose(); this.sprite.material.dispose();
+    this.ombre.geometry.dispose(); (this.ombre.material as THREE.Material).dispose();
+  }
 
   /** Avancer le long de la route. Rend vrai a l'arrivee du dernier point. */
   avancer(dt: number, vitesse: number): boolean {
@@ -739,7 +746,11 @@ export class Ville {
     this.scene.fog = new THREE.Fog('#BFDDF3', 260, 480);
     this.scene.add(this.ciel);
     this.soleil.castShadow = true;
-    this.soleil.shadow.mapSize.set(2048, 2048);
+    // un telephone a 4 Go ou moins part avec une carte d'ombre quatre fois plus legere (la nettete,
+    // elle, ne bouge pas : regle de l'auteur ci-dessus)
+    const memoire = (navigator as any).deviceMemory;
+    const carte = memoire && memoire <= 4 ? 1024 : 2048;
+    this.soleil.shadow.mapSize.set(carte, carte);
     const sc = this.soleil.shadow.camera;
     sc.left = -60; sc.right = 60; sc.top = 60; sc.bottom = -60; sc.near = 1; sc.far = 300;
     this.soleil.shadow.bias = -0.0004; this.soleil.shadow.normalBias = 0.04;
@@ -1128,7 +1139,7 @@ export class Ville {
     }
     this.instancier(new THREE.CylinderGeometry(0.07, 0.09, 5, 6), mat('#3A3F46', { metalness: 0.5 }), lampes, 2.5);
     this.instancier(new THREE.SphereGeometry(0.22, 10, 6), this.lampe, lampes, 5.1);
-    garees.slice(0, 260).forEach((c, i) => { const v = voiture(COULEURS_AUTO[i % COULEURS_AUTO.length]); v.position.set(c.x, SOL - 0.02, c.z); v.rotation.y = c.a; g.add(v); });
+    this.garer(garees.slice(0, 260));
 
     // les reseaux : a pied partout, en voiture sur les rues
     // LES PIETONS SUR LES TROTTOIRS (« le personnage est sur la route au lieu du trottoir », l'auteur,
@@ -1217,6 +1228,40 @@ export class Ville {
       im.computeBoundingSphere();
       im.castShadow = true; im.receiveShadow = true;
       this.monde.add(im);
+    }
+  }
+
+  /**
+   * LES VOITURES GAREES, EN LOTS : 260 voitures de 7 maillages chacune faisaient ~1 800 appels de
+   * dessin, plus autant dans la passe d'ombre. Meme forme que `voiture()`, mais trois InstancedMesh
+   * par tuile (caisse teinte voiture par voiture, vitres, roues) ; seule la caisse porte une ombre.
+   */
+  private garer(garees: { x: number; z: number; a: number }[]) {
+    if (!garees.length) return;
+    const caisse = new THREE.BoxGeometry(1.7, 0.7, 3.9).translate(0, 0.65, 0);
+    const vitres = new THREE.BoxGeometry(1.5, 0.6, 2).translate(0, 1.25, -0.2);
+    const roues = mergeGeometries([[-0.8, -1.2], [0.8, -1.2], [-0.8, 1.2], [0.8, 1.2]].map(([x, z]) =>
+      new THREE.CylinderGeometry(0.33, 0.33, 0.25, 12).rotateZ(Math.PI / 2).translate(x, 0.33, z)))!;
+    const lots: [THREE.BufferGeometry, THREE.Material, boolean][] = [
+      [caisse, mat('#FFFFFF', { roughness: 0.35, metalness: 0.3 }), true],
+      [vitres, mat('#2B3A4A', { roughness: 0.1, metalness: 0.4 }), false],
+      [roues, mat('#1A1A1A'), false],
+    ];
+    const parTuile = new Map<string, number[]>();
+    garees.forEach((c, i) => { const k = cleTuile(c.x, c.z); (parTuile.get(k) || parTuile.set(k, []).get(k)!).push(i); });
+    const m = new THREE.Matrix4(), r = new THREE.Matrix4(), teinte = new THREE.Color();
+    for (const idx of parTuile.values()) {
+      lots.forEach(([geo, mt, ombre], n) => {
+        const im = new THREE.InstancedMesh(geo, mt, idx.length);
+        idx.forEach((i, j) => {
+          const c = garees[i];
+          im.setMatrixAt(j, m.makeTranslation(c.x, SOL - 0.02, c.z).multiply(r.makeRotationY(c.a)));
+          if (n === 0) im.setColorAt(j, teinte.set(COULEURS_AUTO[i % COULEURS_AUTO.length]));
+        });
+        im.computeBoundingSphere();
+        im.castShadow = ombre;
+        this.monde.add(im);
+      });
     }
   }
 
@@ -1430,19 +1475,17 @@ export class Ville {
 
   private lesEtiquettes() {
     const l = this.hote.clientWidth, h = this.hote.clientHeight;
-    for (const [, g] of this.habitants) {
-      const q = g.p.pos.clone(); q.y = 2.5; q.project(this.cam);
-      const x = (q.x + 1) / 2 * l, y = (1 - q.y) / 2 * h;
-      const dehors = q.z > 1 || x < -60 || x > l + 60 || y < -20 || y > h + 40;
-      g.el.style.display = dehors ? 'none' : '';
-      if (!dehors) g.el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%,-100%)`;
-    }
-    for (const { el, p } of this.etiquettes) {
-      const q = p.clone().project(this.cam);
-      const x = (q.x + 1) / 2 * l, y = (1 - q.y) / 2 * h;
-      const dehors = q.z > 1 || x < -80 || x > l + 80 || y < -20 || y > h + 40;
-      el.style.display = dehors ? 'none' : '';
+    // un vecteur pour toutes (plus de clone par habitant et par image), et le style n'est ecrit que s'il change
+    const placer = (el: HTMLElement, p: THREE.Vector3, y0: number, marge: number) => {
+      _E.copy(p); if (y0) _E.y = y0; _E.project(this.cam);
+      const x = (_E.x + 1) / 2 * l, y = (1 - _E.y) / 2 * h;
+      const dehors = _E.z > 1 || x < -marge || x > l + marge || y < -20 || y > h + 40;
+      const d = dehors ? 'none' : '';
+      if (el.style.display !== d) el.style.display = d;
       if (!dehors) el.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%,-100%)`;
-    }
+    };
+    for (const [, g] of this.habitants) placer(g.el, g.p.pos, 2.5, 60);
+    for (const { el, p } of this.etiquettes) placer(el, p, 0, 80);
+
   }
 }
