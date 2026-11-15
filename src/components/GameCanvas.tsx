@@ -7,7 +7,7 @@ import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
 import { jeuCourant } from '@/game/jeux';
 import { cameraPour } from '@/game/cadrage';
-import { POUSSEE_OUVERTE, RENDU_3D, lieuParDefaut } from '@/game/canal';
+import { POUSSEE_OUVERTE, RENDU_3D, lieuParDefaut, relais2D } from '@/game/canal';
 import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
@@ -328,7 +328,8 @@ export function GameCanvas() {
       const scenette = G.state === 'cut' && G.cut && G.cut.kind !== 'ending';
       // ... sauf dans la salle Jesse Owens, ou le generique se joue dans la halle en 3D (l'auteur, 3/11 ; poserLeTourDHonneur)
       const generique3D = G.state === 'cut' && G.cut && G.cut.kind === 'ending' && !!G.race && !!(G.race.salle || G.race.salleDroite);
-      const en3D = !!rendu3D && (EPREUVES_3D.has(G.raceKey) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
+      // (au canal de test, le relais peut rester en 2D : canal.ts, relais2D)
+      const en3D = !!rendu3D && ((EPREUVES_3D.has(G.raceKey) && !(G.raceKey === '4x100' && relais2D())) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
         && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || scenette || generique3D);
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {

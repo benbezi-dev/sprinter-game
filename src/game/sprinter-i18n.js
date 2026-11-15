@@ -633,6 +633,7 @@
     relais_r_temps: ['course arrêtée, plus rien ne bougeait', 'race stopped, nothing was moving'],
     relais_solo_rejouer: ['REJOUER', 'RUN AGAIN'],
     relais_fictif:   ['FICTIF', 'BOT'],
+    relais_rendu_test: ['RENDU DU RELAIS (TEST)', 'RELAY VIEW (TEST)'],
     relais_salon_titre: ['COURIR À PLUSIEURS', 'RUN TOGETHER'],
     relais_salon_desc: ['ouvre un salon et envoie son code : à deux, trois ou quatre, les places libres sont courues par des fictifs.',
                         'open a lobby and send its code: with two, three or four of you, empty legs are run by bots.'],

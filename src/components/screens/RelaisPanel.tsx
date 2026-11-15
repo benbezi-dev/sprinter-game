@@ -6,6 +6,7 @@ import { surCourrier } from '@/game/boite';
 import { ChoixCoureurs } from './ChoixCoureurs';
 import { entrerSurLaPiste } from '@/game/piste';
 import { recordSolo } from '@/game/salle-relais-solo';
+import { EST_TEST, relais2D, poserRelais2D } from '@/game/canal';
 import { Users, Loader2, Check, X, ArrowUpDown, Trophy, LogOut, Swords, User } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
@@ -221,6 +222,7 @@ function lireRangSolo(): number {
 function CourirSeul() {
   const { N } = SprinterApp;
   const [rang, setRang] = useState(lireRangSolo);
+  const [rendu, setRendu] = useState<'2d' | '3d'>(() => (relais2D() ? '2d' : '3d'));
   const [code, setCode] = useState('');
   const [occupe, setOccupe] = useState(false);
   const [erreur, setErreur] = useState('');
@@ -241,6 +243,21 @@ function CourirSeul() {
         <User className="w-3 h-3" /> {N.t('relais_solo_titre')}
       </span>
       <p className="text-[10px] text-muted-foreground leading-snug">{N.t('relais_solo_desc')}</p>
+      {/* CANAL DE TEST : le relais en 2D reste disponible a cote de la 3D, pour comparer. */}
+      {EST_TEST && (
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl border border-amber-300/30 bg-amber-300/[0.06]">
+          <span className="text-[9px] tracking-widest text-amber-300">{N.t('relais_rendu_test')}</span>
+          <div className="flex gap-1">
+            {(['3d', '2d'] as const).map(m => (
+              <button key={m} onClick={() => { poserRelais2D(m === '2d'); setRendu(m); }}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest border
+                  ${rendu === m ? 'border-amber-300/60 bg-amber-300/20 text-amber-200' : 'border-white/10 text-muted-foreground'}`}>
+                {m.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-4 gap-1.5" role="radiogroup">
         {[1, 2, 3, 4].map(r => (
           <button key={r} role="radio" aria-checked={rang === r} onClick={() => choisir(r)}

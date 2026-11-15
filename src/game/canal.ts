@@ -656,3 +656,17 @@ export function brancherSignet() {
     return rep;
   }) as typeof window.fetch;
 }
+
+/**
+ * LE RELAIS EN 2D, GARDE AU CANAL DE TEST (l'auteur, 14/11/2026 : « mets le relais 2D dans test »).
+ * Le public court le relais en 3D ; le canal de test garde le dessin 2D a cote, au choix, pour
+ * comparer. Hors canal de test, toujours faux : le choix n'existe pas.
+ */
+const CLE_RELAIS_2D = 'sprinter.relais.rendu';
+export function relais2D(): boolean {
+  if (!EST_TEST) return false;
+  try { return localStorage.getItem(CLE_RELAIS_2D) === '2d'; } catch { return false; }
+}
+export function poserRelais2D(oui: boolean): void {
+  try { localStorage.setItem(CLE_RELAIS_2D, oui ? '2d' : '3d'); } catch { /* sans memoire : 3D */ }
+}
