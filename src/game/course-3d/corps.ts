@@ -252,11 +252,8 @@ function corpsDe(r: any): Corps | null {
         o.material = m;
       });
       const hGabarit = gabarit ? hauteurDe(gabarit) : 1.54, hMaillage = hauteurDe(sc);
-      // (une chaussure couleur de peau, c'est un boss pieds nus et qui le reste : Kouassi, l'enfant de la plage —
-      //  game/legende/stades.ts. `look` ne laisse passer aucun champ de plus, d'ou ce signe-la.)
-      const sk = r.look?.skin, sh = r.look?.shoe;
-      const piedsNus = Array.isArray(sk) && Array.isArray(sh) && sk[0] === sh[0] && sk[1] === sh[1] && sk[2] === sh[2];
-      const chausse = piedsNus || chausserLeMaillage(copie, chemin, r.look?.build === 'f', r.look?.shoe);
+      // (un look `piedsNus` reste pieds nus : Kouassi et Zenith, game/legende/stades.ts)
+      const chausse = !!r.look?.piedsNus || chausserLeMaillage(copie, chemin, r.look?.build === 'f', r.look?.shoe);
       c = { m: modeleDe(copie), mats: {}, echelle: hMaillage > 0.5 ? hGabarit / hMaillage : 1, semelles: semellesDuMaillage(copie),
             aChausser: chausse ? undefined : chemin };
       monde.add(c.m.racine);

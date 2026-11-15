@@ -120,6 +120,12 @@ function corps(glb: string, sh: number, hip: number) {
   return { morph: { sh, hip }, maillage: cheminDuMaillage(glb), facettes: 48, lisse: true };
 }
 
+/**
+ * LES DEUX BOSS QUI RESTENT PIEDS NUS (15/11). Tous les autres recoivent des pointes ajustees a leur pied
+ * (course-3d/corps.ts, chausserLeMaillage). La marque se pose APRES `look`, qui ne garde que ses propres champs. Elle
+ * ne peut pas se lire a la couleur : Chidi Okafor a lui aussi une chaussure couleur de peau, et il se chausse.
+ */
+const piedsNus = (l: any) => ({ ...l, piedsNus: true });
 function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Record<string, any> {
   const or: [number, number, number] = [222, 178, 70];
   return {
@@ -129,11 +135,10 @@ function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Re
     // (kouassi.glb) ; `sh` et `hip` sont ceux que vedette_tripo.py lit sur lui
     // (0,73 / 1,14), pour que les mains et les pieds du jeu tombent sur les
     // siens. Les tubes restent sa doublure le temps qu'il charge.
-    'Kouassi': look({ build: 'm', skin: [122, 65, 47], jersey: [244, 130, 34], shorts: [244, 244, 240],
+    'Kouassi': piedsNus(look({ build: 'm', skin: [122, 65, 47], jersey: [244, 130, 34], shorts: [244, 244, 240],
       shoe: [122, 65, 47], hair: 'shaved', h: 1.60, gait: 'sharp',
-      // (chaussure couleur de peau = pieds nus : c'est aussi a cela que course-3d/corps.ts reconnait qu'il ne faut
-      //  pas le chausser — sa fiche le dit, « toujours pieds nus »)
-      chaine: [238, 230, 210], ...corps(kouassiGlb, 0.73, 1.14) }),
+      // (`piedsNus` : course-3d/corps.ts ne lui met pas de pointes — sa fiche le dit, « toujours pieds nus »)
+      chaine: [238, 230, 210], ...corps(kouassiGlb, 0.73, 1.14) })),
     'Sora Kanzaki': look({ build: 'm', skin: 'clair', jersey: [246, 244, 240], shorts: [222, 58, 34],
       shoe: [230, 66, 38], hair: 'crop', hairCol: [24, 20, 22], h: 1.76, gait: 'sharp',
       poignet: { col: [222, 58, 34], cote: 1 }, ...corps(soraGlb, 1.02, 1.05) }),
@@ -184,9 +189,10 @@ function looksDesBoss(look: (o: any) => any, SKIN: Record<string, number[]>): Re
       bandeau: [250, 210, 60], ...corps(intiGlb, 1.45, 1.31) }),
     // Un corps de lumiere, nu et violet d'un bout a l'autre, veine d'or : la
     // carnation n'est pas humaine, comme le vert du stade des Trois Soleils.
-    'Zénith': look({ build: 'm', skin: [118, 84, 206], jersey: [104, 70, 196], shorts: [92, 58, 180],
+    // (`piedsNus` : un corps de lumiere ne porte pas de pointes)
+    'Zénith': piedsNus(look({ build: 'm', skin: [118, 84, 206], jersey: [104, 70, 196], shorts: [92, 58, 180],
       shoe: [118, 84, 206], hair: 'shaved', h: 1.95, gait: 'whip',
-      ...corps(zenithGlb, 1.03, 1.04) }),
+      ...corps(zenithGlb, 1.03, 1.04) })),
   };
 }
 
