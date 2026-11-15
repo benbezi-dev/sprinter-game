@@ -1422,6 +1422,9 @@
                       'this recording vanishes when you close this window'],
     mot_illisible:   ['ce message ne se lit pas sur cet appareil',
                       'this message will not play on this device'],
+    // La voix d'un mot de course n'a pas pu etre telechargee.
+    mot_voix_absente: ['la voix n’arrive pas — vérifie ta connexion et réessaie',
+                       'the recording did not load — check your connection and try again'],
     // L'ecoute de controle, avant l'envoi, qui n'a rien rendu.
     mot_ecoute_ratee: ['rien ne sort — monte le volume ou réenregistre',
                        'nothing plays — turn the volume up or record again'],
