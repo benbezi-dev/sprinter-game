@@ -34,6 +34,17 @@ export type TableauNoel = {
   debut: number | null; fin: number | null;
 };
 
+/**
+ * LE STADE DE L'EVENEMENT : le Village de l'Etoile (noel-3d.ts, cle 'noel' dans
+ * STADES_HORS_SERIE). Cherche par sa clef, jamais par son index : l'index d'un stade
+ * depend du canal. A defaut (un build sans lui), le 0.Games comme avant.
+ */
+function niveauDeNoel(): number {
+  const L = (SprinterApp as any).LEVELS as any[] | undefined;
+  const i = L ? L.findIndex(l => l && l.cle === 'noel') : -1;
+  return i >= 0 ? i : 4;
+}
+
 /* ---------------------------------------------------- qui ecoute le tableau */
 const ecouteurs = new Set<() => void>();
 export function ecouterNoel(f: () => void) { ecouteurs.add(f); return () => { ecouteurs.delete(f); }; }
@@ -88,7 +99,7 @@ export async function defier(nom: string): Promise<boolean> {
   const f = await fetchFantome(nom);
   if (!f) return false;
   (SprinterApp as any).startOneShot([EPREUVE], {
-    levelIdx: 4,
+    levelIdx: niveauDeNoel(),
     ghosts: [etirer(f.trace, f.facteur)],
     ghostSplits: [f.a_battre_ms / 1000],
     ghostName: nomSurPiste(f),
@@ -101,7 +112,7 @@ export async function defier(nom: string): Promise<boolean> {
 
 /** Courir sans cible : deposer (ou remplacer) son fantome, et secouer la neige. */
 export function deposer() {
-  (SprinterApp as any).startOneShot([EPREUVE], { levelIdx: 4, noel: { cible: null } });
+  (SprinterApp as any).startOneShot([EPREUVE], { levelIdx: niveauDeNoel(), noel: { cible: null } });
 }
 
 /* ------------------------------------------------- le verdict d'une course */

@@ -589,6 +589,29 @@
       names: ['Hugo Lemaire', 'Yanis Bertin', 'Lucas Ferrand', 'Noam Diallo',
               'Theo Marchal', 'Ilan Rousseau', 'Sacha Morel'] },
 
+    // LE VILLAGE DE L'ETOILE — l'evenement de Noel 2026 (15/11, « creer un stade dedie a
+    // l'evenement »). La place du Marche de l'histoire (docs/NOEL_HISTOIRE.md) : le grand
+    // sapin au milieu, la neige, les guirlandes (noel-3d.ts).
+    //
+    // AVEC LES OUVERTS, JUSTE APRES LA SALLE : aucun index public ne bouge (voir le contrat
+    // de la boucle qui remplit LEVELS, sprinter-app.js). RESERVE comme le Champ-de-Mars : il
+    // part dans la version publique, mais c'est le mode Noel qui l'appelle (game/noel.ts) ;
+    // il n'apparait dans le choix du lieu que sur le canal de test.
+    //
+    // Le 60 m est l'epreuve de la bataille de boules de neige : son plateau est ici, une
+    // clef manquante ferait tomber la construction de la course.
+    { cle: 'noel', name: "Village de l'Etoile", theme: 'noel',
+      pool: 'sprint',
+      horsSerie: true,
+      ouvert: true,
+      reserve: true,
+      noms: ["Village de l'Étoile", 'Star Village'],
+      foule: 0.9,
+      plateau: { '60': [6.55, 6.85], '100': [10.15, 10.60], '200': [20.50, 21.50],
+                 '400': [45.80, 47.80], '4x100': [39.20, 40.60] },
+      names: ['Noe Fabre', 'Gabriel Hiver', 'Elio Marchand', 'Leon Sapin',
+              'Timeo Valois', 'Nael Givry', 'Jules Etienne'] },
+
     // LE DEFI AUREL MANGA — l'evenement qui annonce Hurdlers.
     //
     // Un 110 m haies contre un vrai hurdleur de l'equipe de France, qui a

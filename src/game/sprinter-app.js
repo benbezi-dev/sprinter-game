@@ -389,6 +389,27 @@ import { sponsorDeLaCourse } from './panneaux';
       // de vrais ecrans LED (voir panneauPub).
       pubsLed: true
     },
+    // LE VILLAGE DE L'ETOILE — l'evenement de Noel 2026 (noel-3d.ts, docs/NOEL_HISTOIRE.md).
+    //
+    // Une nuit d'hiver, et UNE idee : la neige. Le sol autour de la piste est blanc
+    // bleute, le ciel est un bleu nuit froid et etoile ; la seule chaleur de l'image est
+    // celle des lumieres — les guirlandes, les vitrines des chalets, l'etoile du sapin
+    // quand elle s'allume. La piste reste rouge brique : c'est elle qu'on regarde.
+    noel: {
+      heure: 'nuit',
+      // (« plus lumineux », l'auteur, 15/11) : le crepuscule d'hiver plutot que la nuit noire
+      skyTop: [22, 46, 112], skyBot: [128, 158, 214], stars: 1,
+      grass: [200, 214, 238], grassEdge: [186, 202, 230],
+      trackA: [176, 52, 44], trackB: [154, 42, 36],
+      lane: [250, 250, 255], kerb: [244, 248, 255],
+      tread: [58, 66, 92], riser: [34, 40, 62], roof: [228, 236, 248],
+      barrier: [196, 36, 44],
+      panels: [[196, 36, 44], [22, 92, 58], [222, 176, 72]],
+      crowdLo: [30, 34, 52], crowdHi: [236, 226, 214],
+      accent: [222, 176, 72], dust: [230, 238, 250],
+      projecteurs: true, pubsLed: true,
+      noel: true
+    },
     // LE CIMETIERE MUNICIPAL — la nuit du molosse, edition limitee.
     //
     // Un stade d'Halloween peut virer a la decoration de supermarche en trois

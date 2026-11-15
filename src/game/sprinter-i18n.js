@@ -2144,6 +2144,9 @@
     // Le stade couvert Jesse Owens de Val-de-Reuil, ouvert avec la 3D (29/10) : avec les ouverts, apres le
     // Champ-de-Mars, comme dans STADES_HORS_SERIE.
     ['Stade couvert Jesse Owens', 'Jesse Owens Indoor Stadium'],
+    // Le Village de l'Etoile, le stade de Noel (15/11) : avec les ouverts, apres la salle,
+    // comme dans STADES_HORS_SERIE.
+    ["Village de l'Étoile", 'Star Village'],
     // Le stade du defi Aurel Manga — l'evenement de Hurdlers. Ferme pour
     // l'instant, mais deja a la place qu'il aura ouvert : premier des stades
     // du canal de test, juste apres les ouverts, comme dans STADES_HORS_SERIE.
