@@ -150,7 +150,7 @@ export const dans = (t: [string, string]) => t[lang() === 'en' ? 1 : 0];
 // Le nom, la seance telle que l'entraineur l'ecrit, et ce qu'on fait au
 // mini-jeu. Des seances reelles de sprinteur, ecrites pour l'exemple : le jour
 // ou des coachs partenaires apporteront les leurs, elles prendront cette place.
-export const EXOS: Record<Exercice, { nom: [string, string]; serie: [string, string]; seul: [string, string]; jeu: [string, string] }> = {
+export const EXOS: Record<Exercice, { nom: [string, string]; serie: [string, string]; seul: [string, string]; jeu: [string, string]; jeuSeul?: [string, string] }> = {
   departs: {
     nom: ['Départs en blocs', 'Block starts'],
     serie: ['8 × 20 m départ en blocs, récup 3’', '8 × 20 m from the blocks, 3’ rest'],
@@ -184,8 +184,10 @@ export const EXOS: Record<Exercice, { nom: [string, string]; serie: [string, str
   muscu: {
     nom: ['Musculation', 'Weights'],
     serie: ['Squat 5 × 5, épaulé 4 × 3', 'Squat 5 × 5, clean 4 × 3'],
-    seul: ['Pompes et escaliers de l’immeuble', 'Push-ups and the stairwell'],
+    // sans club, pas de salle ni de barre : des pompes dans la chambre (le mini-jeu suit, SeancesAthlete.tsx)
+    seul: ['Pompes dans ta chambre', 'Push-ups in your bedroom'],
     jeu: ['Appuie pour descendre, relâche dans la zone verte : la barre remonte.', 'Hold to go down, release in the green zone: the bar drives up.'],
+    jeuSeul: ['Appuie pour descendre, relâche quand la poitrine frôle le sol : tu remontes.', 'Hold to go down, release when your chest brushes the floor: push back up.'],
   },
   bonds: {
     nom: ['Bondissements', 'Bounding'],

@@ -36,6 +36,13 @@ export const POSTURES = {
     const bras: Bras = [-0.4, -2.4];
     return { w: 1, jambes: [jambe, jambe], bras: [bras, bras], roule: [-1.3, -0.2], buste: -0.55 * d, leve: -0.42 * d, hanche: -0.22 * d };
   },
+  /** La pompe, de 0 (bras tendus) a 1 (poitrine au ras du sol) : le corps gaine, les coudes plient vers l'arriere. */
+  pompes(p: number): Posture {
+    const d = Math.max(0, Math.min(1.1, p));
+    const j: Jambe = [-1.4, -1.4, -1.5];
+    const bras: Bras = [-1.1 * d, 0.35 * d];
+    return { w: 1, jambes: [j, j], bras: [bras, bras], buste: -1.42 + 0.1 * d, leve: -0.3 - 0.25 * d, hanche: -0.3 };
+  },
   /** La planche sur les avant-bras : le corps a l'horizontale, `tremble` en radians. */
   gainage(tremble = 0): Posture {
     // le bassin a la hauteur des epaules (~0,35 m) : les jambes descendent juste ce qu'il faut vers les pointes de pied

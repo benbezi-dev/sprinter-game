@@ -958,15 +958,17 @@ function Muscu({ fini, scene }: JeuProps) {
   const prof = useRef(0), appuye = useRef(false), monte = useRef(false), bons = useRef(0), bas = useRef(0);
   const ZONE: [number, number] = [0.82, 0.97];
   const e = scene.current;
+  // sans club, la seance se fait dans la chambre : des pompes, pas de barre
+  const pompes = e.decor === 'tapis';
   const lacher = (p?: number) => {
     if (!appuye.current) return;
     appuye.current = false; bas.current = 0;
     const v = p ?? prof.current;
     let s = 0, m: string;
-    if (v > 1) { m = dans(['Trop bas, la barre t’écrase', 'Too deep, the bar wins']); e.flash = 0.6; e.couleurFlash = '#FF3B3B'; }
-    else if (v >= ZONE[0] && v <= ZONE[1]) { s = 1; m = dans(['Parfait : cuisses parallèles', 'Perfect: thighs parallel']); e.flash = 0.4; e.couleurFlash = VERT; }
+    if (v > 1) { m = pompes ? dans(['Trop bas, tu t’écrases au sol', 'Too low, you collapse']) : dans(['Trop bas, la barre t’écrase', 'Too deep, the bar wins']); e.flash = 0.6; e.couleurFlash = '#FF3B3B'; }
+    else if (v >= ZONE[0] && v <= ZONE[1]) { s = 1; m = pompes ? dans(['Parfait : la poitrine frôle le sol', 'Perfect: chest brushes the floor']) : dans(['Parfait : cuisses parallèles', 'Perfect: thighs parallel']); e.flash = 0.4; e.couleurFlash = VERT; }
     else if (v >= 0.6) { s = 0.5; m = dans(['Pas assez profond', 'Not deep enough']); }
-    else m = dans(['Demi-squat…', 'Half squat…']);
+    else m = pompes ? dans(['Demi-pompe…', 'Half push-up…']) : dans(['Demi-squat…', 'Half squat…']);
     bons.current += s;
     monte.current = true; setMsg(m);
     const n = rep + 1; setRep(n);
@@ -978,8 +980,8 @@ function Muscu({ fini, scene }: JeuProps) {
       prof.current += dt * 0.7;
       if (prof.current >= 1) { prof.current = 1; bas.current += dt; if (bas.current > 0.35) lacher(1.01); }
     }
-    e.corps.posture = POSTURES.squat(prof.current);
-    e.barre = prof.current;
+    e.corps.posture = pompes ? POSTURES.pompes(prof.current) : POSTURES.squat(prof.current);
+    e.barre = pompes ? null : prof.current;
     e.sueur = rep / 4;
     maj(n => n + 1);
     if (rep >= 5 && !monte.current) return true;
@@ -992,7 +994,7 @@ function Muscu({ fini, scene }: JeuProps) {
     </div>
   );
   return {
-    haut: `SQUAT ${Math.min(5, rep + 1)} / 5`, grand: undefined,
+    haut: `${pompes ? dans(['POMPES', 'PUSH-UPS']) : 'SQUAT'} ${Math.min(5, rep + 1)} / 5`, grand: undefined,
     petit: msg || dans(['Garde appuyé pour descendre', 'Hold to go down']), zone,
     libelles: [dans(['DESCENDRE', 'DOWN']), dans(['DESCENDRE', 'DOWN'])] as [string, string], extra: jauge,
   };
@@ -1143,7 +1145,7 @@ function VersLaPiste({ jour, a, onFin }: { jour: Jour; a: Athlete; onFin: () => 
 function SeanceDessinee({ jour, a, onFin, ex }: { jour: Jour; a: Athlete; onFin: () => void; ex: Exclude<Exercice, 'departs'> }) {
   const e = EXOS[ex];
   // le lieu decide du decor : seul, les seances de piste se font au parc
-  const decor: Decor = !a.club && JEUX[ex].decor === 'piste' ? 'parc' : JEUX[ex].decor;
+  const decor: Decor = !a.club && JEUX[ex].decor === 'piste' ? 'parc' : !a.club && ex === 'muscu' ? 'tapis' : JEUX[ex].decor;
   const couleur = COULEUR[SEANCES[jour].stat];
   // le corps MakeHuman de la ville (corps-gens.ts), dans sa tenue d'entrainement ; les facettes en attendant
   const look = useRef((() => {
@@ -1173,7 +1175,8 @@ function SeanceDessinee({ jour, a, onFin, ex }: { jour: Jour; a: Athlete; onFin:
   useEffect(() => {
     const s = scene.current, c = s.corps;
     // au squat, les pieds a la largeur des epaules (l'ouverture des jambes du moteur)
-    if (ex === 'muscu') { c.posture = POSTURES.squat(0); s.barre = 0; c.look.ouverture = 0.25; }
+    if (ex === 'muscu' && decor === 'tapis') c.posture = POSTURES.pompes(0);
+    else if (ex === 'muscu') { c.posture = POSTURES.squat(0); s.barre = 0; c.look.ouverture = 0.25; }
     else if (ex === 'gainage') c.posture = POSTURES.gainage();
     else c.debout = 1;
   }, [ex]);
@@ -1194,7 +1197,7 @@ function SeanceDessinee({ jour, a, onFin, ex }: { jour: Jour; a: Athlete; onFin:
           <div className="absolute inset-x-0 bottom-0 p-4 pb-[max(env(safe-area-inset-bottom),1rem)] flex flex-col items-center gap-3 text-center bg-gradient-to-t from-black/80 to-transparent">
             {phase === 'pret' && (
               <>
-                <p className="text-sm text-white max-w-xs leading-relaxed" style={{ textShadow: '0 1px 4px rgba(0,0,0,.6)' }}>{dans(e.jeu)}</p>
+                <p className="text-sm text-white max-w-xs leading-relaxed" style={{ textShadow: '0 1px 4px rgba(0,0,0,.6)' }}>{dans(!a.club && e.jeuSeul ? e.jeuSeul : e.jeu)}</p>
                 <button onClick={() => {
                   // l'attente est finie : le corps quitte sa pose d'attente pour l'exercice
                   const c = scene.current.corps;
