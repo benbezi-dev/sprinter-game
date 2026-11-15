@@ -359,8 +359,10 @@ export class Seance3D {
     const vitre = this.mat({ color: 0xcfe7fb, emissive: 0xbfe0ff, emissiveIntensity: 0.9 });
     for (let i = 0; i < 5; i++) this.bloc(1.6, 0.8, 0.05, vitre, -5 + i * 2.6, 4.3, -3.98, m);
     // la plateforme, le rack, l'arbre a disques, les halteres
-    this.bloc(3, 0.04, 2.4, this.mat({ color: 0x2a2e34, roughness: 0.9 }), 0, 0.02, 0, m);
-    const acier = this.mat({ color: 0x353a42, metalness: 0.6, roughness: 0.35 });
+    // la plateforme d'haltero : caoutchouc noir, bois au centre sous les pieds
+    this.bloc(2.6, 0.04, 2.6, this.mat({ color: 0x24272c, roughness: 0.95 }), 0, 0.02, 0, m);
+    this.bloc(1.0, 0.045, 2.6, this.parquet(1, 2.6), 0, 0.023, 0, m);
+    const acier = this.mat({ color: 0x1e2126, metalness: 0.25, roughness: 0.45 });
     // un demi-rack contre le dos de l'athlete : rien entre elle et la camera
     for (const z of [-0.85, 0.85]) this.bloc(0.08, 2.4, 0.08, acier, -0.6, 1.2, z, m, true);
     this.bloc(0.08, 0.08, 1.78, acier, -0.6, 2.4, 0, m);
@@ -372,17 +374,24 @@ export class Seance3D {
       d.rotation.x = Math.PI / 2; d.position.set(3.3, 0.5, -1.4 + i * 0.07); d.castShadow = true; m.add(d);
     });
     this.bloc(0.06, 0.9, 0.06, acier, 3.3, 0.45, -1.3, m);
-    this.bloc(1.4, 0.06, 0.4, acier, -3.2, 0.7, -3.4, m);
-    for (let i = 0; i < 4; i++) { const x = -3.7 + i * 0.32; this.bloc(0.06, 0.12, 0.25, acier, x, 0.8, -3.4, m); this.bloc(0.12, 0.12, 0.08, this.mat({ color: 0x1c2026 }), x, 0.8, -3.52, m); this.bloc(0.12, 0.12, 0.08, this.mat({ color: 0x1c2026 }), x, 0.8, -3.28, m); }
+    // le rateau d'halteres contre le mur de droite, un banc
+    const fonte = this.mat({ color: 0x1c2026, roughness: 0.6 });
+    this.bloc(0.5, 0.06, 1.6, acier, 4.2, 0.55, -2.2, m); this.bloc(0.06, 0.55, 1.6, acier, 4.0, 0.27, -2.2, m);
+    for (let i = 0; i < 5; i++) { const z = -2.85 + i * 0.32; this.bloc(0.24, 0.13, 0.13, fonte, 4.2, 0.65, z, m); }
+    this.bloc(1.2, 0.08, 0.32, this.mat({ color: 0x1f2933, roughness: 0.7 }), 2.4, 0.45, -2.6, m, true);
+    this.bloc(0.06, 0.42, 0.06, acier, 1.95, 0.21, -2.6, m); this.bloc(0.06, 0.42, 0.06, acier, 2.85, 0.21, -2.6, m);
     // la barre, tenue sur la nuque (placee a chaque image)
     const b = this.barre = new THREE.Group();
     const tige = new THREE.Mesh(this.geo(new THREE.CylinderGeometry(0.014, 0.014, 2.1, 10)), this.mat({ color: 0xb8bec6, metalness: 0.8, roughness: 0.3 }));
     tige.rotation.x = Math.PI / 2; tige.castShadow = true; b.add(tige);
-    for (const z of [-0.68, 0.68]) {
-      const d = new THREE.Mesh(this.geo(new THREE.CylinderGeometry(0.225, 0.225, 0.05, 28)), rouge);
-      d.rotation.x = Math.PI / 2; d.position.z = z * 1.4; d.castShadow = true; b.add(d);
-      const d2 = new THREE.Mesh(this.geo(new THREE.CylinderGeometry(0.2, 0.2, 0.04, 24)), this.mat({ color: 0x1f2933 }));
-      d2.rotation.x = Math.PI / 2; d2.position.z = z * 1.4 + Math.sign(z) * 0.05; b.add(d2);
+    // de chaque cote : un disque rouge de 25, un bleu de 20, le collier
+    const d25 = this.geo(new THREE.CylinderGeometry(0.225, 0.225, 0.055, 32)), d20 = this.geo(new THREE.CylinderGeometry(0.225, 0.225, 0.045, 32));
+    const col = this.geo(new THREE.CylinderGeometry(0.035, 0.035, 0.04, 12)), bleu = this.mat({ color: 0x2471a3, roughness: 0.5 });
+    const chrome = this.mat({ color: 0xd5d9de, metalness: 0.9, roughness: 0.25 });
+    for (const sg of [-1, 1]) {
+      ([[d25, rouge, 0.82], [d20, bleu, 0.875], [col, chrome, 0.92]] as const).forEach(([g, mt, z]) => {
+        const d = new THREE.Mesh(g, mt); d.rotation.x = Math.PI / 2; d.position.z = sg * z; d.castShadow = true; b.add(d);
+      });
     }
     b.visible = false; m.add(b);
   }
@@ -464,9 +473,16 @@ export class Seance3D {
         if (isFinite(bas)) { racine.matrix.elements[13] += (this.lieu === 'tapis' ? 0.06 : 0.05) - bas; racine.matrixWorldNeedsUpdate = true; }
       }
       if (this.barre) {
+        // la barre posee sur les trapezes : sous la nuque du squelette, un peu en arriere, elle suit le corps
         this.barre.visible = e.barre !== null;
-        const b = e.barre || 0, hh = (this.look && this.look.h) || 1.75, kk = hh / 1.45;
-        this.barre.position.set(-(0.06 + 0.12 * b) * kk, (1.24 - 0.42 * b) * kk, 0);
+        const nuque = this.m3.m.os.get('neck_01');
+        if (nuque && this.barre.visible) {
+          racine.updateMatrixWorld(true);
+          nuque.getWorldPosition(this._v);
+          const yaw = PROFIL - e.cap;
+          this.barre.position.set(this._v.x - Math.cos(yaw) * 0.07, this._v.y - 0.06, this._v.z + Math.sin(yaw) * 0.07);
+          this.barre.rotation.y = yaw;
+        }
       }
     }
     this.cam.lookAt(this.vise);

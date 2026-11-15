@@ -10,7 +10,9 @@
 
 type Jambe = [number, number, number];
 type Bras = [number, number];
-export type Posture = { w: number; jambes?: [Jambe, Jambe]; bras?: [Bras, Bras]; buste?: number; leve?: number; hanche?: number };
+export type Posture = { w: number; jambes?: [Jambe, Jambe]; bras?: [Bras, Bras]; buste?: number; leve?: number; hanche?: number;
+  /** Le roulis [bras, avant-bras] du moteur : negatif, le membre s'ecarte du corps. */
+  roule?: [number, number] };
 
 const debout: Jambe = [0.02, 0, 0];
 
@@ -29,9 +31,10 @@ export const POSTURES = {
   squat(p: number): Posture {
     const d = Math.max(0, Math.min(1.1, p));
     const jambe: Jambe = [1.45 * d, -0.55 * d, 0.3 * d];
-    // les mains tiennent la barre posee sur les trapezes : le bras monte en arriere, l'avant-bras revient vers la nuque
-    const bras: Bras = [-1.75, -3.0];
-    return { w: 1, jambes: [jambe, jambe], bras: [bras, bras], buste: -0.55 * d, leve: -0.42 * d, hanche: -0.22 * d };
+    // les mains tiennent la barre posee sur les trapezes (15/11, « tu peux faire mieux ») : le bras s'ecarte du corps
+    // presque a l'horizontale (roule), le coude plie, les mains a la barre de part et d'autre de la nuque
+    const bras: Bras = [-0.4, -2.4];
+    return { w: 1, jambes: [jambe, jambe], bras: [bras, bras], roule: [-1.3, -0.2], buste: -0.55 * d, leve: -0.42 * d, hanche: -0.22 * d };
   },
   /** La planche sur les avant-bras : le corps a l'horizontale, `tremble` en radians. */
   gainage(tremble = 0): Posture {

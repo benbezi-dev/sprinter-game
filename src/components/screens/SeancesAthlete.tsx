@@ -1172,7 +1172,8 @@ function SeanceDessinee({ jour, a, onFin, ex }: { jour: Jour; a: Athlete; onFin:
   // avant de commencer : l'athlete attend, en place pour l'exercice
   useEffect(() => {
     const s = scene.current, c = s.corps;
-    if (ex === 'muscu') { c.posture = POSTURES.squat(0); s.barre = 0; }
+    // au squat, les pieds a la largeur des epaules (l'ouverture des jambes du moteur)
+    if (ex === 'muscu') { c.posture = POSTURES.squat(0); s.barre = 0; c.look.ouverture = 0.25; }
     else if (ex === 'gainage') c.posture = POSTURES.gainage();
     else c.debout = 1;
   }, [ex]);
