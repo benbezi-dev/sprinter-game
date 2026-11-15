@@ -17,10 +17,21 @@
 
 import { zoneDe, TAILLE, LEG, ARRIVEE, PORTEE } from './relais-course.js';
 
-/** Le receveur s'elance quand le porteur arrive a cette distance (m). */
-export const ELAN = 8;
+/**
+ * LA COURSE D'ELAN (l'auteur, 15/11/2026 : « toujours pas de course d'elan des receveurs, ils ne
+ * bougent pas avant la reception du temoin »). Le receveur s'elance quand le porteur arrive a cette
+ * distance (m), d'une marque a deux metres de l'entree de sa zone.
+ *
+ * A 8 m d'une marque a 5 m, le porteur lance a onze metres par seconde rattrapait le receveur en
+ * une seconde : il n'avait couru que 5,6 m (mediane, mesuree sur 420 passages), il semblait
+ * attendre le temoin sur place. A 10,5 m d'une marque a 2 m, il court 19 m avant le contact
+ * (10 a 24), et le temoin passe au milieu de la zone — la ou noterPasse donne le meilleur passage
+ * —, sans que le chrono des equipes change (mediane 38,8 s). Au-dela de 11 m il part trop tot,
+ * arrive au bout de sa zone et y attend : le chrono se degrade.
+ */
+export const ELAN = 10.5;
 /** Ou un receveur fictif attend, en metres dans sa zone. */
-export const MARQUE_FICTIF = 5;
+export const MARQUE_FICTIF = 2;
 /** Un pas de simulation, au plus (ms). */
 export const PAS_MS = 50;
 /** Au-dela, la course s'arrete : plus rien ne bouge (jeu en pause, porteur arrete). */
