@@ -13,6 +13,7 @@ import { charger, pret, dessiner } from '@/game/vedette-3d';
 import { POSTURES } from '@/game/athlete/postures';
 import { bonusDeSeance } from '@/game/athlete/gens';
 import { CLUB_PARTENAIRE, logoDuClub } from '@/game/athlete/partenaires';
+import { sauver as sauverAthlete } from '@/game/athlete/carriere';
 
 /* ---------------------------------------------------------------------------
    LES SEANCES : UN MINI-JEU PAR VRAI EXERCICE, JOUE PAR L'ATHLETE
