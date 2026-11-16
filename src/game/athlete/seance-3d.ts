@@ -560,7 +560,7 @@ export class Seance3D {
       for (let passe = 0; passe < 2; passe++) {
         this.plierBras(bras, avant, main, T, a, b, arriere);
         if (!d1 || !d3) break;
-        this.orienterPoing(main, d1, axe, arriere);
+        this.orienterPoing(main, d1, d3, axe, arriere);
         // le creux du poing : entre la base et le bout du majeur ; la barre doit y passer
         const creux = P(d1).add(P(d3)).multiplyScalar(0.5);
         const ecart = prise.clone().sub(creux);
@@ -583,7 +583,7 @@ export class Seance3D {
     this.viser(avant, main.getWorldPosition(new THREE.Vector3()), S.clone().addScaledVector(u, D));
   }
   /** La main pointe vers le haut et un peu en arriere, et tourne sur elle-meme pour que l'axe du poing suive la barre. */
-  private orienterPoing(main: THREE.Object3D, d1: THREE.Object3D, axe: THREE.Vector3, arriere: THREE.Vector3) {
+  private orienterPoing(main: THREE.Object3D, d1: THREE.Object3D, d3: THREE.Object3D, axe: THREE.Vector3, arriere: THREE.Vector3) {
     main.updateMatrixWorld(true);
     const w = main.getWorldPosition(new THREE.Vector3());
     this.viser(main, d1.getWorldPosition(new THREE.Vector3()), w.clone().add(new THREE.Vector3(0, 1, 0).addScaledVector(arriere, 0.35)));
@@ -597,6 +597,14 @@ export class Seance3D {
     const monde = main.getWorldQuaternion(new THREE.Quaternion()).premultiply(q);
     main.quaternion.copy(main.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(monde));
     main.updateMatrixWorld(true);
+    // la prise de squat (16/11, l'auteur : « les mains sont à l'envers ») : la paume devant la barre, les doigts
+    // passent par-dessus VERS L'ARRIERE. S'ils s'enroulent vers l'avant, la main fait un demi-tour sur elle-meme.
+    if (d3.getWorldPosition(new THREE.Vector3()).sub(d1.getWorldPosition(new THREE.Vector3())).dot(arriere) < 0) {
+      const demi = new THREE.Quaternion().setFromAxisAngle(dir, Math.PI);
+      const m2 = main.getWorldQuaternion(new THREE.Quaternion()).premultiply(demi);
+      main.quaternion.copy(main.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(m2));
+      main.updateMatrixWorld(true);
+    }
   }
   /** Tourner l'os pour que son enfant, aujourd'hui en `de`, passe par `vers` (rotation en repere monde). */
   private viser(o: THREE.Object3D, de: THREE.Vector3, vers: THREE.Vector3) {
