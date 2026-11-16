@@ -622,8 +622,20 @@ export class Interieur {
       g.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h}px) translate(-50%, -100%)`;
     }
     this.rendu.render(this.scene, this.camera);
-    this.id = requestAnimationFrame(this.boucle);
+    this.id = this.enPause ? 0 : requestAnimationFrame(this.boucle);
   };
+
+  /**
+   * Figer la piece pendant une seance par-dessus (16/11) : sa boucle tournait encore sous la seance,
+   * deux rendus 3D lourds a chaque image, et le telephone retirait la 3D de la seance.
+   */
+  private enPause = false;
+  pause(oui: boolean) {
+    if (this.fini || oui === this.enPause) return;
+    this.enPause = oui;
+    if (oui) { cancelAnimationFrame(this.id); this.id = 0; }
+    else { this.avant = 0; this.id = requestAnimationFrame(this.boucle); }
+  }
 
   /** Changer de tenue (le miroir) sans sortir. */
   habiller(look: any) { this.moi.habiller(look); }

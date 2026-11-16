@@ -125,20 +125,34 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
     const cv = ref.current!; const c = cv.getContext('2d')!;
     const A = SprinterApp as any;
     // LE LIEU EN 3D (seance-3d.ts) ; la 2D ne garde que les effets par-dessus. Sans WebGL : tout en 2D.
-    const { s: s3, erreur } = creerSeance3D(etat.current.decor, etat.current.corps.look, PINCEAUX);
-    // un contexte WebGL perdu en cours de seance (le telephone le reprend) : on repasse a la 2D au lieu d'un ecran noir
-    let perdu = false;
-    if (s3) {
-      hote.current!.appendChild(s3.toile);
-      s3.toile.addEventListener('webglcontextlost', (ev) => { ev.preventDefault(); perdu = true; s3.toile.style.display = 'none'; });
-    }
-    else if (EST_TEST && erreur) {
-      // au canal de test, la raison s'affiche : sans elle, une 2D de secours ne se diagnostique pas a distance
-      const n = document.createElement('div');
-      n.textContent = `décor 3D indisponible : ${erreur}`;
-      n.style.cssText = 'position:absolute;left:6px;bottom:6px;z-index:2;font:10px sans-serif;color:#fff;background:rgba(0,0,0,.55);padding:2px 6px;border-radius:6px;pointer-events:none';
-      hote.current!.appendChild(n);
-    }
+    // un contexte WebGL perdu en cours de seance (le telephone le reprend) : on en recree un, deux fois au plus,
+    // et la 2D ne tient la place que le temps de la relance. Au canal de test, la raison s'ecrit dans la scene :
+    // le 16/11 l'auteur voyait la 2D de secours sans un mot, la perte n'etait pas signalee.
+    let s3: ReturnType<typeof creerSeance3D>['s'] = null, perdu = false, pertes = 0, ferme = false;
+    let note: HTMLDivElement | null = null;
+    const dire = (t: string) => {
+      if (!EST_TEST) return;
+      if (!note) {
+        note = document.createElement('div');
+        note.style.cssText = 'position:absolute;left:6px;bottom:6px;z-index:2;font:10px sans-serif;color:#fff;background:rgba(0,0,0,.55);padding:2px 6px;border-radius:6px;pointer-events:none';
+        hote.current!.appendChild(note);
+      }
+      note.textContent = t;
+    };
+    const monter = () => {
+      const r = creerSeance3D(etat.current.decor, etat.current.corps.look, PINCEAUX);
+      if (!r.s) { if (r.erreur) dire(`décor 3D indisponible : ${r.erreur}`); return; }
+      const s = r.s; s3 = s; perdu = false;
+      if (pertes) dire(`décor 3D relancé après ${pertes} perte${pertes > 1 ? 's' : ''}`);
+      hote.current!.appendChild(s.toile);
+      s.toile.addEventListener('webglcontextlost', (ev) => {
+        ev.preventDefault(); perdu = true; pertes++;
+        s.toile.remove();
+        dire(`décor 3D perdu par le téléphone (${pertes})${pertes <= 2 ? ', relance…' : ''}`);
+        if (pertes <= 2) setTimeout(() => { if (!ferme) { try { s.detruire(); } catch { /* deja perdu */ } monter(); } }, 400);
+      });
+    };
+    monter();
     let id = 0, avant = 0, piedAvant = 0, sol0: number | null = null;
     const parts: Particule[] = [];
     const tic = (ms: number) => {
@@ -225,7 +239,7 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
       id = requestAnimationFrame(tic);
     };
     id = requestAnimationFrame(tic);
-    return () => { cancelAnimationFrame(id); if (s3) { s3.toile.remove(); s3.detruire(); } };
+    return () => { ferme = true; cancelAnimationFrame(id); if (s3) { s3.toile.remove(); s3.detruire(); } };
   }, []);
   return (
     <>

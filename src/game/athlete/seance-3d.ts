@@ -518,6 +518,7 @@ export class Seance3D {
           const yaw = PROFIL - e.cap;
           this.barre.position.set(this._v.x - Math.cos(yaw) * 0.07, this._v.y - 0.06, this._v.z + Math.sin(yaw) * 0.07);
           this.barre.rotation.y = yaw;
+          this.tenirLaBarre();
         }
       }
     }
@@ -527,6 +528,45 @@ export class Seance3D {
     const p0 = this._v.set(0, 0, 0).project(this.cam), ax = (p0.x + 1) / 2 * W, sol = (1 - p0.y) / 2 * H;
     const p1 = this._v.set(1, 0, 0).project(this.cam), ppm = Math.abs((p1.x + 1) / 2 * W - ax);
     return { ax, sol, ppm, corps: !!this.m3 };
+  }
+  /**
+   * LES MAINS SUR LA BARRE (16/11, l'auteur : « les bras ça va pas »). La pose du moteur est celle de la 2D,
+   * vue de profil : en 3D les mains se croisaient devant la poitrine sous une barre posee sur la nuque. Chaque
+   * bras est replie par deux os (bras, avant-bras) pour que la main prenne la barre a 42 cm du milieu, coude vers
+   * le bas et un peu en arriere, comme une prise de squat arriere.
+   */
+  private tenirLaBarre() {
+    if (!this.m3 || !this.barre) return;
+    const os = this.m3.m.os as Map<string, THREE.Object3D>;
+    this.barre.updateMatrixWorld(true);
+    const prises = [-0.42, 0.42].map(z => this.barre!.localToWorld(new THREE.Vector3(0, 0, z)));
+    const yaw = this.barre.rotation.y, arriere = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
+    for (const c of ['l', 'r']) {
+      const bras = os.get('upperarm_' + c), avant = os.get('lowerarm_' + c), main = os.get('hand_' + c);
+      if (!bras || !avant || !main) continue;
+      const S = bras.getWorldPosition(new THREE.Vector3()), E = avant.getWorldPosition(new THREE.Vector3()), H = main.getWorldPosition(new THREE.Vector3());
+      const a = S.distanceTo(E), b = E.distanceTo(H);
+      const T = prises[0].distanceTo(S) < prises[1].distanceTo(S) ? prises[0] : prises[1];
+      const u = T.clone().sub(S); const D = Math.min(Math.max(u.length(), Math.abs(a - b) + 1e-3), a + b - 1e-3); u.normalize();
+      // le coude : vers le bas et un peu derriere, rendu perpendiculaire a l'axe epaule-main
+      const pole = new THREE.Vector3(0, -1, 0).addScaledVector(arriere, 0.5);
+      pole.addScaledVector(u, -pole.dot(u)).normalize();
+      const cosA = (a * a + D * D - b * b) / (2 * a * D), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+      const coude = S.clone().addScaledVector(u, a * cosA).addScaledVector(pole, a * sinA);
+      const cible = S.clone().addScaledVector(u, D);
+      this.viser(bras, E, coude);
+      avant.updateMatrixWorld(true);
+      this.viser(avant, main.getWorldPosition(new THREE.Vector3()), cible);
+    }
+  }
+  /** Tourner l'os pour que son enfant, aujourd'hui en `de`, passe par `vers` (rotation en repere monde). */
+  private viser(o: THREE.Object3D, de: THREE.Vector3, vers: THREE.Vector3) {
+    const p = o.getWorldPosition(new THREE.Vector3());
+    const q = new THREE.Quaternion().setFromUnitVectors(de.clone().sub(p).normalize(), vers.clone().sub(p).normalize());
+    const monde = o.getWorldQuaternion(new THREE.Quaternion()).premultiply(q);
+    const parent = o.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
+    o.quaternion.copy(parent.multiply(monde));
+    o.updateMatrixWorld(true);
   }
   private _v2 = new THREE.Vector2();
   private _s = new THREE.Vector3();
