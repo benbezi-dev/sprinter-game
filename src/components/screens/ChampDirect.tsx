@@ -30,8 +30,27 @@ import { MotDuGagnant } from './RejeuChampionnat';
 const OR = '#F8CD4A';
 const ROUGE = '#EF4444';
 
+/**
+ * L'ARRIVEE EN OR A LE TEMPS D'ETRE VUE (l'auteur, 16/11). Dans la salle noire, le couloir du vainqueur s'allume en or
+ * et son chrono s'ecrit sur la piste (course-3d/salle-noire.ts, lArriveeEnOr) ; la salle rend le resultat des que le
+ * dernier a passe la ligne, et le tableau la recouvrait au bout d'une demi-seconde. Il attend donc ARRIVEE_EN_OR.
+ */
+const ARRIVEE_EN_OR = 3200;
+function useTableauPret(e: EtatChampDirect) {
+  const pret = e.etape === 'fin' && !!e.resultat;
+  const [vu, setVu] = useState(false);
+  useEffect(() => {
+    if (!pret) { setVu(false); return; }
+    if (!SprinterApp.G?.champNoir) { setVu(true); return; }
+    const id = setTimeout(() => setVu(true), ARRIVEE_EN_OR);
+    return () => clearTimeout(id);
+  }, [pret, e.resultat]);
+  return pret && vu;
+}
+
 export function ChampDirect() {
   const e = useChampDirect();
+  const tableau = useTableauPret(e);
   if (!e.ouvert) return null;
   return (
     <AnimatePresence>
@@ -42,7 +61,7 @@ export function ChampDirect() {
                        fautifs={e.rappel.fautifs} moiSorti={e.rappel.moiSorti} />}
       {e.etape === 'echauffement' && <BandeauEchauffement key="echauf" />}
       {e.etape === 'course' && e.role === 'spectateur' && <BandeauSpectateur key="spec" e={e} />}
-      {e.etape === 'fin' && e.resultat && <TableauDArrivee key="fin" e={e} />}
+      {tableau && <TableauDArrivee key="fin" e={e} />}
       {e.reconnexion && e.etape !== 'erreur' && <BandeauReconnexion key="reco" />}
     </AnimatePresence>
   );

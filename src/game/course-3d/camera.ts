@@ -5,8 +5,8 @@ import { OCCULTANTS } from '../amsalem-3d';
 import { creuserTapis, zSol, auBordDeLaPiste, SURVOL_SALLE } from '../salle-3d';
 import { Q, DOS, RECUL, COTE, HAUT, P_DEBUT, P_FIN, P_ARRIERE, P_LOIN, LANE_W, P_HAUT, SURVOL, R_CORDE } from './reglages';
 import { camera, _a, _b, renderer, champBase, soleil } from './scene';
-import { ouCourt, capIci, virageApres, ici, sx, salleActive } from './repere';
-import { presente, finCam, presenteOu, finVise } from './salle-noire';
+import { ouCourt, capIci, virageApres, ici, sx, salleActive, milieu } from './repere';
+import { presente, presenteDans, orA, orOu, orCouloir, finCam, presenteOu, presenteAthlete, finVise, planExtinction } from './salle-noire';
 import { profilBas, finaleVue, toitsStade, cameraSalle, blocsSalle, amsalemActif } from './stade';
 import { nCouloirs } from '../course-3d';
 import { suiviDuRelais } from './relais';
@@ -267,6 +267,16 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // LA FINALE : pendant la presentation, la camera cadre le nom qui s'ecrit dans le couloir, de haut et
     // de cote (la tribune), comme les plans de Doha — mais au ras de la salle
     if (finaleVue && presente >= 0 && (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro'))) {
+      // DEUX PLANS PAR ATHLETE (l'auteur, 16/11 : « on doit voir le personnage presente ») : d'abord LUI, de face — la
+      // camera posee dans son propre couloir, 4,5 m devant ses blocs, a hauteur d'yeux (rien ne passe entre eux, ni
+      // voisin ni muret) ; puis, a PLAN_NOM, son nom ecrit dans la piste, comme avant.
+      const PLAN_NOM = 1.5;
+      if (presenteDans < PLAN_NOM) {
+        const A = presenteAthlete, za = zSol(A.x, A.y), f = ici(T.posDemi(4.5, presente, milieu(T, presente)));
+        finCam.set(f[0], -f[1], zSol(f[0], f[1]) + 1.75);
+        finVise.set(A.x, -A.y, za + 1.15);
+        champNom = camera.fov;
+      } else {
       const h = capIci(T.heading(7, presente)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
       // LE NOM ENTIER DANS LE CADRE : la distance se deduit du champ horizontal de la camera, pour que ses 9 m et une
       // marge tiennent en largeur, quel que soit l'ecran. (Les reculs fixes d'avant coupaient la fin du nom en paysage,
@@ -283,7 +293,24 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
       const nrm = Math.hypot(5, 9, 6.5), recul = loin * 5 / nrm, cote = loin * 9 / nrm, haut = Math.min(9.5, loin * 6.5 / nrm);
       finCam.set(presenteOu.x - ax * recul + ex * cote, -(presenteOu.y - ay * recul + ey * cote), haut);
       finVise.set(presenteOu.x, -presenteOu.y, 0);
+      }
       finActive = true;
+    } else if (finaleVue && orCouloir >= 0 && orA > 0 && G.champNoir) {
+      // L'ARRIVEE EN OR A SON PLAN (16/11) : la camera revient sur la ligne, cote tribune et en plongee, et cadre le
+      // chrono ecrit dans le couloir du vainqueur (meme direction que le plan du nom, 15,5 m) ; le tableau attend.
+      const h = capIci(T.heading(Math.max(4, T.total - 7), orCouloir)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
+      const nrm = Math.hypot(5, 9, 6.5), loin = 15.5, recul = loin * 5 / nrm, cote = loin * 9 / nrm, haut = Math.min(9.5, loin * 6.5 / nrm);
+      finCam.set(orOu.x - ax * recul + ex * cote, -(orOu.y - ay * recul + ey * cote), haut);
+      finVise.set(orOu.x, -orOu.y, 0);
+      champNom = camera.fov; finActive = true;
+    } else if (finaleVue && planExtinction && G.state === 'count') {
+      // L'EXTINCTION A SON PLAN (16/11) : haut derriere la ligne de depart, au milieu des couloirs, l'oeil sur la piste
+      // qui file — on voit les lignes s'allumer une par une, de gauche a droite, puis tout le reste d'un coup
+      const k = Math.floor((T.lanes || nCouloirs) / 2), q = ici(T.posDemi(0, k, milieu(T, k))), h = capIci(T.heading(0, k));
+      const v = ici(T.posDemi(Math.min(T.total * 0.5, 26), k, milieu(T, k)));
+      finCam.set(q[0] - Math.cos(h) * 7, -(q[1] - Math.sin(h) * 7), 8.2);
+      finVise.set(v[0], -v[1], 0);
+      champNom = camera.fov; finActive = true;
     } else finActive = false;
     // (le tapis du 60 m s'enfonce sous ceux qui le frappent)
     const auTapis = G.ghost && (G.runners || []).indexOf(G.ghost.runner) < 0 ? (G.runners || []).concat([G.ghost.runner]) : G.runners || [];
@@ -392,7 +419,8 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // 1. s'il s'approche du bord (le rail de la salle, en sortie de virage), la camera tourne vers lui, en douceur ;
     // 2. un mat, un arbre ou une cage d'Amsalem entre la camera et lui est masque le temps de passer.
     // (en course seulement : pendant le decompte, la presentation d'une vedette vise un autre coureur, voir viseCamera.cri)
-    if (fo === 0 && G.state === 'race') {
+    // (sauf sous un plan pose — l'arrivee en or : la camera tournait vers le joueur parti au-dela de la ligne)
+    if (fo === 0 && G.state === 'race' && !finActive) {
       _joueur.set(p[0], -p[1], 1);
       camera.updateMatrixWorld();
       let voulu = 0;

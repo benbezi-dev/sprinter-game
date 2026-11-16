@@ -180,7 +180,8 @@ export function PresentationDirect() {
       </p>
 
       {/* Avant le premier athlete : un simple decompte, la piste derriere. */}
-      {index < 0 && (
+      {/* (pas en serie du championnat dans le noir : la salle qui s'eteint fait l'attente — course-3d/salle-noire.ts) */}
+      {index < 0 && SprinterApp.G?.champNoir !== 'serie' && (
         <motion.div key="avant" {...FONDU}
                     className="relative self-center font-display font-black text-7xl
                                text-white/85 tabular-nums drop-shadow-lg">

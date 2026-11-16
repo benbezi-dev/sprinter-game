@@ -2230,7 +2230,7 @@ export async function contexteCourse(db, edition, phase, course) {
   const rv = (e.calendrier || []).find(r => r.phase === phase && r.course === course);
   const deja = (e.resultats || []).some(r => r.phase === phase && r.course === course);
   return {
-    edition: e.id, phase, course, epreuve: e.epreuve, lieu: e.lieu || null,
+    edition: e.id, phase, course, epreuve: e.epreuve, lieu: e.lieu || null, echelon: e.echelon, zone: e.zone,
     titre: e.titre, phaseNom: e.phaseNom, courses: e.courses,
     at: rv ? rv.at : null, grille, deja,
   };
