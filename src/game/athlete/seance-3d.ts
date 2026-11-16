@@ -114,6 +114,8 @@ export class Seance3D {
     // les corps premium et les modeles ont des textures KTX2 : le decodeur se branche sur ce rendu (comme la ville)
     brancherKTX2(this.R);
     this.toile = this.R.domElement;
+    // ?sonde : les bancs d'essai approchent la camera (comme __interieur)
+    if (/[?&]sonde\b/.test(location.search)) (window as any).__seance3d = this;
     this.toile.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:block';
     this.scene.add(this.monde);
     const dedans = lieu === 'salle' || lieu === 'tapis';
@@ -509,14 +511,16 @@ export class Seance3D {
         if (isFinite(plat) && isFinite(pente)) { racine.matrix.elements[13] += plat - pente; racine.matrixWorldNeedsUpdate = true; }
       }
       if (this.barre) {
-        // la barre posee sur les trapezes : sous la nuque du squelette, un peu en arriere, elle suit le corps
+        // la barre posee SUR LES EPAULES (16/11, l'auteur : « sur les épaules, pas derrière ») : au milieu des deux
+        // epaules du squelette, a leur hauteur plus l'epaisseur du trapeze, a peine en arriere ; elle suit le corps
         this.barre.visible = e.barre !== null;
-        const nuque = this.m3.m.os.get('neck_01');
-        if (nuque && this.barre.visible) {
+        const eg = this.m3.m.os.get('upperarm_l'), ed = this.m3.m.os.get('upperarm_r');
+        if (eg && ed && this.barre.visible) {
           racine.updateMatrixWorld(true);
-          nuque.getWorldPosition(this._v);
-          const yaw = PROFIL - e.cap;
-          this.barre.position.set(this._v.x - Math.cos(yaw) * 0.07, this._v.y - 0.06, this._v.z + Math.sin(yaw) * 0.07);
+          eg.getWorldPosition(this._v); ed.getWorldPosition(this._v3);
+          this._v.add(this._v3).multiplyScalar(0.5);
+          const yaw = PROFIL - e.cap, k = this.m3 ? ((this.look && this.look.h) || this.m3.hauteur) / this.m3.hauteur : 1;
+          this.barre.position.set(this._v.x - Math.cos(yaw) * 0.03 * k, this._v.y + 0.07 * k, this._v.z + Math.sin(yaw) * 0.03 * k);
           this.barre.rotation.y = yaw;
           this.tenirLaBarre();
         }
@@ -530,34 +534,69 @@ export class Seance3D {
     return { ax, sol, ppm, corps: !!this.m3 };
   }
   /**
-   * LES MAINS SUR LA BARRE (16/11, l'auteur : « les bras ça va pas »). La pose du moteur est celle de la 2D,
-   * vue de profil : en 3D les mains se croisaient devant la poitrine sous une barre posee sur la nuque. Chaque
-   * bras est replie par deux os (bras, avant-bras) pour que la main prenne la barre a 42 cm du milieu, coude vers
-   * le bas et un peu en arriere, comme une prise de squat arriere.
+   * LES MAINS SUR LA BARRE (16/11, l'auteur : « les bras ça va pas », « les mains ça va toujours pas »). La pose du
+   * moteur est celle de la 2D, vue de profil : en 3D les mains se croisaient devant la poitrine. Chaque bras est replie
+   * par deux os (bras, avant-bras) vers la prise, a 42 cm du milieu de la barre, coude vers le bas. Puis la main :
+   * le poing que `poser` ferme deja (COURBE.poing) est tourne pour que son creux suive l'axe de la barre, doigts
+   * par-dessus, et le bras est recale pour que la barre passe DANS le poing, pas a cote.
    */
   private tenirLaBarre() {
     if (!this.m3 || !this.barre) return;
     const os = this.m3.m.os as Map<string, THREE.Object3D>;
     this.barre.updateMatrixWorld(true);
-    const prises = [-0.42, 0.42].map(z => this.barre!.localToWorld(new THREE.Vector3(0, 0, z)));
+    const axe = new THREE.Vector3(0, 0, 1).applyQuaternion(this.barre.quaternion).normalize();
     const yaw = this.barre.rotation.y, arriere = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
+    const prises = [-0.42, 0.42].map(z => this.barre!.localToWorld(new THREE.Vector3(0, 0, z)));
+    const P = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
     for (const c of ['l', 'r']) {
       const bras = os.get('upperarm_' + c), avant = os.get('lowerarm_' + c), main = os.get('hand_' + c);
+      const d1 = os.get('middle_01_' + c), d3 = os.get('middle_03_' + c);
       if (!bras || !avant || !main) continue;
-      const S = bras.getWorldPosition(new THREE.Vector3()), E = avant.getWorldPosition(new THREE.Vector3()), H = main.getWorldPosition(new THREE.Vector3());
-      const a = S.distanceTo(E), b = E.distanceTo(H);
-      const T = prises[0].distanceTo(S) < prises[1].distanceTo(S) ? prises[0] : prises[1];
-      const u = T.clone().sub(S); const D = Math.min(Math.max(u.length(), Math.abs(a - b) + 1e-3), a + b - 1e-3); u.normalize();
-      // le coude : vers le bas et un peu derriere, rendu perpendiculaire a l'axe epaule-main
-      const pole = new THREE.Vector3(0, -1, 0).addScaledVector(arriere, 0.5);
-      pole.addScaledVector(u, -pole.dot(u)).normalize();
-      const cosA = (a * a + D * D - b * b) / (2 * a * D), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
-      const coude = S.clone().addScaledVector(u, a * cosA).addScaledVector(pole, a * sinA);
-      const cible = S.clone().addScaledVector(u, D);
-      this.viser(bras, E, coude);
-      avant.updateMatrixWorld(true);
-      this.viser(avant, main.getWorldPosition(new THREE.Vector3()), cible);
+      const S = P(bras);
+      const prise = prises[0].distanceTo(S) < prises[1].distanceTo(S) ? prises[0] : prises[1];
+      const a = S.distanceTo(P(avant)), b = P(avant).distanceTo(P(main));
+      // le poignet sous la barre et un peu devant ; deux passes : la seconde corrige de l'ecart poing-barre
+      const T = prise.clone().add(new THREE.Vector3(0, -0.06, 0)).addScaledVector(arriere, -0.02);
+      for (let passe = 0; passe < 2; passe++) {
+        this.plierBras(bras, avant, main, T, a, b, arriere);
+        if (!d1 || !d3) break;
+        this.orienterPoing(main, d1, axe, arriere);
+        // le creux du poing : entre la base et le bout du majeur ; la barre doit y passer
+        const creux = P(d1).add(P(d3)).multiplyScalar(0.5);
+        const ecart = prise.clone().sub(creux);
+        ecart.addScaledVector(axe, -ecart.dot(axe));   // le long de la barre, la main peut glisser
+        T.add(ecart);
+      }
     }
+  }
+  /** Bras et avant-bras replies pour que le poignet atteigne T (deux os, coude vers le bas et un peu en arriere). */
+  private plierBras(bras: THREE.Object3D, avant: THREE.Object3D, main: THREE.Object3D, T: THREE.Vector3, a: number, b: number, arriere: THREE.Vector3) {
+    bras.updateMatrixWorld(true);
+    const S = bras.getWorldPosition(new THREE.Vector3());
+    const u = T.clone().sub(S); const D = Math.min(Math.max(u.length(), Math.abs(a - b) + 1e-3), a + b - 1e-3); u.normalize();
+    const pole = new THREE.Vector3(0, -1, 0).addScaledVector(arriere, 0.5);
+    pole.addScaledVector(u, -pole.dot(u)).normalize();
+    const cosA = (a * a + D * D - b * b) / (2 * a * D), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
+    const coude = S.clone().addScaledVector(u, a * cosA).addScaledVector(pole, a * sinA);
+    this.viser(bras, avant.getWorldPosition(new THREE.Vector3()), coude);
+    avant.updateMatrixWorld(true);
+    this.viser(avant, main.getWorldPosition(new THREE.Vector3()), S.clone().addScaledVector(u, D));
+  }
+  /** La main pointe vers le haut et un peu en arriere, et tourne sur elle-meme pour que l'axe du poing suive la barre. */
+  private orienterPoing(main: THREE.Object3D, d1: THREE.Object3D, axe: THREE.Vector3, arriere: THREE.Vector3) {
+    main.updateMatrixWorld(true);
+    const w = main.getWorldPosition(new THREE.Vector3());
+    this.viser(main, d1.getWorldPosition(new THREE.Vector3()), w.clone().add(new THREE.Vector3(0, 1, 0).addScaledVector(arriere, 0.35)));
+    // l'axe du poing : l'axe local x des phalanges (celui autour duquel `poser` les replie)
+    const dir = d1.getWorldPosition(new THREE.Vector3()).sub(w).normalize();
+    const pli = new THREE.Vector3(1, 0, 0).applyQuaternion(d1.getWorldQuaternion(new THREE.Quaternion()));
+    const proj = (v: THREE.Vector3) => v.clone().addScaledVector(dir, -v.dot(dir)).normalize();
+    const p0 = proj(pli); let p1 = proj(axe);
+    if (p0.dot(p1) < 0) p1 = p1.negate();
+    const q = new THREE.Quaternion().setFromUnitVectors(p0, p1);
+    const monde = main.getWorldQuaternion(new THREE.Quaternion()).premultiply(q);
+    main.quaternion.copy(main.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(monde));
+    main.updateMatrixWorld(true);
   }
   /** Tourner l'os pour que son enfant, aujourd'hui en `de`, passe par `vers` (rotation en repere monde). */
   private viser(o: THREE.Object3D, de: THREE.Vector3, vers: THREE.Vector3) {
@@ -569,6 +608,7 @@ export class Seance3D {
     o.updateMatrixWorld(true);
   }
   private _v2 = new THREE.Vector2();
+  private _v3 = new THREE.Vector3();
   private _s = new THREE.Vector3();
   private _axeY = new THREE.Vector3(0, 1, 0);
 
