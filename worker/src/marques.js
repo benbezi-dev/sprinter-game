@@ -59,6 +59,7 @@
    est nul, la production refuse tout. La meme date est posee cote jeu
    (vite.config.ts, LANCEMENT_DUEL_MARQUES) : les deux bougent ensemble.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 import { verifierTrace } from './preuve.js';
 import { MESSAGE_PLANCHER, sousLePlancher } from './plancher.js';
 
@@ -95,7 +96,7 @@ export function fenetre(canalTest, maintenant = Date.now()) {
   return { ouvert: maintenant >= DEBUT_PROD && maintenant < fin, debut: DEBUT_PROD, fin };
 }
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureMarquesTables(db) {
   if (pret.has(db)) return;
   await db.batch([

@@ -31,6 +31,7 @@
 // nombre qui recompense ne peut pas en meme temps estimer la force, parce que
 // recompenser demande d'etre genereux avec celui qui prend un risque, et
 // estimer demande de n'etre genereux avec personne.
+import { BasesPretes } from './bases.js';
 import {
   appliquerDuelAuClassement, rangDe, MMR_DEPART,
 } from './classement.js';
@@ -68,7 +69,7 @@ export function disciplineValide(cle) {
 // tenue PAR BASE : le worker en sert deux — production et test — et un simple
 // booleen mentait a la seconde, qui restait sans tables parce que la premiere
 // avait deja eteint la migration.
-const duelReady = new WeakSet();
+const duelReady = new BasesPretes();
 
 /**
  * LE PASSAGE AU CLASSEMENT PAR DISCIPLINE.

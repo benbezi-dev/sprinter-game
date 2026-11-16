@@ -23,6 +23,8 @@ export const CONTEXTES = [
   'carriere', 'solo', 'direct', 'championnat', 'defi_demie', 'echauffement',
   'defi', 'duel', 'fantome', 'objectif', 'vedette', 'legende', 'halloween',
   'edition', 'rejeu',
+  // la carriere d'athlete : jamais envoyee (engine.ts, onRaceRecorded), et refusee par le serveur
+  'athlete',
 ] as const;
 export type Contexte = typeof CONTEXTES[number];
 

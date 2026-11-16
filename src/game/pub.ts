@@ -99,7 +99,10 @@ export async function regarderUnePub(): Promise<boolean> {
     ]);
     try {
       m.AdMob.showRewardVideoAd().catch(() => fin());
-      await fermee;
+      // Si ni la fermeture ni l'echec n'arrivent, l'ecran qui attend la pub restait bloque
+      // jusqu'a relancer l'appli : quatre minutes, bien au-dela d'une pub, rendent la main.
+      const garde = setTimeout(fin, 4 * 60_000);
+      try { await fermee; } finally { clearTimeout(garde); }
     } finally {
       ecoutes.forEach((e: any) => e.remove());
     }

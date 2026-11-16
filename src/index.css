@@ -533,3 +533,13 @@
     animation: none !important;
   }
 }
+
+/* LE FOCUS AU CLAVIER SE VOIT (audit du 16/11). Trente-quatre `outline-none` et aucun
+   `focus-visible` : au clavier ou a la manette, on ne savait plus ou l'on etait. Hors
+   couche, pour passer devant les utilitaires ; les champs de saisie gardent leur propre
+   style (ils prennent `:focus-visible` meme au toucher). Le toucher et la souris ne le
+   declenchent pas sur un bouton. */
+:focus-visible:not(input):not(textarea):not(select) {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}

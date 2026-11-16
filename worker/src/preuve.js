@@ -27,6 +27,7 @@
 
 /** Le pas d'echantillonnage du jeu, en secondes. A TENIR D'ACCORD avec
  *  REC_STEP dans sprinter-app.js. */
+import { BasesPretes } from './bases.js';
 export const PAS_S = 0.08;
 
 /** La trace est en DECIMETRES : le jeu range `Math.round(distance * 10)`. */
@@ -149,7 +150,7 @@ export function vraisemblance(tempsMs, pbMs, courses) {
    n'est pas une raison pour lui prendre son nom : un nom qui veut deja dire
    quelque chose est un piege qui se referme sur le suivant. */
 
-const pretes = new WeakSet();
+const pretes = new BasesPretes();
 
 export async function ensureSuspectes(db) {
   if (pretes.has(db)) return;

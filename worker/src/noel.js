@@ -37,6 +37,7 @@
    est nul, la production refuse tout. La meme date est posee cote jeu
    (vite.config.ts, LANCEMENT_NOEL) : les deux bougent ensemble.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 import { verifierTrace } from './preuve.js';
 import { MESSAGE_PLANCHER, sousLePlancher } from './plancher.js';
 
@@ -96,7 +97,7 @@ export function facteur({ neige = 0, etoileDepuis = null, maintenant = Date.now(
 
 /* ------------------------------------------------------------- les tables */
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureNoelTables(db) {
   if (pret.has(db)) return;
   await db.batch([

@@ -269,6 +269,17 @@ export const DUREE_NOEL_MS: number = typeof __DUREE_NOEL_MS__ === 'number' ? __D
 export const NOEL_OUVERT = EST_TEST || (Date.now() >= LANCEMENT_NOEL && Date.now() < LANCEMENT_NOEL + DUREE_NOEL_MS);
 
 /**
+ * Les saisons s'ouvrent par des constantes lues UNE fois, au chargement. Une appli laissee
+ * a l'arriere-plan a cheval sur le 1er decembre ne voyait donc pas Noel s'ouvrir (ni se
+ * fermer) avant d'etre relancee. Vrai quand l'etat lu au chargement n'est plus celui de
+ * maintenant : l'accueil se recharge alors (engine.ts, au retour au premier plan).
+ */
+export function saisonABascule(maintenant = Date.now()): boolean {
+  if (EST_TEST) return false;
+  return NOEL_OUVERT !== (maintenant >= LANCEMENT_NOEL && maintenant < LANCEMENT_NOEL + DUREE_NOEL_MS);
+}
+
+/**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
  *
  * Ce que Hurdlers a de casse aujourd'hui tient en une phrase : le joueur ne

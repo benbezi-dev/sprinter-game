@@ -18,7 +18,7 @@ import {
   faireUneAction, avancer, heureDe, DIMANCHE, payer, tirerLeCorps, BLESSURES,
   type RendezVousReel, type Tour, apresLeTour, HEURE_DU_TOUR, SEMAINES_AVANT_FRANCE, rendezVousAvantFrance,
   conclureLeMeeting, meetingDe, coutDuMeeting, type Course, enSalle, libelleEpreuve, saisonEnSalle,
-  etape, SALAIRE, soulager, jourDe, REVEIL, BESOINS_PLEINS,
+  etape, SALAIRE, soulager, jourDe, REVEIL, BESOINS_PLEINS, vitDuSport,
 } from './regles';
 import { tirerLaSemaine } from './recit';
 import { MOTS } from './mots';
@@ -100,7 +100,8 @@ export function passerLaSemaine(a: Athlete) {
   // une nuit de 8 h en ville : -0,6 de fatigue par heure (dormir, regles.ts)
   a.fatigue = Math.max(0, a.fatigue - nuits * 8 * 0.6);
   a.besoins = { ...BESOINS_PLEINS };
-  if (etape(a) === 'adulte') {
+  // qui vit du sport (categorie 1) n'a pas de bureau : son revenu tombe deja dans finirLaSemaine
+  if (etape(a) === 'adulte' && !vitDuSport(a)) {
     // du jour ou l'on est jusqu'au vendredi ; la journee deja travaillee ne se repaie pas
     const j = jourDe(a), restants = j < 5 ? 5 - j - (a.cours ? 1 : 0) : 0;
     if (restants > 0) payer(a, SALAIRE * restants, 'Salaire', 'Wages');

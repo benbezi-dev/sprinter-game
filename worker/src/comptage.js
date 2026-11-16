@@ -30,6 +30,7 @@
 // d'aujourd'hui applique a toute la periode.
 
 /** Les contextes que le jeu peut envoyer. Tout le reste devient `inconnu`. */
+import { BasesPretes } from './bases.js';
 const CONTEXTES = new Set([
   'carriere', 'solo', 'direct', 'championnat', 'defi_demie', 'echauffement',
   'defi', 'duel', 'fantome', 'objectif', 'vedette', 'legende', 'halloween',
@@ -42,7 +43,7 @@ export const contexteValide = c => (typeof c === 'string' && CONTEXTES.has(c)) ?
 // ou refuse.
 const QUI = `CASE WHEN name_key NOT IN ('', 'anonyme') THEN 'n:' || name_key ELSE 'd:' || device_id END`;
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 /**
  * Les deux tables, et la reprise de `races`.
  *

@@ -32,6 +32,7 @@
       un compte de marque qui republie du texte libre sans le lire publie une
       insulte tot ou tard. La publication est un second geste, humain, ailleurs.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 
 /**
  * Les moments que le jeu sait reconnaitre, et ce qu'ils valent.
@@ -89,7 +90,7 @@ const CAPS = [100, 250, 500, 1000, 2500, 5000, 10000, 25000, 50000, 100000];
 // test n'aura jamais ces tables, par construction — mais la forme reste la
 // meme que dans acces.js et duels.js, et une forme qui se ressemble partout
 // est une forme qu'on relit sans y penser.
-const pret = new WeakSet();
+const pret = new BasesPretes();
 
 export async function ensureReseauxTables(db) {
   if (pret.has(db)) return;

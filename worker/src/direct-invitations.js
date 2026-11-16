@@ -31,6 +31,7 @@
    ne doit pas rendre joignable. C'est le serveur qui fait la jonction entre un
    pseudonyme et un appareil, et cette jonction ne sort jamais d'ici.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 
 /**
  * Dix minutes. Le temps qu'une salle reste plausible.
@@ -43,7 +44,7 @@ const VIE_MS = 10 * 60 * 1000;
 /** Personne ne peut inviter plus de sept adversaires : la piste a huit couloirs. */
 const MAX_CIBLES = 7;
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 
 export async function ensureInvitationsTables(db) {
   if (pret.has(db)) return;

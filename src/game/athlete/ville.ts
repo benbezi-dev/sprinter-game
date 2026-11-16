@@ -798,6 +798,9 @@ export class Ville {
       for (const x of Array.isArray(mm) ? mm : mm ? [mm] : []) { const t = (x as THREE.MeshStandardMaterial).map; if (t) t.dispose(); x.dispose(); }
     });
     this.rendu.dispose();
+    // rendre le contexte WebGL tout de suite : iOS en tolere peu, et la ville, une piece
+    // et une seance 3D s'enchainent (comme interieur.ts et seance-3d.ts)
+    this.rendu.forceContextLoss();
     this.hote.innerHTML = '';
   }
 

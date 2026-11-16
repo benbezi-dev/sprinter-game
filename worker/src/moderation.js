@@ -28,6 +28,7 @@
    partout ailleurs dans ce worker — voir `opponent_key` et `challenger_key`.
 --------------------------------------------------------------------------- */
 
+import { BasesPretes } from './bases.js';
 import { idDeDuel } from './mot.js';
 
 /** Les motifs proposes. Une liste fermee : un champ libre serait lui-meme un
@@ -40,7 +41,7 @@ export function motifPropre(brut) {
 }
 
 /** Meme memoire par base que partout ailleurs : le worker en sert deux. */
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureModerationTables(db) {
   if (pret.has(db)) return;
   await db.batch([

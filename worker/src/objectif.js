@@ -54,6 +54,7 @@
 // L'envoi est le travail de push.js, le declenchement celui du cron dans
 // index.js. C'est ce qui permet de tester la calibration sans rien envoyer.
 
+import { BasesPretes } from './bases.js';
 import { crediter as crediterPieces, BAREME } from './pieces.js';
 import { PLUS_BAS, PLUS_HAUT, directionDe, pasDe, estMeilleur,
          CLES_DU_JEU, epreuve as fiche } from './epreuves.js';
@@ -690,7 +691,7 @@ export function calibrer(pbMs, coursesMs, options = {}) {
 
 /* ---------------------------------------------------------------- tables */
 
-const pretes = new WeakSet();
+const pretes = new BasesPretes();
 
 export async function ensureObjectifTables(db) {
   if (pretes.has(db)) return;

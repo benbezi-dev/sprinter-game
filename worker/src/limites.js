@@ -26,6 +26,7 @@
 // fenetre, avant d'etre mise en attente. `/test/entrer` est la plus stricte
 // des trois : c'est la seule qui ressemble a une authentification, et donc
 // la seule qu'une force brute chercherait a marteler.
+import { BasesPretes } from './bases.js';
 export const RATE_LIMITS = {
   '/test/entrer': { max: 8, fenetreMs: 60_000 },
   '/duel/mot': { max: 6, fenetreMs: 60_000 },
@@ -60,7 +61,7 @@ export const RATE_LIMITS = {
 // Au-dela de la plus longue fenetre, aucune ligne ne compte plus pour rien.
 const FENETRE_MAX = Math.max(...Object.values(RATE_LIMITS).map(r => r.fenetreMs));
 
-const limitesReady = new WeakSet();
+const limitesReady = new BasesPretes();
 async function ensureRateLimitTable(db) {
   if (limitesReady.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS rate_limits (
@@ -91,7 +92,25 @@ function cleHmac(secret) {
  * constante : le compteur marche, mais l'empreinte redevient reversible —
  * acceptable hors production, ou ADMIN_CLE est toujours posee.
  */
+/**
+ * Une box ou un telephone recoit en IPv6 un bloc /64 entier : compter par
+ * adresse complete laissait changer d'adresse a chaque requete et ne jamais
+ * atteindre le quota. On compte donc par /64 (les quatre premiers groupes).
+ * Une IPv4, ou tout ce qui n'est pas une IPv6 lisible, reste tel quel.
+ */
+export function blocIp(ip) {
+  const s = String(ip || '');
+  if (!s.includes(':') || s.includes('.')) return s;      // IPv4, ou IPv4 dans IPv6
+  const [tete, queue] = s.toLowerCase().split('::');
+  const a = tete ? tete.split(':') : [], b = queue != null && queue !== '' ? queue.split(':') : [];
+  if (queue == null && a.length !== 8) return s;
+  const groupes = queue == null ? a : [...a, ...Array(Math.max(0, 8 - a.length - b.length)).fill('0'), ...b];
+  if (groupes.length !== 8 || groupes.some(g => !/^[0-9a-f]{1,4}$/.test(g))) return s;
+  return groupes.slice(0, 4).map(g => g.replace(/^0+(?=.)/, '')).join(':') + '::/64';
+}
+
 export async function empreinteIp(ip, secret, maintenant = Date.now()) {
+  ip = blocIp(ip);
   const jour = new Date(maintenant).toISOString().slice(0, 10);
   const signature = await crypto.subtle.sign(
     'HMAC', await cleHmac(secret || 'sprinter-limites'),

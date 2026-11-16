@@ -30,6 +30,7 @@
 
 /** Une notification par jour, ou deux. Le choix du joueur, ou celui qu'on
  *  fait pour lui quand il ne repond plus. */
+import { BasesPretes } from './bases.js';
 export const RYTHMES = ['deux', 'un'];
 
 /** Quatre heures entre deux sonneries, quel qu'en soit le motif. */
@@ -49,7 +50,7 @@ export const SANS_OUVERTURE = 4;
 export const DECALAGE_MAX_MIN = 10;
 export const DECALAGE_PAS_MIN = 5;
 
-const pretes = new WeakSet();
+const pretes = new BasesPretes();
 
 export async function ensureJournal(db) {
   if (pretes.has(db)) return;

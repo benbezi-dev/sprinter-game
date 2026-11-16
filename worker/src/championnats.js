@@ -13,6 +13,7 @@
    ou derriere un VPN ne doit pas changer de nationalite sportive.
 --------------------------------------------------------------------------- */
 
+import { BasesPretes } from './bases.js';
 import { crediter as crediterPieces, creditDuTitre } from './pieces.js';
 import {
   FORMAT, formatDe, ECHELONS, TITRE_MOIS, REPLI_PAYS_TROP_PETIT, CALENDRIER, MIN_DOFFICE, ENGAGEMENT_REQUIS, COURSES_EXTRA,
@@ -206,7 +207,7 @@ export function continentDe(pays) {
 // tenue PAR BASE : le worker en sert deux — production et test — et un simple
 // booleen mentait a la seconde, qui restait sans tables parce que la premiere
 // avait deja eteint la migration.
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureChampTables(db) {
   if (pret.has(db)) return;
   await db.batch([

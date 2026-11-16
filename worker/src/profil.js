@@ -20,11 +20,12 @@
 //      renvoyer. Un telephone neuf qui vient d'etre relie ne peut donc pas
 //      remplacer une carriere par une page blanche.
 
+import { BasesPretes } from './bases.js';
 export const PROFIL_MAX_OCTETS = 256 * 1024;
 // `sprinter_*`, `sprinter.*` et le carnet `halloween2026.v1` : les noms que le jeu emploie.
 const CLE_VALIDE = /^(sprinter|halloween)[a-z0-9_.]{1,70}$/;
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureProfils(db) {
   if (pret.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS profils (

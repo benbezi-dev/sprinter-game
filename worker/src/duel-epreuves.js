@@ -40,6 +40,7 @@
      au plus par appareil. Les voix du renfort de l'auteur n'appartiennent a
      personne : aucun fantome ne les protege, aucune course ne les annule.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 import { verifierTrace } from './preuve.js';
 import { sousLePlancher } from './plancher.js';
 
@@ -60,7 +61,7 @@ export function fenetreEpreuves(test, maintenant = Date.now()) {
   return { ouvert: maintenant >= DEBUT && maintenant < FIN, debut: DEBUT, fin: FIN };
 }
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 async function ensureTable(db) {
   if (pret.has(db)) return;
   await db.batch([

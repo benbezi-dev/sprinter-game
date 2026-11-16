@@ -188,7 +188,8 @@ export const EVENEMENTS: Evenement[] = [
     // un adulte n'a ni college ni parents qui le font reviser
     tirable: a => a.chapitre === 'debut' && etape(a) !== 'adulte',
     repetable: true,
-    qui: ['Le collège', 'School'],
+    // un lyceen de 15-17 ans le recoit aussi : pas « le college »
+    qui: ['Les cours', 'School'],
     texte: () => ['Contrôle de maths vendredi. Tes parents veulent que tu révises.', 'Maths test on Friday. Your parents want you to revise.'],
     choix: [
       { t: ['Réviser (pas de séance vendredi)', 'Revise (no Friday session)'], d: ['Moral +5', 'Morale +5'],

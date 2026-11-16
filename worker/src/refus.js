@@ -32,6 +32,7 @@
 /** Les routes dont on accepte de noter les refus. Ecrite en dur : une faute
  *  de frappe dans un appel creerait une categorie fantome, et personne ne
  *  verrait la difference entre « /submitt » et une route qui ne refuse plus. */
+import { BasesPretes } from './bases.js';
 export const ROUTES = new Set([
   '/submit', '/race', '/profil', '/objectif/tentative',
   '/champ/pays', '/direct/inviter', '/notifications/rythme',
@@ -49,7 +50,7 @@ export const ROUTES = new Set([
  *  qu'un joueur reel produit — il en a deux ou trois. */
 const MAX_APPAREILS_PAR_NOM = 50;
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 
 export async function ensureRefusTable(db) {
   if (pret.has(db)) return;

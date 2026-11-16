@@ -442,10 +442,10 @@ function MainGame() {
             de la carriere d'athlete : place, prime, qualification (game/athlete/). */}
         {state === 'winall' && (
           DUELS_OUVERTS && SprinterApp.G.defiDemie ? <FinDuDefi />
-            : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}>{nuitAPlusieurs() ? <FinDeLaMeute /> : <FinDeLaNuit />}</Suspense>
-            : DEFI_VEDETTE_OUVERT && defiVedetteEnCours() ? <Suspense fallback={null}><FinDuDefiVedette /></Suspense>
-            : LEGENDE_OUVERTE && finDEtapeLegende(SprinterApp.G) ? <Suspense fallback={null}><FinDEtapeLegende /></Suspense>
-            : CARRIERE_ATHLETE_OUVERTE && SprinterApp.G.etiquette === 'athlete' ? <Suspense fallback={null}><FinDeCourseAthlete /></Suspense>
+            : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={ATTENTE_FIN}>{nuitAPlusieurs() ? <FinDeLaMeute /> : <FinDeLaNuit />}</Suspense>
+            : DEFI_VEDETTE_OUVERT && defiVedetteEnCours() ? <Suspense fallback={ATTENTE_FIN}><FinDuDefiVedette /></Suspense>
+            : LEGENDE_OUVERTE && finDEtapeLegende(SprinterApp.G) ? <Suspense fallback={ATTENTE_FIN}><FinDEtapeLegende /></Suspense>
+            : CARRIERE_ATHLETE_OUVERTE && SprinterApp.G.etiquette === 'athlete' ? <Suspense fallback={ATTENTE_FIN}><FinDeCourseAthlete /></Suspense>
             : defiEnCours && programmeDuDefi() ? <Revanche />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>
@@ -550,6 +550,15 @@ function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
 }
+
+
+// Un ecran de fin charge a la demande : sur un reseau lent, `fallback={null}` laissait la
+// piste figee sans rien dire, le temps que son morceau arrive.
+const ATTENTE_FIN = (
+  <div className="fixed inset-0 z-40 flex items-end justify-center pb-[max(env(safe-area-inset-bottom),2rem)] pointer-events-none">
+    <span className="h-6 w-6 rounded-full border-2 border-white/25 border-t-white/90 animate-spin" role="status" aria-label="…" />
+  </div>
+);
 
 function App() {
   // Le tableau de bord passe par un parametre d'URL plutot que par une route :

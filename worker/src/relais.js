@@ -25,6 +25,7 @@
    lorsque les quatre ont accepte. Tant qu'un refus est possible, la
    composition n'est pas figee.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 
 const TAILLE = 4;                     // un relais, c'est quatre. Jamais moins.
 
@@ -84,7 +85,7 @@ export function cleComposition(noms) {
 // tenue PAR BASE : le worker en sert deux — production et test — et un simple
 // booleen mentait a la seconde, qui restait sans tables parce que la premiere
 // avait deja eteint la migration.
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureRelayTables(db) {
   if (pret.has(db)) return;
   await db.batch([

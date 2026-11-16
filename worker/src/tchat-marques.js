@@ -71,6 +71,7 @@
    retient, par lecteur et par interlocuteur, le dernier message RECU qu'il a
    vu (`marques_tchat_lus`) ; la lecture rend cette table a chaque fois.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 import { EVENEMENT, inscriptionDe, ensureMarquesTables } from './marques.js';
 import { texteRecevable, nettoyer, TCHAT_MAX } from './mot.js';
 import { estBanni, listeBloques, motifPropre, ensureModerationTables } from './moderation.js';
@@ -108,7 +109,7 @@ export function imiteOfficiel(nom) {
   return String(nom || '').toLowerCase().replace(/[^a-z0-9]/g, '') === OFFICIEL.key;
 }
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureTchatTables(db) {
   if (pret.has(db)) return;
   await ensureMarquesTables(db);
