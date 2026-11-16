@@ -83,6 +83,10 @@ import {
   publicationsDuCompte,
 } from './instagram-envoi.js';
 import {
+  programmer, listerProgrammes, annuler as annulerProgramme, relancer as relancerProgramme,
+  publierLesProgrammes,
+} from './instagram-programme.js';
+import {
   inviterEnDirect, mesInvitationsDirectes, trancherInvitation,
 } from './direct-invitations.js';
 import {
@@ -1174,6 +1178,17 @@ export default {
         .catch(e => console.log('objectifs KO', String(e && e.message || e)))
     );
 
+    // Les publications Instagram validees dans l'atelier et dont l'heure est
+    // venue : voir instagram-programme.js. Sur la base de production seule —
+    // le canal de test ne publie rien sur le compte du jeu.
+    ctx.waitUntil(
+      publierLesProgrammes(env.DB, outilsInstagram(env), quand)
+        .then(b => {
+          if (b.publiees.length || b.echecs.length) console.log('instagram programmees', JSON.stringify(b));
+        })
+        .catch(e => console.log('instagram programmees KO', String(e && e.message || e)))
+    );
+
     // Les compteurs anti-abus dont la fenetre est passee : voir limites.js.
     // Sur la base de production seule — le canal de test n'est pas compte.
     ctx.waitUntil(
@@ -1256,6 +1271,20 @@ export default {
  * qui s'appelle elle-meme par `this.servir` marche en developpement et lache
  * ailleurs, ce qui est la pire des deux options.
  */
+/** Les appels a Meta et au depot dont la tache planifiee a besoin. Rassembles
+    ici pour que instagram-programme.js ne connaisse ni D1 ni le jeton. */
+function outilsInstagram(env) {
+  return {
+    pret: () => envoiPret(env),
+    deposer: jpeg => deposerImage(env.DB, jpeg),
+    oublier: id => oublierImage(env.DB, id),
+    publierImage: o => publierInstagram(env, o),
+    etatConteneur: c => etatConteneur(env, c),
+    publierConteneur: c => publierConteneur(env, c),
+    marquer: id => marquerPublie(env.DB, id, ['instagram']),
+  };
+}
+
 async function envelopper(request, env, ctx) {
   const porteur = {};
   let reponse;
@@ -4684,7 +4713,9 @@ async function servir(request, env, ctx, porteur) {
       // qui ne sait encore publier que des images, et l'echec viendrait apres
       // la confirmation — le pire moment.
       if (quoi === 'envoi' && request.method === 'GET') {
-        return json({ pret: envoiPret(env), formats: FORMATS });
+        // `programmer` : ce Worker sait aussi envoyer a une heure choisie.
+        // L'atelier le lit avant d'afficher le champ « Quand ».
+        return json({ pret: envoiPret(env), formats: FORMATS, programmer: true });
       }
 
       // Les deux secrets, decrits sans etre montres : leur forme (longueur,
@@ -4804,6 +4835,42 @@ async function servir(request, env, ctx, porteur) {
         const r = await publierConteneur(env, (body || {}).creation);
         if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, statutDe(r));
         return json({ ok: true, publication: r.publication, lien: r.lien });
+      }
+
+      // Programmer une publication validee : voir instagram-programme.js.
+      // Image : `image` (JPEG base64). Video : `creation`, le conteneur que
+      // l'atelier vient de charger par video/ouvrir puis video/charger.
+      if (quoi === 'programmer' && request.method === 'POST') {
+        if (!envoiPret(env)) {
+          return json({ error: 'envoi non configure',
+                        detail: 'poser IG_JETON et IG_COMPTE avec wrangler secret put' }, 409);
+        }
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const b = body || {};
+        const r = await programmer(env.DB, {
+          format: b.format, quand: b.quand, legende: b.legende, image: b.image,
+          creation: b.creation, apercu: b.apercu, titre: b.titre, moment: b.id,
+          origine: url.origin,
+        });
+        if (!r.ok) return json({ error: r.erreur }, 400);
+        return json({ ok: true, id: r.id });
+      }
+
+      if (quoi === 'programmes' && request.method === 'GET') {
+        return json({ programmes: await listerProgrammes(env.DB, { limite: url.searchParams.get('limite') }) });
+      }
+
+      if (quoi === 'programmes/annuler' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        return (await annulerProgramme(env.DB, (body || {}).id))
+          ? json({ ok: true }) : json({ error: 'deja partie ou introuvable' }, 409);
+      }
+
+      if (quoi === 'programmes/relancer' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        const r = await relancerProgramme(env.DB, (body || {}).id, (body || {}).quand ?? null);
+        return r.ok ? json({ ok: true }) : json({ error: r.erreur }, 409);
       }
 
       if (quoi === 'ecarter' && request.method === 'POST') {
