@@ -52,7 +52,30 @@ const faible = () => {
 };
 
 export function webglPossible(): boolean {
-  try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch { return false; }
+  // (16/11) le contexte d'essai est rendu aussitot : garde jusqu'au ramasse-miettes, chaque seance en laissait un de
+  // plus, et un telephone n'en tient que quelques-uns a la fois
+  try {
+    const c = document.createElement('canvas');
+    const gl = (c.getContext('webgl2') || c.getContext('webgl')) as WebGLRenderingContext | null;
+    gl?.getExtension('WEBGL_lose_context')?.loseContext();
+    return !!gl;
+  } catch { return false; }
+}
+
+/**
+ * LE LIEU EN 3D, OU POURQUOI IL MANQUE (16/11, l'auteur, capture d'une cote en 2D sur son telephone : « tu peux faire
+ * beaucoup mieux pour les decors »). Le decor 3D existait ; un echec a sa creation retombait en silence sur la 2D de
+ * secours. On retente une fois avec un rendu plus simple (sans lissage ni ombres, GPU par defaut), et l'erreur est
+ * rendue a l'ecran de la seance, qui la montre au canal de test.
+ */
+export function creerSeance3D(lieu: Lieu3D, look: any, P: Pinceaux): { s: Seance3D | null; erreur: string | null } {
+  if (!webglPossible()) return { s: null, erreur: 'WebGL indisponible' };
+  let erreur: string | null = null;
+  for (const simple of [false, true]) {
+    try { return { s: new Seance3D(lieu, look, P, simple), erreur: null }; }
+    catch (e: any) { erreur = String((e && e.message) || e).slice(0, 160); console.warn('[seance 3D]', simple ? 'repli simple' : 'rendu', e); }
+  }
+  return { s: null, erreur };
 }
 
 export class Seance3D {
@@ -79,14 +102,14 @@ export class Seance3D {
   private _m = new THREE.Matrix4();
   private _q = new THREE.Quaternion();
 
-  constructor(private lieu: Lieu3D, private look: any, private P: Pinceaux) {
-    const bas = faible();
-    this.R = new THREE.WebGLRenderer({ antialias: !bas, powerPreference: 'high-performance' });
+  constructor(private lieu: Lieu3D, private look: any, private P: Pinceaux, simple = false) {
+    const bas = simple || faible();
+    this.R = new THREE.WebGLRenderer({ antialias: !bas, powerPreference: simple ? 'default' : 'high-performance' });
     this.R.setPixelRatio(Math.min(window.devicePixelRatio || 1, bas ? 1.25 : 2));
     this.R.outputColorSpace = THREE.SRGBColorSpace;
     this.R.toneMapping = THREE.ACESFilmicToneMapping;
     this.R.toneMappingExposure = 1.05;
-    this.R.shadowMap.enabled = true;
+    this.R.shadowMap.enabled = !simple;
     this.R.shadowMap.type = THREE.PCFSoftShadowMap;
     // les corps premium et les modeles ont des textures KTX2 : le decodeur se branche sur ce rendu (comme la ville)
     brancherKTX2(this.R);
