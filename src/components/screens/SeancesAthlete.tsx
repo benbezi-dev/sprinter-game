@@ -16,7 +16,8 @@ import { ouvrirLesDeparts } from '@/game/athlete/departs';
 import { sauver as sauverAthlete, demanderReouverture } from '@/game/athlete/carriere';
 import { demarrerSequence, pasDuTuto, rangerLeTuto, figerLaPiste } from '@/game/sprint-tuto.js';
 import { CLUB_PARTENAIRE, logoDuClub } from '@/game/athlete/partenaires';
-import { Seance3D, webglPossible, type Pinceaux } from '@/game/athlete/seance-3d';
+import { creerSeance3D, type Pinceaux } from '@/game/athlete/seance-3d';
+import { EST_TEST } from '@/game/canal';
 
 /* ---------------------------------------------------------------------------
    LES SEANCES : UN MINI-JEU PAR VRAI EXERCICE, JOUE PAR L'ATHLETE
@@ -124,10 +125,19 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
     const cv = ref.current!; const c = cv.getContext('2d')!;
     const A = SprinterApp as any;
     // LE LIEU EN 3D (seance-3d.ts) ; la 2D ne garde que les effets par-dessus. Sans WebGL : tout en 2D.
-    let s3: Seance3D | null = null;
-    if (webglPossible()) {
-      try { s3 = new Seance3D(etat.current.decor, etat.current.corps.look, PINCEAUX); hote.current!.appendChild(s3.toile); }
-      catch { s3 = null; }
+    const { s: s3, erreur } = creerSeance3D(etat.current.decor, etat.current.corps.look, PINCEAUX);
+    // un contexte WebGL perdu en cours de seance (le telephone le reprend) : on repasse a la 2D au lieu d'un ecran noir
+    let perdu = false;
+    if (s3) {
+      hote.current!.appendChild(s3.toile);
+      s3.toile.addEventListener('webglcontextlost', (ev) => { ev.preventDefault(); perdu = true; s3.toile.style.display = 'none'; });
+    }
+    else if (EST_TEST && erreur) {
+      // au canal de test, la raison s'affiche : sans elle, une 2D de secours ne se diagnostique pas a distance
+      const n = document.createElement('div');
+      n.textContent = `décor 3D indisponible : ${erreur}`;
+      n.style.cssText = 'position:absolute;left:6px;bottom:6px;z-index:2;font:10px sans-serif;color:#fff;background:rgba(0,0,0,.55);padding:2px 6px;border-radius:6px;pointer-events:none';
+      hote.current!.appendChild(n);
     }
     let id = 0, avant = 0, piedAvant = 0, sol0: number | null = null;
     const parts: Particule[] = [];
@@ -145,7 +155,7 @@ function Scene({ etat }: { etat: React.MutableRefObject<EtatScene> }) {
       let sol = H * 0.8 + e.couloir * H * 0.05;
       let ax = W * (allonge ? 0.62 : 0.42);
       let corps3d = false;
-      if (s3) {
+      if (s3 && !perdu) {
         const p = s3.rendre(e, ms / 1000, W, H);
         ({ ax, sol, ppm } = p); k = ppm / 0.8; corps3d = p.corps;
         c.clearRect(0, 0, W, H);
