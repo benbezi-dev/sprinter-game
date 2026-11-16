@@ -933,7 +933,7 @@
     // dans le code, pas un mot d'athletisme. Un joueur qui lit « boss » sur un
     // ecran de championnat sort du sport et entre dans le jeu video, et c'est
     // exactement l'inverse de ce que tout le reste de ces textes fait.
-    champ_boss:        ['LE TENANT DU TITRE', 'THE DEFENDING CHAMPION'],
+    champ_boss:        ['CHAMPION EN TITRE', 'THE DEFENDING CHAMPION'],
     champ_boss_desc:   ['il remet son titre en jeu. Battez-le, ou il le garde trois mois de plus.',
                         'he puts his title on the line. Beat him, or he keeps it three more months.'],
     champ_boss_finale: ['QUALIFIÉ D’OFFICE POUR LA FINALE', 'STRAIGHT TO THE FINAL'],

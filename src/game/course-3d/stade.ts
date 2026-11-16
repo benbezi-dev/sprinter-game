@@ -400,7 +400,7 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
           if (fiche?.tenant) {
             ce.fillStyle = '#ffd34a'; ce.fillRect(270, 112, 330, 40);
             ce.fillStyle = '#04050a'; ce.font = '900 26px Outfit, system-ui, sans-serif';
-            ce.fillText(String(t_('champ_boss', 'LE TENANT DU TITRE')).toUpperCase(), 282, 133, 306);
+            ce.fillText(String(t_('champ_boss', 'CHAMPION EN TITRE')).toUpperCase(), 282, 133, 306);
           }
           ce.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
           ce.font = '900 104px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 222, w - 300);
