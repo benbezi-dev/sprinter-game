@@ -1,4 +1,4 @@
-import { ORIGINES, NOMS_ORIGINES, origineDe, cheminDe } from '@/game/athlete/corps-gens';
+import { cheminDe, peauxDesCorps, memeCorps } from '@/game/athlete/corps-gens';
 import { POSTURES } from '@/game/athlete/postures';
 import { charger as chargerMaillage, pret, dessiner } from '@/game/vedette-3d';
 import React, { useEffect, useReducer, useRef, useState } from 'react';
@@ -21,7 +21,7 @@ import {
   moyenneDes, exigePourMonter, EPREUVES_SALLE, saisonEnSalle, niveauMaxDe, ageQuiOuvre, semainesAvantLaSalle, libelleEpreuve, type Course, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
   bonusMateriel, coutDuDeplacement, picDeForme,
-  type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
+  type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
   soulager, REVEIL, boulotFait, BOULOTS_PAR_SEMAINE, paieDu, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
@@ -262,12 +262,6 @@ function Bouton({ onClick, disabled, children, plein = false, className = '' }:
    L'APPARENCE : LE CORPS QU'ON SE CHOISIT
    =========================================================================== */
 
-const NOMS_COIFFURES: Record<string, [string, string]> = {
-  crop: ['Court', 'Crop'], fade: ['Dégradé', 'Fade'], ras: ['Ras', 'Buzz'], flattop: ['Flat-top', 'Flat-top'],
-  twists: ['Twists', 'Twists'], braids: ['Tresses', 'Braids'], ponytail: ['Queue de cheval', 'Ponytail'],
-  bun: ['Chignon', 'Bun'], shaved: ['Crâne rasé', 'Shaved'],
-};
-const TEINTES_CHEVEUX: Record<string, string> = { noir: '#1C1616', brun: '#382418', chatain: '#5C3E24', blond: '#BC9A58', roux: '#944A26', gris: '#B0B0B6' };
 const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const PEAUX_RGB: Record<string, number[]> = {
   ebene: [74, 46, 32], cacao: [96, 60, 40], acajou: [108, 66, 42], noisette: [120, 76, 50], bronze: [142, 92, 58],
@@ -316,18 +310,8 @@ function ChoixApparence({ ap, onChange }: { ap: Apparence; onChange: (a: Apparen
       </div>
       <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['PEAU', 'SKIN'])}</span>
       <div className={ligne}>
-        {PEAUX.map(p => <button key={p} aria-label={p} onClick={() => onChange({ ...ap, peau: p })} className={pastille(ap.peau === p)} style={{ background: rgb(PEAUX_RGB[p]) }} />)}
-      </div>
-      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['ORIGINE', 'HERITAGE'])}</span>
-      <div className={ligne}>
-        {ORIGINES.map(o => <Bouton key={o} plein={(ap.origine || origineDe('', PEAUX_RGB[ap.peau])) === o} onClick={() => onChange({ ...ap, origine: o })}>{dans(NOMS_ORIGINES[o])}</Bouton>)}
-      </div>
-      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['COIFFURE', 'HAIR'])}</span>
-      <div className={ligne}>
-        {COIFFURES.map(h => <Bouton key={h} plein={ap.coiffure === h} onClick={() => onChange({ ...ap, coiffure: h })}>{dans(NOMS_COIFFURES[h])}</Bouton>)}
-      </div>
-      <div className={ligne}>
-        {CHEVEUX.map(h => <button key={h} aria-label={h} onClick={() => onChange({ ...ap, cheveux: h })} className={pastille(ap.cheveux === h)} style={{ background: TEINTES_CHEVEUX[h] }} />)}
+        {/* une pastille par corps premium ; origine, coiffure et cheveux ne s'y voient pas (corps-gens.ts, peauxDesCorps) */}
+        {peauxDesCorps(PEAUX, p => PEAUX_RGB[p]).map(p => <button key={p} aria-label={p} onClick={() => onChange({ ...ap, peau: p })} className={pastille(memeCorps(PEAUX_RGB[ap.peau] || PEAUX_RGB.miel, PEAUX_RGB[p]))} style={{ background: rgb(PEAUX_RGB[p]) }} />)}
       </div>
       <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['TAILLE', 'HEIGHT'])} · {ap.taille.toFixed(2)} m</span>
       <input type="range" min={1.55} max={2} step={0.01} value={ap.taille} onChange={e => onChange({ ...ap, taille: +e.target.value })} className="w-full accent-[#3DDC84]" />
