@@ -1129,11 +1129,13 @@ export function construireSalle(ctx: ContexteSalle) {
   // un cadre noir. course-3d.ts y passe le film, puis la campagne en cours ou le logo (salle.ecranGeant).
   const H_ECRAN = 5.4, L_ECRAN = 10.8, Z_ECRAN = 5.4;
   const ecranGeant = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  let ecranMaillage: THREE.Mesh | null = null;
   {
     const cadre = paroi(X1 - 0.3, -RS, Z_ECRAN - 0.25, Z_ECRAN + H_ECRAN + 0.25, L_ECRAN + 0.5, 'x-', new THREE.MeshBasicMaterial({ color: 0x08090c }));
     delete cadre.userData.lumiere;
     const e = paroi(X1 - 0.35, -RS, Z_ECRAN, Z_ECRAN + H_ECRAN, L_ECRAN, 'x-', ecranGeant);
     e.scale.x = -1; delete e.userData.lumiere;   // (le monde est en miroir : l'image se lit droit)
+    ecranMaillage = e;
   }
   // LE LOGO BENBEZI EN NEON (l'auteur, 8/11 : « le logo deja present dans le jeu, en neon ») : le contour de ses lettres
   // en tubes (logoEnNeon), au-dessus de l'ecran geant et en grand sur le pignon d'en face. En competition seulement ; il
@@ -1314,6 +1316,8 @@ export function construireSalle(ctx: ContexteSalle) {
     interieur: g,
     /** L'ecran geant : sa matiere, dont course-3d.ts change l'image (le film, la campagne, le logo). */
     ecranGeant,
+    /** Son maillage : ou il est (camera.ts y cadre le chrono du vainqueur). */
+    ecranMaillage,
     // (les chevrons avancent dans le sens de la course : deux fleches par seconde, 3,2 m/s)
     animer: (t: number) => {
       if (flecheLED) flecheLED.offset.x = -t * VITESSE_F / PAS_F;

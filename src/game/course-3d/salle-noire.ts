@@ -20,6 +20,8 @@ export let planExtinction = false;
 export let presenteDans = 0;
 /** L'arrivee en or, de 0 a 1 : les fleches LED s'effacent devant elle (laPresentationAuSol). */
 export let orA = 0;
+/** Le chrono du vainqueur et son nom (TOI pour le joueur) : l'ecran geant les affiche (stade.ts). */
+export let orTexte = '', orNom = '', orMoi = false;
 /** Ou s'ecrit le chrono en or (camera.ts : le plan de l'arrivee), et son couloir. */
 export const orOu = new THREE.Vector3(); export let orCouloir = -1;
 /** « TOI » dans la langue du joueur (YOU en anglais). */
@@ -326,11 +328,12 @@ export function lArriveeEnOr(T: any, groupe: THREE.Group) {
     // (elle tient jusqu'a la course suivante : a l'arrivee du resultat, les coureurs de la salle sont remplaces et le
     // vainqueur disparaissait de G.runners — l'or s'eteignait au bout de 0,7 s)
     if (!best && pose && G?.state !== 'count') best = garde;
-    if (!best) { bande.visible = chrono.visible = false; pose = ''; depuis = -1; orA = 0; orCouloir = -1; garde = null; return; }
-    if (best !== garde) garde = { lane: best.lane, finishTime: best.finishTime };
+    if (!best) { bande.visible = chrono.visible = false; pose = ''; depuis = -1; orA = 0; orCouloir = -1; garde = null; orTexte = ''; return; }
+    if (best !== garde) garde = { lane: best.lane, finishTime: best.finishTime, nom: best.isPlayer ? toi() : String(best.name || '').toUpperCase(), moi: !!best.isPlayer };
+    orNom = garde.nom; orMoi = garde.moi;
     const k = garde.lane | 0, texte = (+garde.finishTime).toFixed(2), cle = k + '/' + texte;
     if (cle !== pose) {
-      pose = cle; if (depuis < 0) depuis = t;
+      pose = cle; if (depuis < 0) depuis = t; orTexte = texte;
       plier(bande, k, T.total / 2, T.total);
       plier(chrono, k, Math.max(4, T.total - 7), 1, Math.PI);   // (lu depuis la tribune, comme les noms)
       { const q = ici(T.posDemi(Math.max(4, T.total - 7), k, milieu(T, k))); orOu.set(q[0], q[1], 0); orCouloir = k; }
@@ -344,7 +347,8 @@ export function lArriveeEnOr(T: any, groupe: THREE.Group) {
       matC.needsUpdate = true;
     }
     const a = Math.min(1, (t - depuis) / 0.6);
-    bande.visible = chrono.visible = true;
+    // LE CHRONO SUR L'ECRAN GEANT, PLUS AU SOL (l'auteur, 16/11) : le couloir reste en or, le temps passe a l'ecran
+    bande.visible = true; chrono.visible = false;
     matB.opacity = 0.85 * a; matC.opacity = a;
     orA = a;   // (au 200 m, les fleches tricolores d'apres la ligne noyaient l'or : elles s'effacent)
   };
@@ -360,7 +364,9 @@ export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: n
     g.addColorStop(0, 'rgba(90,210,255,0)'); g.addColorStop(0.85, 'rgba(120,225,255,0.55)'); g.addColorStop(1, 'rgba(235,252,255,1)');
     c.fillStyle = g; c.fillRect(0, 0, w, h);
   });
-  const LN = 9, D_NOM = 7;                         // le nom : 9 m de long, centre a 7 m des blocs
+  // le nom : 6 m de long, de 1,2 a 7,2 m de la ligne (« on ne voit plus les noms au sol, ils commencent trop loin »,
+  // l'auteur, 16/11 : a 9 m de long et de 2,5 a 11,5 m, il sortait du plan de l'athlete)
+  const LN = 6, D_NOM = 4.2;
   // L'ATHLETE PRESENTE DANS SA LUMIERE (l'auteur, 16/11 : « on doit voir le personnage presente ») : une lampe au-dessus
   // de ses blocs, qui monte et descend avec son nom ; les autres restent dans le noir
   const lampe = new THREE.SpotLight(0xfff1dc, 0, 9, 0.32, 0.7, 1.4);
