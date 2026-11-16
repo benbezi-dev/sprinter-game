@@ -220,7 +220,7 @@ export function PresentationDirect() {
               </div>
               {/* En championnat, pas de micro : la fiche prend sa place. */}
               {enCours.fiches
-                ? <FichePresentation fiche={saFiche} epreuve={enCours.fiches.epreuve}
+                ? <FichePresentation fiche={saFiche} epreuve={enCours.fiches.epreuve} titre={enCours.fiches.titreChampion}
                                      favori={favori === courant.id} />
                 : <Micro voix={voix} estMoi={estMoi} dans={dansMicro} />}
             </motion.div>

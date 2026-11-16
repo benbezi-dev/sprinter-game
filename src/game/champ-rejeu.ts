@@ -32,6 +32,7 @@
 import { programmerLeFilm, arreterLeFilm } from './film-course';
 import { entrerDansLeTour, presentationAnnoncee, pistoletAnnonce, rappelSiffle, arreterLaMusique } from './musique-championnat';
 import { chargerFiches, type SourceFiches } from './fiches-champ';
+import { championEnTitre } from './championnats';
 
 const SprinterApp: any = (globalThis as any).SprinterApp;
 const SprinterCore: any = (globalThis as any).SprinterCore;
@@ -149,7 +150,7 @@ export type EtatRejeu = {
    * n'annonce pas, avant le pistolet, la medaille que cette finale a donnee.
    * `null` hors championnat.
    */
-  fiches: (SourceFiches & { epreuve: string }) | null;
+  fiches: (SourceFiches & { epreuve: string; titreChampion?: string }) | null;
   /**
    * L'arrivee, une fois la ligne franchie par tout le monde.
    *
@@ -485,7 +486,8 @@ export function rejouerCourse(
   // Les fiches partent maintenant, pas a l'arrivee du premier athlete : le
   // generique leur laisse deux secondes et demie pour revenir.
   const fiches = intitule.course?.edition
-    ? { edition: intitule.course.edition, avant: intitule.quand ?? null, epreuve }
+    ? { edition: intitule.course.edition, avant: intitule.quand ?? null, epreuve,
+        titreChampion: intitule.fr ? championEnTitre('national', 'FR') : undefined }
     : null;
   if (fiches) {
     void chargerFiches(fiches, grille.map(g => g.cle).filter((c): c is string => !!c));

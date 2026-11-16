@@ -398,9 +398,11 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
           ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 32px Outfit, system-ui, sans-serif';
           ce.fillText('CHAMPIONNAT DE FRANCE · SALLE', 274, 82, w - 300);
           if (fiche?.tenant) {
-            ce.fillStyle = '#ffd34a'; ce.fillRect(270, 112, 330, 40);
-            ce.fillStyle = '#04050a'; ce.font = '900 26px Outfit, system-ui, sans-serif';
-            ce.fillText(String(t_('champ_boss', 'CHAMPION EN TITRE')).toUpperCase(), 282, 133, 306);
+            const titre = String(pc?.fiches?.titreChampion || t_('champ_boss', 'CHAMPION EN TITRE')).toUpperCase();
+            ce.font = '900 26px Outfit, system-ui, sans-serif';
+            const lt = Math.min(w - 300, ce.measureText(titre).width + 24);
+            ce.fillStyle = '#ffd34a'; ce.fillRect(270, 112, lt, 40);
+            ce.fillStyle = '#04050a'; ce.fillText(titre, 282, 133, lt - 24);
           }
           ce.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
           ce.font = '900 104px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 222, w - 300);
