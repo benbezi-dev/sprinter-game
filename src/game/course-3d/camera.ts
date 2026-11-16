@@ -9,6 +9,7 @@ import { ouCourt, capIci, virageApres, ici, sx, salleActive, milieu } from './re
 import { orA, orCouloir, finCam, finVise, planExtinction, extinctionE, EXT_COUP, presente, presenteOu } from './salle-noire';
 import { profilBas, finaleVue, toitsStade, cameraSalle, blocsSalle, amsalemActif, ecranSalle } from './stade';
 import { nCouloirs } from '../course-3d';
+import { presentationCourante } from '../presentation-directe';
 import { suiviDuRelais } from './relais';
 
 // LES PLANS DE CAMERA (« plusieurs plans de camera sur les courses, choisis au hasard » ;
@@ -277,6 +278,8 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // vers lui avec le plan qui se resserre (G.zoomPres, pousserLePlan) — lui au centre, ses voisins de part et d'autre.
     const luiPresente = (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro')) && !entreeVue && !nuitDuMolosse ? G.presente : null;
     if (luiPresente) {
+      // (en championnat, la fiche de chaque athlete s'affiche sous son nom : voir PresentationDirect)
+      const fichesEnBas = !!presentationCourante()?.fiches;
       const c = ouCourt(T, luiPresente).slice();
       // (dans la salle, son nom s'ecrit devant lui : la camera vise entre les deux, pour les tenir ensemble)
       if (salleActive && presente >= 0) { c[0] = (c[0] + presenteOu.x) / 2; c[1] = (c[1] + presenteOu.y) / 2; }
@@ -300,12 +303,17 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
         // (cote tribune, les murs ramenaient la camera a 5 m : le nom et l'athlete ne tenaient pas ensemble. Elle se tient
         // donc surtout DERRIERE lui, dans l'axe de la piste ou rien ne la gene, en hauteur, un peu vers la tribune.)
         const nrm = Math.hypot(8, 3.5, 6.5), loin = 11.5 / (1 + 0.35 * Math.max(0, (G.zoomPres || 1) - 1)), recul = loin * 8 / nrm, cote = loin * 3.5 / nrm;
-        finCam.set(presC.x - ax * recul + ex * cote, -(presC.y - ay * recul + ey * cote), z0 + Math.min(9.2, loin * 6.5 / nrm));
-        finVise.set(presC.x, -presC.y, z0 + 0.6);
+        // (lui au tiers haut, au-dessus de sa fiche : la visee recule vers la camera)
+        const bas = fichesEnBas ? 3.2 : 0, bx = -ax * recul + ex * cote, by = -ay * recul + ey * cote, bn = Math.hypot(bx, by) || 1;
+        finCam.set(presC.x + bx + bx / bn * bas, -(presC.y + by + by / bn * bas), z0 + Math.min(9.2, loin * 6.5 / nrm));
+        finVise.set(presC.x + bx / bn * bas, -(presC.y + by / bn * bas), z0 + 0.6);
         champNom = camera.fov; finActive = true;
       } else {
-      finCam.set(presC.x + dx * D * Math.cos(elev), -(presC.y + dy * D * Math.cos(elev)), z0 + D * Math.sin(elev));
-      finVise.set(presC.x, -presC.y, z0 + 0.9);
+      // LUI AU TIERS HAUT DE L'IMAGE : la moitie basse porte son nom et sa fiche (palmares, niveau, bilan —
+      // FichePresentation), qui le cachaient. La camera vise un point plus pres d'elle, sur le sol : il remonte.
+      const bas = fichesEnBas ? haut * 0.34 : 0;
+      finCam.set(presC.x + dx * (D * Math.cos(elev) + bas), -(presC.y + dy * (D * Math.cos(elev) + bas)), z0 + D * Math.sin(elev));
+      finVise.set(presC.x + dx * bas, -(presC.y + dy * bas), z0 + 0.9);
       champNom = CHAMP_2D; finActive = true;
       }
     } else if (finaleVue && orCouloir >= 0 && orA > 0 && G.champNoir && ecranSalle) {

@@ -1,6 +1,8 @@
 // LA COURSE EN VRAIE 3D — le stade de l'etape, aux couleurs du theme du jeu (decoupe de course-3d.ts, 11/11/2026).
 
 import { sponsorDeLaCourse } from '../panneaux';
+import { presentationCourante } from '../presentation-directe';
+import { ficheDe } from '../fiches-champ';
 import * as THREE from 'three';
 import { construirePlage } from '../plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM } from '../amsalem-3d';
@@ -386,10 +388,39 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
           ce.textAlign = 'center'; ce.textBaseline = 'middle'; ce.fillStyle = '#04050a';
           ce.font = '900 44px Outfit, system-ui, sans-serif'; ce.fillText('COULOIR', 115, 150, 196);
           ce.font = '900 230px Outfit, system-ui, sans-serif'; ce.fillText(String(presente + 1), 115, 315);
-          ce.textAlign = 'left'; ce.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
-          ce.font = '900 110px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 250, w - 300);
-          ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 38px Outfit, system-ui, sans-serif';
-          ce.fillText('CHAMPIONNAT DE FRANCE · SALLE', 274, 360, w - 300);
+          // SON PALMARES SOUS SON NOM (l'auteur, 16/11 : « indique le palmares des athletes lors de la presentation ») :
+          // la fiche du speaker (fiches-champ.ts, la meme que FichePresentation), ses trois plus belles medailles
+          const pc = presentationCourante(), N = (globalThis as any).SprinterApp?.N;
+          const sien = pc?.presentation.ordre.find(o => (o.couloir | 0) === presente + 1);
+          const fiche = pc?.fiches && sien ? ficheDe(pc.fiches, sien.id) : null;
+          const medailles = (fiche?.palmares || []).slice(0, 3), t_ = (k: string, d: string) => (N ? N.t(k) : d);
+          ce.textAlign = 'left';
+          ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 32px Outfit, system-ui, sans-serif';
+          ce.fillText('CHAMPIONNAT DE FRANCE · SALLE', 274, 82, w - 300);
+          if (fiche?.tenant) {
+            ce.fillStyle = '#ffd34a'; ce.fillRect(270, 112, 330, 40);
+            ce.fillStyle = '#04050a'; ce.font = '900 26px Outfit, system-ui, sans-serif';
+            ce.fillText(String(t_('champ_boss', 'LE TENANT DU TITRE')).toUpperCase(), 282, 133, 306);
+          }
+          ce.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
+          ce.font = '900 104px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 222, w - 300);
+          if (medailles.length) {
+            ce.fillStyle = '#F8CD4A'; ce.font = '900 26px Outfit, system-ui, sans-serif';
+            ce.fillText(String(t_('fiche_palmares', 'PALMARÈS')).toUpperCase(), 274, 304, w - 300);
+            const COUL = ['#F8CD4A', '#D9DEE8', '#E0965A'], MOT = ['nations_or', 'nations_argent', 'nations_bronze'], DEF = ['Or', 'Argent', 'Bronze'];
+            medailles.forEach((l, j) => {
+              const i = Math.min(2, Math.max(0, l.place - 1)), y = 352 + j * 44;
+              const zone = l.echelon === 'mondial' ? t_('fiche_monde', 'MONDE') : (N?.getLang?.() === 'en' ? l.zoneNomEn || l.zoneNom : l.zoneNom);
+              ce.fillStyle = COUL[i]; ce.beginPath(); ce.arc(290, y, 13, 0, Math.PI * 2); ce.fill();
+              ce.font = '900 34px Outfit, system-ui, sans-serif';
+              const ligne = `${String(t_(MOT[i], DEF[i])).toUpperCase()}  ${String(zone).toUpperCase()}  ${l.epreuve} M${l.n > 1 ? '  ×' + l.n : ''}`;
+              ce.fillText(ligne, 316, y + 2, w - 340);
+            });
+          } else if (fiche) {
+            // (pas de medaille : on ne le presente pas par ce qui lui manque — son bilan en duel, comme la fiche)
+            ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 34px Outfit, system-ui, sans-serif';
+            ce.fillText(`${fiche.bilan.v} V · ${fiche.bilan.d} D · ${fiche.bilan.n} N`, 274, 330, w - 300);
+          }
           // (le drapeau en pied d'ecran, comme les habillages des championnats nationaux a la television)
           ce.fillStyle = '#1f4fe0'; ce.fillRect(0, h - 22, w / 3, 22);
           ce.fillStyle = '#f4f6fb'; ce.fillRect(w / 3, h - 22, w / 3, 22);
