@@ -102,6 +102,9 @@ const REACTION_PILOTE = 0.14;
  */
 const ARRET = 1.5;
 const LIMITE = 8;
+/** Le virage de la carriere : 80 m dans la courbe du 200 m, et le temps qu'on lui laisse. */
+export const DISTANCE_VIRAGE = 80;
+const LIMITE_VIRAGE = 20;
 
 /** L'etat de la sequence en cours. Nul quand le tutoriel ne tourne pas. */
 let seq = null;
@@ -123,6 +126,8 @@ export function etatDuTuto() {
     reaction: seq.reaction,
     fauxDepart: seq.fauxDepart,
     transition: seq.transition,
+    // le virage : le temps des 80 m, du pistolet a la marque
+    temps: seq.temps,
   };
 }
 
@@ -132,10 +137,10 @@ export function etatDuTuto() {
  * LE JOUEUR COURT SEUL, comme dans le tutoriel des haies. Sept adversaires
  * apprennent au joueur qu'il est dernier avant de lui apprendre a courir.
  */
-function poserLaScene() {
+function poserLaScene(cle = CLE) {
   const A = SprinterApp, G = A.G;
-  G.race = A.RACES[CLE];
-  G.raceKey = CLE;
+  G.race = A.RACES[cle];
+  G.raceKey = cle;
   A.buildLevel(G.levelIdx || 0);
   G.runners = [G.player];
 }
@@ -148,13 +153,13 @@ function poserLaScene() {
  * alterner — les deux autres partent des blocs, parce que c'est precisement le
  * depart qu'elles enseignent.
  */
-export function demarrerSequence({ geste = 'alterner', tempo = 1, demo = false } = {}) {
+export function demarrerSequence({ geste = 'alterner', tempo = 1, demo = false, cle = CLE } = {}) {
   const A = SprinterApp, G = A.G;
-  poserLaScene();
+  poserLaScene(cle);
 
   const j = G.player;
   seq = {
-    geste, tempo, demo, fini: false, abandon: false,
+    geste, tempo, demo, cle, fini: false, abandon: false, temps: null,
     fautes: 0, reaction: null, fauxDepart: false, transition: null,
     depart0: 0, derniere: 0, cote: 'left', appuis: 0, tombait: false,
   };
@@ -183,7 +188,7 @@ export function demarrerSequence({ geste = 'alterner', tempo = 1, demo = false }
 /** Rejouer la meme sequence, aux memes conditions. */
 export function rejouerSequence() {
   if (!seq) return null;
-  return demarrerSequence({ geste: seq.geste, tempo: seq.tempo, demo: seq.demo });
+  return demarrerSequence({ geste: seq.geste, tempo: seq.tempo, demo: seq.demo, cle: seq.cle });
 }
 
 /**
@@ -247,6 +252,12 @@ export function pasDuTuto() {
   // noter les quinze premiers, c'est faire attendre pour rien.
   let fini = false;
   if (seq.geste === 'alterner') fini = j.d - seq.depart0 >= PISTE_ALTERNER;
+  else if (seq.geste === 'virage') {
+    // LE VIRAGE (16/11, l'auteur : « le virage peut être joué directement sur un stade ») : la seance de la
+    // carriere court les 80 premiers metres du 200 m, dans la courbe, des blocs ; le temps se lit au passage
+    if (j.d >= DISTANCE_VIRAGE && seq.temps === null) seq.temps = G.elapsed;
+    fini = seq.fauxDepart || seq.temps !== null;
+  }
   else if (seq.geste === 'depart') fini = seq.fauxDepart || seq.reaction !== null;
   else fini = seq.fauxDepart || seq.transition !== null;
 
@@ -255,7 +266,7 @@ export function pasDuTuto() {
   // Le coureur s'est-il arrete ? Jamais pendant le compte — personne ne court
   // encore — ni pendant la demo, ou le pilote tape toujours.
   if (!seq.demo && G.state === 'race' &&
-      ((j.v < ARRET && j.reaction !== null) || G.elapsed > LIMITE)) {
+      ((j.v < ARRET && j.reaction !== null) || G.elapsed > (seq.geste === 'virage' ? LIMITE_VIRAGE : LIMITE))) {
     seq.fini = true;
     seq.abandon = true;
     poserLeTempo(0);
