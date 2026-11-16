@@ -17,7 +17,7 @@
 // mineur de famille modeste paie une petite part ; un adulte paie le reste a
 // charge.
 
-import { type Athlete, type TypeBlessure, BLESSURES, SAISON, avancer, payer, noter, etape, soulager } from './regles';
+import { type Athlete, type TypeBlessure, BLESSURES, SAISON, avancer, payer, noter, etape, soulager, statutDe, PART_DE_TA_POCHE } from './regles';
 
 export type Texte = [string, string];
 export type Soin = 'medecin' | 'radio' | 'irm' | 'osteo';
@@ -41,7 +41,8 @@ export function resteACharge(a: Athlete, s: Soin): number {
   if (mineur && a.origine === 'aisee') return 0;
   // l'osteopathe n'est pas rembourse ; le reste l'est en grande partie
   const part = s === 'osteo' ? 1 : mineur ? 0.15 : 0.35;
-  return Math.round(PRIX[s] * part);
+  // puis la categorie (regles.ts, statutDe) : le club ou la structure d'un pro prend les soins en charge
+  return Math.round(PRIX[s] * part * PART_DE_TA_POCHE[statutDe(a)]);
 }
 
 export const saisonDe = (a: Athlete) => Math.floor((a.semaine - 1) / SAISON);
@@ -66,6 +67,8 @@ export function soinPossible(a: Athlete, s: Soin): Texte | null {
   if (a.argent < resteACharge(a, s)) return ['Pas assez d’argent', 'Not enough money'];
   if (s === 'osteo' && a.osteo) return ['Déjà vu cette semaine', 'Already seen this week'];
   if (s === 'radio' || s === 'irm') {
+    // gueri entre-temps (le kine) : l'examen n'a plus d'objet, et il recreait une semaine d'arret
+    if (a.blessure <= 0) return ['Plus de blessure', 'No injury left'];
     const d = a.diagnostic;
     if (!d || !a.blessureType || EXAMEN[a.blessureType] !== s) return ['Sur prescription du médecin', 'Needs a doctor’s prescription'];
     if (d.examen) return ['Déjà fait', 'Already done'];

@@ -622,8 +622,20 @@ export class Interieur {
       g.el.style.transform = `translate(${(v.x + 1) / 2 * w}px, ${(1 - v.y) / 2 * h}px) translate(-50%, -100%)`;
     }
     this.rendu.render(this.scene, this.camera);
-    this.id = requestAnimationFrame(this.boucle);
+    this.id = this.enPause ? 0 : requestAnimationFrame(this.boucle);
   };
+
+  /**
+   * Figer la piece pendant une seance par-dessus (16/11) : sa boucle tournait encore sous la seance,
+   * deux rendus 3D lourds a chaque image, et le telephone retirait la 3D de la seance.
+   */
+  private enPause = false;
+  pause(oui: boolean) {
+    if (this.fini || oui === this.enPause) return;
+    this.enPause = oui;
+    if (oui) { cancelAnimationFrame(this.id); this.id = 0; }
+    else { this.avant = 0; this.id = requestAnimationFrame(this.boucle); }
+  }
 
   /** Changer de tenue (le miroir) sans sortir. */
   habiller(look: any) { this.moi.habiller(look); }
@@ -632,9 +644,16 @@ export class Interieur {
     this.fini = true;
     cancelAnimationFrame(this.id);
     for (const [t, f] of this.ecoute) window.removeEventListener(t, f);
-    this.scene.traverse((o: any) => { o.geometry?.dispose?.(); });
+    // les matieres et leurs images aussi, puis le contexte WebGL lui-meme : chaque piece en ouvre
+    // un neuf, et iOS n'en tolere qu'une poignee avant l'ecran noir
+    this.scene.traverse((o: any) => {
+      o.geometry?.dispose?.();
+      // pas leurs images : celles des corps sont partagees avec la ville
+      for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) m.dispose?.();
+    });
     for (const g of this.gens) g.el?.remove();
     this.rendu.dispose();
+    this.rendu.forceContextLoss();
     this.rendu.domElement.remove();
   }
 }

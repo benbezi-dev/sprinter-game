@@ -114,14 +114,16 @@ export function Reprises({ parcours, achetes, pubs, pubsMax = PUBS_PAR_CARRIERE,
         </div>
       )}
       {pubOfferte && (
-        <div className="w-full max-w-md flex flex-col items-center gap-1">
+        // LE LIBELLE SE REGLE SUR LA LARGEUR DU BOUTON, pas sur celle de l'ecran (14/11) : la boite ne depasse
+        // jamais 448 px, et « REGARDER UNE PUB · CONTINUER » en text-2xl en sortait des deux cotes sur un ecran large.
+        <div className="w-full max-w-md flex flex-col items-center gap-1 [container-type:inline-size]">
           {!revanche && !(pieces && cout != null) && (
             <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
               {N.t('pieces_reprendre', { etape: etape })}
             </div>
           )}
           <button onClick={handlePub} disabled={pub === 'envoi'}
-            className="w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-sm sm:text-xl md:text-2xl whitespace-nowrap tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
+            className="w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-[clamp(0.7rem,3.7cqw,1.5rem)] whitespace-nowrap tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
             {sansPubs() ? N.t('pub_offerte') : N.t(pub === 'envoi' ? 'pub_charge' : revanche ? 'pub_revanche' : 'pub_continuer')}{!sansPubs() && <Clapperboard className="w-5 h-5 md:w-6 md:h-6" />}
           </button>
           {pub === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}</div>}

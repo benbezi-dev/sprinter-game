@@ -247,6 +247,7 @@ function ClassementApp({ a }: { a: Athlete }) {
           <div key={l.rang} className={`flex items-center gap-3 px-3 py-2 text-[13px] border-b border-white/5 ${l.moi ? 'font-black' : ''}`} style={l.moi ? { background: `${VERT}22`, color: VERT } : undefined}>
             <span className="w-7 tabular-nums text-white/50">{l.rang}</span>
             <span className="flex-1 truncate">{l.nom}</span>
+            {l.statut && <span className="shrink-0 text-[11px] font-bold text-white/55" title={dans(['Catégorie d’athlète', 'Athlete category'])}>{dans(['Cat.', 'Cat.'])} {l.statut}</span>}
             <span className="tabular-nums">{l.temps?.toFixed(2) ?? '—'}</span>
           </div>
         ))}

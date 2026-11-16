@@ -9,7 +9,7 @@ import { getSavedName } from '@/game/leaderboard';
 import { CARRIERES_REQUISES, carrieresGagnees, type ChoixCarriere } from '@/game/legende/compte';
 import { ETAPES, type Transport } from '@/game/legende/etapes';
 import {
-  commencerLaLegende, lancerLEtape, conclureLEtape, etapeSuivante, rangerLaLegende,
+  commencerLaLegende, recommencerLaLegende, lancerLEtape, conclureLEtape, etapeSuivante, rangerLaLegende,
   memoire, lieuDeLEtape, rangEnCours, chronoDuBoss, type Verdict,
   reprisesDeLaLegende, recalerLesContinues, reprendreLEtape,
 } from '@/game/legende/legende';
@@ -403,7 +403,7 @@ export function FinDEtapeLegende() {
 
   const accueil = () => { rangerLaLegende(); (SprinterApp as any).goHome(); };
   const suivante = () => { if (etapeSuivante()) setAnnonce(true); };
-  const recommencer = () => { commencerLaLegende(0); setAnnonce(true); };
+  const recommencer = () => { recommencerLaLegende(); setAnnonce(true); };
   const reprises = reprisesDeLaLegende();
 
   return (

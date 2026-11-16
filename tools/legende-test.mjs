@@ -26,6 +26,12 @@ const titre = t => console.log(`\n── ${t} ${'─'.repeat(Math.max(0, 58 - t.
 
 const src = f => join(process.cwd(), 'src/game', f);
 
+// La conversion 3D des adversaires au 100 m, LUE DANS LE MOTEUR (sprinter-core.js) : la doublure ci-dessous la sert
+// a legende.ts comme le vrai moteur le ferait. Si la table change de forme, ce harnais le dit au lieu de mentir.
+const CONVERSION_100 = Number((readFileSync(src('sprinter-core.js'), 'utf8')
+  .match(/const CONVERSION_ADVERSAIRES = \{[^}]*'100':\s*([\d.]+)/) || [])[1]);
+if (!(CONVERSION_100 > 1)) { console.error('CONVERSION_ADVERSAIRES[100] introuvable dans sprinter-core.js'); process.exit(1); }
+
 // Le moteur (game/engine.ts) ne se charge pas sous Node — il attend le
 // navigateur et les modules virtuels de Vite. Ce qui l'importe pour l'appeler
 // en course (entrees.ts, legende.ts) le recoit donc en doublure ici.
@@ -34,7 +40,7 @@ const doublureDuMoteur = {
   setup(b) {
     b.onResolve({ filter: /(^|\/)engine$/ }, () => ({ path: 'engine', namespace: 'doublure' }));
     b.onLoad({ filter: /^engine$/, namespace: 'doublure' }, () => ({
-      contents: 'export const SprinterApp = { G: {} }; export const SprinterCore = {};', loader: 'js',
+      contents: `export const SprinterApp = { G: {} }; export const SprinterCore = { CONVERSION_ADVERSAIRES: { '100': ${CONVERSION_100} } };`, loader: 'js',
     }));
     // ...et les fichiers que Vite sert par leur adresse (`?url`, les corps
     // des boss) : une adresse de banc, telle que Vite la rendrait.
@@ -245,6 +251,90 @@ ok('chaque replique tient dans la bulle (2 lignes, ~32 caracteres)',
    lieux.every(l => (l.replique.vo || l.replique.fr).length <= 32 && (l.replique.vo || l.replique.en).length <= 32),
    lieux.filter(l => (l.replique.vo || l.replique.fr).length > 32).map(l => l.boss).join(','));
 ok('une replique en langue etrangere a sa traduction', lieux.every(l => !l.replique.vo || (l.replique.fr && l.replique.en)));
+
+/* ------------------------------------- le deroule : chrono, essai, reprise */
+
+titre('L AFFICHE ANNONCE LE CHRONO QUE LE BOSS COURT VRAIMENT');
+
+const deroule = nom => paquet(nom, [
+  `export * from '${src('legende/legende.ts')}';`,
+  `export { SprinterApp } from '${src('engine')}';`,
+  `export { DIFFICULTE } from '${src('legende/stades.ts')}';`,
+  `export { RENDU_3D } from '${src('canal.ts')}';`,
+]);
+const { M: L } = await deroule('deroule-3d');
+const pres = (a, b) => Math.abs(a - b) < 1e-9;
+ok('ce banc court en 3D', L.RENDU_3D === true);
+ok(`en 3D, chaque etape annonce son chrono x ${CONVERSION_100} (celui de buildLevel)`,
+   L.DIFFICULTE.every((d, i) => pres(L.chronoDuBoss(i), d.boss * CONVERSION_100)),
+   L.DIFFICULTE.map((_, i) => L.chronoDuBoss(i).toFixed(2)).join(' '));
+ok('la plage annonce 10,79 s, plus 8,99', L.chronoDuBoss(0).toFixed(2) === '10.79', L.chronoDuBoss(0).toFixed(2));
+ok('un rang hors echelle reste dans l echelle',
+   pres(L.chronoDuBoss(-3), L.chronoDuBoss(0)) && pres(L.chronoDuBoss(99), L.chronoDuBoss(5)));
+globalThis.location = { search: '?rendu=2d' };
+const { M: L2 } = await deroule('deroule-2d');
+delete globalThis.location;
+ok('en 2D (?rendu=2d), l affiche garde le chrono de la table',
+   L2.RENDU_3D === false && L2.DIFFICULTE.every((d, i) => pres(L2.chronoDuBoss(i), d.boss)));
+
+titre('UN ESSAI NE TOUCHE PAS A LA SAUVEGARDE, UNE VRAIE LEGENDE SI');
+
+const CLE_L = 'sprinter_legende_v1';
+// Une arrivee de banc : le joueur passe la ligne en `t`, devant ou derriere.
+const arrivee = (t, gagne) => {
+  const G = L.SprinterApp.G;
+  const lieu = L.lieuDeLEtape(L.rangEnCours());
+  const lui = { name: lieu.boss, finishTime: 10.5 };
+  G.player = { finishTime: t };
+  G.runners = [lui];                      // un tableau neuf = une course neuve
+  G.ranking = gagne ? [G.player, lui] : [lui, G.player];
+  G.won = gagne;
+  return L.conclureLEtape();
+};
+memoire.clear();
+L.commencerLaLegende(5);
+ok('ESSAI 6 part de l apotheose, et se sait un essai', L.rangEnCours() === 5 && L.parcoursDEssai());
+let v = arrivee(9.9, true);
+ok('l essai gagne montre le sacre...', v.gagne && v.accomplie);
+ok('...mais n ecrit rien : ni accomplie, ni plus loin, ni record', !memoire.has(CLE_L)
+   && L.memoire().accomplies === 0 && L.memoire().plusLoin === 0 && Object.keys(L.memoire().meilleurs).length === 0,
+   memoire.get(CLE_L));
+L.commencerLaLegende(2);
+v = arrivee(10.1, true);
+ok('un essai de l etape 3 gagne ne pousse pas « la plus loin »', v.gagne && !v.accomplie && L.memoire().plusLoin === 0);
+ok('l etape suivante d un essai reste un essai', L.etapeSuivante() && L.rangEnCours() === 3 && L.parcoursDEssai());
+
+L.commencerLaLegende(0);
+ok('une Legende partie de la plage n est pas un essai', !L.parcoursDEssai());
+v = arrivee(10.2, true);
+const cle0 = L.lieuDeLEtape(0).cle;
+ok('elle, elle compte : plus loin = 1 et son chrono est garde',
+   L.memoire().plusLoin === 1 && L.memoire().meilleurs[cle0] === 10.2, memoire.get(CLE_L));
+ok('relire le verdict de la meme course ne recompte rien', L.conclureLEtape() === v);
+memoire.clear();
+
+titre('RECOMMENCER : LA PLAGE, COMME LA CARRIERE CLASSIQUE — SAUF L ESSAI');
+
+L.commencerLaLegende(0);
+arrivee(10.2, true); L.etapeSuivante(); L.etapeSuivante();
+const avant = L.parcoursEnCours().id;
+arrivee(11.5, false);
+L.recommencerLaLegende();
+ok('une vraie Legende perdue a l etape 3 repart de la plage', L.rangEnCours() === 0 && !L.parcoursDEssai());
+ok('et c est un parcours neuf (reprises remises a zero)', L.parcoursEnCours().id !== avant
+   && L.parcoursEnCours().continues === 0 && L.parcoursEnCours().pubs === 0);
+L.commencerLaLegende(4);
+arrivee(11.5, false);
+L.recommencerLaLegende();
+ok('un ESSAI de l etape 5 perdu repart de l etape 5', L.rangEnCours() === 4 && L.parcoursDEssai());
+arrivee(9.8, true); L.etapeSuivante(); arrivee(11.0, false);
+L.recommencerLaLegende();
+ok('...meme perdu une etape plus loin', L.rangEnCours() === 4);
+L.rangerLaLegende();
+L.recommencerLaLegende();
+ok('sans parcours, RECOMMENCER part de la plage', L.rangEnCours() === 0 && !L.parcoursDEssai());
+L.rangerLaLegende();
+memoire.clear();
 
 /* -------------------------------------------------------------- le canal */
 

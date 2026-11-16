@@ -33,6 +33,7 @@ import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TutorialHaies, marquerTutoHaiesVu } from '@/components/screens/TutorialHaies';
 import { tutoOuvert, abonnerAuTuto, fermerLeTuto } from '@/game/haies-tuto.js';
 import { Tutorial, marquerTutoVu } from '@/components/screens/Tutorial';
+import { departsOuverts, abonnerAuxDeparts, fermerLesDeparts } from '@/game/athlete/departs';
 import { tutoOuvert as tutoSprintOuvert, abonnerAuTuto as abonnerAuTutoSprint,
          fermerLeTuto as fermerLeStoreSprint } from '@/game/sprint-tuto.js';
 import { CeremonieChampionnat } from '@/components/screens/Championnat';
@@ -127,6 +128,10 @@ const PresentationBoss = /* @__PURE__ */ lazy(() => import('@/components/screens
 // La fin d'une competition de la carriere d'athlete (canal de test seulement).
 const FinDeCourseAthlete = /* @__PURE__ */ lazy(() => import('@/components/screens/CarriereAthlete')
   .then(m => ({ default: m.FinDeCourseAthlete })));
+// Les departs en blocs de la carriere, sur la piste du jeu (game/athlete/departs.ts).
+// hors canal de test, la carriere est absente : le module des seances ne part pas dans le build public
+const DepartsEnPiste = CARRIERE_ATHLETE_OUVERTE ? /* @__PURE__ */ lazy(() => import('@/components/screens/SeancesAthlete')
+  .then(m => ({ default: m.DepartsEnPiste }))) : null;
 // Le duel des marques : ce qu'un duel contre un fantome change a la bataille
 // (K.O., revanche), annonce par-dessus l'ecran de fin. Charge a la demande.
 const AnnonceDuelMarques = /* @__PURE__ */ lazy(() => import('@/components/screens/DuelMarques')
@@ -335,6 +340,8 @@ function MainGame() {
   // aussi met le jeu en course — au compte d'abord, le starter fait partie de
   // ce qu'il enseigne — et l'accueil qui l'ouvre se demonte aussitot.
   const tutoSprint = useSyncExternalStore(abonnerAuTutoSprint, tutoSprintOuvert, tutoSprintOuvert);
+  // les departs de la carriere : meme chemin, la sequence met le jeu au compte
+  const departs = useSyncExternalStore(abonnerAuxDeparts, departsOuverts, departsOuverts);
   const fermerLeTutoSprint = (lancer: boolean) => {
     marquerTutoVu();
     fermerLeStoreSprint();
@@ -463,6 +470,9 @@ function MainGame() {
           et le reste de sa surface laisse passer les appuis. */}
       {tutoHaies && <TutorialHaies onClose={fermerLeTutoHaies} />}
       {tutoSprint && <Tutorial onClose={fermerLeTutoSprint} />}
+      {departs && DepartsEnPiste && <Suspense fallback={null}>
+        <DepartsEnPiste a={departs.a} jour={departs.jour} ex={departs.ex} onFin={fermerLesDeparts} />
+      </Suspense>}
 
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
           qu'on sorte d'une etape de carriere ou d'une epreuve one shot. */}

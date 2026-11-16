@@ -51,7 +51,12 @@ let chargement: Promise<void> | null = null;
 const pointesTripo: { homme: THREE.Object3D | null; femme: THREE.Object3D | null } = { homme: null, femme: null };
 // echelle : un maillage Tripo n'a pas la taille du corps du jeu (Kouassi : 1,82 m au repos
 // contre 1,54) — ramene a lui, il a la taille de son look comme les autres
-export type Corps = { m: Modele; mats: Record<string, THREE.MeshStandardMaterial>; echelle?: number; tissu?: Map<THREE.Bone, { a: number; w: number; p: number | null }>; tPrec?: number };
+export type Corps = { m: Modele; mats: Record<string, THREE.MeshStandardMaterial>; echelle?: number; semelles?: Semelle[]; aChausser?: string; tissu?: Map<THREE.Bone, { a: number; w: number; p: number | null }>; tPrec?: number };
+// LES POINTES SE POSENT SUR LA PISTE (14/11, « pieds coupes », « enfonces dans le sol ») : la pose vient du squelette
+// du jeu, regle sur l'ancien corps ; sur les corps premium, la pointe Tripo (semelle plus epaisse) descendait de 4 a
+// 7 cm SOUS la piste — il n'en restait que 2 a 4 cm au-dessus, la jambe semblait coupee a la cheville. Chaque pointe
+// garde ses points extremes dans le repere de l'os du pied ; poserLeCorps remonte le corps de ce qui depasse.
+type Semelle = { peau: THREE.SkinnedMesh; os: THREE.Bone; pts: THREE.Vector3[] };
 const hauteurDe = (o: THREE.Object3D) => { const b = new THREE.Box3().setFromObject(o); return b.max.y - b.min.y; };
 export const corps = new Map<any, Corps>();
 
@@ -247,7 +252,10 @@ function corpsDe(r: any): Corps | null {
         o.material = m;
       });
       const hGabarit = gabarit ? hauteurDe(gabarit) : 1.54, hMaillage = hauteurDe(sc);
-      c = { m: modeleDe(copie), mats: {}, echelle: hMaillage > 0.5 ? hGabarit / hMaillage : 1 };
+      // (un look `piedsNus` reste pieds nus : Kouassi et Zenith, game/legende/stades.ts)
+      const chausse = !!r.look?.piedsNus || chausserLeMaillage(copie, chemin, r.look?.build === 'f', r.look?.shoe);
+      c = { m: modeleDe(copie), mats: {}, echelle: hMaillage > 0.5 ? hGabarit / hMaillage : 1, semelles: semellesDuMaillage(copie),
+            aChausser: chausse ? undefined : chemin };
       monde.add(c.m.racine);
       corps.set(r, c);
       return c;
@@ -339,8 +347,10 @@ function corpsDe(r: any): Corps | null {
     if (mats.dossard) dossardSousLaBande(mats.dossard);
   }
   chausserTripo(copie, femme, L.shoe);
+  const semelles: Semelle[] = [];
+  copie.traverse((o: any) => { if (o.userData?.semelle) semelles.push(o.userData.semelle); });
   // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
-  c = { m: modeleDe(copie), mats, echelle: source !== gabarit ? hauteurDe(gabarit) / hauteurDe(source) : undefined };
+  c = { m: modeleDe(copie), mats, echelle: source !== gabarit ? hauteurDe(gabarit) / hauteurDe(source) : undefined, semelles };
   if (L.pereNoel) habillerPereNoel(copie, c.m);
   monde.add(c.m.racine);
   corps.set(r, c);
@@ -494,7 +504,69 @@ if (vKitN.x > 0.2) {
 // Chaque pointe prend la place de la chaussure du jeu (tige, semelle, plaque, clous, logo, masques) : un maillage
 // accroche au meme os du pied, avec le meme squelette. L'eclair et le talon vert-jaune du modele prennent la couleur de
 // chaussure du coureur ; une couleur trop sombre garde le vert d'origine (sinon l'eclair disparait dans la tige noire).
+/** La matiere d'une pointe Tripo : sa texture, l'eclair et le talon a la couleur de chaussure du coureur. */
+function matierePointe(modele: any, couleur: number[] | undefined): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ map: modele.material.map, roughness: 0.6, metalness: 0 });
+  const t = couleur ? new THREE.Color().setRGB(couleur[0] / 255, couleur[1] / 255, couleur[2] / 255, THREE.SRGBColorSpace) : null;
+  const teinte = t && t.r * 0.3 + t.g * 0.59 + t.b * 0.11 > 0.04 ? t : null;
+  lisere(m);   // (avant la teinte : lisere remplace onBeforeCompile, la teinte s'y enchaine)
+  if (teinte) {
+    const avant = m.onBeforeCompile;
+    m.onBeforeCompile = (sh, r) => {
+      avant.call(m, sh, r);
+      sh.uniforms.uTeinte = { value: teinte };
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform vec3 uTeinte;')
+        .replace('#include <map_fragment>', `#include <map_fragment>
+{
+  vec3 c = diffuseColor.rgb; float hi = max(c.r, max(c.g, c.b)), lo = min(c.r, min(c.g, c.b));
+  float vif = smoothstep(0.35, 0.6, hi > 0.0 ? (hi - lo) / hi : 0.0) * step(c.b, c.g * 0.6) * step(c.r, c.g * 1.15);
+  diffuseColor.rgb = mix(c, uTeinte * clamp(hi / 0.7, 0.4, 1.3), vif);
+}`);
+    };
+    m.customProgramCacheKey = () => 'pointe-tripo';
+  }
+  return m;
+}
 const geoPointes = new Map<string, THREE.BufferGeometry>();
+const osPointes = new Map<string, number>(), extremesPointes = new Map<string, THREE.Vector3[]>();
+/** Les sommets les plus avances d'un maillage dans 26 directions : son enveloppe, en peu de points. `parmi` : ceux-la seulement. */
+function extremes(geo: THREE.BufferGeometry, parmi?: number[]): THREE.Vector3[] {
+  const pos = geo.getAttribute('position'), v = new THREE.Vector3(), vus = new Set<number>();
+  const n = parmi ? parmi.length : pos.count;
+  if (!n) return [];
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+    if (!dx && !dy && !dz) continue;
+    let mieux = -Infinity, qui = 0;
+    for (let j = 0; j < n; j++) { const i = parmi ? parmi[j] : j; const d = pos.getX(i) * dx + pos.getY(i) * dy + pos.getZ(i) * dz; if (d > mieux) { mieux = d; qui = i; } }
+    vus.add(qui);
+  }
+  return [...vus].map(i => v.fromBufferAttribute(pos, i).clone());
+}
+/** Les semelles d'un corps sans pointes (un boss de la Legende, une vedette : pieds nus ou chausses dans son maillage) :
+ *  les sommets que l'os de chaque pied porte le plus, ramenes a leur enveloppe dans le repere de cet os. */
+function semellesDuMaillage(copie: THREE.Object3D): Semelle[] {
+  const out: Semelle[] = [];
+  copie.traverse((o: any) => {
+    if (!o.isSkinnedMesh) return;
+    const si = o.geometry.getAttribute('skinIndex'), sw = o.geometry.getAttribute('skinWeight');
+    if (!si || !sw) return;
+    for (const nom of ['foot_l', 'foot_r']) {
+      const io = o.skeleton.bones.findIndex((b: THREE.Bone) => b.name === nom);
+      if (io < 0) continue;
+      const siens: number[] = [];
+      for (let i = 0; i < si.count; i++) {
+        let k0 = 0;
+        for (let k = 1; k < 4; k++) if (sw.getComponent(i, k) > sw.getComponent(i, k0)) k0 = k;
+        if (si.getComponent(i, k0) === io && sw.getComponent(i, k0) > 0.5) siens.push(i);
+      }
+      const versOs = new THREE.Matrix4().multiplyMatrices(o.skeleton.boneInverses[io], o.bindMatrix);
+      const pts = extremes(o.geometry, siens).map(q => q.applyMatrix4(versOs));
+      if (pts.length) out.push({ peau: o, os: o.skeleton.bones[io], pts });
+    }
+  });
+  return out;
+}
 function chausserTripo(copie: THREE.Object3D, femme: boolean, couleur: number[] | undefined) {
   const src = pointesTripo[femme ? 'femme' : 'homme'];
   if (!src) return;
@@ -520,33 +592,93 @@ function chausserTripo(copie: THREE.Object3D, femme: boolean, couleur: number[] 
       geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
       geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(w, 4));
       geoPointes.set(cle, geo);
+      osPointes.set(cle, os);
+      extremesPointes.set(cle, extremes(geo));
     }
-    const m = new THREE.MeshStandardMaterial({ map: modele.material.map, roughness: 0.6, metalness: 0 });
-    const t = couleur ? new THREE.Color().setRGB(couleur[0] / 255, couleur[1] / 255, couleur[2] / 255, THREE.SRGBColorSpace) : null;
-    const teinte = t && t.r * 0.3 + t.g * 0.59 + t.b * 0.11 > 0.04 ? t : null;
-    lisere(m);   // (avant la teinte : lisere remplace onBeforeCompile, la teinte s'y enchaine)
-    if (teinte) {
-      const avant = m.onBeforeCompile;
-      m.onBeforeCompile = (sh, r) => {
-        avant.call(m, sh, r);
-        sh.uniforms.uTeinte = { value: teinte };
-        sh.fragmentShader = sh.fragmentShader
-          .replace('#include <common>', '#include <common>\nuniform vec3 uTeinte;')
-          .replace('#include <map_fragment>', `#include <map_fragment>
-{
-  vec3 c = diffuseColor.rgb; float hi = max(c.r, max(c.g, c.b)), lo = min(c.r, min(c.g, c.b));
-  float vif = smoothstep(0.35, 0.6, hi > 0.0 ? (hi - lo) / hi : 0.0) * step(c.b, c.g * 0.6) * step(c.r, c.g * 1.15);
-  diffuseColor.rgb = mix(c, uTeinte * clamp(hi / 0.7, 0.4, 1.3), vif);
-}`);
-      };
-      m.customProgramCacheKey = () => 'pointe-tripo';
-    }
+    const m = matierePointe(modele, couleur);
     const sm = new THREE.SkinnedMesh(geo, m);
     sm.name = 'pointe_' + c;
     sm.bind(peau.skeleton, peau.bindMatrix);
     tige!.parent!.add(sm);
+    // (les points de la semelle, dans le repere de l'os qui la porte : voir Semelle)
+    const io = osPointes.get(cle)!, versOs = new THREE.Matrix4().multiplyMatrices(peau.skeleton.boneInverses[io], peau.bindMatrix);
+    sm.userData.semelle = { peau: sm, os: peau.skeleton.bones[io], pts: extremesPointes.get(cle)!.map(q => q.clone().applyMatrix4(versOs)) } as Semelle;
     for (const nom of ['Tige', 'Semelle', 'Plaque', 'Clous', 'Logo']) { const o = copie.getObjectByName(nom + '_foot_' + c); if (o) o.visible = false; }
   }
+}
+// LES BOSS CHAUSSES (14/11, « ils sont tous pieds nus ») : un maillage Tripo de boss a ses pieds nus dans sa
+// texture, et rien ne lui mettait de pointes — au depart d'une finale, a cote de sept coureurs chausses. On lui pose
+// les memes pointes Tripo, AJUSTEES A SON PIED : dans la pose de repos de son maillage, la pointe est mise a
+// l'echelle de la longueur (ou de la largeur) du pied, centree sur lui, semelle sous sa plante ; elle suit ensuite
+// l'os du pied, comme sur les autres corps. Le pied nu reste dedans.
+const geoPointesBoss = new Map<string, THREE.BufferGeometry | false>();
+function chausserLeMaillage(copie: THREE.Object3D, chemin: string, femme: boolean, couleur: number[] | undefined): boolean {
+  const src = pointesTripo[femme ? 'femme' : 'homme'];
+  if (!src) return false;                      // les pointes chargent encore : on reessaiera (poserLeCorps)
+  for (const c of ['l', 'r']) {
+    let peau: any = null, io = -1;
+    copie.traverse((o: any) => {
+      if (peau || !o.isSkinnedMesh || String(o.name).startsWith('pointe_')) return;
+      const k = o.skeleton.bones.findIndex((b: THREE.Bone) => b.name === 'foot_' + c);
+      if (k >= 0) { peau = o; io = k; }
+    });
+    let modele: any = null;
+    src.getObjectByName('pointe_' + c)?.traverse((o: any) => { if (!modele && o.isMesh) modele = o; });
+    if (!peau || !modele) continue;
+    const cle = chemin + '|' + c;
+    let geo = geoPointesBoss.get(cle);
+    if (geo === undefined) {
+      geo = ajusterLaPointe(peau.geometry, io, modele.geometry) || false;
+      geoPointesBoss.set(cle, geo);
+    }
+    if (!geo) continue;
+    const sm = new THREE.SkinnedMesh(geo, matierePointe(modele, couleur));
+    sm.name = 'pointe_' + c;
+    sm.bind(peau.skeleton, peau.bindMatrix);
+    peau.parent!.add(sm);
+  }
+  return true;
+}
+/** La geometrie d'une pointe mise au pied d'un maillage : echelle et place lues sur sa pose de repos. null si le pied est introuvable. */
+function ajusterLaPointe(corpsGeo: THREE.BufferGeometry, io: number, pointe: THREE.BufferGeometry): THREE.BufferGeometry | null {
+  const pos = corpsGeo.getAttribute('position'), si = corpsGeo.getAttribute('skinIndex'), sw = corpsGeo.getAttribute('skinWeight');
+  if (!pos || !si || !sw) return null;
+  // le haut : l'axe le long duquel le corps debout est le plus grand ; les pieds sont du cote des petites valeurs
+  corpsGeo.computeBoundingBox();
+  const bc = corpsGeo.boundingBox!, tc = bc.getSize(new THREE.Vector3());
+  const axes = ['x', 'y', 'z'] as const;
+  const haut = axes.reduce((a, b) => (tc[b] > tc[a] ? b : a));
+  const taille = tc[haut];
+  // le pied : les sommets que son os porte le plus, a moins de 4,5 % de la taille au-dessus du plus bas (sans la cheville)
+  const v = new THREE.Vector3(), siens: THREE.Vector3[] = [];
+  let bas = Infinity;
+  for (let i = 0; i < si.count; i++) {
+    let k0 = 0;
+    for (let k = 1; k < 4; k++) if (sw.getComponent(i, k) > sw.getComponent(i, k0)) k0 = k;
+    if (si.getComponent(i, k0) !== io || sw.getComponent(i, k0) <= 0.5) continue;
+    v.fromBufferAttribute(pos, i); siens.push(v.clone()); if (v[haut] < bas) bas = v[haut];
+  }
+  const pied = new THREE.Box3();
+  for (const q of siens) if (q[haut] < bas + 0.045 * taille) pied.expandByPoint(q);
+  if (pied.isEmpty()) return null;
+  pointe.computeBoundingBox();
+  const bp = pointe.boundingBox!, tp = bp.getSize(new THREE.Vector3()), tf = pied.getSize(new THREE.Vector3());
+  const plats = axes.filter(a => a !== haut);
+  const long = tp[plats[0]] >= tp[plats[1]] ? plats[0] : plats[1], large = long === plats[0] ? plats[1] : plats[0];
+  // assez grande pour contenir le pied nu, dans les deux sens ; bornee (un pied mal pese ne fait pas une barque)
+  const k = Math.max(0.8, Math.min(1.5, Math.max(tf[long] / tp[long] * 1.08, tf[large] / tp[large] * 1.06)));
+  const cp = bp.getCenter(new THREE.Vector3()), cf = pied.getCenter(new THREE.Vector3());
+  const t = new THREE.Vector3();
+  t[long] = cf[long] - cp[long] * k; t[large] = cf[large] - cp[large] * k;
+  t[haut] = (bas - 0.006) - bp.min[haut] * k;               // la semelle juste sous la plante
+  const geo = pointe.clone();
+  geo.applyMatrix4(new THREE.Matrix4().makeScale(k, k, k).setPosition(t));
+  const n = geo.getAttribute('position').count;
+  const idx = new Uint16Array(n * 4), w = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) { idx[i * 4] = io; w[i * 4] = 1; }
+  geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(idx, 4));
+  geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(w, 4));
+  return geo;
 }
 const LOGO_DEVANT = { z: '0.042', y: '1.222', l: '0.094', h: '0.0349' };
 // (« VAL DE REUIL » et son triangle, decoupes dans le dessin de l'auteur : Tripo en avait abime le D)
@@ -728,10 +860,37 @@ function faireFlotter(c: Corps, v: number, dt: number, t: number) {
 }
 
 export const _M = new THREE.Matrix4(), _S = new THREE.Matrix4(), _T = new THREE.Matrix4();
+const _A = new THREE.Matrix4(), _pt = new THREE.Vector3();
+/** Plus qu'une foulee ne creuse : au-dela, ce n'est pas une semelle sous la piste (un plongeon, une chute). */
+const REMONTEE_MAX = 0.16;
+/** Remonte le corps de ce que ses pointes depassent SOUS la piste (voir Semelle). Rien si elles sont au-dessus. */
+function poserLesSemelles(c: Corps, sol: number) {
+  if (!c.semelles || !c.semelles.length) return;
+  c.m.racine.updateMatrixWorld(true);
+  let bas = Infinity;
+  for (const s of c.semelles) {
+    // (le meme chemin que la carte graphique : monde x lien inverse x os ; les points sont deja dans le repere de l'os)
+    _A.multiplyMatrices(s.peau.matrixWorld, s.peau.bindMatrixInverse).multiply(s.os.matrixWorld);
+    for (const q of s.pts) { const z = _pt.copy(q).applyMatrix4(_A).z; if (z < bas) bas = z; }
+  }
+  const manque = sol - bas;
+  if (!(manque > 0.001)) return;
+  c.m.racine.matrix.elements[14] += Math.min(REMONTEE_MAX, manque);
+  c.m.racine.matrixWorldNeedsUpdate = true;
+}
 /** Le maillage du coureur, pose et place ; faux s'il n'est pas (encore) la. */
 export function poserLeCorps(App: any, r: any, p: number[], cap: number, lean: number, k: number): boolean {
   const c = corpsDe(r);
   if (!c || !r.squelette) return false;
+  // (un boss arrive avant ses pointes : on le chausse des qu'elles sont la)
+  if (c.aChausser) {
+    const copie = c.m.racine.children[0];
+    if (chausserLeMaillage(copie, c.aChausser, r.look?.build === 'f', r.look?.shoe)) {
+      c.aChausser = undefined;
+      copie.traverse((o: any) => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = OMBRES; } });
+      c.semelles = semellesDuMaillage(copie);
+    }
+  }
   poser(c.m, r.squelette);
   const [ex, ey, ez] = App.repereDuCoureur(r, cap, lean, false, false);
   _M.set(ex[0], ey[0], ez[0], 0, ex[1], ey[1], ez[1], 0, ex[2], ey[2], ez[2], 0, 0, 0, 0, 1);
@@ -739,6 +898,7 @@ export function poserLeCorps(App: any, r: any, p: number[], cap: number, lean: n
   c.m.racine.matrix.multiplyMatrices(_T.makeTranslation(p[0], p[1], salleActive ? zSol(p[0], p[1]) : 0), _S.makeScale(ke, ke, ke))
     .multiply(_M).multiply(Qgl);
   c.m.racine.matrixWorldNeedsUpdate = true;
+  poserLesSemelles(c, salleActive ? zSol(p[0], p[1]) : 0);
   c.m.racine.visible = true;
   const maintenant = performance.now() / 1000;
   faireFlotter(c, r.v || 0, c.tPrec ? maintenant - c.tPrec : 1 / 60, maintenant);

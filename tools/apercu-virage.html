@@ -1,0 +1,24 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sprinter — le virage de la carriere, sur le stade</title>
+<link rel="stylesheet" href="/src/index.css">
+<style>html,body{margin:0;height:100%;background:#000}</style>
+<div id="r"></div>
+<script type="module">
+  // Le virage de la carriere sur la vraie piste du jeu (16/11) : le jeu et la seance, sans le reste de l'appli.
+  // ?ex=departs pour les departs en blocs.
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { GameCanvas } from '/src/components/GameCanvas.tsx';
+  import { DepartsEnPiste } from '/src/components/screens/SeancesAthlete.tsx';
+  import { nouvelAthlete } from '/src/game/athlete/regles.ts';
+  const q = new URLSearchParams(location.search);
+  const a = nouvelAthlete('NOVA', 'modeste', 'polyvalent', null, { corps: q.get('corps') || 'm', peau: 'cacao', coiffure: 'braids', cheveux: 'noir', taille: 1.80, couleur: 1 });
+  a.club = 'quartier'; a.coach = 'dede';
+  window.athlete = a;
+  const ex = q.get('ex') || 'virage';
+  createRoot(document.getElementById('r')).render(React.createElement(React.Fragment, null,
+    React.createElement(GameCanvas),
+    React.createElement(DepartsEnPiste, { a, jour: 'vendredi', ex, onFin: () => { document.title = 'fini'; } })));
+</script>

@@ -89,9 +89,14 @@ titre('l\'argent');
   ok('l\'aisee ne paie pas ses deplacements', R.coutDuDeplacement(riche, 3) === 0);
   ok('la modeste paie le sien', R.coutDuDeplacement(pauvre, 3) === 150);
   pauvre.club = 'quartier';
-  ok('le club en prend la moitie', R.coutDuDeplacement(pauvre, 3) === 75);
+  ok('le club : categorie 3, 35 % de sa poche (video du 15/11)', R.coutDuDeplacement(pauvre, 3) === 53);
   ok('un boulot rapporte', R.prendreUnBoulot(pauvre, 'marche') && pauvre.argent === 80);
-  ok('un seul par semaine', !R.prendreUnBoulot(pauvre, 'livraison'));
+  ok('pas deux fois le meme', !R.prendreUnBoulot(pauvre, 'marche'));
+  ok('deux boulots se cumulent', R.prendreUnBoulot(pauvre, 'livraison') && pauvre.argent === 125);
+  ok('pas un troisieme', !R.prendreUnBoulot(pauvre, 'babysitting'));
+  // un adulte : les deux boulots les moins payes couvrent le loyer et laissent de quoi se deplacer
+  const paies = R.BOULOTS.map(b => b.adulte).sort((x, y) => x - y);
+  ok('deux boulots paient le loyer d\'un adulte', paies[0] + paies[1] - R.LOYER >= 40);
   ok('le marche prend le samedi', R.seancePossible(pauvre, 'samedi') === 'boulot');
   ok('pas les pointes carbone sans les autres', R.achatPossible(riche, 'pointes3') === 'avant');
   ok('les pointes montent en gamme', R.acheter(riche, 'pointes2') && !riche.materiel.includes('pointes1'));
@@ -120,9 +125,9 @@ titre('les competitions');
   const f = R.conclureLaCompetition(a, '100', 1, null);
   ok('un faux depart ne qualifie pas', !f.qualifie && a.niveau === 1);
   a.niveau = 3; R.conclureLaCompetition(a, '100', 1, 10.2);
-  ok('au national, 4 semaines de preparation', a.prochaine === a.semaine + 4);
+  ok('au national, 6 semaines de preparation (4 avant le 15/11)', a.prochaine === a.semaine + 6);
   a.niveau = 5;
-  ok('premier aux mondiaux : le sommet', R.conclureLaCompetition(a, '100', 1, 9.9).sommet);
+  ok('premier aux mondiaux : champion du monde (le sommet, ce sont les Grands Jeux)', R.conclureLaCompetition(a, '100', 1, 9.9).mondial);
 }
 
 titre('l\'histoire');
@@ -163,7 +168,7 @@ titre('les exercices, le kine, le parc');
   ok('la muscu a la salle du club', R.lieuDeLExercice(a, 'muscu') === 'club_quartier');
   ok('les departs au stade', R.lieuDeLExercice(a, 'departs') === 'stade');
   a.argent = 100; a.fatigue = 60; a.blessure = 2;
-  ok('le kine : la moitie payee par le club', R.chezLeKine(a) === null && a.argent === 80);
+  ok('le kine : 35 % de sa poche en categorie 3', R.chezLeKine(a) === null && a.argent === 100 - Math.round(R.KINE * 0.35));
   ok('il soulage et fait guerir plus vite', a.fatigue === 35 && a.blessure === 1);
   ok('une fois par semaine', R.chezLeKine(a) === 'fait');
   a.blessure = 0;
@@ -474,6 +479,148 @@ titre('la garde-robe');
     && R.momentDe(16 * 60, false, sea) === 'entrainement' && R.momentDe(11 * 60, false, sea) === 'ville');
   ok('seance faite : retour en tenue de ville', R.momentDe(18 * 60, false, { ...sea, faite: true }) === 'ville');
   ok('on part avec une tenue pour chaque moment', ['ville', 'entrainement', 'competition', 'nuit'].every(m => R.GARDE_ROBE_DE_DEPART.possede.includes(R.GARDE_ROBE_DE_DEPART.porte[m])));
+}
+
+titre('la semaine, la nuit, le travail (lot 1, 14/11)');
+{
+  // minuit passe le dimanche : la semaine tourne quand meme (loyer, seances remises a zero)
+  const a = R.nouvelAthlete('S', 'modeste', 'polyvalent', null, undefined, 19);
+  a.jour = R.DIMANCHE; a.heure = 23 * 60 + 30; a.faites = ['lundi']; a.prochaine = a.semaine + 5;
+  const s0 = a.semaine, argent0 = a.argent;
+  R.avancer(a, 60);
+  ok('minuit le dimanche : la semaine tourne', a.semaine === s0 + 1 && R.jourDe(a) === 0, `semaine ${a.semaine}, jour ${R.jourDe(a)}`);
+  ok('… le loyer tombe', a.argent === argent0 - R.LOYER, `${argent0} → ${a.argent}`);
+  ok('… et le lundi n’est plus bloque', a.faites.length === 0);
+  // competition manquee a minuit : forfait, une fois
+  const b = R.nouvelAthlete('F', 'aisee', 'polyvalent', null);
+  b.jour = R.DIMANCHE; b.heure = 23 * 60; b.prochaine = b.semaine;
+  R.avancer(b, 90);
+  ok('competition non courue a minuit : forfait', b.journal.some(l => /^Forfait/.test(l.fr)) && b.prochaine > b.semaine);
+  // se coucher apres minuit
+  const c = R.nouvelAthlete('N', 'aisee', 'polyvalent', null);
+  c.jour = 2; c.heure = 60;
+  ok('dormir a 1 h du matin est permis', R.actionPossible(c, 'dormir') === null, R.actionPossible(c, 'dormir'));
+  R.faireUneAction(c, 'dormir');
+  ok('… reveil a 7 h le meme jour', R.heureDe(c) === R.REVEIL && R.jourDe(c) === 2);
+  c.heure = 15 * 60;
+  ok('dormir a 15 h reste refuse', R.actionPossible(c, 'dormir') === 'heure');
+  // dormir le dimanche soir tourne la semaine une seule fois
+  const d = R.nouvelAthlete('D', 'aisee', 'polyvalent', null);
+  d.jour = R.DIMANCHE; d.heure = 22 * 60; d.prochaine = d.semaine + 5;
+  const sd = d.semaine; R.faireUneAction(d, 'dormir');
+  ok('dormir le dimanche soir : une semaine de plus, lundi', d.semaine === sd + 1 && R.jourDe(d) === 0);
+  // le samedi n'est plus obligatoire : trois seances suffisent pour monter un peu l'endurance
+  const g = R.gainDeSeance(R.nouvelAthlete('V', 'aisee', 'polyvalent', null), 'vendredi', 0.8);
+  ok('le vendredi fait aussi l’endurance', (g.endurance || 0) > 0, JSON.stringify(g));
+  // radio apres guerison : refusee
+  const h = R.nouvelAthlete('H', 'aisee', 'polyvalent', null);
+  h.blessure = 0; h.blessureType = 'cheville'; h.diagnostic = { examen: false };
+  ok('radio refusee une fois gueri', R.soinPossible(h, 'radio') !== null);
+}
+
+titre('grandir : plafond par age, salle d hiver, rivaux (lot 3, 15/11)');
+{
+  ok('plafond : Minime regionaux, Cadet France, Junior Europe, Senior Monde et Grands Jeux',
+     R.niveauMaxDe(14) === 2 && R.niveauMaxDe(16) === 3 && R.niveauMaxDe(19) === 4 && R.niveauMaxDe(23) === R.JEUX);
+  ok('les France s ouvrent a 16 ans, le Monde a 23', R.ageQuiOuvre(2) === 16 && R.ageQuiOuvre(4) === 23 && R.ageQuiOuvre(6) === null);
+  // un minime pret, sur le podium des regionaux : il reste aux regionaux
+  const m = R.nouvelAthlete('M', 'aisee', 'polyvalent', null, undefined, 14);
+  m.niveau = 2; for (const k of R.STATS) m.stats[k] = 60;
+  const r = R.conclureLaCompetition(m, '100', 1, 11.0);
+  ok('minime vainqueur des regionaux : pas de France avant 16 ans', m.niveau === 2 && r.tropJeune === 16 && !r.qualifie && !r.pasPret, JSON.stringify({ n: m.niveau, t: r.tropJeune }));
+  m.age = 16; R.conclureLaCompetition(m, '100', 1, 11.0);
+  ok('… a 16 ans, le meme podium ouvre les France', m.niveau === 3);
+  ok('une seance ratee (score 0,2) rend bien moins qu une reussie',
+     (R.gainDeSeance(R.nouvelAthlete('Q', 'aisee', 'polyvalent', null), 'lundi', 0.2).vitesse || 0) * 4 < (R.gainDeSeance(R.nouvelAthlete('Q', 'aisee', 'polyvalent', null), 'lundi', 0.9).vitesse || 0));
+  const s = R.nouvelAthlete('S', 'aisee', 'polyvalent', null);
+  s.semaine = 1; const hors = R.saisonEnSalle(s), avant = R.semainesAvantLaSalle(s);
+  s.semaine = 14; const pendant = R.saisonEnSalle(s);
+  s.semaine = 30; const apres = R.saisonEnSalle(s);
+  ok('la salle : l hiver seulement (semaines 13 a 24 de la saison)', !hors && avant === 12 && pendant && !apres, `${hors} ${avant} ${pendant} ${apres}`);
+  // les rivaux s approchent de leur meilleur niveau au fil de la saison
+  const c = R.nouvelAthlete('C', 'aisee', 'polyvalent', null, undefined, 16);
+  c.semaine = 1; const debut = R.classement(c, '100').lignes.filter(l => !l.moi).reduce((t, l) => t + l.temps, 0);
+  c.semaine = 35; const fin = R.classement(c, '100').lignes.filter(l => !l.moi).reduce((t, l) => t + l.temps, 0);
+  ok('les rivaux vont plus vite en fin de saison', fin < debut, `${debut.toFixed(2)} → ${fin.toFixed(2)}`);
+  // la duree d une carriere : 14 ans, quatre seances reussies par semaine, toujours vainqueur quand il court
+  const a = R.nouvelAthlete('D', 'aisee', 'specialiste', '100', undefined, 14); a.evenement = null; a.coach = true;
+  let semaines = 0;
+  while (a.niveau < 5 && semaines < 600) {
+    semaines++; a.semaine++; a.fatigue = 0; a.moral = 80;
+    if (a.semaine % R.SAISON === 0) a.age++;
+    for (const j of ['lundi', 'mercredi', 'vendredi', 'samedi']) {
+      const g = R.gainDeSeance(a, j, 0.8), pl = R.COMPETITIONS[a.niveau].plafond;
+      for (const k of Object.keys(g)) a.stats[k] = Math.min(pl, Math.max(a.stats[k], a.stats[k] + g[k]));
+    }
+    if (a.semaine >= a.prochaine) R.conclureLaCompetition(a, '100', 1, 10.5);
+  }
+  const saisons = semaines / R.SAISON;
+  console.log(`      14 ans, bien entraine, toujours vainqueur : champion du monde apres ${semaines} semaines (${saisons.toFixed(1)} saisons, a ${a.age} ans)`);
+  ok('une carriere au sommet dure entre 6 et 12 saisons (plus jamais une seule)', saisons >= 6 && saisons <= 12, saisons.toFixed(1));
+}
+
+titre('les Grands Jeux et le changement de discipline (testeur, 15/11 : « fini en moins d une semaine »)');
+{
+  const J = R.semaineDesProchainsJeux(1);
+  ok('les premiers Jeux : la 4e saison, semaine 30', J === 3 * R.SAISON + R.SEMAINE_DES_JEUX + 1 && R.anneeDesJeux(J) && !R.anneeDesJeux(J - R.SAISON), String(J));
+  ok('puis tous les quatre saisons', R.semaineDesProchainsJeux(J + 1) === J + 4 * R.SAISON);
+  const fort = () => { const a = R.nouvelAthlete('J', 'aisee', 'specialiste', '200', undefined, 25); a.evenement = null; for (const k of R.STATS) a.stats[k] = 95; a.niveau = R.MONDE; return a; };
+  const a = fort(); a.semaine = 10;
+  let r = R.conclureLaCompetition(a, '200', 1, 20.1);
+  ok('champion du monde hors saison des Jeux : titre, pas de selection', r.mondial && !r.selection && a.niveau === R.MONDE && r.avantLesJeux === J - 10);
+  const b = fort(); b.semaine = J - 6;
+  r = R.conclureLaCompetition(b, '200', 2, 20.2);
+  ok('podium aux Mondes la saison des Jeux : selectionne, la date des Jeux', r.selection && b.niveau === R.JEUX && b.prochaine === J);
+  b.semaine = J; r = R.conclureLaCompetition(b, '200', 1, 19.9);
+  ok('les Jeux courus : champion, retour aux Mondes, la discipline peut changer', r.sommet && r.jeux && b.niveau === R.MONDE && b.apresJeux && b.jeux.length === 1);
+  R.changerDeDiscipline(b, '400');
+  ok('changer de discipline : specialiste du 400, aux France, qualites a 80 %', b.specialite === '400' && b.niveau === R.NATIONAL && b.stats.vitesse === 76 && !b.apresJeux);
+  const c = fort(); c.semaine = J + 2;
+  r = R.conclureLaCompetition(c, '200', 1, 20.0);
+  ok('les Mondes apres les Jeux ne selectionnent pas', !r.selection && c.niveau === R.MONDE);
+  // la duree : un adulte de 23 ans, bien entraine, toujours vainqueur ; trois disciplines, trois Jeux
+  const d = R.nouvelAthlete('D', 'aisee', 'specialiste', '100', undefined, 23); d.evenement = null; d.coach = true;
+  let w = 0, auxMondes = 0, jeux = [];
+  while (jeux.length < 3 && w < 2000) {
+    w++; d.semaine++; d.fatigue = 0; d.moral = 80;
+    if (d.semaine % R.SAISON === 0) d.age++;
+    for (const j of ['lundi', 'mercredi', 'vendredi', 'samedi']) {
+      const g = R.gainDeSeance(d, j, 0.8), pl = R.COMPETITIONS[d.niveau].plafond;
+      for (const k of Object.keys(g)) d.stats[k] = Math.min(pl, Math.max(d.stats[k], d.stats[k] + g[k]));
+    }
+    if (d.semaine >= d.prochaine) {
+      const n = d.niveau; R.conclureLaCompetition(d, d.specialite, 1, 10);
+      if (!auxMondes && d.niveau >= R.MONDE) auxMondes = w;
+      if (n === R.JEUX) { jeux.push(w); R.changerDeDiscipline(d, ['200', '400', '100'][jeux.length - 1]); }
+    }
+  }
+  console.log(`      adulte de 23 ans, toujours vainqueur : aux Mondes en ${auxMondes} semaines, Grands Jeux aux semaines ${jeux.join(', ')} (${(w / R.SAISON).toFixed(1)} saisons)`);
+  ok('aux Mondes en plus de deux saisons (1,2 avant le 15/11)', auxMondes > 2 * R.SAISON, String(auxMondes));
+  ok('trois disciplines et trois Jeux : au moins dix saisons', jeux.length === 3 && w >= 10 * R.SAISON, String(w));
+}
+
+titre('les quatre categories d athletes (video de l auteur, 15/11)');
+{
+  const a = R.nouvelAthlete('C', 'modeste', 'polyvalent', null, undefined, 20); a.evenement = null; a.club = null; a.sponsors = []; a.niveau = 2;
+  ok('sans club ni sponsor : categorie 4, tout de sa poche', R.statutDe(a) === 4 && R.coutDuDeplacement(a, 3) === R.COMPETITIONS[3].deplacement && R.prixDuKine(a) === R.KINE);
+  a.club = 'horizon';
+  ok('un club : categorie 3, 35 % de sa poche', R.statutDe(a) === 3 && R.coutDuDeplacement(a, 3) === Math.round(R.COMPETITIONS[3].deplacement * 0.35));
+  a.sponsors = ['equipementier']; a.niveau = R.NATIONAL;
+  ok('un sponsor et les France : categorie 2, 150 €/semaine', R.statutDe(a) === 2 && R.revenuDuSport(a) === 150);
+  a.sponsors.push('marque'); a.niveau = 4;
+  ok('deux contrats et l Europe : categorie 1, rien de sa poche', R.statutDe(a) === 1 && R.coutDuDeplacement(a, 5) === 0 && R.resteACharge(a, 'irm') === 0 && R.prixDuMateriel(a, 450) === 0);
+  // en categorie 1, pas d'absence au travail
+  a.jour = 1; a.heure = 8 * 60; a.cours = false; const n0 = a.journal.length; R.avancer(a, 120);
+  ok('categorie 1 : personne ne l attend au travail', !a.journal.slice(0, a.journal.length - n0).some(l => /Absent au travail/.test(l.fr)));
+  // le passage d'une categorie a l'autre est annonce a la fin de la semaine
+  const b = R.nouvelAthlete('B', 'modeste', 'polyvalent', null, undefined, 20); b.evenement = null; b.club = null; b.statut = 4; b.club = 'horizon';
+  R.finirLaSemaine(b);
+  ok('changer de categorie se note au journal', b.statut === 3 && b.journal.some(l => /catégorie 3/.test(l.fr)));
+  const m = R.nouvelAthlete('M', 'aisee', 'polyvalent', null, undefined, 14);
+  ok('un mineur aise : ses parents paient deplacement et meeting, pas le materiel', R.coutDuDeplacement(m, 3) === 0 && R.coutDuMeeting(m) === 0 && R.prixDuMateriel(m, 100) === 100);
+  const lst = R.classement(R.nouvelAthlete('L', 'aisee', 'polyvalent', null, undefined, 20), '100').lignes;
+  ok('au classement senior, les quatre categories se melangent', [1, 2, 3, 4].every(c => lst.some(l => l.statut === c)));
+  ok('pas de categorie chez les Minimes', R.classement(m, '100').lignes.every(l => l.statut === undefined));
 }
 
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');

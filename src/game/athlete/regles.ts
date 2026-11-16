@@ -65,8 +65,8 @@ export type Athlete = {
   semaine: number;
   /** Les seances deja faites (ou perdues) cette semaine. */
   faites: Jour[];
-  /** Le petit boulot pris cette semaine. */
-  boulot: string | null;
+  /** Les petits boulots faits cette semaine : chacun une fois, deux au plus. */
+  boulots?: string[];
   club: string | null;
   coach: string | null;
   objectif: Objectif | null;
@@ -79,6 +79,8 @@ export type Athlete = {
   abonnes: number;
   relations: { coach: number; club: number; rival: number };
   sponsors: string[];
+  /** La categorie de la semaine derniere (statutDe), pour annoncer un changement. */
+  statut?: Statut;
   chapitre: Chapitre;
   /** LA JOURNEE (game/athlete/regles.ts, « la journee ») : le jour (0 = lundi), l'heure en minutes. */
   jour?: number;
@@ -136,6 +138,8 @@ export type Athlete = {
   position?: [number, number];
   /** Le dernier vrai championnat (id d'edition) couru ou declare forfait : on ne le court qu'une fois. */
   rendezVous?: string | null;
+  /** Qualifie pour la demie ou la finale de ce dimanche : on la reprend sans repayer (carriere.ts). */
+  tourAttendu?: { epreuve: Epreuve; tour: 'demie' | 'finale'; semaine: number };
   /** L'evenement qui attend une reponse, ou null. */
   evenement: string | null;
   vus: string[];
@@ -143,6 +147,12 @@ export type Athlete = {
   palmares: { s: number; niveau: number; epreuve: Course; place: number; chrono: number | null; meeting?: string }[];
   /** L'assiduite du cycle : seances proposees, seances faites. */
   assiduite: { proposees: number; faites: number };
+  /** Les Grands Jeux courus (la semaine, l'epreuve, la place). */
+  jeux?: { s: number; epreuve: Epreuve; place: number }[];
+  /** Les Jeux viennent de se courir : le changement de discipline est propose (changerDeDiscipline). */
+  apresJeux?: boolean;
+  /** Les changements de discipline (la semaine, la nouvelle epreuve). */
+  disciplines?: { s: number; epreuve: Epreuve }[];
 };
 
 /* ------------------------------------------------------------ les seances */
@@ -150,7 +160,8 @@ export type Athlete = {
 export const SEANCES: Record<Jour, { stat: Stat; secondaire: Stat; fatigue: number }> = {
   lundi:    { stat: 'vitesse',   secondaire: 'technique', fatigue: 18 },
   mercredi: { stat: 'force',     secondaire: 'vitesse',   fatigue: 22 },
-  vendredi: { stat: 'technique', secondaire: 'force',     fatigue: 14 },
+  // l'endurance aussi le vendredi (le virage) : sans quoi le samedi, un bonus, devenait obligatoire pour monter
+  vendredi: { stat: 'technique', secondaire: 'endurance', fatigue: 14 },
   samedi:   { stat: 'endurance', secondaire: 'force',     fatigue: 20 },
 };
 
@@ -193,7 +204,8 @@ export function lieuDeLExercice(a: Athlete, ex: Exercice): 'stade' | 'cote' | 'p
 
 /** Le kine : une seance par semaine, moitie prise par le club. */
 export const KINE = 40;
-export const prixDuKine = (a: Athlete) => (a.club ? KINE / 2 : KINE);
+// la part de l'athlete selon sa categorie (statutDe, plus bas) ; le kine n'est pas rembourse
+export const prixDuKine = (a: Athlete) => deTaPoche(a, KINE, false);
 
 /**
  * Une seance chez le kine : la fatigue tombe, une blessure guerit d'une
@@ -263,13 +275,16 @@ export const piece = (id: string) => MATERIEL.find(p => p.id === id) || null;
 
 /* ------------------------------------------------------- les petits boulots */
 
-export type Boulot = { id: string; gain: number; fatigue: number; prend: Jour | null };
+/** `adulte` : la paie d'un adulte, qui a un loyer (LOYER) ; deux boulots le paient et laissent de quoi courir. */
+export type Boulot = { id: string; gain: number; adulte: number; fatigue: number; prend: Jour | null };
 
 export const BOULOTS: Boulot[] = [
-  { id: 'babysitting', gain: 30, fatigue: 3, prend: null },
-  { id: 'livraison', gain: 45, fatigue: 12, prend: null },
-  { id: 'marche', gain: 60, fatigue: 8, prend: 'samedi' },
+  { id: 'babysitting', gain: 30, adulte: 70, fatigue: 3, prend: null },
+  { id: 'livraison', gain: 45, adulte: 90, fatigue: 12, prend: null },
+  { id: 'marche', gain: 60, adulte: 110, fatigue: 8, prend: 'samedi' },
 ];
+/** Ce que rapporte ce boulot a cet athlete. */
+export const paieDu = (a: Athlete, b: Boulot) => (etape(a) === 'adulte' ? b.adulte : b.gain);
 
 /* ---------------------------------------------------------- les competitions */
 
@@ -291,7 +306,8 @@ export type Competition = {
 /** La moyenne des quatre qualites. */
 export const moyenneDes = (a: Athlete) => STATS.reduce((s, k) => s + a.stats[k], 0) / STATS.length;
 /** La moyenne qu'il faut pour monter d'un niveau : 85 % du plafond du sien (l'endurance, seance du samedi, monte moins vite). */
-export const exigePourMonter = (niveau: number) => Math.round(COMPETITIONS[niveau].plafond * 0.85);
+// 85 % du plafond, 90 % a partir des France (15/11 : l'adulte montait aux Mondes en une saison)
+export const exigePourMonter = (niveau: number) => Math.round(COMPETITIONS[niveau].plafond * (niveau >= NATIONAL ? 0.9 : 0.85));
 /** Les stats sont-elles pretes pour le niveau suivant ? (le podium fait le reste) */
 export const pretPourLaSuite = (a: Athlete) => moyenneDes(a) >= exigePourMonter(a.niveau);
 
@@ -302,10 +318,39 @@ export const COMPETITIONS: Competition[] = [
   { cle: 'departementaux', plateau: 0, deplacement: 15, prime: 0, reputation: 8, ecart: 2, plafond: 45,
     chronos: { '100': [11.80, 13.40], '200': [23.60, 27.00], '400': [51.00, 57.00] } },
   { cle: 'regionaux', plateau: 1, deplacement: 40, prime: 0, reputation: 12, ecart: 2, plafond: 60 },
-  { cle: 'france', plateau: 2, deplacement: 150, prime: 400, reputation: 30, ecart: 4, plafond: 75 },
-  { cle: 'europe', plateau: 3, deplacement: 600, prime: 1500, reputation: 70, ecart: 4, plafond: 90 },
-  { cle: 'monde', plateau: 4, deplacement: 1500, prime: 5000, reputation: 160, ecart: 4, plafond: 100 },
+  // ALLONGER LA CARRIERE (l'auteur, 15/11 : « en moins d'une semaine c'est boucle […] minimum 1 mois ») : les grands
+  // championnats s'espacent (4 semaines partout jusque-la) : on s'y prepare.
+  { cle: 'france', plateau: 2, deplacement: 150, prime: 400, reputation: 30, ecart: 6, plafond: 75 },
+  { cle: 'europe', plateau: 3, deplacement: 600, prime: 1500, reputation: 70, ecart: 8, plafond: 90 },
+  { cle: 'monde', plateau: 4, deplacement: 1500, prime: 5000, reputation: 160, ecart: 12, plafond: 100 },
+  // Les Grands Jeux, tous les quatre saisons (voir JEUX) : `ecart` n'y sert pas, la date est fixe.
+  { cle: 'jeux', plateau: 4, deplacement: 2500, prime: 12000, reputation: 320, ecart: 12, plafond: 100 },
 ];
+
+/**
+ * LES 0.GAMES (l'auteur, 15/11 : « d'autres etapes apres les Mondes, genre JO », puis « pouvoir
+ * changer de discipline apres les J.O »). Nom generique : « Jeux olympiques », « olympique » et
+ * « olympiade » sont proteges en France (Code du sport, art. L141-5), comme on ne cite pas la FFA.
+ * Tous les quatre saisons (la 4e, la 8e…), la semaine 30 de la saison, en ete. La selection se joue
+ * aux Mondes de cette saison-la, avant les Jeux : un podium, les stats pretes. Les autres saisons,
+ * les Mondes rapportent le titre et la prime, sans monter. Les Jeux courus, on redescend aux Mondes
+ * et l'on peut changer de discipline.
+ */
+export const MONDE = 5, JEUX = 6;
+export const SEMAINE_DES_JEUX = 30;
+/** La moyenne des qualites qu'il faut, avec un podium aux Mondes, pour etre selectionne·e. */
+export const SELECTION_JEUX = 85;
+/** La saison (0, 1, 2…) de la semaine `s`. */
+export const saisonDe = (s: number) => Math.floor((s - 1) / SAISON);
+/** La saison de la semaine `s` est-elle celle des Jeux ? */
+export const anneeDesJeux = (s: number) => saisonDe(s) % 4 === 3;
+/** La semaine des prochains Jeux, a partir de la semaine `s` (comprise). */
+export function semaineDesProchainsJeux(s: number): number {
+  for (let k = saisonDe(s); ; k++) {
+    const w = k * SAISON + SEMAINE_DES_JEUX + 1;
+    if (k % 4 === 3 && w >= s) return w;
+  }
+}
 
 /** Le niveau vise par chaque objectif du programme. */
 export const NIVEAU_OBJECTIF: Record<Objectif, number> = { france: 3, europe: 4, monde: 5 };
@@ -380,6 +425,29 @@ export const etape = (a: Athlete): Etape => ((a.age ?? 14) <= 14 ? 'college' : (
 export const LOYER = 110;
 export const SALAIRE = 65;
 
+/**
+ * GRANDIR (lot 3 de l'audit, accepte par l'auteur le 15/11) : le plus haut championnat ouvert a
+ * chaque categorie d'age. Benjamin et Minime : les regionaux ; Cadet : les France ; Junior et
+ * Espoir : l'Europe ; Senior : le Monde. Un podium au plafond de sa categorie attend l'anniversaire.
+ * Une sauvegarde deja plus haut garde son niveau : on ne redescend jamais.
+ */
+export const niveauMaxDe = (age: number) => (age <= 15 ? 2 : age <= 17 ? 3 : age <= 22 ? 4 : 6);
+/** L'age ou la categorie ouvre le niveau au-dessus de `niveau` (null au sommet). */
+export function ageQuiOuvre(niveau: number): number | null {
+  for (let age = 10; age <= 40; age++) if (niveauMaxDe(age) > niveau) return age;
+  return null;
+}
+
+/**
+ * LA SAISON EN SALLE : les semaines 13 a 24 de chaque saison de 36 (decembre a fevrier si la
+ * saison part en septembre, comme la saison d'athletisme). Hors de la, pas de meeting en salle.
+ */
+export const semaineDeSaison = (a: Athlete) => (((a.semaine - 1) % SAISON) + SAISON) % SAISON;
+export const SALLE_DEBUT = 12, SALLE_FIN = 24;
+export const saisonEnSalle = (a: Athlete) => semaineDeSaison(a) >= SALLE_DEBUT && semaineDeSaison(a) < SALLE_FIN;
+/** Semaines avant la prochaine saison en salle (0 pendant). */
+export const semainesAvantLaSalle = (a: Athlete) => (saisonEnSalle(a) ? 0 : (SALLE_DEBUT - semaineDeSaison(a) + SAISON) % SAISON);
+
 export function categorie(age: number): [string, string] {
   if (age <= 13) return ['Benjamin', 'Under-14'];
   if (age <= 15) return ['Minime', 'Under-16'];
@@ -417,7 +485,7 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
     blessure: 0,
     semaine: 1,
     faites: [],
-    boulot: null,
+    boulots: [],
     club: null,
     coach: null,
     objectif: null,
@@ -455,13 +523,14 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
 export function seancePossible(a: Athlete, j: Jour): null | 'faite' | 'blesse' | 'boulot' {
   if (a.blessure > 0) return 'blesse';
   if (a.faites.includes(j)) return 'faite';
-  const b = BOULOTS.find(x => x.id === a.boulot);
-  if (b && b.prend === j) return 'boulot';
+  if (BOULOTS.some(b => b.prend === j && boulotFait(a, b.id))) return 'boulot';
   return null;
 }
 
 /** Ce que rapporte une qualite a ce niveau : plus elle est haute, moins on y gagne. */
-const reste = (v: number) => Math.max(0.08, 1 - v / 115);
+// Plus on monte, plus chaque point coute : au-dessus de 50, le frein s'ajoute (15/11, carriere bouclee en une
+// semaine par un testeur : 100 partout en 106 semaines) ; a 77, un gain vaut le tiers d'avant, a 90 le cinquieme.
+const reste = (v: number) => Math.max(0.08, 1 - v / 115) * (v <= 50 ? 1 : Math.max(0.12, Math.pow((105 - v) / 55, 1.5)));
 
 /**
  * Le gain d'une seance, sans l'appliquer. `score` : la qualite de la seance,
@@ -470,14 +539,16 @@ const reste = (v: number) => Math.max(0.08, 1 - v / 115);
  */
 export function gainDeSeance(a: Athlete, j: Jour, score: number, bonus = 0): Partial<Record<Stat, number>> {
   const s = SEANCES[j];
-  const q = 0.25 + 0.75 * borne(score, 0, 1);
+  // bien jouer compte : sous 40 % de reussite, la seance ne rapporte presque rien (lot 3 de l'audit)
+  const sc = borne(score, 0, 1), q = sc < 0.4 ? 0.1 : sc;
   const c = club(a.club);
   const encadrement = a.coach && c ? c.bonus : 1;
   const forme = 1 - Math.max(0, a.fatigue - 50) / 100;
   const outil = a.materiel.some(id => piece(id)?.seance === j) ? 1.15 : 1;
   const moral = 0.85 + 0.3 * (a.moral / 100);
-  // 7 : sur l'echelle de 0 a 100 (26/10), on sort du scolaire en 7 a 8 semaines d'entrainement suivi
-  const base = 7 * q * encadrement * forme * outil * moral * formeDuJour(a) * (1 + bonus);
+  // 2,5 (7 jusqu'au 15/11 : champion du monde en moins d'une saison) : avec le plafond par age
+  // (niveauMaxDe), une carriere de 14 ans au sommet dure environ six saisons
+  const base = 2.5 * q * encadrement * forme * outil * moral * formeDuJour(a) * (1 + bonus);
   const cles = a.specialite ? CLES_EPREUVE[a.specialite] : [];
   const spe = (st: Stat) => (a.voie === 'specialiste' && cles.includes(st) ? 1.2 : 1);
   // Le polyvalent gagne moins vite sur l'essentiel mais plus sur le reste.
@@ -517,12 +588,17 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
 
 /* ------------------------------------------------------------ l'argent */
 
+/** Deux boulots par semaine au plus : le dimanche reste aux competitions. */
+export const BOULOTS_PAR_SEMAINE = 2;
+/** Ce boulot est-il deja fait cette semaine ? */
+export const boulotFait = (a: Athlete, id: string) => !!a.boulots?.includes(id);
+
 export function prendreUnBoulot(a: Athlete, id: string): boolean {
   const b = BOULOTS.find(x => x.id === id);
-  if (!b || a.boulot) return false;
+  if (!b || boulotFait(a, id) || (a.boulots?.length || 0) >= BOULOTS_PAR_SEMAINE) return false;
   if (b.prend && a.faites.includes(b.prend)) return false;
-  a.boulot = id;
-  payer(a, b.gain, 'Petit boulot', 'Side job');
+  (a.boulots ||= []).push(id);
+  payer(a, paieDu(a, b), 'Petit boulot', 'Side job');
   a.fatigue = borne(a.fatigue + b.fatigue, 0, 100);
   return true;
 }
@@ -533,14 +609,14 @@ export function achatPossible(a: Athlete, id: string): null | 'possede' | 'argen
   if (!p) return 'inconnu';
   if (a.materiel.includes(id) || MATERIEL.some(q => q.remplace === id && a.materiel.includes(q.id))) return 'possede';
   if (p.remplace && !a.materiel.includes(p.remplace)) return 'avant';
-  if (a.argent < p.prix) return 'argent';
+  if (a.argent < prixDuMateriel(a, p.prix)) return 'argent';
   return null;
 }
 
 export function acheter(a: Athlete, id: string): boolean {
   if (achatPossible(a, id)) return false;
   const p = piece(id)!;
-  payer(a, -p.prix, 'Matériel', 'Kit');
+  payer(a, -prixDuMateriel(a, p.prix), 'Matériel', 'Kit');
   if (p.remplace) a.materiel = a.materiel.filter(x => x !== p.remplace);
   a.materiel.push(id);
   return true;
@@ -556,13 +632,53 @@ export function bonusMateriel(a: Athlete): Record<Stat, number> {
   return b;
 }
 
-/** Ce que coute le deplacement a l'athlete, apres parents, club et sponsors. */
+/* ----------------------------------------------- les quatre categories d'athletes */
+
+/**
+ * LES QUATRE CATEGORIES (video envoyee par l'auteur le 15/11 : « les 4 categories d'athletes de
+ * haut niveau ») : ce qui separe les athletes, c'est QUI PAIE LEUR SPORT, et ils courent pourtant
+ * les memes competitions pour les memes objectifs.
+ *  1. Professionnel·le : le sport est son metier (contrat, aides) ; il ou elle s'y consacre a 110 %.
+ *  2. Soutenu·e : le sport fait 50 a 70 % de ses revenus, mais pas de quoi s'y donner a 100 %.
+ *  3. Aide·e : 30 a 40 % de la saison sort de sa poche, le reste vient du club ou d'un sponsor ;
+ *     un travail alimentaire a cote.
+ *  4. Laisse·e pour compte : le travail paie la vie ET 100 % du sport (materiel, deplacements, soins).
+ * La categorie se deduit de ce que l'athlete a obtenu : club, sponsors, niveau. Rien n'est tire au hasard.
+ */
+export type Statut = 1 | 2 | 3 | 4;
+export const STATUTS: Record<Statut, { nom: [string, string]; phrase: [string, string] }> = {
+  1: { nom: ['professionnel·le', 'professional'], phrase: ['Ton sport est ton métier : tu peux t’y donner à 110 %.', 'Your sport is your job: you can give it 110%.'] },
+  2: { nom: ['soutenu·e', 'supported'], phrase: ['Le sport fait plus de la moitié de tes revenus, mais pas de quoi t’y consacrer à 100 %.', 'Sport is over half your income, but not enough to commit 100%.'] },
+  3: { nom: ['aidé·e', 'helped'], phrase: ['Club et sponsor paient une partie : 35 % de ta saison sort de ta poche, il te faut un travail à côté.', 'Club and sponsor cover part: 35% of your season comes out of your pocket, you need a job on the side.'] },
+  4: { nom: ['laissé·e pour compte', 'left behind'], phrase: ['Ton travail paie ta vie ET 100 % de ton sport : matériel, déplacements, soins.', 'Your job pays for your life AND 100% of your sport: kit, travel, care.'] },
+};
+export function statutDe(a: Athlete): Statut {
+  const s = a.sponsors.length;
+  if (s >= 2 && a.niveau >= 4) return 1;            // deux contrats et l'Europe : on vit du sport
+  if (s >= 1 && a.niveau >= NATIONAL) return 2;     // un sponsor au niveau national, et les aides qui vont avec
+  if (s >= 1 || a.club) return 3;
+  return 4;
+}
+/** La part de ses depenses de sport que l'athlete paie lui-meme, par categorie. */
+export const PART_DE_TA_POCHE: Record<Statut, number> = { 1: 0, 2: 0.1, 3: 0.35, 4: 1 };
+/** Les parents aises d'un mineur paient sa part ; sinon, `prix` × sa part. */
+export const deTaPoche = (a: Athlete, prix: number, parents = true) =>
+  parents && etape(a) !== 'adulte' && a.origine === 'aisee' ? 0 : Math.round(prix * PART_DE_TA_POCHE[statutDe(a)]);
+/** Ce que le sport rapporte chaque semaine : un salaire en categorie 1, sponsors et aides ensuite. */
+export function revenuDuSport(a: Athlete): number {
+  const st = statutDe(a);
+  return st === 1 ? 300 : st === 2 ? 150 : a.sponsors.length * 60;
+}
+/** En categorie 1, le sport est le metier : plus d'obligation d'aller au travail. */
+export const vitDuSport = (a: Athlete) => statutDe(a) === 1;
+
+/** Ce que coute le deplacement a l'athlete, apres parents, club et sponsors (sa categorie). */
 export function coutDuDeplacement(a: Athlete, niveau: number): number {
   const c = COMPETITIONS[borne(niveau, 0, COMPETITIONS.length - 1)];
-  if (a.origine === 'aisee') return 0;               // les parents paient
-  if (a.sponsors.length) return 0;                   // le sponsor paie
-  return a.club ? Math.round(c.deplacement / 2) : c.deplacement;   // le club en prend la moitie
+  return deTaPoche(a, c.deplacement);
 }
+/** Le materiel : fourni en partie selon la categorie (les parents ne l'achetent pas). */
+export const prixDuMateriel = (a: Athlete, prix: number) => deTaPoche(a, prix, false);
 
 /* ------------------------------------------------------------ la course */
 
@@ -610,8 +726,16 @@ export type Resultat = {
   qualifie: boolean;
   prime: number;
   reputation: number;
-  /** Champion du monde ? */
+  /** Champion·ne des Grands Jeux ? */
   sommet: boolean;
+  /** Champion·ne du monde ? */
+  mondial?: boolean;
+  /** Selectionne·e pour les Grands Jeux par ce podium aux Mondes. */
+  selection?: boolean;
+  /** Une course des Grands Jeux. */
+  jeux?: boolean;
+  /** Semaines jusqu'aux prochains Grands Jeux (aux Mondes). */
+  avantLesJeux?: number;
   /** Un nouveau record personnel ? */
   record?: boolean;
   /** Le vent (m/s, 100 et 200 m), et si le chrono vaut record (vent de +2,0 au plus). */
@@ -623,6 +747,8 @@ export type Resultat = {
   auTemps?: boolean;
   /** Sur le podium, mais les stats n'ont pas encore la moyenne du niveau suivant (pretPourLaSuite). */
   pasPret?: boolean;
+  /** Sur le podium au plafond de sa categorie d'age (niveauMaxDe) : l'age qui ouvre la suite. */
+  tropJeune?: number;
   /** Un meeting de club (ne qualifie pour rien) : son nom. */
   meeting?: [string, string];
   /** Blesse pendant la course ? */
@@ -667,15 +793,31 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   const homologue = vent === null || vent <= 2.0;
   const record = chrono !== null && homologue && (rec[epreuve] === undefined || chrono < rec[epreuve]!);
   if (record) rec[epreuve] = Math.round(chrono! * 100) / 100;
-  const sommet = niveau === COMPETITIONS.length - 1 && place === 1 && chrono !== null;
+  const sommet = niveau === JEUX && place === 1 && chrono !== null;
+  const mondial = niveau === MONDE && place === 1 && chrono !== null;
+  a.assiduite = { proposees: 0, faites: 0 };
+  // LES GRANDS JEUX COURUS : retour aux Mondes, et la discipline peut changer
+  if (niveau === JEUX) {
+    (a.jeux ||= []).push({ s: a.semaine, epreuve: epreuve as Epreuve, place });
+    a.niveau = MONDE; a.apresJeux = true;
+    a.prochaine = a.semaine + ecart(MONDE);
+    return { niveau, epreuve, place, chrono, qualifie: false, prime, reputation: rep, sommet, record, vent, homologue, jeux: true };
+  }
   // LE PODIUM ET LES STATS (l'auteur, 26/10 : « au depart les stats sont bridees sur le niveau
   // scolaire et les stats liberent les niveaux ») : on ne monte que les deux reunis.
-  const enHaut = niveau >= COMPETITIONS.length - 1, pret = pretPourLaSuite(a);
+  // Aux Mondes, on ne monte aux Jeux que la saison des Jeux, avant eux.
+  const auSommet = niveau >= MONDE;
+  const tropJeune = !auSommet && niveau >= niveauMaxDe(a.age ?? 14);
+  const enHaut = auSommet || tropJeune, pret = pretPourLaSuite(a);
+  // la selection : 85 de moyenne (pas 90) : un athlete serieux court ses premiers Jeux a la 4e saison
+  const selection = niveau === MONDE && podium && moyenneDes(a) >= SELECTION_JEUX && niveauMaxDe(a.age ?? 14) >= JEUX
+    && anneeDesJeux(a.semaine) && semaineDeSaison(a) < SEMAINE_DES_JEUX;
   if (podium && pret && !enHaut) a.niveau += 1;
-  a.prochaine = a.semaine + ecart(a.niveau);
-  // Un nouveau cycle commence : l'assiduite se recompte jusqu'a la prochaine.
-  a.assiduite = { proposees: 0, faites: 0 };
-  return { niveau, epreuve, place, chrono, qualifie: podium && pret && !enHaut, pasPret: podium && !pret && !enHaut, prime, reputation: rep, sommet, record, vent, homologue };
+  if (selection) a.niveau = JEUX;
+  a.prochaine = a.niveau === JEUX ? semaineDesProchainsJeux(a.semaine) : a.semaine + ecart(a.niveau);
+  return { niveau, epreuve, place, chrono, qualifie: (podium && pret && !enHaut) || selection, pasPret: podium && !pret && !enHaut,
+           tropJeune: podium && tropJeune ? ageQuiOuvre(niveau) ?? undefined : undefined, prime, reputation: rep, sommet, record, vent, homologue,
+           mondial, selection, avantLesJeux: niveau === MONDE ? semaineDesProchainsJeux(a.semaine) - a.semaine : undefined };
 }
 
 /**
@@ -690,6 +832,8 @@ export const MEETINGS: [string, string][] = [
   ['Meeting des Falaises', 'Cliffs meet'], ['Meeting d’automne du club', 'Club autumn meet'],
 ];
 export const DEPLACEMENT_MEETING = 10;
+/** Le meeting, selon la categorie (et les parents d'un mineur aise). */
+export const coutDuMeeting = (a: Athlete) => deTaPoche(a, DEPLACEMENT_MEETING);
 export const meetingDe = (a: Athlete) => MEETINGS[a.semaine % MEETINGS.length];
 /** Un meeting est-il possible ce jour-ci ? Rend la raison sinon. */
 export function meetingPossible(a: Athlete, championnatAujourdhui: boolean): [string, string] | null {
@@ -698,7 +842,7 @@ export function meetingPossible(a: Athlete, championnatAujourdhui: boolean): [st
   if (championnatAujourdhui) return ['Aujourd’hui, c’est le championnat', 'Today is the championship'];
   if (a.meeting === a.semaine) return ['Déjà couru ce dimanche', 'Already raced this Sunday'];
   if (a.blessure > 0) return ['Blessé·e', 'Injured'];
-  if (a.argent < DEPLACEMENT_MEETING) return ['Pas assez d’argent', 'Not enough money'];
+  if (a.argent < coutDuMeeting(a)) return ['Pas assez d’argent', 'Not enough money'];
   return null;
 }
 export function conclureLeMeeting(a: Athlete, epreuve: Course, place: number, chrono: number | null, vent: number | null): Resultat {
@@ -719,6 +863,8 @@ export function conclureLeMeeting(a: Athlete, epreuve: Course, place: number, ch
 
 /** Ne pas aller a la competition (pas les moyens, blesse, ou choix). */
 export function declarerForfait(a: Athlete) {
+  // forfait aux Jeux : ils sont passes, retour aux Mondes (sans changement de discipline : on ne les a pas courus)
+  if (a.niveau === JEUX) a.niveau = MONDE;
   a.prochaine = a.semaine + ecart(a.niveau);
   a.moral = borne(a.moral - 8, 0, 100);
   noter(a, 'Forfait : la compétition se fera sans toi.', 'Withdrawn: the meet goes on without you.');
@@ -772,7 +918,10 @@ export function finirLaSemaine(a: Athlete) {
   a.fatigue = borne(a.fatigue - 45 - recup, 0, 100);
   if (a.origine === 'aisee' && etape(a) !== 'adulte') payer(a, ARGENT_DE_POCHE, 'Argent de poche', 'Pocket money');
   if (etape(a) === 'adulte') payer(a, -LOYER, 'Loyer', 'Rent');
-  payer(a, a.sponsors.length * 60, 'Sponsors', 'Sponsors');
+  const st = statutDe(a), gagne = revenuDuSport(a);
+  payer(a, gagne, st === 1 ? 'Contrat : tu vis de ton sport' : st === 2 ? 'Sponsors et aides' : 'Sponsors', st === 1 ? 'Contract: you live off your sport' : st === 2 ? 'Sponsors and grants' : 'Sponsors');
+  if (a.statut && a.statut !== st) noter(a, `Tu passes en catégorie ${st} : ${STATUTS[st].nom[0]}. ${STATUTS[st].phrase[0]}`, `You move to category ${st}: ${STATUTS[st].nom[1]}. ${STATUTS[st].phrase[1]}`);
+  a.statut = st;
   // une nouvelle saison : un an de plus, peut-etre une nouvelle categorie
   if (a.semaine % SAISON === 0) a.age = (a.age ?? 14) + 1;
   // Trois seances proposees par semaine (le samedi reste un bonus).
@@ -786,9 +935,10 @@ export function finirLaSemaine(a: Athlete) {
   a.osteo = false;
   a.semaine += 1;
   a.faites = [];
-  a.boulot = null;
+  a.boulots = [];
   a.kine = false;
   a.footing = false;
+  delete a.tourAttendu;
 }
 
 /* ------------------------------------------------------------ la journee */
@@ -831,7 +981,8 @@ export function avancer(a: Athlete, minutes: number, effets: Partial<Record<Beso
   const h0 = heureDe(a);
   for (const k of BESOINS) b[k] = borne(b[k] - BAISSE[k] * minutes / 60 + (effets[k] || 0), 0, 100);
   let h = h0 + minutes;
-  if (enSemaine(a) && h0 < 9 * 60 && h >= 9 * 60 && !a.cours) {
+  // en categorie 1, le sport est le metier : personne n'attend l'athlete au bureau
+  if (enSemaine(a) && h0 < 9 * 60 && h >= 9 * 60 && !a.cours && !(etape(a) === 'adulte' && vitDuSport(a))) {
     a.ecole = borne((a.ecole ?? 60) - 5, 0, 100);
     a.moral = borne(a.moral - 3, 0, 100);
     const e = etape(a);
@@ -839,12 +990,27 @@ export function avancer(a: Athlete, minutes: number, effets: Partial<Record<Beso
     else noter(a, e === 'lycee' ? 'Absent au lycée : la vie scolaire a appelé tes parents.' : 'Absent au collège : le CPE a appelé à la maison.', e === 'lycee' ? 'Missed school: the office called your parents.' : 'Missed school: the office called home.');
     out.push('absence');
   }
-  while (h >= 24 * 60) { h -= 24 * 60; a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
+  while (h >= 24 * 60) { h -= 24 * 60; jourSuivant(a); }
   a.heure = h;
   if (b.energie <= 0) out.push('epuise');
   // un ventre vide et une tete fatiguee pesent sur le moral
   if (b.faim < 15 || b.energie < 15) a.moral = borne(a.moral - minutes / 60, 0, 100);
   return out;
+}
+
+/**
+ * Passer au jour suivant (minuit, ou le reveil d'une nuit commencee avant
+ * minuit). Apres le dimanche, la semaine tourne — meme si l'on veille ou si
+ * l'on s'effondre apres minuit : sinon le loyer sautait et le lundi restait
+ * bloque. Une competition non courue devient un forfait.
+ */
+function jourSuivant(a: Athlete) {
+  if (jourDe(a) === DIMANCHE) {
+    if (jourDeCompetition(a)) declarerForfait(a);
+    finirLaSemaine(a);
+  }
+  a.jour = (jourDe(a) + 1) % 7;
+  a.cours = false;
 }
 
 /** La fenetre d'entrainement : apres les cours en semaine, en journee le samedi. */
@@ -865,12 +1031,13 @@ export type Action = {
   effets: Partial<Record<Besoin, number>>;
   moral?: number;
   /** Quand c'est possible : [debut, fin] en minutes, et en semaine seulement ? */
+  /** Debut et fin en minutes ; un debut apres la fin passe minuit. */
   quand?: [number, number];
   semaine?: boolean;
 };
 
 export const ACTIONS: Action[] = [
-  { id: 'dormir', lieu: 'maison', duree: 'nuit', effets: {}, quand: [20 * 60, 24 * 60 - 1] },
+  { id: 'dormir', lieu: 'maison', duree: 'nuit', effets: {}, quand: [20 * 60, REVEIL - 30] },
   { id: 'sieste', lieu: 'maison', duree: 60, effets: { energie: 16 } },
   { id: 'manger', lieu: 'maison', duree: 30, effets: { faim: 60, social: 6 } },
   { id: 'douche', lieu: 'maison', duree: 15, effets: { hygiene: 85 } },
@@ -898,7 +1065,8 @@ export function actionPossible(a: Athlete, id: string): null | 'heure' | 'argent
   if (x.semaine && !enSemaine(a)) return 'week-end';
   if (x.duree === 'cours' && a.cours) return 'fait';
   const h = heureDe(a);
-  if (x.quand && (h < x.quand[0] || h > x.quand[1])) return 'heure';
+  // une fenetre qui passe minuit (dormir : 20 h – 6 h 30) a son debut apres sa fin
+  if (x.quand && (x.quand[0] <= x.quand[1] ? h < x.quand[0] || h > x.quand[1] : h < x.quand[0] && h > x.quand[1])) return 'heure';
   if (x.cout && a.argent < x.cout) return 'argent';
   return null;
 }
@@ -933,7 +1101,6 @@ export function faireUneAction(a: Athlete, id: string): null | string {
 export function dormir(a: Athlete) {
   const b = besoinsDe(a), h = heureDe(a);
   const duree = h <= REVEIL ? REVEIL - h : 24 * 60 - h + REVEIL;
-  const dimanche = jourDe(a) === DIMANCHE && h > REVEIL;
   // la nuit : la faim baisse doucement, l'energie remonte, les muscles recuperent
   b.energie = borne(b.energie + duree / 60 * 12.5, 0, 100);
   b.faim = borne(b.faim - duree / 60 * 2.5, 0, 100);
@@ -942,15 +1109,11 @@ export function dormir(a: Athlete) {
   // la nuit repare : 4 points d'usure par zone, mieux apres 8 h, moins sous 6 h
   soulager(a, 4 * (duree >= 8 * 60 ? 1.5 : duree < 6 * 60 ? 0.5 : 1));
   if (duree < 7 * 60) a.moral = borne(a.moral - 4, 0, 100);
-  if (h > REVEIL) { a.jour = (jourDe(a) + 1) % 7; a.cours = false; }
-  a.faitAujourdhui = [];
+  // couche avant minuit : le jour change au reveil (et la semaine apres le dimanche) ; apres minuit, c'est deja fait
   a.nuits = (a.nuits || 0) + 1;
+  if (h > REVEIL) jourSuivant(a);
+  a.faitAujourdhui = [];
   a.heure = REVEIL;
-  // le dimanche soir, la semaine tourne ; une competition manquee est un forfait
-  if (dimanche) {
-    if (jourDeCompetition(a)) declarerForfait(a);
-    finirLaSemaine(a);
-  }
 }
 
 /* ------------------------------------------------------------ le corps */
@@ -1065,3 +1228,23 @@ export function soulager(a: Athlete, points: number, laPire = false) {
   else for (const z of ZONES) u[z] = Math.max(0, u[z] - points);
   majGene(a);
 }
+
+/**
+ * CHANGER DE DISCIPLINE apres les Grands Jeux (l'auteur, 15/11) : la nouvelle epreuve devient la specialite ;
+ * on repart des Championnats de France, les qualites a 80 % (le corps est la, pas encore la course), et l'on
+ * vise les Jeux suivants dans cette epreuve.
+ */
+export function changerDeDiscipline(a: Athlete, e: Epreuve) {
+  const avant = a.specialite;
+  a.voie = 'specialiste'; a.specialite = e;
+  a.niveau = NATIONAL;
+  for (const k of STATS) a.stats[k] = rond(a.stats[k] * 0.8);
+  a.apresJeux = false;
+  a.prochaine = a.semaine + ecart(NATIONAL);
+  a.assiduite = { proposees: 0, faites: 0 };
+  (a.disciplines ||= []).push({ s: a.semaine, epreuve: e });
+  noter(a, `Nouvelle discipline : le ${e} m${avant ? ` après le ${avant} m` : ''}. Retour aux Championnats de France.`,
+        `New event: the ${e} m${avant ? ` after the ${avant} m` : ''}. Back to the national championships.`);
+}
+/** Garder sa discipline apres les Jeux : rien ne change, on vise les suivants. */
+export function garderSaDiscipline(a: Athlete) { a.apresJeux = false; }

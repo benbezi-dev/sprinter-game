@@ -10,6 +10,7 @@ import {
   type Athlete, type Epreuve, type Resultat, type Jour,
   COMPETITIONS, JOURS, JOUR_DE, DIMANCHE, EPREUVES,
   exerciceDuJour, lieuDeLExercice, jourDeCompetition, jourDe, heureDe, besoinsDe, avancer, payer, etape, categorie,
+  semaineDeSaison, SAISON, statutDe,
 } from './regles';
 import { type Personne, lienDe } from './gens';
 import { EXOS, MOTS } from './mots';
@@ -106,19 +107,32 @@ const PRENOMS_F = ['Lina', 'Jade', 'Aïcha', 'Léa', 'Maëlys', 'Fatou', 'Chloé
 const NOMS = 'BDKMTLSNRGHCPFV';
 const fixe = (i: number) => ((Math.sin(i * 12.9898 + 78.233) * 43758.5453) % 1 + 1) % 1;
 
-export type Ligne = { nom: string; temps: number | null; moi?: boolean; rang: number };
+/** `statut` : sa categorie d'athlete (regles.ts, statutDe), montree a partir des Juniors. */
+/** `q` : 0 le plus rapide, 1 le plus lent ; `r` : un tirage fixe. */
+const statutDuRival = (q: number, r: number) =>
+  q < 0.2 ? (r < 0.5 ? 1 : r < 0.75 ? 2 : r < 0.9 ? 3 : 4) : q < 0.5 ? (r < 0.2 ? 1 : r < 0.5 ? 2 : r < 0.8 ? 3 : 4) : (r < 0.1 ? 2 : r < 0.5 ? 3 : 4);
+export type Ligne = { nom: string; temps: number | null; moi?: boolean; rang: number; statut?: number };
 
 export function classement(a: Athlete, e: Epreuve): { lignes: Ligne[]; moi: Ligne; categorie: Texte; total: number } {
   const cat = categorie(a.age ?? 14), f = (a.apparence?.corps || 'f') === 'f';
   const base = MEILLEUR_100[cat[0]] * FACTEUR[e] * (f ? 1.1 : 1), ecart = 2.8 * FACTEUR[e];
   const graine = cat[0].length * 101 + EPREUVES.indexOf(e) * 7 + (f ? 3 : 0);
+  // LES RIVAUX PROGRESSENT (lot 3 de l'audit) : chacun part de la saison 1,5 a 3 % au-dessus de son
+  // meilleur niveau et s'en approche semaine apres semaine, a son rythme (un tirage fixe : pas de hasard
+  // d'une ouverture a l'autre). Le classement bouge sans que tu coures.
+  const avance = semaineDeSaison(a) / (SAISON - 1);
+  const forme = (i: number) => 1 + (0.015 + 0.015 * fixe(graine + i * 5 + 2)) * (1 - Math.min(1, avance * (0.7 + 0.6 * fixe(graine + i * 7 + 4))));
+  // LES QUATRE CATEGORIES SUR LA MEME LISTE (video de l'auteur, 15/11) : pros et laisses pour compte
+  // courent les memes courses. Les meilleurs sont plus souvent pros, sans que ce soit une regle.
+  const adultes = (a.age ?? 14) >= 18;
   const autres: Ligne[] = Array.from({ length: 39 }, (_, i) => ({
     nom: `${(f ? PRENOMS_F : PRENOMS)[Math.floor(fixe(graine + i) * 20)]} ${NOMS[Math.floor(fixe(graine + i + 50) * NOMS.length)]}.`,
-    temps: Math.round((base + ecart * Math.pow(fixe(graine + i * 3 + 1), 0.8)) * 100) / 100,
+    temps: Math.round((base + ecart * Math.pow(fixe(graine + i * 3 + 1), 0.8)) * forme(i) * 100) / 100,
     rang: 0,
+    statut: adultes ? statutDuRival(fixe(graine + i * 3 + 1), fixe(graine + i * 11 + 6)) : undefined,
   }));
   const record = a.records?.[e] ?? null;
-  const moi: Ligne = { nom: a.nom, temps: record, moi: true, rang: 0 };
+  const moi: Ligne = { nom: a.nom, temps: record, moi: true, rang: 0, statut: adultes ? statutDe(a) : undefined };
   const tous = [...autres, moi].sort((x, y) => (x.temps ?? 999) - (y.temps ?? 999));
   tous.forEach((l, i) => { l.rang = i + 1; });
   return { lignes: tous, moi, categorie: cat, total: tous.length };
