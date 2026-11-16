@@ -2488,7 +2488,8 @@ import { sponsorDeLaCourse } from './panneaux';
     const cibles = (lvl.cibles && lvl.cibles[R.key]) || null;
     G.track = new Track(R);
     // (la face du tapis est a 26,07 m de la ligne, salle-3d.ts ; le coureur s'y arrete les mains devant)
-    K.Runner.prototype.tapis = R.salleDroite && RENDU_3D ? 25.7 : null;
+    // (pas de tapis dehors : au Village de l'Etoile, le 60 m finit sur la piste, comme un 100 m)
+    K.Runner.prototype.tapis = R.salleDroite && RENDU_3D && lvl.cle !== 'noel' ? 25.7 : null;
     K.Runner.prototype.tapisRecord = K.RECORDS_DU_MONDE[R.key] || null;
     G.runners = [];
     // LE COULOIR TIRE AU SORT SUR L'ANNEAU COUVERT (« le couloir 6 a plus de montee, le couloir 1 un angle
@@ -9251,8 +9252,9 @@ import { sponsorDeLaCourse } from './panneaux';
   /** Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. */
   function themeBrut() {
     // LA PISTE COUVERTE DE VAL-DE-REUIL (piste-salle.js) : sa halle, quel que soit le niveau
-    if (G.race && (G.race.salle || G.race.salleDroite)) return THEMES.salle;
+    // ... sauf le 60 m au Village de l'Etoile, qui se court dehors (salle-3d.ts, salleDroiteDehors)
     const lvl = LEVELS[G.levelIdx];
+    if (G.race && (G.race.salle || (G.race.salleDroite && !(lvl && lvl.cle === 'noel')))) return THEMES.salle;
     return THEMES[(lvl && lvl.theme) || 'day'] || THEMES.day;
   }
 
