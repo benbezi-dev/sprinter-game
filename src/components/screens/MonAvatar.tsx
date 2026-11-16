@@ -5,8 +5,8 @@ import { UserRound } from 'lucide-react';
 import { Repliable } from './Repliable';
 import { SprinterApp, SprinterCore, SprinterI18N } from '@/game/engine';
 import { charger as chargerMaillage, pret, dessiner } from '@/game/vedette-3d';
-import { cheminDe } from '@/game/athlete/corps-gens';
-import { useVestiaire, choisirAvatar, PEAUX, COIFFURES, CHEVEUX, type Avatar } from '@/game/vestiaire';
+import { cheminDe, peauxDesCorps, memeCorps } from '@/game/athlete/corps-gens';
+import { useVestiaire, choisirAvatar, PEAUX, type Avatar } from '@/game/vestiaire';
 
 const dans = (t: [string, string]) => t[SprinterI18N.index()];
 const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
@@ -14,10 +14,6 @@ const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const OR = 'rgb(248, 205, 74)';
 /** Le stade de jour : le ciel, la pelouse, la piste bleue. */
 const ENCRE = '#14213A', PISTE = '#2D5BD8';
-const NOMS_COIFFURES: Record<string, [string, string]> = {
-  crop: ['COURT', 'CROP'], fade: ['DÉGRADÉ', 'FADE'], shaved: ['RASÉ', 'SHAVED'], bun: ['CHIGNON', 'BUN'],
-  ponytail: ['QUEUE', 'PONYTAIL'], braids: ['TRESSES', 'BRAIDS'], flattop: ['FLAT-TOP', 'FLAT-TOP'],
-};
 
 /** Le coureur 3D de la course (Rocketbox), debout, qui tourne lentement ; les facettes tant qu'il charge. */
 function Apercu({ av, haut }: { av: Avatar | null; haut: number }) {
@@ -104,14 +100,8 @@ export function MonAvatar() {
             </div>
             <Titre>{dans(['PEAU', 'SKIN'])}</Titre>
             <div className="flex flex-wrap gap-2">
-              {PEAUX.map(p => <Pastille key={p} nom={p} couleur={SprinterCore.SKIN[p]} actif={av.peau === p} onClick={() => changer({ peau: p })} />)}
-            </div>
-            <Titre>{dans(['COIFFURE', 'HAIR'])}</Titre>
-            <div className="flex flex-wrap gap-2">
-              {COIFFURES.map(h => <Choix key={h} actif={av.coiffure === h} onClick={() => changer({ coiffure: h })}>{dans(NOMS_COIFFURES[h])}</Choix>)}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {Object.keys(CHEVEUX).map(h => <Pastille key={h} nom={h} couleur={CHEVEUX[h]} actif={av.cheveux === h} onClick={() => changer({ cheveux: h })} />)}
+              {/* une pastille par corps premium ; la coiffure et les cheveux ne s'y voient pas (corps-gens.ts, peauxDesCorps) */}
+              {peauxDesCorps(PEAUX, p => SprinterCore.SKIN[p]).map(p => <Pastille key={p} nom={p} couleur={SprinterCore.SKIN[p]} actif={memeCorps(SprinterCore.SKIN[av.peau] || SprinterCore.SKIN.ebene, SprinterCore.SKIN[p])} onClick={() => changer({ peau: p })} />)}
             </div>
             {avatar && (
               <button onClick={() => choisirAvatar(null)}
