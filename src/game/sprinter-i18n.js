@@ -929,7 +929,7 @@
     nations_compte_pl: ['{n} pays médaillés', '{n} countries with medals'],
     // le champion en titre.
     //
-    // « Tenant du titre » et non « boss » : le second est le nom du declencheur
+    // « Champion en titre » (l'auteur, 16/11 ; « tenant du titre » avant) et non « boss » : le second est le nom du declencheur
     // dans le code, pas un mot d'athletisme. Un joueur qui lit « boss » sur un
     // ecran de championnat sort du sport et entre dans le jeu video, et c'est
     // exactement l'inverse de ce que tout le reste de ces textes fait.
@@ -939,7 +939,7 @@
     champ_boss_finale: ['QUALIFIÉ D’OFFICE POUR LA FINALE', 'STRAIGHT TO THE FINAL'],
     // Le sigle sur sa ligne dans la grille. Court, parce qu'une ligne de
     // couloir porte deja un drapeau, un nom, un rang et un chrono.
-    champ_tenant:      ['TENANT', 'HOLDER'],
+    champ_tenant:      ['CHAMPION', 'HOLDER'],
     // La ligne d'en-tete, pour qui ouvre l'ecran en cours de weekend et n'a
     // jamais vu passer la cinematique.
     champ_tenant_defend: ['{n} défend son titre', '{n} is defending the title'],
@@ -949,7 +949,7 @@
     champ_repeche_doffice: ['d’office', 'by title'],
     // Sous chaque repeche, la raison en quelques mots.
     champ_rep_chrono:       ['repêché au chrono', 'fastest non-qualifier'],
-    champ_rep_doffice:      ['tenant du titre, qualifié d’office', 'title holder, qualified by right'],
+    champ_rep_doffice:      ['champion en titre, qualifié d’office', 'title holder, qualified by right'],
     champ_rep_priorite:     ['a couru : priorité aux joueurs', 'ran the heat: players come first'],
     champ_rep_place_libre:  ['prend une place laissée par un forfait', 'fills a place left by a no-show'],
     champ_rep_organisation: ['choix de l’organisation', 'organisers’ decision'],
