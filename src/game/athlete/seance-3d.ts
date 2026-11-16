@@ -494,6 +494,19 @@ export class Seance3D {
         let bas = Infinity;
         for (const o of this.os) bas = Math.min(bas, o.getWorldPosition(this._v).y);
         if (isFinite(bas)) { racine.matrix.elements[13] += (this.lieu === 'tapis' ? 0.06 : 0.05) - bas; racine.matrixWorldNeedsUpdate = true; }
+      } else if (this.lieu === 'cote' && e.pente) {
+        // la pente : le sol est a y = x.tan(p) ; le corps est pose pour du plat, si bien que le
+        // pied avant entrait dans la cote. On deplace le corps pour que le pied le plus bas garde
+        // au-dessus de la pente la meme garde qu'il aurait sur du plat.
+        racine.updateMatrixWorld(true);
+        const tp = Math.tan(e.pente);
+        let plat = Infinity, pente = Infinity;
+        for (const o of this.os) {
+          if (/hand/i.test(o.name)) continue;
+          o.getWorldPosition(this._v);
+          plat = Math.min(plat, this._v.y); pente = Math.min(pente, this._v.y - this._v.x * tp);
+        }
+        if (isFinite(plat) && isFinite(pente)) { racine.matrix.elements[13] += plat - pente; racine.matrixWorldNeedsUpdate = true; }
       }
       if (this.barre) {
         // la barre posee sur les trapezes : sous la nuque du squelette, un peu en arriere, elle suit le corps
