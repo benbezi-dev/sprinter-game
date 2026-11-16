@@ -6,7 +6,7 @@ import { creuserTapis, zSol, auBordDeLaPiste, SURVOL_SALLE } from '../salle-3d';
 import { Q, DOS, RECUL, COTE, HAUT, P_DEBUT, P_FIN, P_ARRIERE, P_LOIN, LANE_W, P_HAUT, SURVOL, R_CORDE } from './reglages';
 import { camera, _a, _b, renderer, champBase, soleil } from './scene';
 import { ouCourt, capIci, virageApres, ici, sx, salleActive, milieu } from './repere';
-import { presente, presenteDans, orA, orOu, orCouloir, finCam, presenteOu, presenteAthlete, finVise, planExtinction } from './salle-noire';
+import { orA, orOu, orCouloir, finCam, finVise, planExtinction, extinctionE, EXT_COUP } from './salle-noire';
 import { profilBas, finaleVue, toitsStade, cameraSalle, blocsSalle, amsalemActif } from './stade';
 import { nCouloirs } from '../course-3d';
 import { suiviDuRelais } from './relais';
@@ -41,6 +41,12 @@ let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
 let finActive = false, champNom = 0;
+// la presentation : le point que la camera vise, qui glisse d'un athlete a l'autre (voir LA PRESENTATION SE REGARDE COMME EN 2D)
+const presC = new THREE.Vector3();
+let presPret = false;
+// un cran plus serre que la course 2D : a l'echelle exacte, au 200 m, les athletes n'etaient que des silhouettes au bord
+// de l'anneau (tournage du 16/11)
+const PRES_SERRE = 1.8;
 let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
 /** La camera de l'image : ou elle se tient, ce qu'elle vise, le soleil qui la suit. Rend le coureur suivi. */
 export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
@@ -264,37 +270,40 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
         vise.set(c[0], -c[1], 1.0);
       }
     }
-    // LA FINALE : pendant la presentation, la camera cadre le nom qui s'ecrit dans le couloir, de haut et
-    // de cote (la tribune), comme les plans de Doha — mais au ras de la salle
-    if (finaleVue && presente >= 0 && (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro'))) {
-      // DEUX PLANS PAR ATHLETE (l'auteur, 16/11 : « on doit voir le personnage presente ») : d'abord LUI, de face — la
-      // camera posee dans son propre couloir, 4,5 m devant ses blocs, a hauteur d'yeux (rien ne passe entre eux, ni
-      // voisin ni muret) ; puis, a PLAN_NOM, son nom ecrit dans la piste, comme avant.
-      const PLAN_NOM = 1.5;
-      if (presenteDans < PLAN_NOM) {
-        const A = presenteAthlete, za = zSol(A.x, A.y), f = ici(T.posDemi(4.5, presente, milieu(T, presente)));
-        finCam.set(f[0], -f[1], zSol(f[0], f[1]) + 1.75);
-        finVise.set(A.x, -A.y, za + 1.15);
-        champNom = camera.fov;
+    // LA PRESENTATION SE REGARDE COMME EN 2D (l'auteur, 16/11 : « une presentation comme la 2D ; sur la 3D les
+    // personnages n'etaient pas dans le plan de la camera »). Le plan du nom ecrit dans la piste, puis le gros plan de
+    // face, laissaient l'athlete hors cadre ou seul : la camera prend desormais l'axonometrie du jeu 2D (voir plan2D),
+    // centree sur celui qu'on presente, glisse de l'un a l'autre a la vitesse du 2D (stepPresentation, 3,4/s) et avance
+    // vers lui avec le plan qui se resserre (G.zoomPres, pousserLePlan) — lui au centre, ses voisins de part et d'autre.
+    const luiPresente = (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro')) && !entreeVue && !nuitDuMolosse ? G.presente : null;
+    if (luiPresente) {
+      const c = ouCourt(T, luiPresente);
+      if (!presPret) { presC.set(c[0], c[1], 0); presPret = true; }
+      else presC.lerp(_c3.set(c[0], c[1], 0), 1 - Math.exp(-3.4 * (dt || 0.016)));
+      const Cj = (globalThis as any).SprinterApp?.C;
+      const deg = Cj ? Math.atan2(Cj.ISO_SIN, Cj.ISO_COS) : Math.atan(0.5);
+      const elev = Math.atan(Math.SQRT2 * Math.sin(deg));
+      const VW = renderer!.domElement.clientWidth || 375, VH = renderer!.domElement.clientHeight || 812;
+      const ui = Math.max(0.62, Math.min(1.7, Math.min(VW / 430, VH / 660)));
+      const haut = VH / (ui * (G.race && G.race.arc > 0 ? 44 : 30) * (G.zoomMode || 1) * Math.max(1, G.zoomPres || 1) * PRES_SERRE);
+      const D = haut / (2 * Math.tan(CHAMP_2D * Math.PI / 360));
+      const rot = T.curved ? -14 * Math.PI / 180 : 0, wc = Math.cos(rot), ws = Math.sin(rot);
+      const dx = sx * (-wc - ws) / Math.SQRT2, dy = sx * (ws - wc) / Math.SQRT2;
+      const z0 = salleActive ? zSol(presC.x, presC.y) : 0;
+      if (T.curved && salleActive) {
+        // SUR L'ANNEAU, COTE TRIBUNE : la diagonale du 2D y regardait depuis la pelouse — les officiels et les poteaux
+        // passaient devant, le bord du virage releve coupait les jambes (tournage du 16/11). On prend la direction du
+        // plan des noms, (5, 9, 6,5), qui n'a rien entre elle et la piste, a 9,5 m de l'athlete, l'oeil sur son corps.
+        const h = capIci(T.heading(Math.max(0, luiPresente.d || 0), luiPresente.lane | 0)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
+        const nrm = Math.hypot(5, 9, 6.5), loin = 9.5 / Math.max(1, G.zoomPres || 1), recul = loin * 5 / nrm, cote = loin * 9 / nrm;
+        finCam.set(presC.x - ax * recul + ex * cote, -(presC.y - ay * recul + ey * cote), z0 + loin * 6.5 / nrm);
+        finVise.set(presC.x, -presC.y, z0 + 1.0);
+        champNom = camera.fov; finActive = true;
       } else {
-      const h = capIci(T.heading(7, presente)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
-      // LE NOM ENTIER DANS LE CADRE : la distance se deduit du champ horizontal de la camera, pour que ses 9 m et une
-      // marge tiennent en largeur, quel que soit l'ecran. (Les reculs fixes d'avant coupaient la fin du nom en paysage,
-      // « FONTAIN », sa derniere lettre passant sous la camera, posee 5 m en arriere du centre.) La camera regarde le
-      // centre du nom, de cote (la tribune), en arriere et en plongee — la direction d'avant (5, 9, 6,5), qui passe
-      // au-dessus des agres de la perche ; jamais plus pres que ses 12,2 m, jamais plus haut que 9,5 m (les fermes du
-      // toit descendent a 10,4 m), jamais plus loin que 19 m (au-dela, la coursive et son public passent devant) : en portrait, ou il le
-      // faudrait, c'est le champ qui s'elargit (champNom, pose d'un coup : c'est un plan coupe).
-      const LARGE = 9 / 2 + 1.6;
-      let demiChampH = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), loin = LARGE / Math.tan(demiChampH);
-      champNom = camera.fov;
-      if (loin > 19) { loin = 19; demiChampH = Math.atan(LARGE / 19); champNom = 2 * Math.atan(Math.tan(demiChampH) / camera.aspect) * 180 / Math.PI; }
-      loin = Math.max(12.2, loin);
-      const nrm = Math.hypot(5, 9, 6.5), recul = loin * 5 / nrm, cote = loin * 9 / nrm, haut = Math.min(9.5, loin * 6.5 / nrm);
-      finCam.set(presenteOu.x - ax * recul + ex * cote, -(presenteOu.y - ay * recul + ey * cote), haut);
-      finVise.set(presenteOu.x, -presenteOu.y, 0);
+      finCam.set(presC.x + dx * D * Math.cos(elev), -(presC.y + dy * D * Math.cos(elev)), z0 + D * Math.sin(elev));
+      finVise.set(presC.x, -presC.y, z0 + 0.9);
+      champNom = CHAMP_2D; finActive = true;
       }
-      finActive = true;
     } else if (finaleVue && orCouloir >= 0 && orA > 0 && G.champNoir) {
       // L'ARRIVEE EN OR A SON PLAN (16/11) : la camera revient sur la ligne, cote tribune et en plongee, et cadre le
       // chrono ecrit dans le couloir du vainqueur (meme direction que le plan du nom, 15,5 m) ; le tableau attend.
@@ -308,10 +317,16 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
       // qui file — on voit les lignes s'allumer une par une, de gauche a droite, puis tout le reste d'un coup
       const k = Math.floor((T.lanes || nCouloirs) / 2), q = ici(T.posDemi(0, k, milieu(T, k))), h = capIci(T.heading(0, k));
       const v = ici(T.posDemi(Math.min(T.total * 0.5, 26), k, milieu(T, k)));
-      finCam.set(q[0] - Math.cos(h) * 7, -(q[1] - Math.sin(h) * 7), 8.2);
+      // (refaite le 16/11 : « il faut de la tension ») elle AVANCE lentement vers la piste pendant toute la montee, et
+      // au coup elle recule et monte d'un trait : la salle entiere, allumee d'un bloc
+      const u = Math.min(1, extinctionE / EXT_COUP), av = u * u * (3 - 2 * u);
+      const w = Math.min(1, Math.max(0, (extinctionE - EXT_COUP) / 1.4)), re = 1 - Math.pow(1 - w, 3);
+      const recul = 10 - 6.5 * av + 9 * re, hautE = 8.6 - 3.2 * av + 4 * re;
+      finCam.set(q[0] - Math.cos(h) * recul, -(q[1] - Math.sin(h) * recul), Math.min(9.6, hautE));
       finVise.set(v[0], -v[1], 0);
       champNom = camera.fov; finActive = true;
     } else finActive = false;
+    if (!luiPresente) presPret = false;
     // (le tapis du 60 m s'enfonce sous ceux qui le frappent)
     const auTapis = G.ghost && (G.runners || []).indexOf(G.ghost.runner) < 0 ? (G.runners || []).concat([G.ghost.runner]) : G.runners || [];
     if (salleActive && auTapis.some((r: any) => r.creuxTapis != null)) {
@@ -331,7 +346,7 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
     // pas de survol pour la nuit du molosse (« pas de vue aerienne de presentation », l'auteur, 23/10)
-    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue && !(finaleVue && presente >= 0);
+    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue && !luiPresente;
     if (!avant && G.state !== 'race' && G.state !== 'falseout') { volLance = false; volPlonge = -1; }
     if (avant && !volLance) { volLance = true; volT = 0; volPlonge = -1; }
     let survol = false;

@@ -34,17 +34,26 @@ function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: 
 }
 /**
  * L'EXTINCTION DE LA SALLE, entre l'appel et le premier nom d'une serie (l'auteur, 8/11 ; refaite le 16/11 : « plus
- * spectaculaire, qui reste en tete », « les neons qui s'allument un par un »). Sept secondes, en quatre temps :
- *  1. les plafonniers tombent en trois rangees (0,5 / 1 / 1,5 s), chacune son clignotement et son contacteur ;
- *  2. le noir complet, presque une seconde, la rumeur du public qui monte ;
- *  3. les lignes de la piste courue s'allument UNE PAR UNE, du couloir 1 au dernier : chaque tube hesite (deux
- *     amorces), et chacun sonne une note plus haute que la precedente — une montee qu'on reconnait ;
- *  4. le coup : tout le reste s'allume d'un bloc (la piste qu'on ne court pas, les fleches, les logos, le tapis),
- *     avec un eclair qui fait gonfler les halos puis retombe, un choc grave et la clameur.
- * Elle part au premier moment d'avant-course (le decompte suspendu de l'appel) et ne revient jamais en arriere. La
- * salle du championnat laisse ce temps avant la presentation (worker/src/salle-championnat.js, avantPresentation).
+ * spectaculaire, qui reste en tete », puis « pas assez spectaculaire et trop rapide, il faut de la tension »). Onze
+ * secondes, en cinq temps :
+ *  1. les plafonniers tombent en trois rangees (0,6 / 1,4 / 2,2 s), chacune son clignotement et son contacteur ;
+ *  2. le noir complet, plus de deux secondes : un coeur qui bat dans la halle, et un tube du couloir 1 qui tente de
+ *     s'allumer, gresille... et meurt ;
+ *  3. les lignes de la piste courue s'allument UNE PAR UNE, lentement d'abord puis de plus en plus vite, comme le
+ *     coeur : chaque tube hesite (trois amorces) et sonne une note plus haute que la precedente ;
+ *  4. le souffle : toutes les lignes allumees battent avec le coeur, une montee de bruit blanc enfle ;
+ *  5. le coup : tout le reste s'allume d'un bloc (la piste qu'on ne court pas, les fleches, les logos, le tapis), un
+ *     grand eclair qui fait gonfler les halos et retombe en une seconde et demie, un choc grave et la clameur.
+ * La camera (camera.ts) avance lentement vers la piste pendant toute la montee, puis recule d'un coup au dernier coup
+ * pour montrer la salle entiere. Elle part au premier moment d'avant-course (le decompte suspendu de l'appel) et ne
+ * revient jamais en arriere. La salle du championnat laisse ce temps avant la presentation
+ * (worker/src/salle-championnat.js, avantPresentation).
  */
-export const DUREE_EXTINCTION = 7;
+export const DUREE_EXTINCTION = 11;
+/** Le dernier coup, en secondes depuis le debut de l'extinction (camera.ts recule a cet instant). */
+export const EXT_COUP = 9.2;
+/** Ou en est l'extinction, en secondes (camera.ts : son lent travelling). */
+export let extinctionE = 0;
 /**
  * LE SON DE L'EXTINCTION : le « clonk » d'un contacteur par rangee de plafonniers, qui roule dans la halle ; le
  * public qui monte d'un cran quand le noir tombe ; le gresillement des tubes neon qui s'allument. Synthetise sur
@@ -125,7 +134,30 @@ const sonDeSalle = {
     const o = ctx.createOscillator(); o.type = 'sine';
     o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(34, t + 1.2);
     const g = this.enveloppe(ctx, t, 0.7, 0.005, 1.4); o.connect(g).connect(A.sortie); o.start(t); o.stop(t + 1.5);
-    this.clonk(1.3); this.ovation(true);
+    this.clonk(1.5); this.ovation(true);
+    // la halle renvoie le choc : un grondement qui tient deux secondes
+    const n = this.bruit(ctx, 2.2), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 180;
+    const gn = this.enveloppe(ctx, t, 0.5, 0.01, 2.1); n.connect(lp).connect(gn).connect(A.sortie); n.start(t);
+  },
+  /** Un battement de coeur, deux coups sourds (lub-dub), plus fort a mesure que la tension monte. */
+  coeur(force = 1) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t0 = ctx.currentTime + 0.01;
+    for (const [dt, a] of [[0, 0.5], [0.16, 0.32]] as const) {
+      const t = t0 + dt, o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(62, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.18);
+      const g = this.enveloppe(ctx, t, a * force, 0.008, 0.22); o.connect(g).connect(A.sortie); o.start(t); o.stop(t + 0.3);
+    }
+  },
+  /** La montee d'avant le coup : un bruit blanc dont le filtre s'ouvre pendant `d` secondes. */
+  souffle(d: number) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.01;
+    const n = this.bruit(ctx, d + 0.1), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.5;
+    f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(5200, t + d);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + d);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.08);
+    n.connect(f).connect(g).connect(A.sortie); n.start(t);
   },
   /** Un tube neon qui s'amorce : un ping, puis le bourdon du ballast. */
   neon(dur = 0.12) {
@@ -140,11 +172,24 @@ const sonDeSalle = {
 };
 export function lExtinction(eteindre: (lumiere: number, neons: number, lignesA?: (i: number, n: number) => number, eclat?: number) => void,
                             eclairer: (k: number) => void) {
-  const RANGEES = [0.5, 1.0, 1.5];
-  const LIGNE0 = 2.4, PAS_LIGNE = 0.27, COUP = 5.1;
-  /** Une amorce de tube a `f` secondes de son heure : allume, eteint, allume, puis tient. */
-  const amorce = (f: number) => f < 0 ? 0 : f < 0.05 ? 0.8 : f < 0.1 ? 0.05 : f < 0.14 ? 1 : f < 0.19 ? 0.3 : 1;
-  let debut = -1, fini = false, vu = -1;
+  const RANGEES = [0.6, 1.4, 2.2];
+  // le tube qui rate (couloir 1), la premiere ligne, la derniere : entre elles, des ecarts qui raccourcissent
+  // d'un quart a chaque ligne — lent, puis de plus en plus vite —, quel que soit le nombre de lignes
+  const RATE = 3.5, LIGNE0 = 4.9, LIGNE_FIN = 8.0, COUP = EXT_COUP, RESSERRE = 0.75;
+  const heureLigne = (i: number, n: number) => {
+    if (n <= 1) return LIGNE0;
+    const S = (k: number) => (1 - Math.pow(RESSERRE, k)) / (1 - RESSERRE);
+    return LIGNE0 + (LIGNE_FIN - LIGNE0) * S(i) / S(n - 1);
+  };
+  /** Une amorce de tube a `f` secondes de son heure : trois hesitations, puis il tient. */
+  const amorce = (f: number) => f < 0 ? 0 : f < 0.06 ? 0.7 : f < 0.13 ? 0 : f < 0.2 ? 0.9 : f < 0.27 ? 0.12 : f < 0.33 ? 1 : f < 0.37 ? 0.45 : 1;
+  /** Le tube qui rate : quelques sursauts faibles, de plus en plus faibles, puis plus rien. */
+  const rate = (f: number) => f < 0 || f > 0.75 ? 0 : [0.35, 0, 0.5, 0.1, 0, 0.25, 0, 0, 0.12, 0, 0, 0, 0.05, 0, 0][Math.floor(f / 0.05)] || 0;
+  // le coeur : de plus en plus vite et de plus en plus fort, du noir jusqu'au coup
+  const COEUR0 = 2.6;
+  const battements: number[] = [];
+  for (let b = COEUR0, p = 0.95; b < COUP - 0.15; b += p, p = Math.max(0.36, p * 0.93)) battements.push(b);
+  let debut = -1, fini = false, vu = -1, nVu = 9;
   return (t: number) => {
     if (fini) return;
     const dt = vu < 0 ? 0 : t - vu; vu = t;
@@ -152,21 +197,36 @@ export function lExtinction(eteindre: (lumiere: number, neons: number, lignesA?:
     const avant = !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
     if (debut < 0) { if (!avant) return; debut = t; planExtinction = true; }
     const e = t - debut, avantE = e - dt;
-    // 1. la lumiere : un tiers de moins a chaque rangee, et 0,18 s de clignotement au moment ou elle tombe
+    extinctionE = e;
+    // 1. la lumiere : un tiers de moins a chaque rangee, et 0,25 s de clignotement au moment ou elle tombe
     let lumiere = 1;
     for (let i = 0; i < RANGEES.length; i++) {
       const f = e - RANGEES[i];
       if (f < 0) break;
       const avantR = 1 - i / RANGEES.length, apres = 1 - (i + 1) / RANGEES.length;
-      lumiere = f < 0.18 && Math.floor(f / 0.045) % 2 === 0 ? avantR : apres;
+      lumiere = f < 0.25 && Math.floor(f / 0.05) % 2 === 0 ? avantR : apres;
     }
-    // 3. les lignes, une par une ; 4. le reste d'un bloc, et l'eclair qui retombe en 0,9 s
-    const lignesA = (i: number) => Math.max(amorce(e - (LIGNE0 + i * PAS_LIGNE)), e >= COUP ? 1 : 0);
+    // le souffle avant le coup : les lignes allumees battent avec le coeur
+    let pouls = 1;
+    if (e > LIGNE_FIN + 0.4 && e < COUP) {
+      let dernier = -1; for (const b of battements) if (b <= e) dernier = b;
+      const fb = dernier < 0 ? 1 : e - dernier;
+      pouls = 0.55 + 0.45 * Math.min(1, fb / 0.3);
+    }
+    // 2. le rate ; 3. les lignes, une par une, de plus en plus vite ; 5. le reste d'un bloc, l'eclair en 1,5 s
+    const lignesA = (i: number, n: number) => {
+      nVu = n;
+      const allume = amorce(e - heureLigne(i, n)) * pouls;
+      return Math.max(i === 0 ? rate(e - RATE) : 0, allume, e >= COUP ? 1 : 0);
+    };
     const neons = e >= COUP ? amorce(e - COUP) : 0;
-    const fc = e - COUP, eclat = fc >= 0.14 && fc < 1.04 ? 1.4 * Math.pow(1 - (fc - 0.14) / 0.9, 2) : 0;
-    // le son : un contacteur par rangee, la rumeur au premier ; une note par ligne, de plus en plus haute ; le coup
+    const fc = e - COUP, eclat = fc >= 0.1 && fc < 1.6 ? 2.4 * Math.pow(1 - (fc - 0.1) / 1.5, 2) : 0;
+    // le son
     RANGEES.forEach((r, i) => { if (avantE < r && e >= r) { sonDeSalle.clonk(1 - i * 0.15); if (i === 0) sonDeSalle.rumeur(); } });
-    for (let i = 0; i < 10; i++) { const a = LIGNE0 + i * PAS_LIGNE; if (a < COUP - 0.1 && avantE < a && e >= a) sonDeSalle.note(i); }
+    battements.forEach((b, k) => { if (avantE < b && e >= b) sonDeSalle.coeur(0.5 + 0.5 * k / Math.max(1, battements.length - 1)); });
+    if (avantE < RATE && e >= RATE) { sonDeSalle.neon(0.08); setTimeout(() => sonDeSalle.neon(0.05), 110); setTimeout(() => sonDeSalle.neon(0.04), 280); }
+    for (let i = 0; i < nVu; i++) { const a = heureLigne(i, nVu); if (avantE < a && e >= a) sonDeSalle.note(i); }
+    if (avantE < LIGNE_FIN + 0.4 && e >= LIGNE_FIN + 0.4) sonDeSalle.souffle(COUP - LIGNE_FIN - 0.4);
     if (avantE < COUP && e >= COUP) sonDeSalle.coup();
     eteindre(lumiere, neons, lignesA, eclat); eclairer(lumiere);
     if (e > DUREE_EXTINCTION) { eteindre(0, 1, () => 1, 0); fini = true; }

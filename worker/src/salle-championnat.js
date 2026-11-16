@@ -60,7 +60,7 @@ const APPEL_AVANT_MS = 8 * PRESENTATION_PAR_JOUEUR_MS + AVANT_DEPART_MS + AVANT_
  * LE NOIR QUI TOMBE (l'auteur, 16/11) : en serie du Championnat de France en salle, la salle s'eteint entre l'appel
  * et le premier nom (course-3d/salle-noire.ts, lExtinction, 7 s) — la presentation l'attend.
  */
-const AVANT_PRESENTATION_NOIR_MS = 7500;
+const AVANT_PRESENTATION_NOIR_MS = 11500;
 const EPREUVES_EN_SALLE = ['60', '200s', '400s'];
 export function avantPresentation(ctx) {
   return ctx && ctx.echelon === 'national' && ctx.zone === 'FR' && ctx.phase === 'series' && EPREUVES_EN_SALLE.includes(ctx.epreuve)
