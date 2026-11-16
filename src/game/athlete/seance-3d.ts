@@ -42,6 +42,8 @@ export type Projection = { ax: number; sol: number; ppm: number; corps: boolean 
 
 const PROFIL = Math.PI / 2 + 0.2;
 const COULOIR = 1.22;
+/** Du centre de la barre au milieu d'un doigt qui l'entoure : rayon de la barre (1,4 cm) et demi-doigt. */
+const RAYON_PRISE = 0.026;
 /** Le couloir de l'athlete au virage : 36,5 m a la corde + 4,5 couloirs. */
 const R_VIRAGE = 36.8 + COULOIR * 4.5;
 const fixe = (i: number) => ((Math.sin(i * 127.1) * 43758.5453) % 1 + 1) % 1;
@@ -557,15 +559,33 @@ export class Seance3D {
       const a = S.distanceTo(P(avant)), b = P(avant).distanceTo(P(main));
       // le poignet sous la barre et un peu devant ; deux passes : la seconde corrige de l'ecart poing-barre
       const T = prise.clone().add(new THREE.Vector3(0, -0.06, 0)).addScaledVector(arriere, -0.02);
-      for (let passe = 0; passe < 2; passe++) {
+      // la jointure du majeur se pose DEVANT la barre, contre elle : la paume la porte, les doigts l'entourent
+      const jointure = prise.clone().addScaledVector(arriere, -RAYON_PRISE);
+      for (let passe = 0; passe < 3; passe++) {
         this.plierBras(bras, avant, main, T, a, b, arriere);
         if (!d1 || !d3) break;
         this.orienterPoing(main, d1, d3, axe, arriere);
-        // le creux du poing : entre la base et le bout du majeur ; la barre doit y passer
-        const creux = P(d1).add(P(d3)).multiplyScalar(0.5);
-        const ecart = prise.clone().sub(creux);
+        const ecart = jointure.clone().sub(P(d1));
         ecart.addScaledVector(axe, -ecart.dot(axe));   // le long de la barre, la main peut glisser
         T.add(ecart);
+      }
+      // (16/11, l'auteur : « les doigts… ») les doigts ENTOURENT la barre : chaque phalange tourne autour de son axe
+      // en gardant la meme distance, par-dessus puis derriere, au lieu de pendre en griffe
+      const haut = new THREE.Vector3(0, 1, 0), devant = arriere.clone().negate();
+      const sens = devant.clone().applyAxisAngle(axe, Math.PI / 2).dot(haut) > 0 ? 1 : -1;
+      for (const f of ['index', 'middle', 'ring', 'pinky']) {
+        for (const n of ['01', '02', '03']) {
+          const o = os.get(`${f}_${n}_${c}`);
+          const enfant = o?.children.find((x: any) => x.isBone);
+          if (!o || !enfant) continue;
+          o.updateMatrixWorld(true);
+          const p = P(o), q = P(enfant), L = p.distanceTo(q);
+          const r = p.clone().sub(prise); r.addScaledVector(axe, -r.dot(axe));
+          const rho = Math.max(r.length(), RAYON_PRISE * 0.8);
+          const theta = 2 * Math.asin(Math.min(1, L / (2 * rho)));
+          const vers = p.clone().sub(r).add(r.clone().setLength(rho).applyAxisAngle(axe, sens * theta));
+          this.viser(o, q, vers);
+        }
       }
     }
   }
