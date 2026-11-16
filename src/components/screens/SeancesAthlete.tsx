@@ -1157,12 +1157,14 @@ function EnJeu({ ex, fini, couleur, scene }: { ex: Exclude<Exercice, 'departs'> 
 export function SeanceJeu(p: { jour: Jour; a: Athlete; onFin: () => void; exercice?: Exercice }) {
   // `exercice` : imposer l'exercice (l'apercu tools/apercu-seances.html) ; sinon, le programme du jour
   const ex = p.exercice || exerciceDuJour(p.a, p.jour);
-  return ex === 'departs' ? <VersLaPiste {...p} /> : <SeanceDessinee {...p} ex={ex} />;
+  // les departs, et le virage quand on a un club (sa piste) : sur le vrai stade du jeu
+  return ex === 'departs' || (ex === 'virage' && p.a.club)
+    ? <VersLaPiste {...p} ex={ex} /> : <SeanceDessinee {...p} ex={ex as Exclude<Exercice, 'departs'>} />;
 }
 
-/** Les departs : la seance part sur la piste du jeu, et l'ecran de la carriere se referme. */
-function VersLaPiste({ jour, a, onFin }: { jour: Jour; a: Athlete; onFin: () => void }) {
-  useEffect(() => { onFin(); ouvrirLesDeparts(a, jour); }, []);
+/** Les departs et le virage : la seance part sur la piste du jeu, et l'ecran de la carriere se referme. */
+function VersLaPiste({ jour, a, onFin, ex }: { jour: Jour; a: Athlete; onFin: () => void; ex: 'departs' | 'virage' }) {
+  useEffect(() => { onFin(); ouvrirLesDeparts(a, jour, ex); }, []);
   return null;
 }
 
@@ -1268,14 +1270,22 @@ function Bilan({ a, res, onFin }: { a: Athlete; res: { score: number; r: Resulta
 
 /* ================================================================ les departs, sur la piste */
 
-const ESSAIS = 5;
+const ESSAIS_DEPARTS = 5, ESSAIS_VIRAGE = 4;
+
+/**
+ * LE VIRAGE SUR LE STADE (16/11, l'auteur : « le virage peut être joué directement sur un stade ») : les 80
+ * premiers metres du 200 m, des blocs, dans la courbe du vrai stade ; quatre fois, comme « 4 x 80 m en courbe ».
+ * Le temps fait la note : 8,8 s et moins, parfait ; 13 s et plus, ou faux depart, rien.
+ */
+const noteVirage = (t: number) => borne((13 - t) / 4.2);
 
 /**
  * Les departs en blocs sur la piste du jeu : la sequence « depart » du tutoriel, le starter
  * et le pistolet du moteur, le corps de l'athlete. Cinq essais ; la reaction que mesure le
  * moteur fait la note (0,13 s : parfait ; 0,35 s et plus, ou faux depart : rien).
  */
-export function DepartsEnPiste({ a, jour, onFin }: { a: Athlete; jour: Jour; onFin: () => void }) {
+export function DepartsEnPiste({ a, jour, onFin, ex = 'departs' }: { a: Athlete; jour: Jour; onFin: () => void; ex?: 'departs' | 'virage' }) {
+  const virage = ex === 'virage', ESSAIS = virage ? ESSAIS_VIRAGE : ESSAIS_DEPARTS;
   const [essai, setEssai] = useState(0);
   const [dernier, setDernier] = useState<string | null>(null);
   const [res, setRes] = useState<{ score: number; r: ResultatSeance | null } | null>(null);
@@ -1284,20 +1294,26 @@ export function DepartsEnPiste({ a, jour, onFin }: { a: Athlete; jour: Jour; onF
   // la seance a ete comptee (au bilan ou en quittant) : une fois seulement
   const traite2 = useRef(false);
 
-  const lancer = () => { traite.current = false; setDernier(null); demarrerSequence({ geste: 'depart', tempo: 1, demo: false }); };
+  const lancer = () => { traite.current = false; setDernier(null); demarrerSequence(virage ? { geste: 'virage', tempo: 1, demo: false, cle: '200' } : { geste: 'depart', tempo: 1, demo: false }); };
   useEffect(() => {
     const G = SprinterApp.G as any;
     G.reglagesJoueur = { look: lookDe(apparenceDe(a), false) };
     lancer();
     let raf = 0, minuteur = 0;
     const pas = () => {
-      const e = pasDuTuto() as { fini: boolean; abandon: boolean; reaction: number | null; fauxDepart: boolean } | null;
+      const e = pasDuTuto() as { fini: boolean; abandon: boolean; reaction: number | null; fauxDepart: boolean; temps: number | null } | null;
       if (e && e.fini && !traite.current) {
         traite.current = true;
         const r = e.reaction;
+        if (virage) {
+          const t = e.temps;
+          scores.current.push(e.fauxDepart || e.abandon || t === null ? 0 : noteVirage(t));
+          setDernier(e.fauxDepart ? mot('faux') : t === null ? dans(['Arrêté', 'Stopped']) : `80 m : ${t.toFixed(2)} s`);
+        } else {
         const s = e.fauxDepart || e.abandon || r === null ? 0 : borne((0.35 - r) / 0.22);
         scores.current.push(s);
         setDernier(e.fauxDepart ? mot('faux') : r === null ? dans(['Trop tard', 'Too late']) : `${dans(['Réaction', 'Reaction'])} ${r.toFixed(3)} s`);
+        }
         minuteur = window.setTimeout(() => {
           const n = scores.current.length;
           setEssai(n);
@@ -1330,7 +1346,7 @@ export function DepartsEnPiste({ a, jour, onFin }: { a: Athlete; jour: Jour; onF
                     pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] px-4">
       {/* sous le bandeau de course et la reaction du jeu, qui tiennent le haut de l'ecran */}
       <span className="relative mt-[11.5rem] px-3 py-1 rounded-full bg-black/60 text-[10px] font-black tracking-[0.22em]" style={{ color: COULEUR[SEANCES[jour].stat] }}>
-        {mot(jour)} · {dans(EXOS.departs.nom).toUpperCase()}
+        {mot(jour)} · {dans(EXOS[ex].nom).toUpperCase()}
       </span>
       <span className="relative mt-1 text-xs font-black tracking-[0.3em] text-white/80">{dans(['ESSAI', 'ATTEMPT'])} {Math.min(ESSAIS, essai + 1)} / {ESSAIS}</span>
       {dernier && <span className="relative mt-2 font-black font-display text-2xl text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.95)]">{dernier}</span>}

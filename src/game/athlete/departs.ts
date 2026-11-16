@@ -5,11 +5,13 @@
 // drapeau dit a la racine de le monter.
 import type { Athlete, Jour } from './regles';
 
-let ouvert: { a: Athlete; jour: Jour } | null = null;
+/** Ce qui se court sur la vraie piste : les departs en blocs, et le virage (les 80 m du 200 m, 16/11). */
+export type SeanceEnPiste = 'departs' | 'virage';
+let ouvert: { a: Athlete; jour: Jour; ex: SeanceEnPiste } | null = null;
 const abonnes = new Set<() => void>();
 const prevenir = () => abonnes.forEach(f => f());
 
 export const departsOuverts = () => ouvert;
 export function abonnerAuxDeparts(f: () => void) { abonnes.add(f); return () => { abonnes.delete(f); }; }
-export function ouvrirLesDeparts(a: Athlete, jour: Jour) { ouvert = { a, jour }; prevenir(); }
+export function ouvrirLesDeparts(a: Athlete, jour: Jour, ex: SeanceEnPiste = 'departs') { ouvert = { a, jour, ex }; prevenir(); }
 export function fermerLesDeparts() { ouvert = null; prevenir(); }

@@ -466,7 +466,7 @@ function MainGame() {
       {tutoHaies && <TutorialHaies onClose={fermerLeTutoHaies} />}
       {tutoSprint && <Tutorial onClose={fermerLeTutoSprint} />}
       {departs && DepartsEnPiste && <Suspense fallback={null}>
-        <DepartsEnPiste a={departs.a} jour={departs.jour} onFin={fermerLesDeparts} />
+        <DepartsEnPiste a={departs.a} jour={departs.jour} ex={departs.ex} onFin={fermerLesDeparts} />
       </Suspense>}
 
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
