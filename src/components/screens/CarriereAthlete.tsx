@@ -282,14 +282,17 @@ function Apercu({ ap, haut = 260 }: { ap: Apparence; haut?: number }) {
     const dpr = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
     cv.width = Math.round(haut * 0.8 * dpr); cv.height = Math.round(haut * dpr);
     const c = cv.getContext('2d')!, A = SprinterApp as any;
-    // le corps MakeHuman de la ville (corps-gens.ts) : l'origine choisie s'y voit ; les facettes en attendant
-    const look = lookDe(ap, true, tenue(GARDE_ROBE_DE_DEPART.porte.ville));
+    // EN TENUE DE COMPETITION (16/11, l'auteur : « la taille et les couleurs [ne fonctionnent pas] ») : en tenue de
+    // ville, le t-shirt blanc et le jean de la garde-robe recouvraient « tes couleurs », qui ne se portent qu'au
+    // maillot. Le corps premium (corps-gens.ts) est en debardeur et short : c'est la tenue qu'il montre de toute facon.
+    const look = lookDe(ap, false, tenue(GARDE_ROBE_DE_DEPART.porte.competition));
     look.maillage = cheminDe(look); chargerMaillage(look.maillage);
     const corps = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0, posture: POSTURES.debout() } as any;
     let id = 0;
     const tic = (t: number) => {
       c.clearRect(0, 0, cv.width, cv.height);
-      const k = cv.height * 0.47, cap = -Math.PI / 2 + Math.sin(t / 1400) * 1.2;
+      // A SA TAILLE : la toile est faite pour 2,00 m, la plus grande ; un athlete de 1,55 m y tient plus bas.
+      const k = cv.height * 0.47 * Math.min(1, (ap.taille || 1.72) / 2), cap = -Math.PI / 2 + Math.sin(t / 1400) * 1.2;
       const caps = A.personCapsules(corps, cap, 0, false, false, A.niveauDetail(k));
       if (!(pret(look.maillage) && dessiner(c, look.maillage, corps.squelette || null, A.repereDuCoureur(corps, cap, 0, false, false), cv.width / 2, cv.height * 0.96, k, look)))
         A.drawFacetFigure(c, caps, cv.width / 2, cv.height * 0.96, k);
