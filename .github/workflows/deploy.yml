@@ -22,7 +22,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
       - run: npm install
+
+      # RIEN NE PART SANS CES DEUX CONTROLES (audit du 16/11 : la production se publiait sans
+      # aucun). Les types arretent le deploiement : une erreur de type est une erreur. Les bancs
+      # (tools/bancs.mjs, une douzaine de secondes) previennent sans arreter, le temps de voir
+      # qu'ils tiennent sur cette machine comme sur le Mac ; retirer `continue-on-error` ensuite.
+      - name: Verifier les types
+        run: npm run typecheck
+      - name: Lancer les bancs
+        id: bancs
+        continue-on-error: true
+        run: npm test
+      - name: Signaler des bancs en echec
+        if: steps.bancs.outcome == 'failure'
+        run: echo "::warning title=Bancs en echec::npm test a echoue — le deploiement continue, mais regarder l'etape « Lancer les bancs »."
 
       # Le jeu, tel que tout le monde le voit. Il est servi a la racine de
       # sprinter-game.com et non plus dans un sous-dossier au nom du depot :

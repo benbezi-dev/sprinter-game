@@ -27,6 +27,8 @@
 # pantalon, les pieds les chaussures).
 #
 # Sortie : public/modeles/stades/public-cartes.png et public-cartes.json.
+# Le jeu charge le .webp (sans perte, 5 fois plus leger) : apres un rendu,
+#   cwebp -lossless -exact public-cartes.png -o public-cartes.webp   puis retirer le .png de public/.
 # -----------------------------------------------------------------------
 import bpy
 import json

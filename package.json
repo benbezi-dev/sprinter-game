@@ -7,6 +7,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node tools/bancs.mjs",
     "tableau": "node suivi/servir.mjs",
     "build:app": "VITE_ENVELOPPE=native vite build --outDir dist-app",
     "android:alleger": "cd dist-app && rm -rf halloween decors/halloween-* decors-ultra/halloween-* modeles/stades-ultra/halloween modeles/boss-plein modeles/molosse-chien.glb",

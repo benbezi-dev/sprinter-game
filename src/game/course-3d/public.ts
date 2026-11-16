@@ -28,7 +28,7 @@ export function chargerLaPlage() {
   if (plageDemandee) return;
   plageDemandee = true;
   const base = (import.meta as any).env?.BASE_URL || '/';
-  new THREE.TextureLoader().loadAsync(base + 'modeles/stades/public-plage-cartes.png').then(t => {
+  new THREE.TextureLoader().loadAsync(base + 'modeles/stades/public-plage-cartes.webp').then(t => {
     t.magFilter = t.minFilter = THREE.NearestFilter;
     t.generateMipmaps = false;
     t.colorSpace = THREE.NoColorSpace;
@@ -40,7 +40,7 @@ export function chargerLePublic() {
   if (publicDemande) return;
   publicDemande = true;
   const base = (import.meta as any).env?.BASE_URL || '/';
-  new THREE.TextureLoader().loadAsync(base + 'modeles/stades/public-cartes.png').then(t => {
+  new THREE.TextureLoader().loadAsync(base + 'modeles/stades/public-cartes.webp').then(t => {
     // au plus proche, sans mipmaps : une passe melangee a sa voisine n'existe pas
     t.magFilter = t.minFilter = THREE.NearestFilter;
     t.generateMipmaps = false;
