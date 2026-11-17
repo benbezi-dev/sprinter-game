@@ -1101,7 +1101,7 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
     <div className="fixed inset-0 z-[70] bg-[#A9D3F0] text-foreground select-none">
       <div ref={hote} className="absolute inset-0 overflow-hidden" />
       {dedans && (
-        <Piece key={dedans} lieu={dedans} titre={nomLieu(dedans, a)} look={lookDe(apparenceDe(a), true, tenueVue)} nuit={heureDe(a) < 7 * 60 || heureDe(a) >= 20 * 60}
+        <Piece key={dedans} figee={!!seance} lieu={dedans} titre={nomLieu(dedans, a)} look={lookDe(apparenceDe(a), true, tenueVue)} nuit={heureDe(a) < 7 * 60 || heureDe(a) >= 20 * 60}
                gens={PERSONNES.flatMap(p => (ouEst(a, p) === dedans ? [{ id: p, nom: dans(GENS[p].nom(a)), lieu: dedans, look: lookDePersonne(a, p) }] : []))}
                ouvrir={m => {
                  const ids = m ? actionsDuMeuble(dedans, m) : [];
@@ -1313,8 +1313,8 @@ function EspaceSante({ a, ev, changer }: { a: Athlete; ev: boolean; changer: (f:
 
 /** Qui est la, dans ce lieu, en ce moment. */
 /** LA PIECE DU BATIMENT (interieur.ts) : on y marche, on touche un meuble ou quelqu'un ; la porte ramene en ville. */
-function Piece({ lieu, titre, look, nuit, gens, ouvrir, parler, sortir }: {
-  lieu: Lieu; titre: string; look: any; nuit: boolean; gens: { id: string; nom: string; lieu: Lieu; look: any }[];
+function Piece({ figee, lieu, titre, look, nuit, gens, ouvrir, parler, sortir }: {
+  figee?: boolean; lieu: Lieu; titre: string; look: any; nuit: boolean; gens: { id: string; nom: string; lieu: Lieu; look: any }[];
   ouvrir: (m?: Meuble) => void; parler: (id: string) => void; sortir: () => void;
 }) {
   const hote = useRef<HTMLDivElement>(null);
@@ -1332,6 +1332,8 @@ function Piece({ lieu, titre, look, nuit, gens, ouvrir, parler, sortir }: {
   }, []);
   // l'heure tourne : qui arrive, qui s'en va (gens.ts, ouEst)
   const presents = gens.map(g => g.id).join();
+  // une seance par-dessus : la piece s'arrete de rendre, la seance a le telephone pour elle
+  useEffect(() => { piece.current?.pause(!!figee); }, [figee]);
   useEffect(() => { piece.current?.majGens(gens); }, [presents]);
   // le miroir, la garde-robe : l'athlete se change sans sortir
   const habit = JSON.stringify(look);

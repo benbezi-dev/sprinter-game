@@ -43,6 +43,8 @@ const R_MUR = RS + W + 0.05;                          // le muret blanc
 const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
 const EV = 1.15;                                      // l'evasement de la coursive dans les virages
 const H_COURSIVE = 4.4;                               // (0463 : mesuree a l'echelle de la rambarde de 1 m)
+/** L'oeil d'un spectateur debout sur la coursive (le plan `tribune` de course-3d/camera.ts). */
+export const OEIL_COURSIVE = H_COURSIVE + 1.6;
 const R_G = R_MUR + 0.15;                             // le passage derriere le muret commence la
 // la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; le long cote
 // oppose a 29 m de l'axe, celui de la tribune a 35 m (le plan : ses gradins vont jusque-la)
@@ -54,6 +56,8 @@ const LY = LARGE + LARGE_T, YC = -RS + (LARGE_T - LARGE) / 2;     // la largeur 
 // rambarde vitree, puis dix rangs de beton gris de 0,80 m sur 0,40 m, aux sieges bleu ciel.
 const R_T = R_MUR + 1.2, N_T = 10, P_T = 0.8, Z_T = 1.1, M_T = 0.4;
 const H_TOIT = 12.5;
+/** Au-dessus, la camera est dans les fermes (membrure basse a 10,3 m, lampes a 10,2 m) : la charpente se cache. */
+const TOIT_CACHE = 10;
 const CW_DROITE = 1.22, NC_DROITE = SALLE.couloirsDroite; // la ligne droite centrale
 const W60 = NC_DROITE * CW_DROITE;
 // les lignes peintes a 8 cm, comme dans tout le jeu en 3D (plus fines, elles se crenelaient au loin ; l auteur, 24/10)
@@ -1240,8 +1244,8 @@ export function construireSalle(ctx: ContexteSalle) {
       if (!neuf) {
         // la coque n'a plus besoin des lumieres du jeu : sa lumiere est cuite (MeshBasic : albedo x lumiere / pi)
         neuf = coque
-          ? new THREE.MeshBasicMaterial({ map: ancien.map, color: ancien.color, side: ancien.side, lightMap: t, lightMapIntensity: LUMIERE_COQUE })
-          : Object.assign(ancien.clone(), { lightMap: t, lightMapIntensity: LUMIERE_SOL });
+          ? new THREE.MeshBasicMaterial({ map: ancien.map, color: ancien.color, side: ancien.side, lightMap: t, lightMapIntensity: LUMIERE_COQUE * (ctx.nuit ? NUIT_COQUE : 1) })
+          : Object.assign(ancien.clone(), { lightMap: t, lightMapIntensity: LUMIERE_SOL * (ctx.nuit ? NUIT_SOL : 1) });
         neuf.userData.cuite = (neuf as THREE.MeshBasicMaterial).lightMapIntensity;   // (sa pleine lumiere : `eteindre` la baisse)
         deja.set(ancien, neuf);
       }
@@ -1368,7 +1372,11 @@ export function construireSalle(ctx: ContexteSalle) {
      * du 2D) ; l'exterieur ne se montre qu'au survol, la camera hors de la halle.
      */
     camera: (x: number, y: number, z: number, survol: boolean, cam?: THREE.Camera, vise?: THREE.Vector3) => {
-      toit.visible = z < H_TOIT - 0.3;
+      // LA CHARPENTE S'EFFACE DES QUE LA CAMERA MONTE DANS LES FERMES (17/11, « c'est le toit de la salle, a
+      // rectifier », l'auteur) : la plongee d'avant-course part du survol (9,2 m) et rejoint le plan venu du 2D
+      // (jusqu'a 24 m) ; cachee a 12,2 m seulement, elle traversait treillis, lampes et plafond — des images grises.
+      // Sous la membrure basse (10,3 m) : le survol et le plan `tribune` (9,3 m) la gardent.
+      toit.visible = z < TOIT_CACHE;
       // (un agres dans le champ, plus pres de la camera que ce qu'elle vise, s'efface ; au survol, tout reste)
       if (cam && vise) {
         cam.updateMatrixWorld();
@@ -1381,7 +1389,10 @@ export function construireSalle(ctx: ContexteSalle) {
           for (const o of a.objets) o.visible = !gene;
         }
       }
-      const dedans = x > X0 - 0.5 && x < X1 + 0.5 && y > Y0 - 0.5 && y < Y1 + 0.5 && z < H_TOIT + 1.5;
+      // (au-dessus de la halle, la camera reste « dedans » : le survol de la salle se fait sous le toit, et la
+      // plongee qui monte vers le plan du 2D doit montrer la salle sans toit, comme ce plan — pas le batiment
+      // vu de dehors, dont le toit gris remplissait l'image au-dessus de 14 m ; 17/11)
+      const dedans = x > X0 - 0.5 && x < X1 + 0.5 && y > Y0 - 0.5 && y < Y1 + 0.5;
       dehors.visible = survol && !dedans;
       g.visible = !dehors.visible;
     },
@@ -1444,6 +1455,11 @@ export function placesDuPublic(affluence: number, hasard: () => number): { x: nu
 
 /** Les intensites des lumieres cuites (les images sont gardees en dessous de 1 : voir cuire_lumiere.py, EXPO). */
 const LUMIERE_COQUE = Math.PI * 1.05, LUMIERE_SOL = 0.85;
+// LA SALLE DE NUIT DES VIDEOS DU 17/11 (deux 60 m de nuit a Jesse Owens) : sous les plafonniers LED, la halle est
+// presque aussi claire que de jour — sol clair, couloirs bleus francs, toit gris clair et poutres de bois bien
+// visibles ; seules les vitres sont noires. La lumiere cuite de nuit (cuire_lumiere.py, NUIT=1) sortait terne :
+// on la remonte.
+const NUIT_COQUE = 1.5, NUIT_SOL = 1.65;
 export const ATLAS = 2048;
 
 /**
@@ -1514,4 +1530,4 @@ export const SALLE_LUMIERE = { fond: 0xdde4ec, brume: 0xd4dce6, hemiCiel: 0xf4f7
 /** La nuit (28/10, la video du club : « lumiere de jour et de nuit ») : le noir derriere les vitres, les plafonniers seuls. */
 /** La finale dans le noir : presque rien, une lueur froide pour garder le public visible. */
 export const SALLE_FINALE = { fond: 0x010206, brume: 0x010206, hemiCiel: 0x5a6a9a, hemiSol: 0x05060c, hemi: 0.45, soleil: 0.12, soleilCouleur: 0x8a9acc };
-export const SALLE_NUIT = { fond: 0x05080f, brume: 0x0a0e18, hemiCiel: 0xfff1dc, hemiSol: 0x2a2620, hemi: 1.0, soleil: 0.9, soleilCouleur: 0xfff0d8 };
+export const SALLE_NUIT = { fond: 0x05080f, brume: 0x0a0e18, hemiCiel: 0xfbf8f2, hemiSol: 0x4a463e, hemi: 1.4, soleil: 1.15, soleilCouleur: 0xfff8ee };
