@@ -15,10 +15,16 @@ import { suiviDuRelais } from './relais';
 // « garde cette vue aussi », « alterne entre les vues », l'auteur, 23/10) : la camera 3D (a la
 // nuit du molosse, sa poursuite) et celle du jeu 2D. Tire a chaque decompte, jamais deux fois
 // le meme de suite ; ?plan=3d, ?plan=2d ou ?plan=rail l'impose.
-const PLANS = ['3d', '2d', 'rail'] as const;
-export let planCam: typeof PLANS[number] = PLANS[Math.floor(Math.random() * PLANS.length)], planPour: unknown = null;
+// LES PLANS DES VIDEOS DE JESSE OWENS (17/11, deux videos d'un 60 m de nuit) : au 60 m de la salle seulement,
+// `bord` (au bord de la piste, a hauteur d'homme, qui pivote avec eux) et `tribune` (en haut, derriere l'arrivee,
+// face a la course). ?plan=bord ou ?plan=tribune les impose.
+const PLANS = ['3d', '2d', 'rail', 'bord', 'tribune'] as const;
+const PLANS_SALLE: readonly string[] = ['bord', 'tribune'];
+export let planCam: typeof PLANS[number] = (['3d', '2d', 'rail'] as const)[Math.floor(Math.random() * 3)], planPour: unknown = null;
 // le rail : ou il centre le peloton (metres devant le joueur) et de combien il recule
 let railPret = false, railC = 0, railD = 10;
+// le champ des plans des videos de Jesse Owens (bord, tribune)
+let champFixe = 40;
 // l'etirement horizontal de la vue 2D (voir LE PIXEL DU 2D N'EST PAS CARRE)
 let etire2D = 1;
 // le champ du plan 2D : etroit, pour tenir l'echelle fixe de l'axonometrie
@@ -56,10 +62,12 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // plan pour le smartphone en paysage, la tablette ou le pc portable », l'auteur, 24/10) : un
     // telephone tenu droit ne le tire plus (?plan=rail l'impose encore)
     const large = camera.aspect >= 1 || Math.min(innerWidth, innerHeight) >= 600;
-    const autres = PLANS.filter(k => k !== planCam && !(k === 'rail' && (nuitDuMolosse || !large)));
-    planCam = PLANS.includes(force) ? force : autres[Math.floor(Math.random() * autres.length)];
+    const droite60 = salleActive && !T.curved;
+    const autres = PLANS.filter(k => k !== planCam && !(k === 'rail' && (nuitDuMolosse || !large)) && (droite60 || !PLANS_SALLE.includes(k)));
+    planCam = PLANS.includes(force) && (droite60 || !PLANS_SALLE.includes(force)) ? force : autres[Math.floor(Math.random() * autres.length)];
   }
   const plan2D = !DOS && planCam === '2d', rail = !DOS && planCam === 'rail' && !nuitDuMolosse;
+  const fixe = !DOS && salleActive && !T.curved && PLANS_SALLE.includes(planCam) ? planCam : null;
   if (pl) {
     const p = ouCourt(T, pl);
     // Centree sur le couloir du joueur, decalee vers la corde (couloir 1), la tribune en face :
@@ -96,7 +104,7 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     else profilB += (cible - profilB) * Math.min(1, (dt || 0.016) * 0.7);
     const b = profilB;
     if (b <= 0) profilPret = false;
-    if (b > 0 && !DOS && !plan2D && !rail && !nuitDuMolosse) {
+    if (b > 0 && !DOS && !plan2D && !rail && !fixe && !nuitDuMolosse) {
       let dMin = pl.d, dMax = pl.d;
       for (const r of G.runners) if (r && r.look && !r.retour) { dMin = Math.min(dMin, r.d); dMax = Math.max(dMax, r.d); }
       dMin = Math.max(dMin, pl.d - 7); dMax = Math.min(dMax, pl.d + 7);
@@ -202,6 +210,28 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
       voulu.set(cx + vx * railD, -(cy + vy * railD), portrait ? 2 + railD * 0.22 : 1.6 + railD * 0.14);
       vise.set(cx, -cy, portrait ? 1.0 : 0.5);
     } else railPret = false;
+    // LES DEUX PLANS DES VIDEOS (17/11). La camera ne bouge pas, elle pivote : elle vise le milieu du peloton, a
+    // mi-chemin du joueur, et son champ se resserre a mesure qu'il est loin (un telephone qui zoome).
+    // - `bord` (la premiere video) : debout au bord de la piste, cote des derniers couloirs, aux deux tiers du
+    //   60 m, a hauteur d'homme. Ils arrivent de loin, passent devant elle, et finissent de dos.
+    // - `tribune` (la seconde) : en haut des gradins, derriere l'arrivee et cote couloir 1, face a la course :
+    //   toute la ligne droite en enfilade, les coureurs viennent vers elle.
+    if (fixe) {
+      const total = T.total || 60;
+      let sd = 0, n = 0;
+      for (const r of G.runners || []) if (r && r.look && !r.retour) { sd += Math.max(0, r.d || 0); n++; }
+      const dCentre = n ? (sd / n + Math.max(0, pl.d)) / 2 : Math.max(0, pl.d);
+      const milieuC = (nCouloirs - 1) / 2;
+      const c = ici(T.pos(Math.min(total + 8, dCentre), milieuC));
+      const q = fixe === 'bord'
+        ? ici(T.pos(total * 0.68, nCouloirs + 1.6))
+        : ici(T.pos(total + 20, -6));
+      voulu.set(q[0], -q[1], fixe === 'bord' ? 1.65 : 9.3);
+      vise.set(c[0], -c[1], fixe === 'bord' ? 1.0 : 0.6);
+      // ~18 m de large au peloton (huit couloirs et leurs bords), en champ vertical
+      const dist = Math.max(1, Math.hypot(q[0] - c[0], q[1] - c[1]));
+      champFixe = Math.max(fixe === 'bord' ? 22 : 18, Math.min(55, 2 * Math.atan(9 / (dist * camera.aspect)) * 180 / Math.PI));
+    }
     // LA NUIT DU MOLOSSE, L'AUTRE PLAN : UNE CAMERA DE POURSUITE (« recree l'evenement le molosse
     // en full 3D », l'auteur, 23/10). De face, le coureur vient vers nous et la bete grandit dans
     // son dos, les yeux dans la brume. Le depart garde notre camera, la bascule se fait sur les
@@ -376,7 +406,7 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     const fo = G.state === 'falseout' ? Math.min(1, (G.falseOutT || 0) / 0.8) : 0;
     if (fo > 0) camera.lookAt(camVise.x, camVise.y, camVise.z + fo * fo * (3 - 2 * fo) * 0.2 * camera.position.distanceTo(camVise));
     else camera.lookAt(camVise);
-    const fov = plan2D ? CHAMP_2D : rail ? (camera.aspect < 1 ? 40 : 32) : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
+    const fov = fixe ? champFixe : plan2D ? CHAMP_2D : rail ? (camera.aspect < 1 ? 40 : 32) : champBase + Math.min(1, Math.max(0, (pl.v || 0) / 11)) * 7;
     if (finActive && champNom > 0) camera.fov = champNom;
     else if (Math.abs(camera.fov - fov) > 0.05) camera.fov += (fov - camera.fov) * Math.min(1, (dt || 0.016) * 3);
     // LE PIXEL DU 2D N'EST PAS CARRE (vue.py) : un metre en largeur y vaut cos.racine2/racine(2 sin2+1)
