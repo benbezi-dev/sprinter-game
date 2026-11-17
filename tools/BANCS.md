@@ -32,6 +32,10 @@ championnat-tenant, championnat-cloture, mot, relais-defis.
 
 Enchaines, direct-tournoi et reseaux echouent parfois ; seuls, ils passent.
 
+Non lances (autre port ou cle) : championnat-direct, championnat-fiches, championnat-fictifs,
+fictifs-faux-depart, tchat-rapide (8791), correctifs-21-10 (8794), reponse-perdant (8795),
+refus (8787), submit-preuve.
+
 ## Bancs sans serveur encore casses
 
 | Banc | Ce qui casse |
