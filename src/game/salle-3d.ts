@@ -43,6 +43,8 @@ const R_MUR = RS + W + 0.05;                          // le muret blanc
 const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
 const EV = 1.15;                                      // l'evasement de la coursive dans les virages
 const H_COURSIVE = 4.4;                               // (0463 : mesuree a l'echelle de la rambarde de 1 m)
+/** L'oeil d'un spectateur debout sur la coursive (le plan `tribune` de course-3d/camera.ts). */
+export const OEIL_COURSIVE = H_COURSIVE + 1.6;
 const R_G = R_MUR + 0.15;                             // le passage derriere le muret commence la
 // la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; le long cote
 // oppose a 29 m de l'axe, celui de la tribune a 35 m (le plan : ses gradins vont jusque-la)
@@ -54,6 +56,8 @@ const LY = LARGE + LARGE_T, YC = -RS + (LARGE_T - LARGE) / 2;     // la largeur 
 // rambarde vitree, puis dix rangs de beton gris de 0,80 m sur 0,40 m, aux sieges bleu ciel.
 const R_T = R_MUR + 1.2, N_T = 10, P_T = 0.8, Z_T = 1.1, M_T = 0.4;
 const H_TOIT = 12.5;
+/** Au-dessus, la camera est dans les fermes (membrure basse a 10,3 m, lampes a 10,2 m) : la charpente se cache. */
+const TOIT_CACHE = 10;
 const CW_DROITE = 1.22, NC_DROITE = SALLE.couloirsDroite; // la ligne droite centrale
 const W60 = NC_DROITE * CW_DROITE;
 // les lignes peintes a 8 cm, comme dans tout le jeu en 3D (plus fines, elles se crenelaient au loin ; l auteur, 24/10)
@@ -1368,7 +1372,11 @@ export function construireSalle(ctx: ContexteSalle) {
      * du 2D) ; l'exterieur ne se montre qu'au survol, la camera hors de la halle.
      */
     camera: (x: number, y: number, z: number, survol: boolean, cam?: THREE.Camera, vise?: THREE.Vector3) => {
-      toit.visible = z < H_TOIT - 0.3;
+      // LA CHARPENTE S'EFFACE DES QUE LA CAMERA MONTE DANS LES FERMES (17/11, « c'est le toit de la salle, a
+      // rectifier », l'auteur) : la plongee d'avant-course part du survol (9,2 m) et rejoint le plan venu du 2D
+      // (jusqu'a 24 m) ; cachee a 12,2 m seulement, elle traversait treillis, lampes et plafond — des images grises.
+      // Sous la membrure basse (10,3 m) : le survol et le plan `tribune` (9,3 m) la gardent.
+      toit.visible = z < TOIT_CACHE;
       // (un agres dans le champ, plus pres de la camera que ce qu'elle vise, s'efface ; au survol, tout reste)
       if (cam && vise) {
         cam.updateMatrixWorld();
@@ -1381,7 +1389,10 @@ export function construireSalle(ctx: ContexteSalle) {
           for (const o of a.objets) o.visible = !gene;
         }
       }
-      const dedans = x > X0 - 0.5 && x < X1 + 0.5 && y > Y0 - 0.5 && y < Y1 + 0.5 && z < H_TOIT + 1.5;
+      // (au-dessus de la halle, la camera reste « dedans » : le survol de la salle se fait sous le toit, et la
+      // plongee qui monte vers le plan du 2D doit montrer la salle sans toit, comme ce plan — pas le batiment
+      // vu de dehors, dont le toit gris remplissait l'image au-dessus de 14 m ; 17/11)
+      const dedans = x > X0 - 0.5 && x < X1 + 0.5 && y > Y0 - 0.5 && y < Y1 + 0.5;
       dehors.visible = survol && !dedans;
       g.visible = !dehors.visible;
     },

@@ -2,7 +2,7 @@
 
 import * as THREE from 'three';
 import { OCCULTANTS } from '../amsalem-3d';
-import { creuserTapis, zSol, auBordDeLaPiste, SURVOL_SALLE } from '../salle-3d';
+import { creuserTapis, zSol, auBordDeLaPiste, SURVOL_SALLE, OEIL_COURSIVE } from '../salle-3d';
 import { Q, DOS, RECUL, COTE, HAUT, P_DEBUT, P_FIN, P_ARRIERE, P_LOIN, LANE_W, P_HAUT, SURVOL, R_CORDE } from './reglages';
 import { camera, _a, _b, renderer, champBase, soleil } from './scene';
 import { ouCourt, capIci, virageApres, ici, sx, salleActive } from './repere';
@@ -226,11 +226,15 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
       const q = fixe === 'bord'
         ? ici(T.pos(total * 0.68, nCouloirs + 1.6))
         : ici(T.pos(total + 20, -6));
-      voulu.set(q[0], -q[1], fixe === 'bord' ? 1.65 : 9.3);
+      // (`tribune` : DEBOUT SUR LA COURSIVE du virage, derriere le tapis, a hauteur d'oeil — 17/11, « il faut que ca
+      // fonctionne », l'auteur. A 9,3 m, relevee encore du virage, la camera flottait a 10,6 m dans les fermes,
+      // sans rien de la tribune autour d'elle.)
+      voulu.set(q[0], -q[1], fixe === 'bord' ? 1.65 : OEIL_COURSIVE);
       vise.set(c[0], -c[1], fixe === 'bord' ? 1.0 : 0.6);
       // ~18 m de large au peloton (huit couloirs et leurs bords), en champ vertical
       const dist = Math.max(1, Math.hypot(q[0] - c[0], q[1] - c[1]));
-      champFixe = Math.max(fixe === 'bord' ? 22 : 18, Math.min(55, 2 * Math.atan(9 / (dist * camera.aspect)) * 180 / Math.PI));
+      // (de la tribune, ~85 m du depart : le telephone zoome plus serre)
+      champFixe = Math.max(fixe === 'bord' ? 22 : 10, Math.min(55, 2 * Math.atan(9 / (dist * camera.aspect)) * 180 / Math.PI));
     }
     // LA NUIT DU MOLOSSE, L'AUTRE PLAN : UNE CAMERA DE POURSUITE (« recree l'evenement le molosse
     // en full 3D », l'auteur, 23/10). De face, le coureur vient vers nous et la bete grandit dans
@@ -329,7 +333,9 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
       // CHACUN SUR LE SOL SOUS LUI (« on ne ressent pas les montees et descentes sur l'anneau », l'auteur,
       // 27/10) : montes d'une meme hauteur, camera et visee glissaient sans s'incliner — la pente ne se
       // voyait pas. La camera reste a sa place (plateau ou releve), le coureur monte devant elle.
-      _a.z += zSol(_a.x, -_a.y); _b.z += zSol(_b.x, -_b.y);
+      // (sauf la camera de la tribune : elle se tient sur la coursive, pas sur le virage releve)
+      if (fixe !== 'tribune') _a.z += zSol(_a.x, -_a.y);
+      _b.z += zSol(_b.x, -_b.y);
     }
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
