@@ -108,6 +108,12 @@ async function jeuDe(canal) {
   await build({
     entryPoints: [entree], outfile: sortie, bundle: true,
     format: 'esm', platform: 'node', logLevel: 'silent',
+    // La liste du prechargement est un module virtuel que seul Vite fabrique
+    // (vite.config.ts) : vide ici, rien n'est a precharger sous node.
+    plugins: [{ name: 'precharge', setup(b) {
+      b.onResolve({ filter: /^virtual:precharge$/ }, () => ({ path: 'precharge', namespace: 'virtuel' }));
+      b.onLoad({ filter: /.*/, namespace: 'virtuel' }, () => ({ contents: 'export default { ordinaire: [], ultra: [] };', loader: 'js' }));
+    } }],
     define: {
       'import.meta.env.VITE_CANAL': JSON.stringify(canal),
       'import.meta.env.BASE_URL': '"/"',

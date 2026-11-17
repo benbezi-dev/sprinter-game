@@ -75,7 +75,7 @@ const ligne = (b, n) => b.classement.find(x => x.name === n) || null;
      `200 : ${!!ligne(c200, z)}, 400 : ${!!ligne(c400, z)}`);
   ok('le classement rendu porte sa discipline', c400.epreuve === '400', c400.epreuve);
   ok('et annonce les distances qu un ecran peut proposer',
-     Array.isArray(c100.epreuves) && c100.epreuves.join(',') === '100,200,400',
+     Array.isArray(c100.epreuves) && c100.epreuves.join(',') === '100,200,400,100h,110h,400h',
      JSON.stringify(c100.epreuves));
 
   titre('MONTER SUR 100 M NE FAIT PAS MONTER SUR 400 M');

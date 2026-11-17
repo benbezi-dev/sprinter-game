@@ -47,7 +47,8 @@ const nouvelle = () => fetch(`${B}/live/nouveau`, { method: 'POST' }).then(r => 
 /** Un joueur qui parle le protocole a la main. */
 function client(code, nom, { places = 2, races = '100' } = {}) {
   const c = { nom, moi: null, etat: null, depart: null, resultats: [], bienvenue: null };
-  const q = `name=${encodeURIComponent(nom)}&races=${races}&level=5&max=${places}`;
+  // l'appareil, comme le jeu : sans lui, la salle compte le nom en anonyme
+  const q = `device=harnais-${String(nom).replace(/[^a-zA-Z0-9]/g, '').slice(0, 50)}&name=${encodeURIComponent(nom)}&races=${races}&level=5&max=${places}`;
   c.ws = new WebSocket(`${WS}/live/${code}?${q}`);
   c.ouvert = new Promise(res => c.ws.addEventListener('open', res));
   c.ws.addEventListener('message', ev => {
@@ -259,7 +260,8 @@ titre('le client rouvre la piste fermee, sous le meme code');
   h.pret(true); j.pret(true);
   ok('la course part', await jusqua(() => vus.h.length === 1 && vus.j.length === 1));
   ok('chacun se voit pret, d apres la salle', h.pretMoi && j.pretMoi);
-  h.fini(10300); j.fini(10600);
+  // un 400 m : un chrono sous son plancher (plancher.js) serait ignore
+  h.fini(45300); j.fini(45600);
   ok('apres le verdict, personne n est plus pret',
      await jusqua(() => !h.pretMoi && !j.pretMoi && !!h.dernierEtat?.termine));
 
