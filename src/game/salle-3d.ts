@@ -43,6 +43,8 @@ const R_MUR = RS + W + 0.05;                          // le muret blanc
 const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
 const EV = 1.15;                                      // l'evasement de la coursive dans les virages
 const H_COURSIVE = 4.4;                               // (0463 : mesuree a l'echelle de la rambarde de 1 m)
+/** L'oeil d'un spectateur debout sur la coursive (le plan `tribune` de course-3d/camera.ts). */
+export const OEIL_COURSIVE = H_COURSIVE + 1.6;
 const R_G = R_MUR + 0.15;                             // le passage derriere le muret commence la
 // la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; le long cote
 // oppose a 29 m de l'axe, celui de la tribune a 35 m (le plan : ses gradins vont jusque-la)
