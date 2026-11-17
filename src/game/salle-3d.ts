@@ -1240,8 +1240,8 @@ export function construireSalle(ctx: ContexteSalle) {
       if (!neuf) {
         // la coque n'a plus besoin des lumieres du jeu : sa lumiere est cuite (MeshBasic : albedo x lumiere / pi)
         neuf = coque
-          ? new THREE.MeshBasicMaterial({ map: ancien.map, color: ancien.color, side: ancien.side, lightMap: t, lightMapIntensity: LUMIERE_COQUE })
-          : Object.assign(ancien.clone(), { lightMap: t, lightMapIntensity: LUMIERE_SOL });
+          ? new THREE.MeshBasicMaterial({ map: ancien.map, color: ancien.color, side: ancien.side, lightMap: t, lightMapIntensity: LUMIERE_COQUE * (ctx.nuit ? NUIT_COQUE : 1) })
+          : Object.assign(ancien.clone(), { lightMap: t, lightMapIntensity: LUMIERE_SOL * (ctx.nuit ? NUIT_SOL : 1) });
         neuf.userData.cuite = (neuf as THREE.MeshBasicMaterial).lightMapIntensity;   // (sa pleine lumiere : `eteindre` la baisse)
         deja.set(ancien, neuf);
       }
@@ -1444,6 +1444,11 @@ export function placesDuPublic(affluence: number, hasard: () => number): { x: nu
 
 /** Les intensites des lumieres cuites (les images sont gardees en dessous de 1 : voir cuire_lumiere.py, EXPO). */
 const LUMIERE_COQUE = Math.PI * 1.05, LUMIERE_SOL = 0.85;
+// LA SALLE DE NUIT DES VIDEOS DU 17/11 (deux 60 m de nuit a Jesse Owens) : sous les plafonniers LED, la halle est
+// presque aussi claire que de jour — sol clair, couloirs bleus francs, toit gris clair et poutres de bois bien
+// visibles ; seules les vitres sont noires. La lumiere cuite de nuit (cuire_lumiere.py, NUIT=1) sortait terne :
+// on la remonte.
+const NUIT_COQUE = 1.5, NUIT_SOL = 1.65;
 export const ATLAS = 2048;
 
 /**
@@ -1514,4 +1519,4 @@ export const SALLE_LUMIERE = { fond: 0xdde4ec, brume: 0xd4dce6, hemiCiel: 0xf4f7
 /** La nuit (28/10, la video du club : « lumiere de jour et de nuit ») : le noir derriere les vitres, les plafonniers seuls. */
 /** La finale dans le noir : presque rien, une lueur froide pour garder le public visible. */
 export const SALLE_FINALE = { fond: 0x010206, brume: 0x010206, hemiCiel: 0x5a6a9a, hemiSol: 0x05060c, hemi: 0.45, soleil: 0.12, soleilCouleur: 0x8a9acc };
-export const SALLE_NUIT = { fond: 0x05080f, brume: 0x0a0e18, hemiCiel: 0xfff1dc, hemiSol: 0x2a2620, hemi: 1.0, soleil: 0.9, soleilCouleur: 0xfff0d8 };
+export const SALLE_NUIT = { fond: 0x05080f, brume: 0x0a0e18, hemiCiel: 0xfbf8f2, hemiSol: 0x4a463e, hemi: 1.4, soleil: 1.15, soleilCouleur: 0xfff8ee };
