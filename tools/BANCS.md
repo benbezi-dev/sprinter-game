@@ -1,6 +1,6 @@
 # Les bancs de tools/ — état au 16/11/2026
 
-`npm test` lance `tools/bancs.mjs` : les 46 bancs qui tournent sans serveur (12 s). La CI les lance
+`npm test` lance `tools/bancs.mjs` : les 50 bancs qui tournent sans serveur. La CI les lance
 avant chaque déploiement.
 
 ## Bancs qui demandent le worker local
@@ -18,30 +18,28 @@ curl -X POST -H 'Content-Type: application/json' -H "X-Sprinter-Admin: $ADMIN" h
 Sans ce code, les bancs tombent sous la limite de débit et échouent tous (« trop de tentatives »).
 Les lancer UN PAR UN : enchaînés, `relais-client-test` et `nations-test` échouent une fois sur deux.
 
-Passent (20) : classement-integration, championnat-epreuve, direct-couloirs, defi-plusieurs,
-defi-camera, direct-revanche-duel, direct-huit, direct-presentation, haies-integration,
-direct-tournoi, identite, mot-direct, relais-client, relais-confrontation, reseaux, recruteurs,
-profil, serie, revanche, nations.
+Mis a jour le 17/11, apres la reprise du lot du 21/10 (9fbde050).
 
-Échouent, sur main comme après l'audit (12, à réparer ou à retirer) : acces, championnat-cycle,
-championnat-double, championnat-france, championnat-tenant, championnat-cloture,
-direct-revanche-accord, duels-disciplines, mot, relais-salle, relais-vestiaire, relais-defis.
+Passent (25) : correctifs-21-10-soir (a lancer depuis la racine), classement-integration,
+championnat-epreuve, direct-couloirs, defi-plusieurs, defi-camera, direct-revanche-duel,
+direct-revanche-accord, direct-huit, direct-presentation, haies-integration, direct-tournoi,
+identite, mot-direct, relais-client, relais-confrontation, relais-salle, relais-vestiaire,
+reseaux, recruteurs, profil, serie, revanche, nations, acces.
 
-Non lancés (autre port ou clé) : championnat-direct, championnat-fiches, championnat-fictifs,
-fictifs-faux-depart, tchat-rapide (8791), correctifs-21-10 (8794), reponse-perdant (8795),
-refus (8787), submit-preuve.
+Echouent, attentes perimees (a mettre a jour) : duels-disciplines (ne connait pas 60hf/60h),
+et non relances depuis : championnat-cycle, championnat-double, championnat-france,
+championnat-tenant, championnat-cloture, mot, relais-defis.
 
-## Bancs sans serveur cassés (16 moins les 4 ci-dessus qui attendaient un serveur)
+Enchaines, direct-tournoi et reseaux echouent parfois ; seuls, ils passent.
+
+## Bancs sans serveur encore casses
 
 | Banc | Ce qui casse |
 |---|---|
-| nationalite-test | importe `oublierPays`, qui n'existe plus dans worker/src/championnats.js |
-| performance-test | `tenirLaCadence` déplacé dans course-3d/paliers |
-| rendu-ultra-test | 4 attentes sur le palier de départ |
+| performance-test | `tenirLaCadence` deplace dans course-3d/paliers |
 | piste-salle-test | « le tapis ne vaut qu'au 60 m » |
-| edition-danube-test | 19 noms de stades pour 22 attendus |
-| longueur-canal-test, molosse-canal-test | cherchent des chaînes dans le paquet public |
-| depart-test, haies-canal-test, poussee-canal-test | esbuild ne résout pas `virtual:precharge` |
+| edition-danube-test, haies-canal-test | attentes perimees (stades, nombre d'epreuves) |
+| longueur-canal-test, molosse-canal-test | cherchent des chaines dans le paquet public |
 | carton-film-test, review-partage-test | import sans extension (`mp4-duree`) sous node |
 | direct-revanche-moteur-test | `import` hors module |
-| limites-test | demande `wrangler` à la racine |
+| limites-test | demande `wrangler` a la racine |

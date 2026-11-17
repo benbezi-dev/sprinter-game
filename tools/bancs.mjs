@@ -1,7 +1,7 @@
 // LES BANCS QUI TOURNENT SANS SERVEUR, d'une seule commande : `npm test`.
 //
 // tools/ compte une centaine de bancs `*-test.mjs`, et aucun n'etait lance nulle part : seize
-// avaient pourri sans que personne le voie (audit du 16/11). Ceux de la liste passent sur main
+// avaient pourri sans que personne le voie (audit du 16/11). Ceux de la liste passent
 // et ne demandent ni worker local ni reseau. Les autres attendent un worker
 // (`cd worker && npx wrangler dev --local --port 8788`) ou sont a reparer : voir tools/BANCS.md.
 //
@@ -16,6 +16,7 @@ championnats-test
 classement-test
 coude-casse-test
 cycle-avant-test
+depart-test
 faux-depart-test
 fenetre-deploiement-test
 haies-appel-test
@@ -38,17 +39,20 @@ legende-test
 lien-court-test
 longueur-test
 molosse-test
+nationalite-test
 noel-test
 objectif-distances-test
 objectif-test
 palette-affiche-test
 panneaux-test
 plancher-test
+poussee-canal-test
 preparer-github-pages-test
 profil-fusion-test
 record-attente-test
 records-du-monde-test
 relais-regles-test
+rendu-ultra-test
 reprise-test
 succes-test
 tchat-marques-test

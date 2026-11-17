@@ -154,7 +154,21 @@ function paletteDuPublic(th: any, luxe: boolean, cyber: boolean) {
 export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, stadeCle: string | null, etape: number, affluence = 1) {
   // le virage du depart : celui du stade sur un virage, plus loin derriere au 100 m (sa ligne droite est plus longue)
   const DROITE0 = T.curved ? DROITE1 - T.straight : DROITE0_100;
-  if (stade) { monde.remove(stade); stade.traverse((o: any) => { o.geometry?.dispose?.(); }); }
+  // L'ancien stade rend TOUT au processeur graphique, pas seulement ses geometries (audit du
+  // 16/11) : ses materiaux, leurs textures, et le ciel peint (une CanvasTexture). Sans quoi chaque
+  // changement de stade ou de forme laissait sa memoire graphique derriere lui. three.js
+  // re-televerse a la demande un materiau ou une texture partages qui resserviraient.
+  if (stade) {
+    monde.remove(stade);
+    stade.traverse((o: any) => {
+      o.geometry?.dispose?.();
+      for (const m of Array.isArray(o.material) ? o.material : o.material ? [o.material] : []) {
+        for (const k in m) { const v = m[k]; if (v && v.isTexture) v.dispose(); }
+        m.dispose?.();
+      }
+    });
+  }
+  if ((scene.background as any)?.isTexture) (scene.background as THREE.Texture).dispose();
   if (miroir) { miroir.dispose(); miroir = null; }
   stade = new THREE.Group();
   monde.add(stade);

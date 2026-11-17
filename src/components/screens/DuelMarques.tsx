@@ -618,7 +618,7 @@ function Score({ t, fr, reduit }: { t: TableauMarques; fr: boolean; reduit: bool
                     transition={vivant ? { duration: 1.2, repeat: Infinity } : { duration: 0 }} />
                   {fr
                     ? `${manque(t, attente, e)} place${manque(t, attente, e) > 1 ? 's' : ''} à prendre pour Team ${NOM_CAMP[attente]} : le prochain qui court le ${NOM_EPREUVE[e]} compte.`
-                    : `${manque(t, attente, e)} seat${manque(t, attente, e) > 1 ? 's' : ''} open for Team ${NOM_CAMP[attente]}: the next ${NOM_EPREUVE[e]} runner counts.`}
+                    : `${manque(t, attente, e)} seat${manque(t, attente, e) !== 1 ? 's' : ''} open for Team ${NOM_CAMP[attente]}: the next ${NOM_EPREUVE[e]} runner counts.`}
                 </span>
               )}
             </motion.div>
@@ -666,7 +666,7 @@ function MaLigne({ t, fr, courir, reduit, defier, enRoute, changer }: {
         {!!moi.ko && (
           <span className="flex items-center gap-1 text-[11px] font-black text-primary">
             <Swords className="w-3 h-3" aria-hidden />
-            {fr ? `Tu tiens ${moi.ko} duel${moi.ko > 1 ? 's' : ''}` : `You hold ${moi.ko} duel${moi.ko > 1 ? 's' : ''}`}
+            {fr ? `Tu tiens ${moi.ko} duel${moi.ko > 1 ? 's' : ''}` : `You hold ${moi.ko} duel${moi.ko !== 1 ? 's' : ''}`}
           </span>
         )}
         <button onClick={changer}
@@ -874,7 +874,7 @@ function ChangerEpreuve({ t, fr, reduit, onClose }: { t: TableauMarques; fr: boo
   const [refus, setRefus] = useState(false);
   const perte: string[] = [];
   if (moi.best_ms != null) perte.push(fr ? `ton ${secondes(moi.best_ms)} s au ${NOM_EPREUVE[moi.epreuve]}` : `your ${secondes(moi.best_ms)} s at ${NOM_EPREUVE[moi.epreuve]}`);
-  if (moi.ko) perte.push(fr ? `tes ${moi.ko} duel${moi.ko > 1 ? 's' : ''} tenu${moi.ko > 1 ? 's' : ''}` : `your ${moi.ko} held duel${moi.ko > 1 ? 's' : ''}`);
+  if (moi.ko) perte.push(fr ? `tes ${moi.ko} duel${moi.ko > 1 ? 's' : ''} tenu${moi.ko > 1 ? 's' : ''}` : `your ${moi.ko} held duel${moi.ko !== 1 ? 's' : ''}`);
   const confirmer = async () => {
     if (!e) return;
     setEnvoi(true); setRefus(false);
@@ -903,7 +903,7 @@ function ChangerEpreuve({ t, fr, reduit, onClose }: { t: TableauMarques; fr: boo
                 <span className="font-black text-lg w-16 shrink-0">{NOM_EPREUVE[x]}</span>
                 <span className={`text-[11px] leading-snug ${m > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
                   {actuelle ? (fr ? 'ton épreuve actuelle' : 'your current event')
-                    : m > 0 ? (fr ? `${m} place${m > 1 ? 's' : ''} libre${m > 1 ? 's' : ''} pour ton camp` : `${m} open seat${m > 1 ? 's' : ''} for your side`)
+                    : m > 0 ? (fr ? `${m} place${m > 1 ? 's' : ''} libre${m > 1 ? 's' : ''} pour ton camp` : `${m} open seat${m !== 1 ? 's' : ''} for your side`)
                     : (fr ? `${t.epreuves[x].camps[moi.camp].coureurs.length} coureur(s) de ton camp` : `${t.epreuves[x].camps[moi.camp].coureurs.length} runner(s) on your side`)}
                 </span>
               </motion.button>
@@ -1029,10 +1029,10 @@ function ChoixDuCamp({ t, fr, reduit }: { t: TableauMarques; fr: boolean; reduit
   const atout = (c: Camp, e: Epreuve): string => {
     const m = manque(t, c, e);
     if (m > 0) return fr ? `${m} place${m > 1 ? 's' : ''} libre${m > 1 ? 's' : ''} : ta première course compte`
-                         : `${m} open seat${m > 1 ? 's' : ''}: your first run counts`;
+                         : `${m} open seat${m !== 1 ? 's' : ''}: your first run counts`;
     const n = t.epreuves[e].camps[c].coureurs.length;
     if (!n) return fr ? 'personne encore : ouvre l’épreuve pour ton camp' : 'nobody yet: open the event for your side';
-    return fr ? `${n} coureur${n > 1 ? 's' : ''} déjà : place au chrono` : `${n} runner${n > 1 ? 's' : ''} already: earn your seat`;
+    return fr ? `${n} coureur${n > 1 ? 's' : ''} déjà : place au chrono` : `${n} runner${n !== 1 ? 's' : ''} already: earn your seat`;
   };
 
   const actif = vivant && !!nom;
