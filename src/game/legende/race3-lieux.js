@@ -13,6 +13,7 @@
 //               par mesure, joue par un instrument synthetise avec les memes
 //               briques (`tone`) — voir INSTRUMENTS dans sprinter-app.js ;
 //   contretemps les accords plaques sur les contretemps (skank reggae) ;
+//   (nom        le nom de la piste dans le MIDI pour Logic, legende-midi.mjs)
 //   aura        l'Olympe et l'apotheose : choeur, halo, harpe et grande
 //               reverberation par-dessus (aura.js ; 1 = le dosage de base).
 // Un fichier de donnees pur : le jeu le lit (Audio_.buildRace) et
@@ -57,30 +58,48 @@ const tr = (mesure, k) => mesure.map(([s, x, l]) => [s + k, x, l]);
 
 const LIEUX = {
   // MENOLE — Kouassi « le Crabe », 12 ans, pieds nus. Le coupe-decale
-  // d'Abidjan : grosse caisse sur chaque temps, mains sur les contretemps,
-  // basse qui saute d'octave ; devant, la guitare « sebene » qui roule en
-  // doubles-croches sur les accords (I, IV, V, IV, majeur), une 2e guitare
-  // tient le refrain dessous, et le sifflet de l'atalaku lance chaque tour.
+  // d'Abidjan, refait le 14/11 (« genere moi une musique style coupe-decale
+  // pour le premier niveau ») : la grille I-vi-IV-V (la, fa diese mineur, re,
+  // mi), la grosse caisse sur chaque temps avec le rebond du « decale » juste
+  // avant le 4, la caisse claire et les mains sur 2 et 4, la basse qui roule
+  // et saute d'octave. Devant : le riff de cuivres synthe qui se chante
+  // (question sur les deux premieres mesures, reponse sur les deux
+  // dernieres), la guitare sebene qui roule en doubles-croches dans l'aigu,
+  // une 2e guitare en contre-chant sur les croches, la cloche qui tient la
+  // clave, et le sifflet de l'atalaku qui lance le tour et relance a la 3e.
   menole: {
-    ...BASE, prog: [[0, MAJ], [5, MAJ], [7, MAJ], [5, MAJ]],
-    kick: [0, 1, 2, 3], snare: [1, 3, 3.75],
-    bassPat: [0, 0, 12, 0, 7, 0, 12, 0, 0, 0, 12, 0, 7, 0, 4, 7],
-    stabSemi: 7, claps: [0.5, 1.5, 2.5, 3.5], clapAmp: 1.1,
+    ...BASE, prog: [[0, MAJ], [-3, MIN], [5, MAJ], [7, MAJ]],
+    kick: [0, 1, 2, 2.75, 3], snare: [1, 3, 3.75],
+    bassPat: [0, 0, 12, 0, 7, 0, 12, 7, 0, 0, 12, 0, 7, 12, 7, 4],
+    stabSemi: 7, claps: [1, 3, 3.5], clapAmp: 1.1,
     couches: [
-      { instrument: 'pincee', octave: 3, amp: 0.15, melodie: (() => {
-        const sebene = (r) => [12, 16, 19, 16, 24, 19, 16, 12, 14, 16, 19, 21, 19, 16, 14, 12]
-          .map((n, i) => [r + n, i * 0.25, 0.25]);
-        return [sebene(0), sebene(5), sebene(7), sebene(5)];
-      })() },
-      { instrument: 'pincee', octave: 2, amp: 0.20, melodie: [
-        [[12, 0, .25], [9, .25, .25], [7, .5, .25], [9, .75, .25], [12, 1, .5], [9, 1.5, .25], [7, 1.75, .25], [4, 2, .5], [7, 2.5, .5], [9, 3, .5], [7, 3.5, .5]],
-        [[14, 0, .25], [12, .25, .25], [9, .5, .25], [12, .75, .25], [14, 1, .5], [12, 1.5, .25], [9, 1.75, .25], [5, 2, .5], [9, 2.5, .5], [12, 3, .5], [9, 3.5, .5]],
-        [[16, 0, .25], [14, .25, .25], [11, .5, .25], [14, .75, .25], [16, 1, .5], [14, 1.5, .25], [11, 1.75, .25], [7, 2, .5], [11, 2.5, .5], [14, 3, .5], [11, 3.5, .5]],
-        [[14, 0, .5], [12, .5, .5], [9, 1, .5], [7, 1.5, .5], [4, 2, .5], [2, 2.5, .5], [0, 3, 1]],
+      // le riff de cuivres, le refrain qui reste en tete
+      { nom: 'Cuivres', instrument: 'anche', octave: 4, amp: 0.20, melodie: [
+        [[7, 0, .5], [7, .75, .25], [9, 1, .5], [7, 1.5, .5], [4, 2, .75], [2, 2.75, .25], [4, 3, 1]],
+        [[9, 0, .5], [9, .75, .25], [12, 1, .5], [9, 1.5, .5], [4, 2, .75], [2, 2.75, .25], [4, 3, 1]],
+        [[5, 0, .5], [5, .75, .25], [9, 1, .5], [12, 1.5, .5], [14, 2, .75], [12, 2.75, .25], [9, 3, 1]],
+        [[11, 0, .5], [9, .5, .5], [7, 1, .5], [4, 1.5, .5], [7, 2, .25], [9, 2.25, .25], [11, 2.5, .5], [14, 3, .5], [12, 3.5, .5]],
       ] },
-      // le sifflet : deux coups secs, puis un long, au debut du tour
-      { instrument: 'souffle', octave: 6, amp: 0.10, melodie: [
-        [[7, 0, .2], [7, .5, .2], [7, 1, .9]], [], [], [],
+      // la sebene : doubles-croches dans l'aigu, tierce majeure ou mineure selon l'accord
+      { nom: 'Guitare sebene', instrument: 'pincee', octave: 4, amp: 0.10, melodie: (() => {
+        const sebene = (r, t) => [12, 19, 12 + t, 19, 24, 19, 12 + t, 19, 14, 19, 12 + t, 19, 12, 12 + t, 19, 24]
+          .map((n, i) => [r + n - 12, i * 0.25, 0.25]);
+        return [sebene(0, 4), sebene(-3, 3), sebene(5, 4), sebene(7, 4)];
+      })() },
+      // la 2e guitare, en croches sur les contretemps
+      { nom: 'Guitare 2', instrument: 'pincee', octave: 3, amp: 0.13, melodie: [
+        [[16, .5, .5], [12, 1.5, .5], [19, 2.5, .5], [16, 3.5, .5]],
+        [[12, .5, .5], [9, 1.5, .5], [16, 2.5, .5], [12, 3.5, .5]],
+        [[17, .5, .5], [14, 1.5, .5], [21, 2.5, .5], [17, 3.5, .5]],
+        [[19, .5, .5], [16, 1.5, .5], [23, 2.5, .5], [20, 3.5, .5]],
+      ] },
+      // la cloche : la clave qui tient le groove
+      { nom: 'Cloche', instrument: 'cloche', octave: 6, amp: 0.035, melodie: [
+        [[0, 0, .1], [0, .75, .1], [0, 1.5, .1], [0, 2.5, .1], [0, 3, .1]],
+      ] },
+      // le sifflet de l'atalaku : deux coups secs puis un long ; relance a la 3e mesure
+      { nom: 'Sifflet atalaku', instrument: 'souffle', octave: 6, amp: 0.10, melodie: [
+        [[7, 0, .2], [7, .5, .2], [7, 1, .9]], [], [[7, 3, .15], [7, 3.25, .15], [7, 3.5, .4]], [],
       ] },
     ],
   },
@@ -291,7 +310,7 @@ const LIEUX = {
 
 // le gain de chaque refrain (voir enAvant)
 const GAIN = {
-  menole: 3.0, kyoto: 1.8, kingston: 2.25, izmir: 2.15, barcelone: 3.3, casablanca: 1.8,
+  menole: 2.3, kyoto: 1.8, kingston: 2.25, izmir: 2.15, barcelone: 3.3, casablanca: 1.8,
   abuja: 3.5, paris: 2.2, newyork: 1.9, londres: 2.25, karman: 2.35, 'karman-wukong': 1.6,
   'karman-anansi': 1.65, 'karman-inti': 1.6, apotheose: 3.2,
 };
