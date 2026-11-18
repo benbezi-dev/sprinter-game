@@ -337,6 +337,20 @@ export type Recuperation =
   | { etat: 'inconnu' }
   | { etat: 'reseau' };
 
+/* Le nom dont cet appareil attend la reponse. Garde a part : le joueur qui a
+   perdu son nom ferme le jeu en attendant, et rien d'autre ne se souvient de
+   quel nom il a demande. RecuperationRendue.tsx l'interroge a chaque retour. */
+const ATTENTE_KEY = 'sprinter_recuperation_attente';
+
+export function recuperationEnAttente(): string {
+  try { return localStorage.getItem(ATTENTE_KEY) || ''; } catch { return ''; }
+}
+function retenirAttente(nom: string | null) {
+  try {
+    if (nom) localStorage.setItem(ATTENTE_KEY, nom); else localStorage.removeItem(ATTENTE_KEY);
+  } catch { /* sans memoire : le bouton VERIFIER reste */ }
+}
+
 /** Deposer une demande — ou recuperer son code tout de suite si on y a droit. */
 export async function demanderRecuperation(nom: string, indice?: string): Promise<Recuperation> {
   try {
@@ -349,6 +363,7 @@ export async function demanderRecuperation(nom: string, indice?: string): Promis
     const d = await res.json();
     if (d.inconnu) return { etat: 'inconnu' };
     if (d.direct) { keepCode(d.code, d.name); return { etat: 'rendu', name: d.name, code: d.code }; }
+    retenirAttente(nom);
     return {
       etat: 'attente', depuis: d.cree_le,
       insta: d.insta ?? null, phrase: d.phrase ?? null, compte: d.compte,
@@ -365,6 +380,8 @@ export async function etatRecuperation(nom: string): Promise<Recuperation> {
     const res = await fetch(`${API_BASE}/recuperation?${q}`);
     if (!res.ok) return { etat: 'reseau' };
     const d = await res.json();
+    // Tranchee (ou plus rien a attendre) : la reponse est livree, on oublie.
+    if (d.etat !== 'attente') retenirAttente(null);
     if (d.etat === 'accepte') { keepCode(d.code, d.name); return { etat: 'rendu', name: d.name, code: d.code }; }
     if (d.etat === 'attente') {
       return {

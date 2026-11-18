@@ -4267,7 +4267,14 @@ async function servir(request, env, ctx, porteur) {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const r = await trancherRecuperation(env.DB, (body || {}).id, !!(body || {}).accepte);
-      return r.erreur ? json({ error: r.erreur }, 404) : json(r);
+      if (r.erreur) return json({ error: r.erreur }, 404);
+      // Le joueur ne guette pas la file : on sonne l'appareil qui a fait la
+      // demande. Sans abonnement push, il l'apprendra a la prochaine ouverture
+      // du jeu (RecuperationRendue.tsx). Un refus ne sonne pas.
+      if (r.etat === 'accepte') {
+        ctx.waitUntil(notifierAppareil(env.DB, r.device_id, 'recuperation', env));
+      }
+      return json({ ok: true, id: r.id, etat: r.etat });
     }
 
     // Lier son compte Instagram a son nom de joueur.

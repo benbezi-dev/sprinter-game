@@ -95,6 +95,12 @@ const MESSAGES = {
     fr: ['Objectif du jour', 'Ton objectif du jour est en ligne.'],
     en: ['Objective of the day', 'Your objective of the day is up.'],
   },
+  // Une demande de recuperation acceptee (identite.js). Ni le nom ni le code :
+  // c'est l'ouverture du jeu, sur l'appareil demandeur, qui les delivre.
+  recuperation: {
+    fr: ['Ta demande est acceptée', 'Ouvre Sprinter : ton nom t\u2019attend.'],
+    en: ['Your request was accepted', 'Open Sprinter: your name is waiting for you.'],
+  },
 };
 
 const DEFAUT = { fr: ['Sprinter', 'Il y a du nouveau.'], en: ['Sprinter', 'Something new.'] };

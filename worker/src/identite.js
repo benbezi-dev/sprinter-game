@@ -370,13 +370,14 @@ export async function trancherRecuperation(db, id, accepte) {
   await ensureIdentiteTables(db);
   const n = Number(id);
   if (!Number.isInteger(n) || n <= 0) return { erreur: 'demande inconnue' };
+  // RETURNING rend l'appareil demandeur : c'est lui, et lui seul, qu'on
+  // previent de la decision (voir la route /recuperation/trancher).
   const r = await db.prepare(
     `UPDATE recuperations SET etat = ?, tranche_le = ?
-      WHERE id = ? AND etat = 'attente'`
-  ).bind(accepte ? 'accepte' : 'refuse', Date.now(), n).run();
-  const touche = r && r.meta && r.meta.changes;
-  return touche ? { ok: true, id: n, etat: accepte ? 'accepte' : 'refuse' }
-                : { erreur: 'demande inconnue ou deja tranchee' };
+      WHERE id = ? AND etat = 'attente' RETURNING device_id`
+  ).bind(accepte ? 'accepte' : 'refuse', Date.now(), n).first();
+  return r ? { ok: true, id: n, etat: accepte ? 'accepte' : 'refuse', device_id: r.device_id }
+           : { erreur: 'demande inconnue ou deja tranchee' };
 }
 
 /**

@@ -1828,6 +1828,12 @@
     rec_done:        ['c’est bon, ce nom est de nouveau le tien',
                       'done, this name is yours again'],
     rec_unknown:     ['aucun joueur ne porte ce nom', 'no player goes by that name'],
+    rec_avis_ok_title: ['TON NOM T’EST RENDU', 'YOUR NAME IS BACK'],
+    rec_avis_ok:     ['ta demande a été acceptée : {n} est de nouveau ton nom sur cet appareil. Ton code de récupération est dans ton profil — note-le.',
+                      'your request was accepted: {n} is your name again on this device. Your recovery code is in your profile — write it down.'],
+    rec_avis_refus_title: ['DEMANDE REFUSÉE', 'REQUEST DECLINED'],
+    rec_avis_refus:  ['ta demande pour {n} n’a pas été acceptée. Si ce nom est bien le tien, lie ton Instagram et refais une demande.',
+                      'your request for {n} was not accepted. If this name really is yours, link your Instagram and ask again.'],
     rec_link_insta:  ['lie ton Instagram maintenant — c’est ce qui te permettra de récupérer ton nom si tu perds ce téléphone',
                       'link your Instagram now — it is what will let you recover your name if you lose this phone'],
 

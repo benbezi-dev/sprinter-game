@@ -57,6 +57,7 @@ import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { SceneSelection } from '@/components/screens/Selection';
 import { InboxPopup } from '@/components/screens/InboxPopup';
 import { AnnoncePopup } from '@/components/screens/AnnoncePopup';
+import { RecuperationRendue } from '@/components/screens/RecuperationRendue';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { DefiRelaisPopup } from '@/components/screens/DefiRelaisPopup';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
@@ -476,6 +477,7 @@ function MainGame() {
       <QuitRace />
       <InboxPopup />
       <AnnoncePopup />
+      <RecuperationRendue />
       <InvitationDirecte />
       {RELAIS_OUVERT && <DefiRelaisPopup />}
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
