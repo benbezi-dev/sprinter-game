@@ -33,7 +33,7 @@ export async function defier(epreuve: string, cible?: string): Promise<boolean> 
     levelIdx: 4,
     ghosts: [etirer(f.trace, f.facteur)],
     ghostSplits: [f.a_battre_ms / 1000],
-    ghostName: `${f.name.toUpperCase()} · ${f.voix}`,
+    ghostName: `${f.name.toUpperCase()} · ${f.voix} ${(SprinterApp as any).N.getLang() === 'fr' ? 'VOIX' : (f.voix > 1 ? 'VOTES' : 'VOTE')}`,
     ghostTime: f.a_battre_ms / 1000,
     etiquette: 'fantome',
     duelEpreuves: { cible: f.cible },

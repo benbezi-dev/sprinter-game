@@ -25,17 +25,19 @@ const EPREUVES_3D = new Set(['100', '200', '400', '60', '200s', '400s', '100h', 
 let rendu3D: any = null;
 // LE REPERE DU JOUEUR EN 3D : un chevron jaune et « TOI » au-dessus de sa tete — le seul nom
 // ecrit sur la piste, comme en championnat
-function marquerLeJoueur(ctx: CanvasRenderingContext2D, e: { x: number; y: number }) {
+// Le fantome d'un duel porte aussi son nom, en cyan comme dans le HUD : savoir qui l'on bat
+// compte autant que savoir ou l'on est (demande du 18/11). Jamais en championnat (seul « TOI »).
+function marquerLeJoueur(ctx: CanvasRenderingContext2D, e: { x: number; y: number }, texte = 'TOI', couleur = '#ffd23a') {
   const y = e.y - 6;
   ctx.save();
   ctx.globalAlpha = 0.92;
-  ctx.fillStyle = '#ffd23a';
+  ctx.fillStyle = couleur;
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(e.x - 7, y - 9); ctx.lineTo(e.x + 7, y - 9); ctx.lineTo(e.x, y); ctx.closePath();
   ctx.stroke(); ctx.fill();
   ctx.font = '800 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  ctx.strokeText('TOI', e.x, y - 12); ctx.fillText('TOI', e.x, y - 12);
+  ctx.strokeText(texte, e.x, y - 12); ctx.fillText(texte, e.x, y - 12);
   ctx.restore();
 }
 if (RENDU_3D) import('@/game/course-3d').then(m => { rendu3D = m; }).catch(() => { /* reste en 2D */ });
@@ -446,6 +448,12 @@ export function GameCanvas() {
               // juste au-dessus de la tete : plus haut, de loin, il semblait pose sur le coureur du fond
               const e = rendu3D.ecranDe(SprinterApp, G.player, 1.1);
               if (e) marquerLeJoueur(ctx, e);
+            }
+            const fantome = G.ghost && G.ghost.runner;
+            if (fantome && fantome.repere && fantome.repere.nom && !G.champDirect && !G.rejeu && !G.echauffementChamp
+                && G.raceKey !== '4x100' && rendu3D.ecranDe) {
+              const e = rendu3D.ecranDe(SprinterApp, fantome, 1.1);
+              if (e) marquerLeJoueur(ctx, e, fantome.repere.nom, '#67e8f9');
             }
           }
         } else if (G.state === 'title') {
