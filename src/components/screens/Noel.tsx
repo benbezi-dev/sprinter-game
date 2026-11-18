@@ -312,7 +312,7 @@ function MaLigne({ t, fr, nom, partir }: { t: TableauNoel; fr: boolean; nom: str
       {moi && moi.neige > 0 && (
         <p className="text-xs font-bold text-center" style={{ color: GLACE }}>
           {fr ? `❄ Ton fantôme porte ${moi.neige} boule${moi.neige > 1 ? 's' : ''} : il court en ${secondes(moi.a_battre_ms, fr)} au lieu de ${secondes(moi.ms, fr)}. Recours pour secouer la neige.`
-              : `❄ Your ghost carries ${moi.neige} snowball${moi.neige > 1 ? 's' : ''}: it runs ${secondes(moi.a_battre_ms, fr)} instead of ${secondes(moi.ms, fr)}. Run again to shake it off.`}
+              : `❄ Your ghost carries ${moi.neige} snowball${moi.neige !== 1 ? 's' : ''}: it runs ${secondes(moi.a_battre_ms, fr)} instead of ${secondes(moi.ms, fr)}. Run again to shake it off.`}
         </p>
       )}
       <button onClick={partir} className="w-full py-2.5 rounded-xl font-black text-sm text-black bg-white">
@@ -426,9 +426,9 @@ function Lanceur({ cible, boules, max, pct, fr, onClose }: {
               {fr ? `Son chrono à battre passe de ${secondes(cible.a_battre_ms)} à ${secondes(apres)} s pendant 24 h, sauf s’il recourt.`
                   : `Their time to beat goes from ${secondes(cible.a_battre_ms, false)} to ${secondes(apres, false)} s for 24 h, unless they run again.`}
             </p>
-            <p className="text-[10px] text-center text-muted-foreground">{fr ? `Il te reste ${boules} boule${boules > 1 ? 's' : ''}.` : `You have ${boules} snowball${boules > 1 ? 's' : ''}.`}</p>
+            <p className="text-[10px] text-center text-muted-foreground">{fr ? `Il te reste ${boules} boule${boules > 1 ? 's' : ''}.` : `You have ${boules} snowball${boules !== 1 ? 's' : ''}.`}</p>
             <button onClick={go} disabled={occupe} className="w-full py-2.5 rounded-xl font-black text-black disabled:opacity-60" style={{ background: GLACE }}>
-              {occupe ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (fr ? `LANCER ${n} BOULE${n > 1 ? 'S' : ''}` : `THROW ${n}`)}
+              {occupe ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : (fr ? `LANCER ${n} BOULE${n > 1 ? 'S' : ''}` : `THROW ${n} SNOWBALL${n !== 1 ? 'S' : ''}`)}
             </button>
           </>
         )}
@@ -453,7 +453,7 @@ function Verdict({ v, fr, onDone }: { v: VerdictNoel; fr: boolean; onDone: () =>
     <motion.button onClick={onDone} initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
       className="w-full rounded-2xl border-2 px-3 py-2.5 text-center" style={{ borderColor: couleur }}>
       <div className="font-black text-sm" style={{ color: couleur }}>{titre}</div>
-      {v.secoue > 0 && <div className="text-[11px] text-foreground/75">{fr ? `${v.secoue} boule${v.secoue > 1 ? 's' : ''} de neige secouée${v.secoue > 1 ? 's' : ''}.` : `${v.secoue} snowball${v.secoue > 1 ? 's' : ''} shaken off.`}</div>}
+      {v.secoue > 0 && <div className="text-[11px] text-foreground/75">{fr ? `${v.secoue} boule${v.secoue > 1 ? 's' : ''} de neige secouée${v.secoue > 1 ? 's' : ''}.` : `${v.secoue} snowball${v.secoue !== 1 ? 's' : ''} shaken off.`}</div>}
       {v.etoile_allumee && <div className="text-[11px]" style={{ color: OR }}>{fr ? 'Tu allumes l’étoile : tout le monde te chasse.' : 'You light the star: everyone is hunting you.'}</div>}
     </motion.button>
   );
@@ -468,8 +468,8 @@ function Fil({ fil, fr }: { fil: FilNoel[]; fr: boolean }) {
       case 'allume': return fr ? `★ ${f.a} allume l’étoile` : `★ ${f.a} lights the star`;
       case 'battu': return fr ? `${f.a} bat le fantôme de ${f.b}` : `${f.a} beats ${f.b}'s ghost`;
       case 'vol': return fr ? `★ ${f.a} vole l’étoile à ${f.b} !` : `★ ${f.a} steals the star from ${f.b}!`;
-      case 'neige': return fr ? `❄ ${f.a} lance ${f.n} boule${(f.n || 0) > 1 ? 's' : ''} sur ${f.b}` : `❄ ${f.a} throws ${f.n} at ${f.b}`;
-      case 'secoue': return fr ? `${f.a} recourt et secoue ${f.n} boule${(f.n || 0) > 1 ? 's' : ''}` : `${f.a} runs again and shakes off ${f.n}`;
+      case 'neige': return fr ? `❄ ${f.a} lance ${f.n} boule${(f.n || 0) > 1 ? 's' : ''} sur ${f.b}` : `❄ ${f.a} throws ${f.n} snowball${f.n !== 1 ? 's' : ''} at ${f.b}`;
+      case 'secoue': return fr ? `${f.a} recourt et secoue ${f.n} boule${(f.n || 0) > 1 ? 's' : ''}` : `${f.a} runs again and shakes off ${f.n} snowball${f.n !== 1 ? 's' : ''}`;
       default: return '';
     }
   };

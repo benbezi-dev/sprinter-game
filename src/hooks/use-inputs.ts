@@ -56,12 +56,22 @@ export function useInputHandlers() {
       if (e.key === 'ArrowRight') { delete SprinterApp.G.touches.right; padRelease('right'); }
     };
     
+    // La fenetre perd le focus touche enfoncee (Alt-Tab, notification) : le `keyup` ne vient
+    // jamais, la touche restait « baissee » et le premier appui suivant etait ignore.
+    const handleBlur = () => {
+      for (const cote of ['left', 'right'] as const) {
+        if (SprinterApp.G.touches[cote]) { delete SprinterApp.G.touches[cote]; padRelease(cote); }
+      }
+    };
+
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
     
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
     };
   }, []);
   

@@ -12,6 +12,7 @@
  *
  * Ne poser un nom ou un logo qu'avec l'accord ecrit de la marque.
  */
+import { BasesPretes } from './bases.js';
 export const PANNEAUX = [];
 
 export function panneauxDuMoment(liste, maintenant, canalTest) {
@@ -31,7 +32,7 @@ export function panneauxDuMoment(liste, maintenant, canalTest) {
  */
 export const PLAFOND_VUES_PAR_JOUR = 200;
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 async function ensurePanneaux(db) {
   if (pret.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS panneaux_affichages (

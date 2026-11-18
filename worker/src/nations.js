@@ -29,6 +29,7 @@
    exactement le moment ou l'on confirme avoir demande.
 --------------------------------------------------------------------------- */
 
+import { BasesPretes } from './bases.js';
 import { ensureChampTables, nomZone } from './championnats.js';
 
 /** L'epreuve par defaut du tableau. Le 100 m est la vitrine du jeu. */
@@ -83,7 +84,7 @@ export function lundiDe(ms) {
 
 const SEMAINE = 7 * 24 * 3600 * 1000;
 
-const nationsPretes = new WeakSet();
+const nationsPretes = new BasesPretes();
 async function ensureNationsTable(db) {
   if (nationsPretes.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS nations_semaine (

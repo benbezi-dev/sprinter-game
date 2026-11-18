@@ -53,6 +53,7 @@
    exactement la meme chose — et il la verifie mieux qu'une question secrete
    batie sur des chiffres publics.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 
 /** Le compte du jeu, celui qui recoit les messages de recuperation. */
 export const COMPTE_JEU = 'sprintergame';
@@ -81,7 +82,7 @@ function tirerJeton(n = 8) {
 // Comme ailleurs dans ce worker, la memoire des migrations est tenue PAR BASE :
 // le worker en sert deux, et un simple booleen laisserait la seconde sans
 // tables parce que la premiere aurait deja eteint la migration.
-const pret = new WeakSet();
+const pret = new BasesPretes();
 
 export async function ensureIdentiteTables(db) {
   if (pret.has(db)) return;

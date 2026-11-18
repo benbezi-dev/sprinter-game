@@ -67,7 +67,7 @@ import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel } from './tunnel';
 import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
-import { DUEL_MARQUES_OUVERT, NOEL_OUVERT } from './canal';
+import { DUEL_MARQUES_OUVERT, NOEL_OUVERT, saisonABascule } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
 import { crediterEtape } from './pieces';
 import { jouerLeFauxDepart, rangerLeFauxDepart } from './faux-depart';
@@ -114,17 +114,33 @@ function sonAuFond(cache: boolean) {
   if (cache) c.suspend().catch(() => { });
   else if (c.state === 'suspended') c.resume().catch(() => { });
 }
-document.addEventListener('visibilitychange', () => sonAuFond(document.hidden));
+// ...et la course se met en pause (audit du 16/11). Les images s'arretent a l'arriere-plan :
+// la course gelait, puis repartait sans prevenir au retour, les pouces ailleurs. Le panneau de
+// pause (QuitRace) attend maintenant le joueur ; hors course, pauseRace ne fait rien.
+// Au retour, une saison qui a ouvert ou ferme pendant l'absence se prend en rechargeant.
+function auFond(cache: boolean) {
+  sonAuFond(cache);
+  if (cache) pauseRace();
+  else if (saisonABascule() && G.state === 'title') location.reload();
+}
+document.addEventListener('visibilitychange', () => auFond(document.hidden));
 // Dans l'appli, la WebView ne previent pas toujours : l'etat d'Android/iOS fait foi.
 if ((window as any).Capacitor?.isNativePlatform?.()) {
   import('@capacitor/app').then(({ App }) =>
-    App.addListener('appStateChange', ({ isActive }) => sonAuFond(!isActive))).catch(() => { });
+    App.addListener('appStateChange', ({ isActive }) => auFond(!isActive))).catch(() => { });
 }
 
 SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: number) => {
   // Le vrai mode se lit ICI, tant que les drapeaux de la course sont encore
   // poses : l'envoi part apres un import differe, et l'ecran de fin ou le
   // retour a l'accueil peuvent les avoir effaces entre-temps.
+  //
+  // LA CARRIERE D'ATHLETE NE SORT PAS D'ELLE-MEME (regle de l'auteur, 25/10 : « un chrono de
+  // carriere ne va jamais au classement mondial »). Son coureur court avec les stats de
+  // l'athlete (reglagesJoueur) : ni historique, ni record, ni Duel des marques, ni fete. Elle
+  // partait ici comme une course « solo » — vers la base de test tant que le mode y reste,
+  // vers le classement des joueurs le jour ou il s'ouvre (audit du 16/11).
+  if (SprinterApp.G.etiquette === 'athlete' || SprinterApp.G.reglagesJoueur) return;
   pushFinishedRace(race, t, mode, level, contexteDeLaCourse(SprinterApp.G));
   if (!SprinterApp.G.rejeu) etapeTunnel('arrivee');
   // Les premiers pas (game/premiers-pas.ts) : la premiere course est finie, le

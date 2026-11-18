@@ -1,3 +1,4 @@
+import { BasesPretes, lierSession } from './bases.js';
 import { PANNEAUX, panneauxDuMoment, noterVue, bilanPanneau } from './panneaux.js';
 import {
   recalculerClassement, ETAGES, DIVISIONS, LEGENDE, LP_PAR_PALIER, LP, rangDe,
@@ -224,6 +225,8 @@ const TOP_N = 500;
 // Jusqu'a quel rang un record arrive sans trace merite d'etre signale. Voir
 // « la preuve du record » dans la route /submit.
 const RANG_SANS_TRACE_SIGNALE = 10;
+// Le plus gros corps attendu hors /reseaux/ est le profil (PROFIL_MAX_OCTETS, 256 Ko) : le double laisse de la marge.
+const CORPS_MAX_OCTETS = 512 * 1024;
 // Cumul sentinelle : marque une ligne nee d'un one shot ou d'un defi, sans
 // parcours complet derriere. Doit rester identique cote jeu (NO_RUN_MS).
 // La valeur vit dans records.js, qui en a besoin pour creer une ligne ne
@@ -369,7 +372,7 @@ async function ecrireLeDefi(db, c, { target = null, lance = 1 } = {}) {
 // tenue PAR BASE : le worker en sert deux — production et test — et un simple
 // booleen mentait a la seconde, qui restait sans tables parce que la premiere
 // avait deja eteint la migration.
-const scoresReady = new WeakSet();
+const scoresReady = new BasesPretes();
 async function ensureScoreGhost(db) {
   if (scoresReady.has(db)) return;
   // La table des scores a longtemps ete creee a la main, au demarrage du
@@ -464,7 +467,7 @@ async function getRank(db, race, splitMs) {
 // dans la journee compte pour dix passages mais un seul visiteur. Rien de
 // nominatif n'est stocke, seulement l'identifiant anonyme deja utilise par le
 // classement.
-const visitsReady = new WeakSet();
+const visitsReady = new BasesPretes();
 async function ensureVisitTable(db) {
   if (visitsReady.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS visits (
@@ -482,7 +485,7 @@ async function ensureVisitTable(db) {
 // compteur, personne ne pouvait dire combien de fois une course est relancee,
 // ni si le raccourci sert. Meme forme que `visits` pour que le tableau les
 // lise de la meme facon.
-const reprisesReady = new WeakSet();
+const reprisesReady = new BasesPretes();
 async function ensureRepriseTable(db) {
   if (reprisesReady.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS reprises (
@@ -497,7 +500,7 @@ async function ensureRepriseTable(db) {
 
 // Un defi peut viser quelqu'un en particulier. La colonne est ajoutee apres
 // coup sur une table qui existe deja, d'ou la migration paresseuse.
-const targetReady = new WeakSet();
+const targetReady = new BasesPretes();
 async function ensureChallengeTarget(db) {
   if (targetReady.has(db)) return;
   try { await db.prepare(`ALTER TABLE challenges ADD COLUMN target_device TEXT`).run(); }
@@ -514,7 +517,7 @@ async function ensureChallengeTarget(db) {
  * contre le meme fantome, et le compteur des defis lances ne compte qu'un defi.
  */
 const MAX_CIBLES_DEFI = 50;
-const ciblesReady = new WeakSet();
+const ciblesReady = new BasesPretes();
 async function ensureChallengeCibles(db) {
   if (ciblesReady.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS challenge_cibles (
@@ -601,7 +604,7 @@ async function poserLesCibles(db, id, target, targetName, cibles) {
  * ne sont pas a la camera », ce qui est la meme chose et se lit moins bien —
  * et fermerait la porte au jour ou autre chose que la camera en ouvrira.
  */
-const lanceReady = new WeakSet();
+const lanceReady = new BasesPretes();
 async function ensureChallengeLance(db) {
   if (lanceReady.has(db)) return;
   try { await db.prepare(`ALTER TABLE challenges ADD COLUMN lance INTEGER NOT NULL DEFAULT 1`).run(); }
@@ -675,7 +678,7 @@ async function cibleDeLaRevanche(db, { duelRef, deviceId, nom, tMs }) {
 // meme verraient donc un historique commun. Compromis assume : c'est deja
 // l'identite publique du classement, et l'alternative serait un compte.
 const HIST_PER_DEVICE = 300;
-const racesReady = new WeakSet();
+const racesReady = new BasesPretes();
 async function ensureRaceTable(db) {
   if (racesReady.has(db)) return;
   await db.batch([
@@ -704,7 +707,7 @@ async function ensureRaceTable(db) {
 // court. C'est ce qui remplace un compte : pas de tiers, pas d'e-mail, pas
 // d'ecran de consentement — juste de quoi relier ses appareils et empecher
 // qu'on prenne son nom.
-const joueursReady = new WeakSet();
+const joueursReady = new BasesPretes();
 async function ensurePlayerTables(db) {
   if (joueursReady.has(db)) return;
   await db.batch([
@@ -812,7 +815,7 @@ async function ensureChallengeTables(db) {
    est deja la, ce qui est le cas nominal. La memoire est tenue PAR BASE — le
    worker en sert deux, production et test, et un simple booleen laisserait la
    seconde sans colonne. */
-const attemptTracesReady = new WeakSet();
+const attemptTracesReady = new BasesPretes();
 async function ensureAttemptTraces(db) {
   if (attemptTracesReady.has(db)) return;
   try { await db.prepare(`ALTER TABLE challenge_attempts ADD COLUMN traces TEXT`).run(); }
@@ -823,7 +826,7 @@ async function ensureAttemptTraces(db) {
 // Les annonces ecrites a la main (`/push/diffuser`), que le jeu lit par
 // `GET /annonce`. Le detail est le texte long du panneau ; sans lui, le jeu
 // montre le texte de la notification.
-const annoncesPretes = new WeakSet();
+const annoncesPretes = new BasesPretes();
 async function ensureAnnonces(db) {
   if (annoncesPretes.has(db)) return;
   await db.prepare(`
@@ -836,7 +839,7 @@ async function ensureAnnonces(db) {
   annoncesPretes.add(db);
 }
 
-const pushTableReady = new WeakSet();
+const pushTableReady = new BasesPretes();
 async function ensurePushTable(db) {
   if (pushTableReady.has(db)) return;
   await db.prepare(`
@@ -1306,7 +1309,11 @@ async function envelopper(request, env, ctx) {
       entetes.delete('X-D1-Bookmark');
       return await envelopper(new Request(request, { headers: entetes }), env, ctx);
     }
-    throw e;
+    // Relancer l'erreur rendait la page 1101 de Cloudflare, SANS en-tetes CORS :
+    // le jeu ne voyait qu'un « fetch echoue », sans statut. Un 500 en JSON se lit,
+    // et l'erreur reste dans le journal du worker.
+    console.log('erreur non rattrapee', request.method, new URL(request.url).pathname, String(e && e.stack || e));
+    return json({ error: 'erreur serveur' }, 500);
   }
 
   // Une reponse 101 porte une WebSocket : ses en-tetes ne se modifient plus,
@@ -1333,6 +1340,15 @@ async function servir(request, env, ctx, porteur) {
 
     if (request.method === 'OPTIONS') {
       return cors(new Response(null, { status: 204 }));
+    }
+
+    // Un corps annonce plus lourd que ce qu'aucune route n'attend ne se lit pas.
+    // shortcut: on croit Content-Length (un envoi en morceaux n'en a pas et passe) ; lire le
+    // corps en le comptant si quelqu'un s'en sert pour contourner.
+    // Les envois d'images et de films aux reseaux ont leurs propres bornes (reseaux.js).
+    if (request.method === 'POST' && !url.pathname.startsWith('/reseaux/')
+        && Number(request.headers.get('Content-Length')) > CORPS_MAX_OCTETS) {
+      return json({ error: 'requete trop lourde' }, 413);
     }
 
     // ------------------------------------------------------------- le canal
@@ -1427,6 +1443,8 @@ async function servir(request, env, ctx, porteur) {
         catch (e2) { session = null; }
       }
       if (session) {
+        // les tables deja pretes se comptent par base, pas par session (bases.js)
+        lierSession(session, env.DB);
         env = { ...env, DB: session };
         if (porteur) porteur.session = session;
       }
@@ -1745,7 +1763,9 @@ async function servir(request, env, ctx, porteur) {
     if (url.pathname === '/objectif/tentative' && request.method === 'POST') {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
-      const nom = String(body?.nom || '').trim();
+      // cleanName comme partout : 20 caracteres, sans < ni >. Le nom finit au
+      // Classement des Objectifs, affiche a tous.
+      const nom = cleanName(body?.nom) === 'Anonyme' ? '' : cleanName(body?.nom);
       const deviceId = body?.device_id;
       const ms = Math.round(Number(body?.ms));
       const langue = body?.langue === 'en' ? 'en' : 'fr';
@@ -1830,7 +1850,7 @@ async function servir(request, env, ctx, porteur) {
       }
       if (request.method === 'POST') {
         let body; try { body = await request.json(); } catch { body = {}; }
-        const n = String(body?.nom || '').trim();
+        const n = cleanName(body?.nom) === 'Anonyme' ? '' : cleanName(body?.nom).trim();
         const deviceId = body?.device_id;
         const rythme = String(body?.rythme || '');
         if (!n) return json({ error: 'nom requis' }, 400);
@@ -1881,12 +1901,12 @@ async function servir(request, env, ctx, porteur) {
     // moderation des duels, comme la table du meme nom.
     if (url.pathname === '/objectif/suspectes' && request.method === 'GET') {
       if (!estAdmin(request, env)) return json({ error: 'refuse' }, 403);
-      const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
+      const n = Math.max(1, Math.min(Math.floor(Number(url.searchParams.get('n'))) || 100, 500));
       return json({ suspectes: await listerSuspectes(env.DB, n) });
     }
 
     if (url.pathname === '/objectif/classement' && request.method === 'GET') {
-      const n = Math.min(Number(url.searchParams.get('n')) || 100, 500);
+      const n = Math.max(1, Math.min(Math.floor(Number(url.searchParams.get('n'))) || 100, 500));
       return json({ classement: await classementObjectifs(env.DB, n) });
     }
 
@@ -2391,7 +2411,7 @@ async function servir(request, env, ctx, porteur) {
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
         const r = await choisirPays(env.DB, key, pays);
-        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        return r.erreur ? json({ error: r.erreur, pays: r.pays }, r.code || 400) : json(r);
       }
 
       // Poser ou corriger la nationalite d'un joueur. Le seul geste qui passe
@@ -3077,12 +3097,30 @@ async function servir(request, env, ctx, porteur) {
       const cible = new URL(request.url);
       cible.pathname = sous === 'etat' ? '/etat' : '/ws';
       cible.searchParams.set('code', code);
+      // `canal` et `verifie` sont poses ici, jamais par le client : un
+      // `?canal=test` ajoute a la main envoyait un duel classe perdu dans la
+      // base de test, et un nom pris a un autre comptait a ses LP.
+      cible.searchParams.delete('canal');
+      cible.searchParams.delete('verifie');
       // Le canal voyage jusqu'a la salle : c'est elle qui ecrit le resultat du
       // duel, et elle doit l'ecrire dans la bonne base. Celui du client est
       // retire d'abord : `?canal=test` envoyait sinon le resultat — celui de
       // l'adversaire compris — dans la base de test, hors du classement reel.
       cible.searchParams.delete('canal');
       if (canal.test) cible.searchParams.set('canal', 'test');
+      // Le nom doit etre celui de l'appareil, comme aux salles du championnat :
+      // sinon la salle le traite en anonyme (ni duel, ni piece).
+      if (sous !== 'etat') {
+        const cle = cleanName(url.searchParams.get('name') || '').trim().toLowerCase();
+        const appareil = url.searchParams.get('device') || '';
+        // shortcut: les applis installees avant ce correctif n'envoient pas `device` ; sans lui, on
+        // garde l'ancienne regle (le nom fait foi) pour ne pas leur retirer duels classes et pieces.
+        // Retirer ce repli quand toutes les versions en circulation l'envoient (audit du 16/11).
+        const ancienJeu = !url.searchParams.has('device');
+        const verifie = !!cle && cle !== 'anonyme' && (ancienJeu
+          || (isValidDeviceId(appareil) && await peutUtiliser(env.DB, cle, appareil)));
+        if (verifie) cible.searchParams.set('verifie', '1');
+      }
 
       // Deux salles portant le meme code, une de test et une de production, ne
       // doivent jamais etre le meme objet — sans quoi deux joueurs qui ne se
@@ -4103,11 +4141,6 @@ async function servir(request, env, ctx, porteur) {
       const key = propre.trim().toLowerCase();
       if (!key || propre === 'Anonyme') return json({ error: 'nom invalide' }, 400);
       await ensurePlayerTables(env.DB);
-      // Plus bas, le rattachement des appareils lit la table des scores. Sur
-      // une base neuve — celle du canal de test, ou n'importe quel deploiement
-      // avant le premier chrono — cette table n'existe pas encore, et toute
-      // reservation de nom echouait sur un D1_ERROR muet.
-      await ensureScoreGhost(env.DB);
 
       const existe = await env.DB.prepare(
         `SELECT name, code FROM players WHERE name_key = ?`).bind(key).first();
@@ -4139,15 +4172,17 @@ async function servir(request, env, ctx, porteur) {
       }
 
       const code = makeCode();
-      await env.DB.prepare(
-        `INSERT INTO players (name_key, name, code, created_at) VALUES (?, ?, ?, ?)`
+      // OR IGNORE : deux reservations simultanees du meme nom passent toutes
+      // deux le SELECT ; la seconde violait la cle et repondait 500.
+      const cree = await env.DB.prepare(
+        `INSERT OR IGNORE INTO players (name_key, name, code, created_at) VALUES (?, ?, ?, ?)`
       ).bind(key, propre, code, Date.now()).run();
-      // Les appareils qui jouaient deja sous ce nom sont rattaches : sans
-      // cela, reserver son propre nom couperait le joueur de son historique.
-      await env.DB.prepare(
-        `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at)
-         SELECT DISTINCT ?, device_id, ? FROM scores WHERE lower(trim(name)) = ?`
-      ).bind(key, Date.now(), key).run();
+      if (cree?.meta?.changes === 0) return json({ ok: false, pris: true });
+      // Seul l'appareil qui reserve est rattache. Rattacher tous ceux qui
+      // avaient couru sous ce nom tant qu'il etait libre donnait le code a
+      // n'importe qui : il suffisait d'envoyer un chrono sous le nom d'un
+      // joueur du classement avant qu'il le reserve. Ses autres appareils se
+      // relient avec le code, comme ceux d'un nom deja reserve.
       await env.DB.prepare(
         `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
       ).bind(key, device_id, Date.now()).run();
@@ -4352,13 +4387,8 @@ async function servir(request, env, ctx, porteur) {
       let paysPose = null;
       if (veutPays) {
         await ensureChampTables(env.DB);
-        const deja = await env.DB.prepare(
-          `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(key).first();
-        if (deja && deja.source === 'choix') {
-          return json({ error: 'nationalite deja choisie', pays: deja.pays }, 409);
-        }
         const r = await choisirPays(env.DB, key, pays);
-        if (r.erreur) return json({ error: r.erreur }, 400);
+        if (r.erreur) return json({ error: r.erreur, pays: r.pays }, r.code || 400);
         paysPose = r.pays;
       }
 
@@ -4456,6 +4486,10 @@ async function servir(request, env, ctx, porteur) {
       // Sous le plancher du 100/200/400 m (plancher.js) : ce n'est pas une
       // course jouee, et elle n'entrerait ni a l'historique ni aux records.
       if (sousLePlancher(race_key, t)) return json({ error: MESSAGE_PLANCHER }, 400);
+      // La carriere d'athlete (canal de test) court avec les stats de son athlete : son chrono
+      // n'entre ni a l'historique ni aux records. Le jeu ne l'envoie plus ; ceci tient la regle
+      // meme pour un jeu qui l'enverrait.
+      if (contexte === 'athlete') return json({ ok: true, record: null, ignore: true });
       /* UNE COURSE NE SE JETTE PAS.
 
          Cette route rendait 403 et n'ecrivait rien quand le nom n'appartenait

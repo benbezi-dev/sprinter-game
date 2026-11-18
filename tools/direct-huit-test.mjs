@@ -18,7 +18,8 @@ const ok = (nom, cond, detail) => {
 function client(code, nom, places) {
   const c = { nom, moi: null, joueurs: [], presentation: null, depart: null,
               resultat: null, points: null, positionsRecues: new Map(), max: null };
-  const q = `name=${encodeURIComponent(nom)}&races=100&level=4&max=${places}`;
+  // l'appareil, comme le jeu : sans lui, la salle compte le nom en anonyme
+  const q = `device=harnais-${String(nom).replace(/[^a-zA-Z0-9]/g, '').slice(0, 50)}&name=${encodeURIComponent(nom)}&races=100&level=4&max=${places}`;
   c.ws = new WebSocket(`${WS}/live/${code}?${q}`);
   c.ouvert = new Promise(res => c.ws.addEventListener('open', res));
   c.ws.addEventListener('message', ev => {

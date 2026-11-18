@@ -23,6 +23,7 @@
 // forcement une course recente, la purge ne peut pas l'effacer.
 
 /** Le chemin, dans l'ordre ou un nouveau joueur le parcourt. */
+import { BasesPretes } from './bases.js';
 export const ETAPES_TUNNEL = [
   'ouverture',      // le jeu est charge (pas le tableau de bord)
   'ecran',          // la page est visible ET une image est peinte : quelqu'un a pu voir le jeu
@@ -91,7 +92,7 @@ export const ETAPES_HALLOWEEN = [
 const CONNUES = new Set([...ETAPES_TUNNEL, ...ETAPES_A_COTE, ...ETAPES_HALLOWEEN]);
 export const etapeConnue = e => typeof e === 'string' && CONNUES.has(e);
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureTunnel(db) {
   if (pret.has(db)) return;
   await db.prepare(`CREATE TABLE IF NOT EXISTS tunnel (

@@ -39,7 +39,9 @@ for (const n of NOMS.slice(1)) {
   const r = await poster('/relay/answer', { id: ID, name: n, accept: true });
   if (r.error) throw new Error(`${n} : ${r.error}`);
 }
-const ord = await poster('/relay/order', { id: ID, order: NOMS.map(n => n.toLowerCase()) });
+const ord = await poster('/relay/order', { id: ID, order: NOMS.map(n => n.toLowerCase()),
+  // seul un relayeur de l'equipe fixe l'ordre, depuis son appareil
+  name: NOMS[0], device_id: 'harnais-relais-createur' });
 if (ord.error) throw new Error('ordre refuse : ' + ord.error);
 console.log(`   equipe ${ID} · ${NOMS.join(', ')}`);
 

@@ -35,6 +35,7 @@
  * (`test`) ; la base elle-meme ne le dit pas, le cron passe sur les deux avec
  * le meme code. Va de pair avec PIECES_OUVERTES dans src/game/pieces.ts.
  */
+import { BasesPretes } from './bases.js';
 export const OUVERT_EN_PRODUCTION = true;
 export const piecesOuvertes = test => OUVERT_EN_PRODUCTION || !!test;
 
@@ -92,7 +93,7 @@ export const PLAFOND_CARRIERE_PAR_JOUR = 50;
  */
 export const PLAFOND_DUELS_PAR_JOUR = 20;
 
-const piecesReady = new WeakSet();
+const piecesReady = new BasesPretes();
 
 export async function ensurePieces(db) {
   if (piecesReady.has(db)) return;

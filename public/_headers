@@ -1,2 +1,7 @@
 /pubs/*
   Access-Control-Allow-Origin: *
+
+# Les fichiers de /assets/ portent une empreinte dans leur nom : un contenu qui change change
+# de nom. Ils peuvent donc rester en cache un an sans jamais etre redemandes (Cloudflare Pages).
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

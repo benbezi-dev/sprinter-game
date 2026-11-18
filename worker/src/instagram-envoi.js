@@ -41,6 +41,7 @@
    qui y ont un role. La revue ne sert qu'a publier sur le compte des autres,
    ce que ce projet ne fera jamais.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 
 /** La version de l'API visee. Ecrite une fois. */
 const API = 'https://graph.facebook.com/v21.0';
@@ -51,7 +52,7 @@ const MAX_OCTETS = 900 * 1024;
 /** Ce qu'une image deposee a de temps a vivre, meme si rien ne la reprend. */
 const DUREE_MS = 60 * 60 * 1000;
 
-const pret = new WeakSet();
+const pret = new BasesPretes();
 
 export async function ensureEnvoiTables(db) {
   if (pret.has(db)) return;

@@ -24,6 +24,7 @@
    le code est presente a chaque fois, et le jour ou il ne vaut plus rien, il ne
    vaut plus rien tout de suite.
 --------------------------------------------------------------------------- */
+import { BasesPretes } from './bases.js';
 
 const ALPHABET = '23456789ABCDEFGHJKMNPQRSTUVWXYZ';
 
@@ -41,7 +42,7 @@ function tirerCode(n = 6) {
 // tenue PAR BASE : le worker en sert deux — production et test — et un simple
 // booleen mentait a la seconde, qui restait sans tables parce que la premiere
 // avait deja eteint la migration.
-const pret = new WeakSet();
+const pret = new BasesPretes();
 export async function ensureAccesTables(db) {
   if (pret.has(db)) return;
   await db.batch([
