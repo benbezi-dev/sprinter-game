@@ -3,7 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
-const CHROME = process.env.HOME + '/.cache/puppeteer/chrome-headless-shell/mac_arm-152.0.7977.54/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+const CHROME = process.env.CHROME || process.env.HOME + '/.cache/puppeteer/chrome-headless-shell/mac_arm-152.0.7977.54/chrome-headless-shell-mac-arm64/chrome-headless-shell';
+/* La scene est dessinee en 1080x1920 ; on la photographie a l'echelle 4/3 pour
+   sortir du 2K (1440x2560), le minimum pour les films promo. SPRINTER_ECHELLE
+   le change sans toucher au film : 1 pour un apercu rapide, 2 pour du 4K. */
+const ECHELLE = Number(process.env.SPRINTER_ECHELLE) || 4 / 3;
 const mode = process.argv[2] || 'preview';
 const outDir = path.join(HERE, mode === 'preview' ? 'preview' : 'frames');
 if (mode !== 'range') fs.rmSync(outDir, { recursive: true, force: true });
@@ -13,7 +17,7 @@ const browser = await puppeteer.launch({
   executablePath: CHROME,
   args: ['--no-sandbox', '--hide-scrollbars', '--force-color-profile=srgb',
          '--font-render-hinting=none', '--disable-lcd-text'],
-  defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: 1 },
+  defaultViewport: { width: 1080, height: 1920, deviceScaleFactor: ECHELLE },
 });
 const page = await browser.newPage();
 page.on('pageerror', e => console.error('PAGE ERROR:', e.message));

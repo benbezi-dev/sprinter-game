@@ -38,9 +38,17 @@ Pour vérifier un instant précis pendant l'écriture — l'image atterrit dans
 node rendu.mjs voir 03-relais-4x100 21.6
 ```
 
+## Résolution
+
+Les films sont dessinés en 1080×1920 et photographiés à l'échelle 4/3 : tout
+sort en **2K, 1440×2560**, le minimum pour les films promo. `SPRINTER_ECHELLE=1`
+donne un aperçu rapide en 1080p, `SPRINTER_ECHELLE=2` du 4K (2160×3840).
+Hors de la machine de fabrication, `CHROME=/chemin/vers/chrome` indique le
+navigateur à utiliser.
+
 ## Ce qui sort où
 
-- `videos/sprinter-<film>.mp4` — 1080×1920, 30 i/s, H.264 High, yuv420p,
+- `videos/sprinter-<film>.mp4` — 1440×2560 (2K), 30 i/s, H.264 High, yuv420p,
   faststart. Muet : la musique se pose au montage.
 - `photos/<film>/NN-<nom>.png` — les images fixes, dans l'ordre du film.
 - `images/<film>/` et `controle/` — intermédiaires de rendu, non versionnés.
