@@ -327,6 +327,24 @@ function decoder(ctx: BaseAudioContext, donnees: ArrayBuffer): Promise<AudioBuff
   });
 }
 
+/**
+ * Reveille le son DANS le geste, avant tout `await`.
+ *
+ * Pour un vocal qu'il faut d'abord telecharger (le mot d'une course de
+ * championnat), le geste est consomme par la requete : quand la voix arrive,
+ * iOS refuse tout `play()` et laisse le contexte suspendu. Le bouton se
+ * pressait et il ne se passait rien. On ouvre donc le graphe du jeu au moment
+ * de l'appui — le cree s'il n'existe pas encore — pour qu'il soit deja en
+ * marche quand la voix arrive : une source branchee sur un contexte qui
+ * tourne n'a plus besoin de geste.
+ */
+export function reveillerLeSon(): void {
+  const A = (globalThis as any).SprinterApp?.Audio_;
+  try { if (A && typeof A.init === 'function') A.init(); } catch { /* sans son */ }
+  const g = grapheDuJeu();
+  if (g && g.ctx.state !== 'running') g.ctx.resume().catch(() => { /* refuse */ });
+}
+
 /** Ce qui joue en ce moment : un second appui l'interrompt au lieu de superposer. */
 let ecouteEnCours: (() => void) | null = null;
 

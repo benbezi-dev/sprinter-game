@@ -8,7 +8,9 @@ import { suivreRejeu, lireRejeu, fermerRejeu, lancerLeDepartDuRejeu, presentatio
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
 import { LaisserUnMot } from './MotDuel';
-import { poserMotDeCourse, voixDuMotDeCourse, urlDeLaVoix } from '@/game/mot';
+import {
+  poserMotDeCourse, voixDuMotDeCourse, blobDeLaVoix, ecouterLaVoix, reveillerLeSon,
+} from '@/game/mot';
 import { getSavedName } from '@/game/leaderboard';
 import { arriveeSerree, ecartLePlusSerre, fabriquerPhotoFinish } from '@/game/photo-finish';
 import { sortir, type Sortie } from '@/game/affiche';
@@ -331,19 +333,34 @@ export function MotDuGagnant({ mot, course }: {
 }) {
   const { N } = SprinterApp;
   const [charge, setCharge] = useState(false);
+  const [echec, setEchec] = useState<null | 'reseau' | 'illisible'>(null);
+  // La voix telechargee, gardee : un second appui rejoue sans redemander.
+  const voix = useRef<Blob | null>(null);
 
-  const ecouter = async () => {
+  /**
+   * LE GESTE D'ABORD, LE RESEAU ENSUITE. La lecture se faisait par un
+   * `new Audio().play()` APRES le telechargement : sur iPhone, le geste etait
+   * alors perdu, `play()` refuse, et l'echec avale — un bouton qui ne faisait
+   * rien. Le son est reveille dans l'appui (`reveillerLeSon`), la voix passe
+   * par le graphe du jeu comme celle des duels (`ecouterLaVoix`), et un echec
+   * se dit a l'ecran.
+   */
+  const ecouter = () => {
     if (!course || charge) return;
+    setEchec(null);
+    reveillerLeSon();
+    if (voix.current) { ecouterLaVoix(voix.current, () => setEchec('illisible')); return; }
     setCharge(true);
-    const v = await voixDuMotDeCourse({
+    voixDuMotDeCourse({
       edition: course.edition, phase: course.phase, course: course.numero,
+    }).then(v => {
+      setCharge(false);
+      if (!v || !v.voix) { setEchec('reseau'); return; }
+      let b: Blob;
+      try { b = blobDeLaVoix(v.voix, v.voix_type); } catch { setEchec('illisible'); return; }
+      voix.current = b;
+      ecouterLaVoix(b, () => setEchec('illisible'));
     });
-    if (!v) { setCharge(false); return; }
-    try {
-      const a = new Audio(urlDeLaVoix(v.voix, v.voix_type));
-      a.onended = () => setCharge(false);
-      await a.play();
-    } catch { setCharge(false); }
   };
 
   return (
@@ -362,6 +379,11 @@ export function MotDuGagnant({ mot, course }: {
                      tracking-[0.2em] active:scale-95 transition disabled:opacity-50">
           {charge ? '…' : N.t('mot_ecouter_voix')}
         </button>
+      )}
+      {echec && (
+        <span className="text-[10px] text-destructive leading-snug">
+          {N.t(echec === 'reseau' ? 'mot_voix_absente' : 'mot_illisible')}
+        </span>
       )}
     </div>
   );
