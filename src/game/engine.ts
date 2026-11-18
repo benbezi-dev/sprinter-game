@@ -64,7 +64,7 @@ import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
-import { suivreTunnel, etapeTunnel } from './tunnel';
+import { suivreTunnel, etapeTunnel, mesurerFinIntro } from './tunnel';
 import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
 import { DUEL_MARQUES_OUVERT, NOEL_OUVERT } from './canal';
@@ -1173,7 +1173,11 @@ export function updateLogic(dt: number) {
     // partaient pendant l'ouverture). Toucher l'ecran la termine
     // (passerLOuverture). Elle attend toujours les images (chargement.ts).
     G.openT += dt * OUVERTURE_VITESSE;
-    if (G.openT > OUVERTURE_FIN && chargementFini()) G.state = 'title';
+    if (G.openT > OUVERTURE_FIN) {
+      const passagePossible = chargementFini();
+      mesurerFinIntro(passagePossible);
+      if (passagePossible) G.state = 'title';
+    }
   } else if (G.state === 'cut') {
     G.cut.t += dt;
     // pendant la carte de l'adversaire, les coureurs s'echauffent (game/echauffement.ts)

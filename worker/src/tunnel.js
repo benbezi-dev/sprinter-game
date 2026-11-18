@@ -88,7 +88,8 @@ export const ETAPES_HALLOWEEN = [
   ...Array.from({ length: 13 }, (_, i) => `hw_tenue_${i + 1}`),
 ];
 
-const CONNUES = new Set([...ETAPES_TUNNEL, ...ETAPES_A_COTE, ...ETAPES_HALLOWEEN]);
+const CONNUES = new Set([...ETAPES_TUNNEL, ...ETAPES_A_COTE, ...ETAPES_HALLOWEEN,
+  'intro_mesuree', 'intro_directe', 'intro_attente', 'intro_attente_finie']);
 export const etapeConnue = e => typeof e === 'string' && CONNUES.has(e);
 
 const pret = new WeakSet();
@@ -285,6 +286,24 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
     l.arrivee += r.arrivee ? 1 : 0;
   }
 
+  // Seulement les premières ouvertures instrumentées et vieilles de cinq minutes.
+  // Les signaux peuvent arriver en désordre ; la fin d’une attente prouve son début.
+  const intro = await db.prepare(
+    `WITH c AS (${cohorte}), mesures AS (
+       SELECT c.device_id,
+              MAX(t.etape = 'intro_directe') AS directe,
+              MAX(t.etape IN ('intro_attente', 'intro_attente_finie')) AS attente,
+              MAX(t.etape = 'intro_attente_finie') AS finie
+         FROM c JOIN tunnel t ON t.device_id = c.device_id
+           JOIN tunnel_appareil a ON a.device_id = c.device_id
+        WHERE a.navigateur IS NOT NULL AND a.navigateur <> 'robot'
+          AND c.o_at < ?2 AND t.etape IN ('intro_mesuree', 'intro_directe', 'intro_attente', 'intro_attente_finie')
+        GROUP BY c.device_id)
+     SELECT COUNT(*) AS mesures, COUNT(CASE WHEN directe AND NOT attente THEN 1 END) AS directs,
+            COUNT(CASE WHEN attente THEN 1 END) AS attendent,
+            COUNT(CASE WHEN finie THEN 1 END) AS apres_attente
+       FROM mesures`).bind(depuis, now - 5 * 60 * 1000).first();
+
   // LE TELECHARGEMENT (22/10/2026) : `page` part d'index.html avant le code du
   // jeu. Un appareil neuf qui a `page` sans `ouverture` est parti pendant le
   // telechargement — invisible pour la cohorte, qui commence a l'ouverture.
@@ -305,6 +324,7 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
   return {
     jours, depuis, mesure_depuis: premier,
     telechargement: { pages: tele?.pages || 0, perdus: tele?.perdus || 0 },
+    intro,
     cohorte: base,
     etapes: ETAPES_TUNNEL.map(ligne),
     a_cote: ETAPES_A_COTE.map(ligne),

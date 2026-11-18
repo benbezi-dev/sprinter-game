@@ -36,6 +36,7 @@ const PARTIES = 'sprinter_tunnel';
 
 export type EtapeTunnel =
   | 'page' | 'ouverture' | 'ecran' | 'accueil' | 'visite' | 'nom'
+  | 'intro_mesuree' | 'intro_directe' | 'intro_attente' | 'intro_attente_finie'
   | 'depart' | 'premier_appui' | 'arrivee' | 'oneshot'
   | 'carriere_1' | 'carriere_2' | 'carriere_3'
   | 'carriere_4' | 'carriere_5' | 'carriere_6'
@@ -102,6 +103,31 @@ export function etapeTunnel(etape: EtapeTunnel) {
     faites.add(etape);
     try { localStorage.setItem(PARTIES, JSON.stringify([...faites])); } catch { /* sans memoire */ }
   }).catch(() => { /* hors ligne : elle repartira au prochain lancement */ });
+}
+
+// Ces signaux décrivent un seul lancement. Une visite ultérieure ne doit pas
+// transformer une première attente interrompue en arrivée à l’accueil.
+let introMesuree = false;
+let introEnAttente = false;
+
+function commencerMesureIntro() {
+  try {
+    if (dejaParties().has('ouverture') || localStorage.getItem('sprinter_intro_mesuree')) return;
+    localStorage.setItem('sprinter_intro_mesuree', '1');
+    introMesuree = true;
+    etapeTunnel('intro_mesuree');
+  } catch { /* Sans stockage, on ne peut pas reconnaître une première ouverture. */ }
+}
+
+export function mesurerFinIntro(passagePossible: boolean) {
+  if (!introMesuree) return;
+  if (passagePossible) {
+    etapeTunnel(introEnAttente ? 'intro_attente_finie' : 'intro_directe');
+    introMesuree = false;
+  } else if (!introEnAttente) {
+    introEnAttente = true;
+    etapeTunnel('intro_attente');
+  }
 }
 
 let etatVu = '';
@@ -180,6 +206,7 @@ export function demarrerTunnel() {
   const ouvrir = () => {
     if (document.visibilityState !== 'visible') return;
     document.removeEventListener('visibilitychange', ouvrir);
+    commencerMesureIntro();
     etapeTunnel('ouverture');
   };
   try {

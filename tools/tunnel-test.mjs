@@ -128,7 +128,20 @@ await appareil('c-ancien', 'chrome', 100, OEAD);
 await noterEtape(db, 'c-trop-vieux', 'ouverture', NOW - 60 * 86400000);
 await noterAppareil(db, 'c-trop-vieux', { navigateur: 'firefox' }, NOW - 60 * 86400000);
 
+for (const [id, etapesIntro] of [
+  ['c-sa-1', ['intro_mesuree', 'intro_directe']],
+  ['c-sa-2', ['intro_attente_finie']], // La requête de début peut être perdue.
+  ['c-sa-3', ['intro_mesuree', 'intro_attente']],
+  ['c-sa-4', ['intro_mesuree']], // Interruption avant la fin de l’animation.
+  ['c-ro-1', ['intro_attente']], ['c-ancien', ['intro_directe']], ['c-vieux-1', ['intro_directe']],
+]) {
+  for (const etape of etapesIntro) await noterEtape(db, id, etape, T + 4000);
+}
 const t = await lireTunnel(db, 30, NOW);
+ok('première intro : hors robots, appareils connus antérieurs et navigateurs inconnus',
+  t.intro.mesures === 4 && t.intro.directs === 1 && t.intro.attendent === 2 && t.intro.apres_attente === 1, t.intro);
+const recent = await lireTunnel(db, 30, T + 60000);
+ok('une ouverture récente ne ressemble pas à une attente interrompue', recent.intro.mesures === 0);
 const nav = n => t.par_navigateur.find(x => x.navigateur === n);
 ok('cohorte : 10 appareils neufs (ni l\'ancien ni le trop vieux)', t.cohorte === 10, t.cohorte);
 ok('le format existant est intact',
