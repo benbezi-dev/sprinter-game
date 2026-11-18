@@ -1490,7 +1490,9 @@ export function updateLogic(dt: number) {
       // que si la salle se tait — cinq minutes, plus que la manche la plus
       // longue et sa limite de retardataires.
       if (G.elapsed >= 300) SprinterApp.goHome();
-    } else if (out || slow || mordu || plante || G.elapsed >= 90) {
+    } else if (out || slow || mordu || plante || G.elapsed >= 90
+               // PASSER L'APRES-LIGNE (l'auteur, 18/11) : le bouton du HUD pose le coureur de CETTE course, rien a remettre a zero
+               || (G.player.finished && G.passerFin === G.player)) {
       // Plante seulement : la serie s'arrete la (finishRace, one shot).
       G.finPlante = plante && !(out || slow || mordu);
       for (const r of G.runners)

@@ -38,6 +38,7 @@
     stage_up:     ['ÉTAPE ', 'STAGE '],
     six_cleared:  ['SIX ÉTAPES FRANCHIES', 'SIX STAGES CLEARED'],
     skip_now:     ['touche à nouveau pour passer', 'tap again to skip'],
+    passer_fin:   ['PASSER', 'SKIP'],
     skip_twice:   ['touche deux fois pour passer', 'tap twice to skip'],
 
     // générique de fin de carrière

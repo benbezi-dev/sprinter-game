@@ -230,6 +230,19 @@ export function RaceHUD() {
 
   return (
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
+      {/* PASSER L'APRES-LIGNE (l'auteur, 18/11) : la ligne franchie, aller tout de suite a l'ecran de fin. Pas en
+          direct ni en championnat (c'est la salle qui tranche), ni au rejeu, ni au saut (pas de ligne). */}
+      {isRace && player?.finished && !rejeu && !SprinterApp.G.champDirect && !SprinterApp.G.liveOn
+        && !SprinterApp.G.sautEnCours && (
+        <button type="button"
+          onClick={() => { SprinterApp.G.passerFin = SprinterApp.G.player; }}
+          className="pointer-events-auto absolute right-[max(env(safe-area-inset-right),1rem)] top-[150px] landscape:top-[90px]
+                     z-20 rounded-full border border-white/25 bg-black/55 backdrop-blur-md px-4 py-2
+                     text-xs font-bold tracking-[0.2em] text-foreground active:scale-95">
+          {N.t('passer_fin')} ›
+        </button>
+      )}
+
       {/* Le verdict de chaque haie. Rien hors d'une course de haies. */}
       {isRace && <HaiesHUD />}
 
