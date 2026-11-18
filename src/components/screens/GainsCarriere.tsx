@@ -63,14 +63,16 @@ export function GainsCarriere() {
   return (
     <div className="w-full flex flex-col items-center gap-2">
       <div className="flex items-center gap-1.5 text-primary font-black text-base md:text-lg">
-        <Coins className="w-5 h-5" />{N.t('pieces_carriere', { n: gagne })}
+        <Coins className="w-5 h-5 shrink-0" />{N.t('pieces_carriere', { n: gagne })}
       </div>
       {pubOfferte && etat !== 'fait' && (
         <button onClick={handleDoubler} disabled={etat === 'envoi'}
-          className="w-full py-2.5 md:py-4 rounded-xl font-black font-display text-sm sm:text-xl md:text-2xl whitespace-nowrap tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
-          {offert || pubVue ? N.t('pieces_double_offert')
-            : N.t(etat === 'envoi' ? 'pub_charge' : 'pieces_double')}
-          {!offert && !pubVue && <Clapperboard className="w-5 h-5 md:w-6 md:h-6" />}
+          className="w-full px-3 py-2.5 md:py-4 rounded-xl font-black font-display text-sm sm:text-xl md:text-2xl whitespace-normal tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
+          <span className="min-w-0">
+            {offert || pubVue ? N.t('pieces_double_offert')
+              : N.t(etat === 'envoi' ? 'pub_charge' : 'pieces_double')}
+          </span>
+          {!offert && !pubVue && <Clapperboard className="w-5 h-5 md:w-6 md:h-6 shrink-0" />}
         </button>
       )}
       {etat === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}</div>}
