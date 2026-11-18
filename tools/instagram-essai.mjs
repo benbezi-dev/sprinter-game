@@ -127,6 +127,13 @@ if (g.http !== 200) {
   } else if (m) {
     rate('Meta ne reconnait pas le jeton', `${m.erreur} · via ${g.d.hote.replace('https://', '')}`);
   }
+  const x = g.d.expiration;
+  if (x && x.jamais) ok('Le jeton n\'expire pas');
+  else if (x && x.alerte) rate('Le jeton expire bientot, ou deja', `le ${x.le} (${x.jours} j) — en poser un neuf`);
+  else if (x) ok('Echeance du jeton', `le ${x.le}, dans ${x.jours} jours`);
+  else if (j.famille.startsWith('Instagram')) {
+    console.log('   \x1b[2mEcheance non lisible pour un jeton Instagram Login : 60 jours apres sa creation.\x1b[0m');
+  }
 }
 
 /* --------------------------------------------------------- 2. le conteneur */
