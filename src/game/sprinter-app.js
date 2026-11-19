@@ -2653,7 +2653,6 @@ import { sponsorDeLaCourse } from './panneaux';
   }
 
   function startRun() {
-    G.premiereCourse = false;
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.etiquette = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
@@ -2706,7 +2705,6 @@ import { sponsorDeLaCourse } from './panneaux';
     G.challengeTarget = null;
     G.defiSansCible = null;
     G.mode = 'campaign';
-    G.premiereCourse = false;
     G.ghost = null; G.ghostSet = null; G.ghostSplits = [];
     G.ghostName = ''; G.ghostTime = 0; G.challenge = null;
     G.etiquette = null;
@@ -2735,7 +2733,6 @@ import { sponsorDeLaCourse } from './panneaux';
     // a la premiere : meme distance, mais plus de fantome, ou un plateau par
     // defaut. Le joueur croirait rejouer et courrait autre chose.
     G.shotOpts = opts;
-    G.premiereCourse = false;
     G.mode = 'oneshot';
     G.etiquette = opts.etiquette || null;
     // Un one-shot n'a pas de photo-finish : l'adversaire, s'il y en a un, est
@@ -2853,7 +2850,7 @@ import { sponsorDeLaCourse } from './panneaux';
   // Seule la toute premiere course du joueur (premiers-pas) garde le simple
   // blocage : il n'a encore rien appris du depart.
   function falseStartOut() {
-    if (G.falseOut || G.etiquette === 'decouverte') return false;
+    if (G.falseOut) return false;
     const carriere = G.mode === 'campaign' && !G.premiereCourse && !G.rejeu;
     if (G.mode !== 'oneshot' && !carriere) return false;
     G.falseOut = true; G.falseOutT = 0;
@@ -7695,7 +7692,7 @@ import { sponsorDeLaCourse } from './panneaux';
     // Les marquages au sol rendus dans Blender — fosse, cercle de lancer —
     // avec la pelouse, sous les gradins, la piste et tout ce qui se tient
     // debout.
-    if (G.etiquette !== 'decouverte' && DEC()) DEC().sol(ctx, apiDecor(), th, G.levelIdx);
+    if (DEC()) DEC().sol(ctx, apiDecor(), th, G.levelIdx);
     if (cdm) cdm.pelouse(ctx, apiCdm(), th, rIn);
 
     // Palmiers derriere les tribunes. Ils sont traces AVANT elles, et c'est
@@ -7716,7 +7713,7 @@ import { sponsorDeLaCourse } from './panneaux';
     // elle et avant les coureurs, comme les gradins. Voir decors-stades.js.
     // Le sol de la ruelle d'abord : caniveaux, flaques, feuilles (a plat).
     if (th.ruelle && RUE()) RUE().sol(ctx, PEINTRE, th, rIn, rOut);
-    if (G.etiquette !== 'decouverte' && DEC() && DEC().fond) DEC().fond(ctx, apiDecor(), th, G.levelIdx);
+    if (DEC() && DEC().fond) DEC().fond(ctx, apiDecor(), th, G.levelIdx);
 
     // Tribune simplifiee : muret, gradins, toiture. Elle est dessinee AVANT
     // la piste. Ces bandes sont posees en hauteur, et dans le virage leur
@@ -8071,7 +8068,7 @@ import { sponsorDeLaCourse } from './panneaux';
     // en quinconce, et cinquante-trois metres separent le bloc du couloir 1 de
     // celui du couloir 8 : `markAt` donne a chacun le sien, exactement comme
     // pour les reperes peints juste au-dessus.
-    if (T.markAt && G.etiquette !== 'decouverte') drawBlocs(ctx, th);
+    if (T.markAt) drawBlocs(ctx, th);
     // Les guirlandes de la ruelle, au-dessus de la piste, avant les coureurs.
     if (th.ruelle && RUE()) RUE().guirlandes(ctx, PEINTRE, th, rIn, rOut);
 
@@ -8105,7 +8102,7 @@ import { sponsorDeLaCourse } from './panneaux';
 
     // Hors course, les decors debout se posent ici. En course, ils passent
     // apres les coureurs : voir la fin de drawAthletes.
-    if (G.etiquette !== 'decouverte' && DEC() && G.state !== 'race' && G.state !== 'count') {
+    if (DEC() && G.state !== 'race' && G.state !== 'count') {
       DEC().debout(ctx, apiDecor(), th, G.levelIdx);
     }
 
@@ -9231,13 +9228,7 @@ import { sponsorDeLaCourse } from './panneaux';
   function NL() { return (G.track && G.track.lanes) || C.LANE_COUNT; }
 
   /** Le meme, tel que le stade a ete regle, sans la lumiere de l'heure. */
-  const THEME_DECOUVERTE = {
-    ...THEMES.day, sansGradins: true, sansPanneaux: true, sansGrain: true,
-    feuillus: false, tonte: false, heure: false,
-  };
-
   function themeBrut() {
-    if (G.etiquette === 'decouverte') return THEME_DECOUVERTE;
     // LA PISTE COUVERTE DE VAL-DE-REUIL (piste-salle.js) : sa halle, quel que soit le niveau
     if (G.race && (G.race.salle || G.race.salleDroite)) return THEMES.salle;
     const lvl = LEVELS[G.levelIdx];
@@ -9611,7 +9602,7 @@ import { sponsorDeLaCourse } from './panneaux';
     // doit donc passer DEVANT le coureur qui court derriere, jamais
     // l'inverse. Les noms, eux, restent au-dessus de tout — un nom cache par
     // un mat ne se lit plus.
-    if (G.etiquette !== 'decouverte' && DEC()) DEC().debout(ctx, apiDecor(), th, G.levelIdx);
+    if (DEC()) DEC().debout(ctx, apiDecor(), th, G.levelIdx);
     // Le premier plan debout d'un evenement (torii, cerisiers, pirogues :
     // game/legende/decors.ts), pour la meme raison.
     if (G.premierPlanEvenement && G.premierPlanEvenement.devant && th && G.track) {

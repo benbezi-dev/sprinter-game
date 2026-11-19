@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { SprinterApp, useGameStore } from '@/game/engine';
+import { useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import { paysDe } from '@/game/identity';
 import { PanneauIdentite } from './NameChip';
@@ -82,9 +82,9 @@ export function Bienvenue() {
   // ou a l'accueil, si le jeu a ete ferme sur l'ecran de fin sans repondre.
   // Une fois posee la, elle ne revient plus d'elle-meme (la puce du nom reste).
   const premiere = apresLaPremiereArrivee();
-  const ouLaPoser = SprinterApp.G.etiquette !== 'decouverte' && (premiere
+  const ouLaPoser = premiere
     ? (FINS.has(etat) || etat === 'title') && !nomDejaDemande()
-    : etat === 'title' && visiteFinie);
+    : etat === 'title' && visiteFinie;
 
   useEffect(() => {
     if (!ouLaPoser || repoussee || ouvert || demande.current) return;

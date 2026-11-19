@@ -9,8 +9,9 @@
    et la moitie de ceux qui voyaient l'accueil n'allaient jamais jusqu'a une
    course.
 
-   Au premier lancement, le bouton d'ouverture propose un 100 m découverte,
-   sans visite, sans bienvenue et sans attendre les décors des autres courses. Le geste
+   LA REGLE, DECIDEE PAR L'AUTEUR LE 14/10 : au tout premier lancement, on
+   court. L'accueil passe la main d'office a l'etape 1 de la carriere, au
+   100 m, sans visite, sans bienvenue, sans cinematique d'intro. Le geste
    s'apprend PENDANT la course (CoachPremiereCourse.tsx) : un mot avant le
    pistolet, les paves qui s'allument dans l'ordre, un rappel si l'on tape deux
    fois du meme cote. Le tutoriel complet reste a portee depuis l'accueil.
@@ -111,11 +112,3 @@ export function nomDemandeApresCourse() {
   try { localStorage.setItem(CLE_NOM, '1'); } catch { /* la visite attendra le nom */ }
 }
 export function nomDejaDemande(): boolean { return lire(CLE_NOM) === '1'; }
-
-/** Un lien vers une invitation conserve son parcours d'ouverture. */
-export function proposeLe100m(): boolean {
-  const { pathname = '', search = '' } = globalThis.location ?? {};
-  const params = new URLSearchParams(search);
-  return !/\/d\/[^/]+(?:\/|\/index\.html)?$/.test(pathname)
-    && !['defi', 'direct', 'championnat', 'regarder', 'liaison'].some(cle => params.has(cle));
-}

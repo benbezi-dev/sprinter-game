@@ -1,30 +1,83 @@
-import { useState } from 'react';
-import { SprinterApp, courirDecouverte, passerLOuverture, useGameStore } from '@/game/engine';
-import { premierLancement, proposeLe100m } from '@/game/premiers-pas';
+import React from 'react';
+import { motion } from 'motion/react';
+import { MONTEE, FONDU } from '@/lib/mouvement';
+import { useGameStore, passerLOuverture } from '@/game/engine';
 import { estHalloween } from '@/game/theme-accueil';
 
 export function OpenScreen() {
+  const openT = useGameStore(s => s.openT);
+  // La part des images deja chargee (game/chargement.ts) : l'ouverture ne
+  // cede la place a l'accueil qu'une fois tout la.
   const charge = useGameStore(s => s.chargement ?? 0);
-  const { N } = SprinterApp;
-  const [menuDemande, setMenuDemande] = useState(false);
+  const pret = charge >= 1;
+  const word = "SPRINTER".split("");
+
   return (
-    <div data-halloween={estHalloween() ? '' : undefined}
-      className="relative flex h-full w-full flex-col items-center justify-between px-6 pt-[max(env(safe-area-inset-top),3rem)] pb-[max(env(safe-area-inset-bottom),2rem)] text-center">
-      <h1 className="font-display text-5xl font-black tracking-tight text-primary sm:text-7xl">SPRINTER</h1>
-      <div className="flex w-full max-w-xs flex-col items-stretch gap-2">
-        {proposeLe100m() && (
-          <button type="button" onClick={courirDecouverte}
-            className="pointer-events-auto rounded-xl bg-primary px-5 py-4 text-lg font-black text-background">
-            {N.t('courir_decouverte')}
-          </button>
-        )}
-        <button type="button" onClick={() => { setMenuDemande(true); passerLOuverture(); }}
-          className="pointer-events-auto rounded-xl border border-white/20 bg-background/80 px-5 py-3 text-sm font-bold text-foreground">
-          {N.t('ouvrir_menu')}
-        </button>
-        {(menuDemande || !premierLancement() || !proposeLe100m()) && charge < 1 && <progress className="h-1 w-full accent-primary" value={charge} max={1}
-          aria-label={N.t('chargement_decouverte')} />}
+    // Toucher l'ecran saute l'animation : « Tap to start » ne promettait rien
+    // jusqu'au 14/10/2026, et un joueur qui touche sans effet croit le jeu fige.
+    <div onPointerDown={passerLOuverture}
+      data-halloween={estHalloween() ? '' : undefined}
+      className="w-full h-full flex flex-col items-center justify-between pointer-events-auto relative pt-[max(env(safe-area-inset-top),2rem)] pb-[max(env(safe-area-inset-bottom),2rem)]">
+      <div className="flex-1 flex flex-col justify-end pb-[10vh] md:pb-12 z-10 w-full overflow-hidden">
+        <div className="flex gap-1 sm:gap-2 justify-center px-4">
+          {word.map((letter, i) => {
+            const lt = openT - 1.5 - i * 0.085;
+            // Chaque lettre a sa largeur naturelle, la meme avant et pendant la
+            // chute (memes classes, seulement invisible) : rien ne se decale.
+            // La case fixe de 0.85ch collait le N et le T sur telephone (5/11).
+            const lettre = "text-5xl sm:text-7xl md:text-8xl font-black font-display tracking-tighter text-primary";
+            if (lt <= 0) return <div key={i} className={`${lettre} opacity-0`}>{letter}</div>;
+
+            const drop = Math.max(0, 1 - lt / 0.42);
+            const bounce = Math.sin(Math.min(1, lt / 0.42) * Math.PI) * 12;
+            const y = -300 * drop * drop + bounce;
+
+            return (
+              <div
+                key={i}
+                style={{ transform: `translateY(${y}px)` }}
+                className={`${lettre} drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]`}
+              >
+                {letter}
+              </div>
+            );
+          })}
+        </div>
       </div>
+
+      <div className="flex-1 flex flex-col items-center pt-4 md:pt-8 gap-2 md:gap-4 z-10 text-center px-4">
+        {openT > 3.1 && (
+          <motion.div
+            {...MONTEE}
+            className="text-lg sm:text-2xl font-bold tracking-widest text-foreground/90 font-display whitespace-nowrap"
+          >
+            100 &nbsp;&mdash;&nbsp; 200 &nbsp;&mdash;&nbsp; 400 METRES
+          </motion.div>
+        )}
+
+        {openT > 4.0 && (
+          <motion.div
+            {...FONDU}
+            className="text-[10px] sm:text-sm md:text-base font-medium text-muted-foreground uppercase tracking-widest max-w-[280px] sm:max-w-none"
+          >
+            Six stages, one clock to beat
+          </motion.div>
+        )}
+      </div>
+
+      {openT > 4.6 && pret && (
+        <div className="absolute bottom-[max(env(safe-area-inset-bottom),2rem)] text-xs sm:text-sm md:text-base font-bold text-foreground/80 tracking-widest uppercase animate-pulse z-10">
+          Tap to start
+        </div>
+      )}
+
+      {/* Le couloir et son coureur sont dessines dans la toile, juste
+          au-dessus (GameCanvas.tsx) : ici, seulement le pourcentage. */}
+      {openT > 2.2 && !pret && (
+        <div className="absolute bottom-[max(env(safe-area-inset-bottom),2rem)] text-[10px] sm:text-xs font-bold text-foreground/70 tracking-widest uppercase tabular-nums z-10">
+          Chargement {Math.floor(charge * 100)} %
+        </div>
+      )}
     </div>
   );
 }

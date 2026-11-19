@@ -29,7 +29,6 @@ import { ChampDirect } from '@/components/screens/ChampDirect';
 import { BandeauTournoi } from '@/components/screens/TournoiDirect';
 import { BandeauDefi, FinDuDefi } from '@/components/screens/DefiDemie';
 import { Mondes } from '@/components/screens/Mondes';
-import { FinDecouverte } from '@/components/screens/FinDecouverte';
 import { OpenScreen } from '@/components/screens/OpenScreen';
 import { TutorialHaies, marquerTutoHaiesVu } from '@/components/screens/TutorialHaies';
 import { tutoOuvert, abonnerAuTuto, fermerLeTuto } from '@/game/haies-tuto.js';
@@ -449,7 +448,6 @@ function MainGame() {
             : LEGENDE_OUVERTE && finDEtapeLegende(SprinterApp.G) ? <Suspense fallback={null}><FinDEtapeLegende /></Suspense>
             : CARRIERE_ATHLETE_OUVERTE && SprinterApp.G.etiquette === 'athlete' ? <Suspense fallback={null}><FinDeCourseAthlete /></Suspense>
             : defiEnCours && programmeDuDefi() ? <Revanche />
-            : SprinterApp.G.etiquette === 'decouverte' ? <FinDecouverte />
             : mode === 'oneshot' ? <OneShotEndScreen /> : <WinAllScreen />)}
       </div>
       

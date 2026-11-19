@@ -38,7 +38,6 @@ const PARTIES = 'sprinter_tunnel';
 export type EtapeTunnel =
   | 'page' | 'ouverture' | 'ecran' | 'accueil' | 'visite' | 'nom'
   | 'intro_mesuree' | 'intro_directe' | 'intro_attente' | 'intro_attente_finie'
-  | 'decouverte' | 'decouverte_arrivee'
   | 'depart' | 'premier_appui' | 'arrivee' | 'oneshot'
   | 'carriere_1' | 'carriere_2' | 'carriere_3'
   | 'carriere_4' | 'carriere_5' | 'carriere_6'
@@ -58,7 +57,7 @@ function dejaParties(): Set<string> {
 
 /** Les etapes qui supposent une vraie course : muettes pendant un tutoriel. */
 const DE_COURSE = new Set<EtapeTunnel>([
-  'depart', 'premier_appui', 'arrivee', 'oneshot', 'decouverte_arrivee',
+  'depart', 'premier_appui', 'arrivee', 'oneshot',
   'carriere_1', 'carriere_2', 'carriere_3', 'carriere_4', 'carriere_5', 'carriere_6',
 ]);
 
@@ -151,9 +150,7 @@ export function suivreTunnel(G: any) {
   if (etat === 'title') etapeTunnel('accueil');
   else if (etat === 'count') {
     etapeTunnel('depart');
-    if (G.mode === 'oneshot') {
-      if (G.etiquette !== 'decouverte') etapeTunnel('oneshot');
-    }
+    if (G.mode === 'oneshot') etapeTunnel('oneshot');
     else {
       const n = (G.levelIdx | 0) + 1;
       if (n >= 1 && n <= 6) etapeTunnel(`carriere_${n}` as EtapeTunnel);

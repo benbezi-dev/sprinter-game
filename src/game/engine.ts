@@ -65,7 +65,7 @@ import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel, mesurerFinIntro } from './tunnel';
-import { premiereArrivee, premierLancement, phasePremiersPas, premiereCourseLancee, proposeLe100m } from './premiers-pas';
+import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
 import { DUEL_MARQUES_OUVERT, NOEL_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
@@ -126,10 +126,7 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
   // poses : l'envoi part apres un import differe, et l'ecran de fin ou le
   // retour a l'accueil peuvent les avoir effaces entre-temps.
   pushFinishedRace(race, t, mode, level, contexteDeLaCourse(SprinterApp.G));
-  if (!SprinterApp.G.rejeu) {
-    etapeTunnel('arrivee');
-    if (SprinterApp.G.etiquette === 'decouverte') etapeTunnel('decouverte_arrivee');
-  }
+  if (!SprinterApp.G.rejeu) etapeTunnel('arrivee');
   // Les premiers pas (game/premiers-pas.ts) : la premiere course est finie, le
   // coach se tait, et l'ecran de fin demandera de signer ce chrono.
   if (SprinterApp.G.premiereCourse && !SprinterApp.G.rejeu) {
@@ -370,7 +367,7 @@ export function rafraichirTout() {
 const { G, Audio_, clamp, THEMES, LEVELS, RACES } = SprinterApp;
 
 // Les images des decors et du public, pendant l'ecran d'ouverture.
-if (!premierLancement() || !proposeLe100m()) lancerChargement();
+lancerChargement();
 const { C } = SprinterCore;
 const { N } = SprinterI18N;
 
@@ -520,21 +517,8 @@ const OUVERTURE_VITESSE = 2;
  * l'animation. Le passage a l'accueil attend encore les images de la premiere
  * course (chargement.ts) — c'est la barre qui le montre.
  */
-let menuDemande = false;
 export function passerLOuverture() {
-  if (G.state !== 'open') return;
-  menuDemande = true;
-  lancerChargement();
-  G.openT = Math.max(G.openT, OUVERTURE_FIN);
-}
-
-export function courirDecouverte() {
-  if (G.state !== 'open' && G.etiquette !== 'decouverte') return;
-  if (G.state === 'open') etapeTunnel('decouverte');
-  if (premierLancement() && phasePremiersPas() === null) premiereCourseLancee();
-  SprinterApp.startOneShot(['100'], { levelIdx: 0, etiquette: 'decouverte' });
-  G.premiereCourse = true;
-  requestAnimationFrame(lancerChargement);
+  if (G.state === 'open') G.openT = Math.max(G.openT, OUVERTURE_FIN);
 }
 
 /** Le dernier pave touche et quand (performance.now()), pour le coach. */
@@ -1184,10 +1168,12 @@ export function updateLogic(dt: number) {
   }
 
   if (G.state === 'open') {
-    // Les nouveaux voient les deux choix avant de demander les décors.
-    // Les liens et les joueurs de retour rejoignent le menu automatiquement.
-    G.openT = Math.min(OUVERTURE_FIN + 0.01, G.openT + dt * OUVERTURE_VITESSE);
-    if (G.openT > OUVERTURE_FIN && (menuDemande || !premierLancement() || !proposeLe100m())) {
+    // L'animation est ecrite sur 6,4 s, et jouee deux fois plus vite : 3,2 s
+    // au plus avant l'accueil (14/10/2026 — la moitie des appareils neufs
+    // partaient pendant l'ouverture). Toucher l'ecran la termine
+    // (passerLOuverture). Elle attend toujours les images (chargement.ts).
+    G.openT += dt * OUVERTURE_VITESSE;
+    if (G.openT > OUVERTURE_FIN) {
       const passagePossible = chargementFini();
       mesurerFinIntro(passagePossible);
       if (passagePossible) G.state = 'title';
@@ -1274,7 +1260,7 @@ export function updateLogic(dt: number) {
     // plus d'ATTENTE_STADE_MAX_S : mieux vaut un spectateur en retard qu'un
     // joueur bloque. Pas en direct, en relais ni en rejeu : leur pistolet est
     // a l'heure de la salle — ils composent pendant leur presentation.
-    if (!G.attitudesFaites && !G.liveOn && !G.rejeu && !G.spectateur && G.etiquette !== 'decouverte') {
+    if (!G.attitudesFaites && !G.liveOn && !G.rejeu && !G.spectateur) {
       if (!G.attenteImages) G.debutAttente = performance.now();
       G.attenteStade = (G.attenteStade || 0) + dt;
       G.attenteImages = (G.attenteImages || 0) + 1;
@@ -1296,7 +1282,7 @@ export function updateLogic(dt: number) {
     }
     if (!G.attitudesFaites) {
       G.attitudesFaites = true;
-      if (!G.avantDepart && !G.liveOn && !G.rejeu && !G.spectateur && G.etiquette !== 'decouverte' && (G.runners || []).length > 1) {
+      if (!G.avantDepart && !G.liveOn && !G.rejeu && !G.spectateur && (G.runners || []).length > 1) {
         const deja = G.attenteStade || 0;
         G.avantDepart = { reste: Math.max(ATTITUDES_MIN_S, ATTITUDES_S - deja), t: 0, dit: true, attitudes: true };
       }
