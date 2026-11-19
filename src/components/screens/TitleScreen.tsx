@@ -19,7 +19,7 @@ import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
 import { Parametres } from './Parametres';
-import { Coins } from 'lucide-react';
+import { PieceBB } from '@/components/PieceBB';
 import { rafraichirPieces, usePieces } from '@/game/pieces';
 import { NOM_CHANGE, getSavedName } from '@/game/leaderboard';
 import { bienvenueVue, BIENVENUE_CLOSE } from './Bienvenue';
@@ -844,10 +844,14 @@ function PucePieces() {
   }, []);
   if (!pieces || !pieces.reserve) return null;
   return (
-    <div title={SprinterApp.N.t('pieces_solde', { n: pieces.solde })}
-         className="bg-card/80 backdrop-blur-md border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 text-amber-300">
-      <Coins className="w-3.5 h-3.5 md:w-4 md:h-4" />
-      <span className="font-bold text-xs md:text-sm tabular-nums">{pieces.solde}</span>
+    <div title={`${pieces.solde} BenbeDollar`}
+         className="bg-card/80 backdrop-blur-md border border-white/10 px-2 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1 md:gap-1.5 text-amber-300">
+      <PieceBB className="h-4 w-4 md:h-5 md:w-5" />
+      {/* Affiche comme une vraie monnaie : montant puis symbole, a la francaise
+          (« 26 B$ » comme « 26 € »). Le nom complet, BenbeDollar, est dans le title. */}
+      <span className="font-bold text-xs md:text-sm tabular-nums whitespace-nowrap">
+        {pieces.solde.toLocaleString('fr-FR')}&nbsp;B$
+      </span>
     </div>
   );
 }

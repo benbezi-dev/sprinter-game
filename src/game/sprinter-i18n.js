@@ -115,7 +115,7 @@
     unfinished:   ['non terminé', 'unfinished'],
     race_again:   ['RECOMMENCER ?', 'RACE AGAIN?'],
     // Les Benbedollars et le Continue (game/pieces.ts). {n} est un montant.
-    pieces_solde:      ['{n} Benbedollars', '{n} Benbedollars'],
+    pieces_solde:      ['{n} B$', 'B${n}'],
     pieces_continuer:  ['CONTINUER · {n}', 'CONTINUE · {n}'],
     pieces_revanche:   ['REVANCHE · {n}', 'REMATCH · {n}'],
     pieces_reprendre:  ['Reprendre à : {etape}', 'Resume at: {etape}'],

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { Coins, Clapperboard } from 'lucide-react';
+import { Clapperboard } from 'lucide-react';
+import { PieceBB } from '@/components/PieceBB';
 import { rafraichirPieces, usePieces, coutDuContinue, acheterContinue, type EtatPieces } from '@/game/pieces';
 import { pubPossible, regarderUnePub, PUBS_PAR_CARRIERE } from '@/game/pub';
 import { sansPubs } from '@/game/achats';
@@ -87,7 +88,7 @@ export function Reprises({ parcours, achetes, pubs, pubsMax = PUBS_PAR_CARRIERE,
         <div className="w-full max-w-md flex flex-col items-center gap-1.5">
           {pieces.reserve && (
             <div className="flex items-center gap-1.5 text-primary font-bold text-sm md:text-base">
-              <Coins className="w-4 h-4" />{N.t('pieces_solde', { n: pieces.solde })}
+              <PieceBB className="h-5 w-5" />{N.t('pieces_solde', { n: pieces.solde })}
             </div>
           )}
           {!revanche && <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
@@ -98,7 +99,7 @@ export function Reprises({ parcours, achetes, pubs, pubsMax = PUBS_PAR_CARRIERE,
             className={peutPayer
               ? 'w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary-foreground bg-primary hover:brightness-110 disabled:opacity-60 transition-all border-b-4 border-black/30 active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2'
               : 'w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary/60 bg-primary/10 border-2 border-dashed border-primary/40 cursor-not-allowed flex items-center justify-center gap-2'}>
-            {N.t(revanche ? 'pieces_revanche' : 'pieces_continuer', { n: cout })}<Coins className="w-5 h-5 md:w-6 md:h-6" />
+            {N.t(revanche ? 'pieces_revanche' : 'pieces_continuer', { n: cout })}<PieceBB className="h-5 w-5 md:h-6 md:w-6" />
           </button>
           {!peutPayer && (
             <div className="flex flex-col items-center gap-0.5 text-center">

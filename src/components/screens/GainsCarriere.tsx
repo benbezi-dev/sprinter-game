@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Clapperboard, Coins } from 'lucide-react';
+import { Clapperboard } from 'lucide-react';
+import { PieceBB } from '@/components/PieceBB';
 import { SprinterApp } from '@/game/engine';
 import { doublerCarriere, usePieces } from '@/game/pieces';
 import { pubPossible, regarderUnePub } from '@/game/pub';
@@ -63,7 +64,7 @@ export function GainsCarriere() {
   return (
     <div className="w-full flex flex-col items-center gap-2">
       <div className="flex items-center gap-1.5 text-primary font-black text-base md:text-lg">
-        <Coins className="w-5 h-5 shrink-0" />{N.t('pieces_carriere', { n: gagne })}
+        <PieceBB className="w-5 h-5 shrink-0" />{N.t('pieces_carriere', { n: gagne })}
       </div>
       {pubOfferte && etat !== 'fait' && (
         <button onClick={handleDoubler} disabled={etat === 'envoi'}
