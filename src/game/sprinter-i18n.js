@@ -11,6 +11,14 @@
     races:        ['100 - 200 - 400 METRES', '100 - 200 - 400 METRES'],
     tagline:      ['six étapes, un seul chrono à battre',
                    'six stages, one clock to beat'],
+    courir_decouverte: ['Courir un 100 m', 'Run a 100 m'],
+    chargement_decouverte: ['Chargement du jeu', 'Loading game'],
+    ouvrir_menu: ['Menu principal', 'Main menu'],
+    chrono_decouverte: ['Ton 100 m', 'Your 100 m'],
+    refaire_decouverte: ['Refaire mon chrono', 'Race again'],
+    carriere_decouverte: ['Essayer la carrière', 'Try career mode'],
+    pseudo_decouverte: ['Enregistrer mon pseudo', 'Save my name'],
+    decouverte_sans_chrono: ['Course interrompue', 'Race interrupted'],
     tap_start:    ["touche l'écran pour commencer", 'tap the screen to start'],
     // six_stages porte son propre separateur : reservee au rendu canvas, qui
     // concatene sans mise en forme. En HTML on prend six_stages_bare et on

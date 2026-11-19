@@ -11,7 +11,7 @@ import { POUSSEE_OUVERTE, RENDU_3D, lieuParDefaut, relais2D } from '@/game/canal
 import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
-import { chargementFini, partChargee } from '@/game/chargement';
+import { premierLancement, proposeLe100m } from '@/game/premiers-pas';
 import { dessinSuspendu } from '@/game/dessin-suspendu';
 
 // LA COURSE EN VRAIE 3D (22/10/2026). Sur la branche de test ferme test-ferme/course-3d,
@@ -40,7 +40,12 @@ function marquerLeJoueur(ctx: CanvasRenderingContext2D, e: { x: number; y: numbe
   ctx.strokeText(texte, e.x, y - 12); ctx.fillText(texte, e.x, y - 12);
   ctx.restore();
 }
-if (RENDU_3D) import('@/game/course-3d').then(m => { rendu3D = m; }).catch(() => { /* reste en 2D */ });
+let rendu3DDemande = false;
+function chargerRendu3D() {
+  if (!RENDU_3D || rendu3DDemande) return;
+  rendu3DDemande = true;
+  import('@/game/course-3d').then(m => { rendu3D = m; }).catch(() => { /* reste en 2D */ });
+}
 
 /** Ou se tient le personnage d'une cinematique ordinaire : ses pieds, a l'ecran. */
 function pointDuPersonnage(G: any): [number, number] {
@@ -322,6 +327,8 @@ export function GameCanvas() {
       // mesurer — l'image ou le jeu y arrive, avant que React ne le monte — on
       // garde le fond de l'ouverture plutot que de montrer le stade sous une
       // camera qui n'est pas la sienne. Voir game/scene-accueil.ts.
+      if (G.state !== 'open' && (G.etiquette !== 'decouverte' || G.state === 'winall')
+          || G.state === 'open' && (!premierLancement() || !proposeLe100m())) chargerRendu3D();
       const accueilSansScene = G.state === 'title' && !placerLaCameraDeLAccueil(SprinterApp);
       // la presentation de l'adversaire (cinematique `intro`) se passe aussi en 3D : la camera
       // y fait le tour du stade avant de plonger vers le depart (course-3d.ts, LE SURVOL)
@@ -331,7 +338,7 @@ export function GameCanvas() {
       // ... sauf dans la salle Jesse Owens, ou le generique se joue dans la halle en 3D (l'auteur, 3/11 ; poserLeTourDHonneur)
       const generique3D = G.state === 'cut' && G.cut && G.cut.kind === 'ending' && !!G.race && !!(G.race.salle || G.race.salleDroite);
       // (au canal de test, le relais peut rester en 2D : canal.ts, relais2D)
-      const en3D = !!rendu3D && ((EPREUVES_3D.has(G.raceKey) && !(G.raceKey === '4x100' && relais2D())) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
+      const en3D = G.etiquette !== 'decouverte' && !!rendu3D && ((EPREUVES_3D.has(G.raceKey) && !(G.raceKey === '4x100' && relais2D())) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
         && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || scenette || generique3D);
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {
@@ -365,31 +372,6 @@ export function GameCanvas() {
           }
         }
 
-        // L'ATTENTE DU CHARGEMENT SE COURT. Un couloir de piste au-dessus du
-        // pourcentage (OpenScreen.tsx), sa ligne d'arrivee a gauche, et un
-        // coureur du jeu qui le parcourt a mesure que les images arrivent
-        // (game/chargement.ts) — vers la gauche, comme en course. La partie
-        // deja courue est la piste eclairee, le reste attend dans l'ombre.
-        if (tm > 2.2 && !chargementFini()) {
-          const part = partChargee();
-          const L = Math.min(G.VW * 0.62, 340), x0 = (G.VW - L) / 2, xA = x0;
-          const y = G.VH - 86, h = 9;
-          const xc = x0 + L * (1 - part);
-          ctx.fillStyle = 'rgba(150,40,34,0.35)';
-          ctx.fillRect(x0, y - h / 2, L, h);
-          ctx.fillStyle = 'rgb(186,52,40)';
-          ctx.fillRect(xc, y - h / 2, x0 + L - xc, h);
-          ctx.fillStyle = 'rgba(255,255,255,0.75)';
-          ctx.fillRect(x0, y - h / 2 - 1, L, 1.2);
-          ctx.fillRect(x0, y + h / 2, L, 1.2);
-          // la ligne d'arrivee, en damier
-          for (let k = 0; k < 3; k++) {
-            ctx.fillStyle = k % 2 ? '#111' : '#f4f4f4';
-            ctx.fillRect(xA - 2, y - h / 2 + k * (h / 3), 3, h / 3);
-          }
-          const man = { look: zeze[0], stride: tm * 11, v: 12, maxSpeed: 12, fallAnim: 0, celebrate: 0 };
-          SprinterApp.drawIcon(ctx, man, xc, y + h / 2 - 1, 46);
-        }
       } else {
         // Le theme a l'heure ou l'on joue (game/heure-du-jour.js) : les
         // cinematiques et l'accueil le recoivent tel que la piste le montre.

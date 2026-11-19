@@ -65,7 +65,7 @@ const RetourAthlete = /* @__PURE__ */ lazy(() => import('./CarriereAthlete')
 const PanneauAthlete = /* @__PURE__ */ lazy(() => import('./CarriereAthlete')
   .then(m => ({ default: m.PanneauAthlete })));
 import { GameTour, tourVu, marquerTourVu } from './GameTour';
-import { premierLancement, phasePremiersPas, premiereCourseLancee, apresLaPremiereArrivee, premiersPasFaits, nomDejaDemande } from '@/game/premiers-pas';
+import { premierLancement, phasePremiersPas, apresLaPremiereArrivee, premiersPasFaits, nomDejaDemande } from '@/game/premiers-pas';
 import { TutoPropose } from './TutoPropose';
 import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, epreuvesDuLieu } from '@/game/jeux';
@@ -271,19 +271,6 @@ export function TitleScreen() {
   // Il ne se propose que la ou ce geste existe (canal.ts, APPEL_JOUEUR) : le
   // proposer ailleurs enseignerait une commande que le jeu n'a pas.
   const tutoDesHaies = APPEL_JOUEUR && estUneCourseDeHaies(raceKey);
-
-  // Le premier lancement court tout de suite : l'etape 1 de la carriere, au
-  // 100 m, sans cinematique d'intro (sprinter-app.js, G.premiereCourse). Le
-  // geste s'apprend pendant la course (CoachPremiereCourse.tsx) : le tutoriel
-  // n'est donc pas propose, il reste a portee depuis l'accueil.
-  useEffect(() => {
-    if (!premiersPas || phasePremiersPas() !== null) return;
-    premiereCourseLancee();
-    marquerTutoVu();
-    SprinterApp.G.premiereCourse = true;
-    SprinterApp.startRun();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handleStart = () => {
     if (tutoDesHaies) {

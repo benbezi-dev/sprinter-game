@@ -308,6 +308,13 @@ export default defineConfig(({ mode }) => ({
     react(),
     tailwindcss(),
     listeDuChargement(),
+    {
+      name: 'sprinter-mesure-page',
+      transformIndexHtml(html, ctx) {
+        const test = !!ctx.server || canalDuBuild(mode) === 'test' || !!apiLocale;
+        return html.replace('__SPRINTER_PAGE_TEST__', test ? 'oui' : 'non');
+      },
+    },
     ...musiqueHorsProduction(canalDuBuild(mode)),
     pagesDApercu(basePath),
     ...(apiLocale ? [{

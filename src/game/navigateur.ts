@@ -48,7 +48,7 @@ export const UA_INTEGRE = new RegExp(INTEGRES.map(([, r]) => r.source).join('|')
  * Les apercus de lien et les robots qui se declarent. `navigator.webdriver`
  * attrape ceux qui pilotent un vrai navigateur sans le dire.
  */
-const UA_ROBOT = /\bbot\b|bot\/|crawl|spider|slurp|headless|lighthouse|pagespeed|facebookexternalhit|whatsapp|telegrambot|twitterbot|linkedinbot|discordbot|slackbot|skypeuri|preview|python-requests|curl\/|wget\//i;
+const UA_ROBOT = /\bbot\b|bot\/|crawl|spider|slurp|headless|lighthouse|pagespeed|facebookexternalhit|telegrambot|twitterbot|linkedinbot|discordbot|slackbot|skypeuri|preview|python-requests|curl\/|wget\//i;
 
 export type Mesures = {
   ua: string;
@@ -62,7 +62,7 @@ export type Mesures = {
 
 /** La classe d'un navigateur, d'apres ce qu'il dit de lui et ce qu'il montre. */
 export function classerNavigateur({ ua, webdriver = false, appli = false, tactile = 0 }: Mesures): Navigateur {
-  if (webdriver || UA_ROBOT.test(ua)) return 'robot';
+  if (webdriver || UA_ROBOT.test(ua) || /^WhatsApp\//i.test(ua)) return 'robot';
   if (appli) return 'appli';
   for (const [nom, re] of INTEGRES) if (re.test(ua)) return nom;
   if (/SamsungBrowser/i.test(ua)) return 'samsung';
