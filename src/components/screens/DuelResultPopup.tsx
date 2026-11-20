@@ -15,6 +15,7 @@ import { LaisserUnMot, LireLeMot, ReponseRecue } from './MotDuel';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
 import { useRetour } from '@/hooks/use-retour';
+import { MascotteFin } from '@/components/MascotteFin';
 
 const fmt = (ms: number) => `${(ms / 1000).toFixed(2)} s`;
 
@@ -247,6 +248,8 @@ export function DuelResultPopup() {
                         grid grid-cols-1 court:grid-cols-2 gap-3 court:gap-x-4 court:gap-y-2`}
           >
             <div className="flex flex-col items-center gap-3 court:gap-1.5 court:justify-center min-w-0">
+              {/* le rival, ton adversaire : il enrage si tu gagnes, te nargue si tu perds */}
+              <MascotteFin key={duel.id} hauteur={130} rival={gagne ? 'gagne' : nul ? 'nul' : 'perdu'} />
               <div className="flex items-center gap-2">
                 <Swords className={`w-4 h-4 court:w-3.5 court:h-3.5 ${ton}`} />
                 <span className="text-[10px] md:text-xs court:text-[9px] font-bold tracking-[0.25em] text-muted-foreground">

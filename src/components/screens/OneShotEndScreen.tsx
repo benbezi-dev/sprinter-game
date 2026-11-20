@@ -979,8 +979,12 @@ export function OneShotEndScreen() {
                      py-2 md:py-6 court:py-1 gap-2 md:gap-5 court:gap-0
                      colonnes-si-bas ${remplir ? 'flex-1 justify-between' : ''}`}>
 
-          {/* la mascotte reagit a la course (MascotteFin) ; pas pendant un tournoi en direct */}
-          {!resTournoi && <MascotteFin />}
+          {/* la mascotte reagit a la course (MascotteFin) ; pas pendant un tournoi en direct.
+              Un DUEL releve : c'est le rival qui reagit — il toise tant que le serveur n'a pas
+              tranche, puis enrage si tu gagnes (issue « opponent »), te nargue si tu perds. */}
+          {!resTournoi && <MascotteFin rival={!challenge ? undefined
+            : !duel ? 'attente'
+            : duel.issue === 'opponent' ? 'gagne' : duel.issue === 'draw' ? 'nul' : 'perdu'} />}
 
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
