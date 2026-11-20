@@ -44,7 +44,7 @@ export function PastilleFFA({ cle, perf, compact = false, points = true }: {
     return (
       <span className={`shrink-0 inline-flex items-center rounded border font-bold tracking-wider
                         text-muted-foreground border-white/10 ${taille}`}
-            title={fr() ? 'Hors barème FFA' : 'Below the FFA scale'}>
+            title={fr() ? 'Hors barème' : 'Below the scale'}>
         {fr() ? 'HB' : '—'}
       </span>
     );
@@ -52,7 +52,7 @@ export function PastilleFFA({ cle, perf, compact = false, points = true }: {
   return (
     <span className={`shrink-0 inline-flex items-center gap-1 rounded border font-black tracking-wider
                       tabular-nums ${TEINTE_ECHELON[n.echelon]} ${taille}`}
-          title={`${fr() ? 'Barème FFA' : 'FFA scale'} : ${n.code} (${ECHELONS_FFA[n.echelon][fr() ? 'fr' : 'en']}) · ${n.points} pts`}>
+          title={`${fr() ? 'Barème' : 'Scale'} : ${n.code} (${ECHELONS_FFA[n.echelon][fr() ? 'fr' : 'en']}) · ${n.points} pts`}>
       {n.code}{points && <span className="font-bold opacity-75">· {n.points} pts</span>}
     </span>
   );
@@ -70,7 +70,7 @@ export function LigneNiveauFFA({ cle, perf }: { cle: string; perf: number | null
     const e = entreeBaremeFFA(cle, perf);
     return (
       <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] sm:text-xs font-bold tracking-widest uppercase text-muted-foreground">
-        <span>{f ? 'Hors barème FFA' : 'Below the FFA scale'}</span>
+        <span>{f ? 'Hors barème' : 'Below the scale'}</span>
         {e && <span className="text-foreground/70">D7 {f ? 'à' : 'in'} {ecartTexte(cle, e.ecart)}</span>}
       </div>
     );
@@ -101,7 +101,7 @@ export function TableauBaremeFFA({ cle, perf }: { cle: string; perf?: number | n
       <button type="button" onClick={() => setOuvert(o => !o)}
               className="w-full flex items-center justify-between px-4 py-3 text-left">
         <span className="text-xs md:text-sm font-black tracking-widest uppercase text-foreground/90">
-          {f ? 'Barème FFA' : 'FFA scoring table'} · {ligne.epreuve.replace('m', ' m')}
+          {f ? 'Barème' : 'Scoring table'} · {ligne.epreuve.replace('m', ' m')}
         </span>
         <span className="text-xs font-bold text-primary">{ouvert ? '−' : '+'}</span>
       </button>
@@ -132,8 +132,8 @@ export function TableauBaremeFFA({ cle, perf }: { cle: string; perf?: number | n
           </div>
           <p className="mt-3 text-[10px] leading-snug text-muted-foreground font-sans">
             {f
-              ? "Barème Hommes du classement des clubs, Fédération Française d'Athlétisme. Un niveau est acquis dès que la performance égale sa case."
-              : 'French Athletics Federation men’s club-ranking table. A level is earned as soon as the performance equals its mark.'}
+              ? 'Un niveau est acquis dès que la performance égale sa case.'
+              : 'A level is earned as soon as the performance equals its mark.'}
           </p>
         </div>
       )}

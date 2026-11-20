@@ -1394,7 +1394,7 @@ export function OneShotEndScreen() {
             )}
             {!falseOut && shotRaces.length > 1 && shotRaces.some(r => ligneBaremeFFA(r as string)) && (
               <div className="flex justify-between items-center px-2 md:px-4 gap-2 mt-1 text-xs md:text-sm court:text-[10px] font-bold tracking-widest uppercase">
-                <span className="text-muted-foreground">{N.getLang() === 'en' ? 'FFA scale points' : 'Points barème FFA'}</span>
+                <span className="text-muted-foreground">{N.getLang() === 'en' ? 'Scale points' : 'Points barème'}</span>
                 <span className="font-mono font-black text-amber-300">
                   {shotRaces.reduce((t, r, i) => t + pointsFFA(r as string, [runSplits[i]]), 0)} pts
                 </span>
