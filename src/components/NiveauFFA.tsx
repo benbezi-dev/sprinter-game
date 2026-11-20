@@ -60,7 +60,7 @@ export function PastilleFFA({ cle, perf, compact = false, points = true }: {
 
 /**
  * La ligne d'arrivée : le niveau atteint, son étage, et l'écart au suivant.
- * « NIVEAU N2 — National · 28 pts · N1 à 0,12 s »
+ * « N2 · 28 pts — National — N1 à 0,12 s »
  */
 export function LigneNiveauFFA({ cle, perf }: { cle: string; perf: number | null | undefined }) {
   const n = niveauFFA(cle, perf);
@@ -77,7 +77,6 @@ export function LigneNiveauFFA({ cle, perf }: { cle: string; perf: number | null
   }
   return (
     <div className="flex flex-wrap items-center justify-center gap-2 text-[10px] sm:text-xs font-bold tracking-widest uppercase">
-      <span className="text-muted-foreground">{f ? 'Niveau FFA' : 'FFA level'}</span>
       <PastilleFFA cle={cle} perf={perf} />
       <span className="text-foreground/80">{ECHELONS_FFA[n.echelon][f ? 'fr' : 'en']}</span>
       {n.suivant
