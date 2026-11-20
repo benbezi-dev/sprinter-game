@@ -15,20 +15,27 @@ export function Mascotte({ personnage, geste, ensuite = 'idle', lacet, cadrage =
   className?: string;
   style?: React.CSSProperties;
 }) {
-  const toile = useRef<HTMLCanvasElement>(null);
+  const boite = useRef<HTMLDivElement>(null);
   const vue = useRef<Vue | null>(null);
 
+  // UNE TOILE NEUVE PAR VUE : liberer() rend le contexte WebGL (forceContextLoss, game/mascotte-3d.ts)
+  // et une toile dont le contexte est perdu n'en redonne plus. Une vue recreee (autre lacet ou
+  // cadrage) sur l'ancienne toile restait donc vide pour toujours.
   useEffect(() => {
-    if (!toile.current) return;
-    const v = vueMascotte({ toile: toile.current, lacet, cadrage });
+    if (!boite.current) return;
+    const toile = document.createElement('canvas');
+    toile.setAttribute('aria-hidden', 'true');
+    toile.style.cssText = 'width:100%;height:100%;display:block;pointer-events:none';
+    boite.current.appendChild(toile);
+    const v = vueMascotte({ toile, lacet, cadrage });
     vue.current = v;
-    return () => { v.liberer(); vue.current = null; };
+    return () => { v.liberer(); vue.current = null; toile.remove(); };
   }, [lacet, cadrage]);
 
   useEffect(() => {
     vue.current?.jouer(personnage, geste, ensuite);
   }, [personnage, geste, ensuite, lacet, cadrage]);
 
-  return <canvas ref={toile} aria-hidden className={className}
-    style={{ width: '100%', height: '100%', display: 'block', pointerEvents: 'none', ...style }} />;
+  return <div ref={boite} aria-hidden className={className}
+    style={{ width: '100%', height: '100%', pointerEvents: 'none', ...style }} />;
 }

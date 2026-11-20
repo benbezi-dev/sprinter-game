@@ -205,7 +205,8 @@ function basDe(pr: Preparation, t: Testee) {
  * La plus petite poussee du bout du membre `t` (monde) qui sort TOUS ses points des zones interdites,
  * le membre replie par l'IK du jeu (vue.plier). La pose est remise telle quelle apres chaque essai.
  */
-function chercher(vue: ReturnType<typeof vueMascotte>, pr: Preparation, E: Etat, t: Membre, marge: number, sol: number) {
+function chercher(vue: ReturnType<typeof vueMascotte>, pr: Preparation, E: Etat, t: Membre, marge: number, sol: number,
+                  prec: THREE.Vector3 | null = null) {
   const corps = vue.inspecter()!.corps;
   const os = CHAINES[t].map((n) => corps.getObjectByName(n)!);
   const garde = os.map((o) => o.quaternion.clone());
@@ -214,17 +215,28 @@ function chercher(vue: ReturnType<typeof vueMascotte>, pr: Preparation, E: Etat,
   const r0 = dedans(pr, E, t);
   if (!r0.nb) return null;
   const n = r0.premier ? normaleProche(pr, E, t, r0.premier) : null;
-  const dirs = n ? [n, ...DIRS] : DIRS;
+  // LA SUITE DANS LE TEMPS (« la main agit bizarrement », l'auteur, 20/11/2026) : prendre la plus
+  // petite poussee qui marche, image par image et chacune pour soi, faisait sauter la main d'un cote
+  // a l'autre — 16 cm vers le bas puis 16 cm vers le haut en un dixieme de seconde. On essaie donc
+  // d'abord la direction de l'image d'avant, et parmi ce qui marche au premier pas qui marche et au
+  // suivant, on garde ce qui reste le plus pres de la poussee d'avant.
+  const dirs = [...(prec && prec.lengthSq() > 1e-10 ? [prec.clone().normalize()] : []), ...(n ? [n] : []), ...DIRS];
   const jambe = t === 'jl' || t === 'jr';
-  for (const s of PAS_POUSSEE) {
+  let premierPas = -1, meilleur: THREE.Vector3 | null = null, score = Infinity;
+  for (let k = 0; k < PAS_POUSSEE.length; k++) {
+    if (premierPas >= 0 && k > premierPas + 1) break;
     for (const d of dirs) {
-      const v = d.clone().multiplyScalar((s + marge) * pr.haut);
+      const v = d.clone().multiplyScalar((PAS_POUSSEE[k] + marge) * pr.haut);
       vue.plier(t, bout.clone().add(v));
       const ok = dedans(pr, E, t, false).nb === 0 && (!jambe || basDe(pr, t) >= sol);
       remettre();
-      if (ok) return v;
+      if (!ok) continue;
+      if (premierPas < 0) premierPas = k;
+      const sc = prec ? v.distanceTo(prec) + 0.25 * v.length() : v.length();
+      if (sc < score) { score = sc; meilleur = v; }
     }
   }
+  if (meilleur) return meilleur;
   // rien ne suffit : la plus grande poussee le long de la normale (le rapport le dira)
   return (n || DIRS[0]).clone().multiplyScalar((PAS_POUSSEE[PAS_POUSSEE.length - 1] + marge) * pr.haut);
 }
@@ -256,15 +268,22 @@ function chercherTete(vue: ReturnType<typeof vueMascotte>, pr: Preparation) {
  * `chercherAussi`, par geste, ce qu'il faut AJOUTER aux corrections.
  */
 async function passe(opts: { corriger: boolean; marge: number; chercherAussi: boolean; seulement?: string[] }) {
-  const toile = document.createElement('canvas');
-  toile.style.cssText = 'width:64px;height:128px';
-  document.body.appendChild(toile);
+  // UNE TOILE NEUVE PAR GESTE : liberer() rend le contexte WebGL (forceContextLoss), et l'ancienne
+  // toile n'en redonne plus — tous les gestes apres le premier sortaient « non charge ».
+  const neuve = () => {
+    const t = document.createElement('canvas');
+    t.style.cssText = 'width:64px;height:128px';
+    document.body.appendChild(t);
+    return t;
+  };
+  let toile = neuve();
   const rapport: any[] = [];
   const ajout: Corrections = {};
   for (const p of Object.keys(MASCOTTES) as Personnage[]) {
     for (const g of MASCOTTES[p]) {
       const cle = `${p}/${g}`;
       if (opts.seulement && !opts.seulement.includes(cle)) continue;
+      toile.remove(); toile = neuve();
       const vue = vueMascotte({ toile, pixels: 1, manuelle: true, corriger: opts.corriger });
       if (!(await vue.jouer(p, g, null))) { rapport.push({ cle, erreur: 'non charge' }); vue.liberer(); continue; }
       const duree = vue.duree();
@@ -275,6 +294,7 @@ async function passe(opts: { corriger: boolean; marge: number; chercherAussi: bo
       const sorties = { l: [] as number[][], r: [] as number[][], jl: [] as number[][], jr: [] as number[][], y: [] as number[], tete: [] as number[] };
       const compte = { bras: 0, jambes: 0, tete: 0, sol: 0 };
       let images = 0, pireSol = 0, tPire = 0, pirePoints = 0;
+      const precs: Record<string, THREE.Vector3 | null> = {};
       for (let k = 0; k < n; k++) {
         vue.avancer(k === 0 ? 0 : PAS);
         const ins = vue.inspecter()!;
@@ -300,7 +320,8 @@ async function passe(opts: { corriger: boolean; marge: number; chercherAussi: bo
           }
           if (t === 'tete') continue;   // (la tete n'a pas d'IK : rapportee seulement)
           let v: THREE.Vector3 | null = null;
-          if (nb && opts.chercherAussi) v = chercher(vue, pr, E, t, opts.marge, sol);
+          if (nb && opts.chercherAussi) v = chercher(vue, pr, E, t, opts.marge, sol, precs[t] || null);
+          precs[t] = v ? v.clone() : null;
           if (v) { ins.bassin!.getWorldQuaternion(_q); v.applyQuaternion(_q.invert()); }
           sorties[t].push(v ? [+v.x.toFixed(5), +v.y.toFixed(5), +v.z.toFixed(5)] : [0, 0, 0]);
         }
@@ -322,29 +343,54 @@ async function passe(opts: { corriger: boolean; marge: number; chercherAussi: bo
   return { rapport, ajout };
 }
 
+/** Les gestes joues en boucle dans le jeu (attente apres un geste) : leurs corrections bouclent aussi. */
+const EN_BOUCLE = /\/(idle|attente)$/;
 /**
  * Adoucir dans le temps : un membre qui saute de 5 cm d'une image a l'autre se voit. Chaque decalage
- * s'annonce et s'eteint sur les images voisines (moitie de part et d'autre), puis une moyenne
- * glissante 1-2-1. Les creux que cela ouvre sont repris par la passe suivante.
+ * s'annonce et s'eteint sur les images voisines (moitie de part et d'autre), puis `passes` moyennes
+ * glissantes 1-2-1 (trois ≈ une cloche de 0,12 s de part et d'autre). Un geste en boucle est adouci
+ * en boucle : sa derniere image rejoint la premiere. Les creux que cela ouvre sont repris par la
+ * passe suivante.
  */
-function lisser(corr: Corrections): Corrections {
+function lisser(corr: Corrections, passes = 3): Corrections {
   const out: Corrections = JSON.parse(JSON.stringify(corr));
-  const adoucir = (a: number[][]) => {
+  const adoucir = (a0: number[][], boucle: boolean) => {
     const mag = (v: number[]) => Math.hypot(...v);
-    const b = a.map((v, i) => {
+    const n = a0.length;
+    const at = <T,>(l: T[], i: number) => (boucle ? l[((i % n) + n) % n] : l[i]);
+    let a = a0.map((v, i) => {
       if (mag(v) > 0) return v;
-      const vois = [a[i - 1], a[i + 1]].filter((w) => w && mag(w) > 0) as number[][];
+      const vois = [at(a0, i - 1), at(a0, i + 1)].filter((w) => w && mag(w) > 0) as number[][];
       if (!vois.length) return v;
       return vois.reduce((m, q) => (mag(q) > mag(m) ? q : m)).map((k) => k * 0.5);
     });
-    return b.map((v, i) => v.map((_, k) => +(((b[i - 1] || v)[k] + 2 * v[k] + (b[i + 1] || v)[k]) / 4).toFixed(5)));
+    for (let p = 0; p < passes; p++) {
+      const b = a;
+      a = b.map((v, i) => v.map((_, k) => ((at(b, i - 1) || v)[k] + 2 * v[k] + (at(b, i + 1) || v)[k]) / 4));
+    }
+    return a.map((v) => v.map((k) => +k.toFixed(5)));
   };
-  for (const x of Object.values(out)) {
-    for (const m of ['l', 'r', 'jl', 'jr'] as const) if (x[m]) x[m] = adoucir(x[m]!);
-    if (x.y) x.y = adoucir(x.y.map((v) => [v])).map((v) => v[0]);
-    if (x.tete) x.tete = adoucir(x.tete.map((v) => [v])).map((v) => v[0]);
+  for (const [cle, x] of Object.entries(out)) {
+    const b = EN_BOUCLE.test(cle);
+    for (const m of ['l', 'r', 'jl', 'jr'] as const) if (x[m]) x[m] = adoucir(x[m]!, b);
+    if (x.y) x.y = adoucir(x.y.map((v) => [v]), b).map((v) => v[0]);
+    if (x.tete) x.tete = adoucir(x.tete.map((v) => [v]), b).map((v) => v[0]);
   }
   return out;
+}
+
+/** Le plus grand saut d'une image a l'autre (part de la taille, membres seulement), geste par geste. */
+function sauts(corr: Corrections, haut = 1) {
+  const r: Record<string, number> = {};
+  for (const [cle, x] of Object.entries(corr)) {
+    let mx = 0;
+    for (const m of ['l', 'r', 'jl', 'jr'] as const) {
+      const l = x[m]; if (!l) continue;
+      for (let i = 1; i < l.length; i++) mx = Math.max(mx, Math.hypot(l[i][0] - l[i - 1][0], l[i][1] - l[i - 1][1], l[i][2] - l[i - 1][2]));
+    }
+    r[cle] = +(mx / haut).toFixed(4);
+  }
+  return r;
 }
 
 /** Ajouter des corrections a d'autres (memes cles, meme pas). */
@@ -380,5 +426,5 @@ async function image(p: Personnage, g: string, t: number, lacet: number, corrige
   return url;
 }
 
-(window as any).__verifier = { passe, cumuler, lisser, poserCorrections, image };
+(window as any).__verifier = { passe, cumuler, lisser, sauts, poserCorrections, image };
 (window as any).__pret = true;

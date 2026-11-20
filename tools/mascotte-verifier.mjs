@@ -57,13 +57,20 @@ try {
   // 1 : la poussee la plus petite, image par image, puis adoucie dans le temps
   let corr = await p.evaluate((a) => window.__verifier.lisser(window.__verifier.cumuler({}, a)), avant.ajout);
   // 2 a 5 : ce qui reste (les creux de l'adoucissement, une main poussee dans la cuisse...)
-  for (let k = 2; k <= 5; k++) {
+  // Les premieres reprises sont adoucies (une reprise brute rouvrait des sauts) ; les dernieres,
+  // petites, sont gardees telles quelles : elles bouchent les derniers contacts sans faire sauter.
+  for (let k = 2; k <= 8; k++) {
     const r = await passe(corr, true, true);
     if (!Object.keys(r.ajout).length) break;
     corr = await cumuler(corr, r.ajout);
+    if (k <= 5) corr = await p.evaluate((c) => window.__verifier.lisser(c, 1), corr);
   }
   const apres = await passe(corr, true, false);
   montrer('APRES', apres.rapport);
+  const sauts = await p.evaluate((c) => window.__verifier.sauts(c), corr);
+  const pires = Object.entries(sauts).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  console.log('\nplus grands sauts d\'une image a l\'autre (unites du modele, par 0,1 s) :');
+  for (const [k, v] of pires) console.log(`  ${k.padEnd(28)} ${v}`);
   fs.writeFileSync(SORTIE, JSON.stringify(corr));
   console.log(`\n${SORTIE} : ${Object.keys(corr).length} geste(s) corrige(s), ${(fs.statSync(SORTIE).size / 1024).toFixed(1)} Ko`);
 } finally { await b.close(); }
