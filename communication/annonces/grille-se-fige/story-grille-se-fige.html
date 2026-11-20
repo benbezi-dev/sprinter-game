@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La grille se fige</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;700;800;900&family=Space+Mono:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #0b0f1a; color: #EEF0F8; font: 500 15px Outfit, sans-serif;
+         display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px 16px; }
+  canvas { width: min(100%, 432px); height: auto; border: 1px solid #1E293B; }
+  button { font: 800 15px Outfit, sans-serif; letter-spacing: .04em; text-transform: uppercase;
+           background: #F8CD4A; color: #060913; border: 0; border-radius: 10px; padding: 12px 22px; cursor: pointer; }
+  label { opacity: .7; }
+  p { max-width: 432px; opacity: .6; margin: 0; line-height: 1.45; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1080" height="1920"></canvas>
+<label><input type="checkbox" id="zones"> Montrer les zones réservées et le sticker (aperçu seulement)</label>
+<button id="dl">Télécharger le PNG</button>
+<p>Fond de story 1080 × 1920. Le sticker « Compte à rebours » (« Sélection close », mercredi 16 décembre, 1 h 00) se pose dans Instagram, vers 1300 px.</p>
+<script>
+/* Charte : reprise de src/game/trace-affiche.js (poserFond, chiffre, titre). */
+const L = 1080, H = 1920;
+const HAUT = 250, BAS = H - 250;            // rectangle utile 250 → 1670
+const UTILE = BAS - HAUT;                   // 1420
+const OR = '#F8CD4A', ENCRE = '#EEF0F8';
+const c = document.getElementById('c').getContext('2d');
+
+/* --- fond de la charte, au pixel ------------------------------------------ */
+function poserFond() {
+  c.fillStyle = '#060913'; c.fillRect(0, 0, L, H);
+  const lueur = c.createRadialGradient(L / 2, H * 0.08, 0, L / 2, H * 0.08, L * 0.85);
+  lueur.addColorStop(0, 'rgba(248,205,74,0.20)');
+  lueur.addColorStop(1, 'rgba(248,205,74,0)');
+  c.fillStyle = lueur; c.fillRect(0, 0, L, H);
+}
+function poserTraits() {
+  c.save(); c.globalAlpha = 0.14;
+  for (let i = 0; i < 3; i++) {
+    const y = H * (0.62 + i * 0.11);
+    const g = c.createLinearGradient(0, y, L, y);
+    g.addColorStop(0, 'rgba(248,205,74,0)');
+    g.addColorStop(0.5, 'rgba(248,205,74,1)');
+    g.addColorStop(1, 'rgba(248,205,74,0)');
+    c.fillStyle = g; c.fillRect(0, y, L, Math.max(2, L / 540));
+  }
+  c.restore();
+}
+
+/* --- le couloir : vu dans l'axe, éclairé du seul bout --------------------- */
+const FOND_Y = 1120;                        // le bout éclairé du couloir
+const PRES_Y = BAS - 20;                    // le couloir s'éteint avant la zone réservée
+const FOND_DEMI = 64, PRES_DEMI = 470;
+const xA = (y, cote) => {                   // bord du couloir à la hauteur y
+  const t = (y - FOND_Y) / (PRES_Y - FOND_Y);
+  return L / 2 + cote * (FOND_DEMI + t * (PRES_DEMI - FOND_DEMI));
+};
+function poserCouloir() {
+  // La salle est noire : seule la lumière du bout existe.
+  const halo = c.createRadialGradient(L / 2, FOND_Y, 0, L / 2, FOND_Y, 520);
+  halo.addColorStop(0, 'rgba(255,232,170,0.30)');
+  halo.addColorStop(0.25, 'rgba(248,205,74,0.12)');
+  halo.addColorStop(1, 'rgba(248,205,74,0)');
+  c.fillStyle = halo; c.fillRect(0, HAUT, L, UTILE);
+
+  // Le sol du couloir : clair au bout, noir devant.
+  c.save();
+  c.beginPath();
+  c.moveTo(xA(FOND_Y, -1), FOND_Y); c.lineTo(xA(FOND_Y, 1), FOND_Y);
+  c.lineTo(xA(PRES_Y, 1), PRES_Y);  c.lineTo(xA(PRES_Y, -1), PRES_Y);
+  c.closePath();
+  const sol = c.createLinearGradient(0, FOND_Y, 0, PRES_Y);
+  sol.addColorStop(0, 'rgba(248,205,74,0.30)');
+  sol.addColorStop(0.18, 'rgba(248,205,74,0.08)');
+  sol.addColorStop(0.6, 'rgba(248,205,74,0.015)');
+  sol.addColorStop(1, 'rgba(248,205,74,0)');
+  c.fillStyle = sol; c.fill();
+  c.restore();
+
+  // Les deux lignes du couloir, qui s'éteignent en venant vers nous.
+  for (const cote of [-1, 1]) {
+    const g = c.createLinearGradient(0, FOND_Y, 0, PRES_Y);
+    g.addColorStop(0, 'rgba(238,240,248,0.85)');
+    g.addColorStop(0.35, 'rgba(238,240,248,0.28)');
+    g.addColorStop(1, 'rgba(238,240,248,0)');
+    c.save();
+    c.beginPath();
+    c.moveTo(xA(FOND_Y, cote) - cote * 1, FOND_Y);
+    c.lineTo(xA(FOND_Y, cote) + cote * 1, FOND_Y);
+    c.lineTo(xA(PRES_Y, cote) + cote * 6, PRES_Y);
+    c.lineTo(xA(PRES_Y, cote) - cote * 6, PRES_Y);
+    c.closePath(); c.fillStyle = g; c.fill();
+    c.restore();
+  }
+
+  // Les marques transversales : rapprochées au bout, espacées devant.
+  c.save();
+  for (let k = 1; k <= 6; k++) {
+    const t = Math.pow(k / 7, 1.9);
+    const y = FOND_Y + t * (PRES_Y - FOND_Y);
+    const a = 0.32 * (1 - t);
+    c.fillStyle = `rgba(238,240,248,${a.toFixed(3)})`;
+    c.fillRect(xA(y, -1), y, xA(y, 1) - xA(y, -1), Math.max(1, 1 + t * 4));
+  }
+  c.restore();
+
+  // La ligne du bout : celle qu'on vise.
+  c.fillStyle = 'rgba(255,240,200,0.9)';
+  c.fillRect(xA(FOND_Y, -1), FOND_Y - 1, FOND_DEMI * 2, 3);
+}
+
+/* --- les textes ------------------------------------------------------------ */
+function titre(texte, y, taille, interligne) {
+  c.save();
+  c.fillStyle = ENCRE;
+  c.font = `800 ${taille}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.letterSpacing = `${-taille * 0.022}px`;
+  texte.split('\n').forEach((l, i) => c.fillText(l, L / 2, y + i * interligne));
+  c.restore();
+}
+function corps(texte, y, taille, alpha) {
+  c.save();
+  c.fillStyle = `rgba(255,255,255,${alpha})`;
+  c.font = `500 ${taille}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.fillText(texte, L / 2, y);
+  c.restore();
+}
+function surtitre(texte, y, taille, couleur) {
+  c.save();
+  c.fillStyle = couleur;
+  c.font = `700 ${taille}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.letterSpacing = `${taille * 0.36}px`;
+  c.fillText(texte.toUpperCase(), L / 2 + taille * 0.18, y);
+  c.restore();
+}
+function chiffre(texte, yCentre, taille) {
+  c.save();
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.shadowColor = 'rgba(248,205,74,0.45)'; c.shadowBlur = 60;
+  c.fillStyle = OR;
+  c.fillText(texte, L / 2, yCentre);
+  c.restore();
+}
+function pied() {
+  // Charte : signature à 8,8 % du bas — rapportée au rectangle utile,
+  // pour ne pas tomber sous l'interface d'Instagram (250 px du bas).
+  const ySig = BAS - UTILE * 0.088;         // ≈ 1545
+  c.save();
+  c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(90, ySig - 44.5); c.lineTo(L - 90, ySig - 44.5); c.stroke();
+  c.fillStyle = 'rgba(255,255,255,0.30)';
+  c.font = `500 ${Math.round(L * 0.0205)}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.letterSpacing = `${L * 0.002}px`;
+  c.fillText('@sprintergame', L / 2, ySig);
+  c.restore();
+}
+
+function zonesApercu() {
+  c.save();
+  c.fillStyle = 'rgba(255,60,60,0.18)';
+  c.fillRect(0, 0, L, HAUT); c.fillRect(0, BAS, L, H - BAS);
+  c.strokeStyle = 'rgba(255,255,255,0.8)'; c.setLineDash([12, 10]); c.lineWidth = 3;
+  c.strokeRect(190, 1220, 700, 170);
+  c.fillStyle = 'rgba(255,255,255,0.8)'; c.font = `700 30px Outfit`; c.textAlign = 'center';
+  c.fillText('STICKER · SÉLECTION CLOSE', L / 2, 1315);
+  c.restore();
+}
+
+function dessiner(apercu) {
+  poserFond();
+  poserCouloir();
+  poserTraits();
+  surtitre('Sélection · Championnat', 300, 26, 'rgba(248,205,74,0.85)');
+  titre('LA GRILLE\nSE FIGE', 362, 154, 148);
+  corps('Les premiers du classement à la clôture.', 676, 38, 0.60);
+  chiffre('32', 900, 330);
+  surtitre('places sur la grille', 1044, 28, 'rgba(255,255,255,0.55)');
+  pied();
+  if (apercu) zonesApercu();
+}
+
+const zones = document.getElementById('zones');
+zones.onchange = () => dessiner(zones.checked);
+document.getElementById('dl').onclick = () => {
+  dessiner(false);
+  const a = document.createElement('a');
+  a.download = 'story-grille-se-fige-1080x1920.png';
+  a.href = c.canvas.toDataURL('image/png');
+  a.click();
+  dessiner(zones.checked);
+};
+
+Promise.all([
+  document.fonts.load("800 154px Outfit"), document.fonts.load("500 38px Outfit"),
+  document.fonts.load("700 28px Outfit"), document.fonts.load("700 330px 'Space Mono'"),
+]).then(() => document.fonts.ready).then(() => { dessiner(false); window.__pret = true; });
+</script>
+</body>
+</html>
