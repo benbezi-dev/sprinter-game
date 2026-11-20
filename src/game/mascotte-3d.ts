@@ -372,7 +372,13 @@ export function vueMascotte(o: Options): Vue {
     liberer() {
       cancelAnimationFrame(anim); anim = 0; demande++;
       actuel?.mel.stopAllAction();
+      // LE CONTEXTE WEBGL SE REND, PAS SEULEMENT LA MEMOIRE (20/11/2026) : dispose() vide les
+      // tampons mais garde le contexte ouvert. Chaque passage par l'accueil ou une fin de course en
+      // laissait un de plus ; un telephone n'en tient qu'une poignee, et quand il en manque, le
+      // navigateur ferme le plus ancien — celui de la course, qui restait blanche. On le rend donc
+      // explicitement (forceContextLoss), apres avoir vide la memoire.
       rendu?.dispose();
+      rendu?.forceContextLoss();
       rendu = null;
     },
   };
