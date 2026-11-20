@@ -73,6 +73,7 @@ import { useMenuSansDefiler } from '@/hooks/use-menu-sans-defiler';
 import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
 import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE, NOEL_OUVERT } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
+import { MascotteAccueil } from '@/components/MascotteFin';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
 import { legendeAccessible, type ChoixCarriere } from '@/game/legende/compte';
@@ -439,7 +440,10 @@ export function TitleScreen() {
               </p>
             </div>
             <div data-accueil-scene aria-hidden
-                 className="order-2 landscape:order-1 w-full max-w-md flex-1 min-h-[84px] serre:min-h-0 landscape:min-h-[96px]" />
+                 className="relative order-2 landscape:order-1 w-full max-w-md flex-1 min-h-[84px] serre:min-h-0 landscape:min-h-[96px]">
+              {/* la mascotte salue, sur le cote de la scene (components/MascotteFin.tsx) */}
+              {!haies && <MascotteAccueil />}
+            </div>
             <div className="hidden landscape:block order-3 flex-1" />
           </div>
 

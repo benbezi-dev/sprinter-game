@@ -9,6 +9,7 @@ import {
   type RaceKey, type RaceOutcome,
 } from '@/game/leaderboard';
 import { garder, oublier } from '@/game/record-attente';
+import { MascotteFin } from '@/components/MascotteFin';
 import { primeTopNames } from '@/game/engine';
 import {
   createChallenge, submitAttempt, challengeLink,
@@ -977,6 +978,9 @@ export function OneShotEndScreen() {
           className={`flex flex-col items-center largeur-tenue w-full
                      py-2 md:py-6 court:py-1 gap-2 md:gap-5 court:gap-0
                      colonnes-si-bas ${remplir ? 'flex-1 justify-between' : ''}`}>
+
+          {/* la mascotte reagit a la course (MascotteFin) ; pas pendant un tournoi en direct */}
+          {!resTournoi && <MascotteFin />}
 
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
