@@ -17,6 +17,7 @@
 # Samsung Galaxy Z Flip6, 7/11/2026).
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 -keep @interface com.getcapacitor.annotation.** { *; }
--keep class com.getcapacitor.** { *; }
+# Pas de -keep sur tout com.getcapacitor.** : Capacitor fournit ses propres regles
+# (greffons, Bridge) et cette regle bloquait l'optimisation R8 de tout le paquet.
 -keep @com.getcapacitor.annotation.CapacitorPlugin class * { *; }
 -keep @com.getcapacitor.NativePlugin class * { *; }

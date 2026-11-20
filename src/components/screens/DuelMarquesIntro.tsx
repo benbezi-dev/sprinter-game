@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef } from 'react';
+import { vibrationActive } from '@/game/reglages';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { SOUFFLE, IMPACT, jouer } from '@/game/marques-son';
@@ -124,7 +125,7 @@ export default function FaceAFace({ onDone, fr }: { onDone: () => void; fr: bool
     jouer(SOUFFLE, 0.05, 0.5);
     jouer(SOUFFLE, 0.3, 0.5);
     jouer(IMPACT, CHOC, 0.9);
-    try { navigator.vibrate?.([0, Math.round(CHOC * 1000), 60, 40, 30]); } catch { /* pas de vibreur */ }
+    if (vibrationActive()) try { navigator.vibrate?.([0, Math.round(CHOC * 1000), 60, 40, 30]); } catch { /* pas de vibreur */ }
     const t = setTimeout(finir, FIN * 1000);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps

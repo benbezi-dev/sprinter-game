@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { SprinterApp } from '@/game/engine';
-import { Coins, Clapperboard } from 'lucide-react';
+import { Clapperboard } from 'lucide-react';
+import { PieceBB } from '@/components/PieceBB';
 import { rafraichirPieces, usePieces, coutDuContinue, acheterContinue, type EtatPieces } from '@/game/pieces';
 import { pubPossible, regarderUnePub, PUBS_PAR_CARRIERE } from '@/game/pub';
+import { sansPubs } from '@/game/achats';
 
 /**
  * LES REPRISES D'UNE ETAPE PERDUE : le Continue paye en pieces et la pub
@@ -21,21 +23,27 @@ type Props = {
   achetes: number;
   /** Pubs deja regardees sur ce parcours. */
   pubs: number;
+  /** Plafond de pubs du parcours : PUBS_PAR_CARRIERE par defaut ; la revanche
+   *  d'un one shot a le sien (RevanchePub.tsx). */
+  pubsMax?: number;
   /** Nom de l'etape a reprendre. */
   etape: string;
   /** Le serveur compte autrement : se recaler sur son compte. */
   recaler: (achetes: number) => void;
+  /** Libelles de revanche (« REVANCHE · 10 », « REGARDER UNE PUB · REVANCHE »)
+   *  au lieu de CONTINUER : duels et one shot (l'auteur, 10/11/2026). */
+  revanche?: boolean;
   /** Relancer l'etape perdue, payee en pieces ou par une pub. */
   reprendre: (parPub: boolean) => void;
 };
 
 /** Une reprise est-elle proposee ? (pour dire « ou repartir de zero ».) */
-export function repriseOfferte(pieces: EtatPieces | null, p: Pick<Props, 'parcours' | 'achetes' | 'pubs'>): boolean {
+export function repriseOfferte(pieces: EtatPieces | null, p: Pick<Props, 'parcours' | 'achetes' | 'pubs' | 'pubsMax'>): boolean {
   if (!p.parcours) return false;
-  return coutDuContinue(pieces, p.achetes) != null || (pubPossible() && p.pubs < PUBS_PAR_CARRIERE);
+  return coutDuContinue(pieces, p.achetes) != null || (pubPossible() && p.pubs < (p.pubsMax ?? PUBS_PAR_CARRIERE));
 }
 
-export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }: Props) {
+export function Reprises({ parcours, achetes, pubs, pubsMax = PUBS_PAR_CARRIERE, etape, revanche = false, recaler, reprendre }: Props) {
   const { N } = SprinterApp;
   const pieces = usePieces();
   const [achat, setAchat] = useState<'libre' | 'envoi' | 'reseau' | 'solde' | 'epuise' | 'nom'>('libre');
@@ -63,11 +71,12 @@ export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }:
 
   // LA PUB « 2E CHANCE » (game/pub.ts) : reprend l'etape comme un Continue,
   // sans pieces, PUBS_PAR_CARRIERE fois. Pas de bouton la ou il n'y a pas de pub.
-  const pubOfferte = pubPossible() && pubs < PUBS_PAR_CARRIERE;
+  const pubOfferte = pubPossible() && pubs < pubsMax;
   const handlePub = async () => {
     if (pub === 'envoi') return;
     setPub('envoi');
-    if (await regarderUnePub()) { reprendre(true); return; }
+    // Sans pubs (game/achats.ts) : la meme 2e chance, sans la video.
+    if (sansPubs() || await regarderUnePub()) { reprendre(true); return; }
     setPub('rate');
   };
 
@@ -79,18 +88,18 @@ export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }:
         <div className="w-full max-w-md flex flex-col items-center gap-1.5">
           {pieces.reserve && (
             <div className="flex items-center gap-1.5 text-primary font-bold text-sm md:text-base">
-              <Coins className="w-4 h-4" />{N.t('pieces_solde', { n: pieces.solde })}
+              <PieceBB className="h-5 w-5" />{N.t('pieces_solde', { n: pieces.solde })}
             </div>
           )}
-          <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
+          {!revanche && <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
             {N.t('pieces_reprendre', { etape: etape })}
-          </div>
+          </div>}
           <button onClick={() => handleContinue()} disabled={!peutPayer || achat === 'envoi'}
             aria-disabled={!peutPayer}
             className={peutPayer
               ? 'w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary-foreground bg-primary hover:brightness-110 disabled:opacity-60 transition-all border-b-4 border-black/30 active:border-b-0 active:translate-y-1 flex items-center justify-center gap-2'
               : 'w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-lg sm:text-xl md:text-2xl tracking-widest text-primary/60 bg-primary/10 border-2 border-dashed border-primary/40 cursor-not-allowed flex items-center justify-center gap-2'}>
-            {N.t('pieces_continuer', { n: cout })}<Coins className="w-5 h-5 md:w-6 md:h-6" />
+            {N.t(revanche ? 'pieces_revanche' : 'pieces_continuer', { n: cout })}<PieceBB className="h-5 w-5 md:h-6 md:w-6" />
           </button>
           {!peutPayer && (
             <div className="flex flex-col items-center gap-0.5 text-center">
@@ -106,15 +115,17 @@ export function Reprises({ parcours, achetes, pubs, etape, recaler, reprendre }:
         </div>
       )}
       {pubOfferte && (
-        <div className="w-full max-w-md flex flex-col items-center gap-1">
-          {!(pieces && cout != null) && (
+        // LE LIBELLE SE REGLE SUR LA LARGEUR DU BOUTON, pas sur celle de l'ecran (14/11) : la boite ne depasse
+        // jamais 448 px, et « REGARDER UNE PUB · CONTINUER » en text-2xl en sortait des deux cotes sur un ecran large.
+        <div className="w-full max-w-md flex flex-col items-center gap-1 [container-type:inline-size]">
+          {!revanche && !(pieces && cout != null) && (
             <div className="text-xs md:text-sm text-foreground/80 uppercase tracking-widest">
               {N.t('pieces_reprendre', { etape: etape })}
             </div>
           )}
           <button onClick={handlePub} disabled={pub === 'envoi'}
-            className="w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-sm sm:text-xl md:text-2xl whitespace-nowrap tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
-            {N.t(pub === 'envoi' ? 'pub_charge' : 'pub_continuer')}<Clapperboard className="w-5 h-5 md:w-6 md:h-6" />
+            className="w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-[clamp(0.7rem,3.7cqw,1.5rem)] whitespace-nowrap tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
+            {sansPubs() ? N.t('pub_offerte') : N.t(pub === 'envoi' ? 'pub_charge' : revanche ? 'pub_revanche' : 'pub_continuer')}{!sansPubs() && <Clapperboard className="w-5 h-5 md:w-6 md:h-6" />}
           </button>
           {pub === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}</div>}
         </div>

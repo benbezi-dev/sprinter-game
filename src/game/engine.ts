@@ -1,4 +1,5 @@
 import './sprinter-i18n.js';
+import { vibrationActive, sonGarde, garderSon } from './reglages';
 import './coureur-hd.js';
 // Les corps des athletes reels, sculptes a part : ils se posent sur
 // SprinterHD, donc APRES coureur-hd.js, qui le cree.
@@ -63,11 +64,12 @@ import './sprinter-app.js';
 import { useSyncExternalStore } from 'react';
 import { jugerLaCourse } from './fete';
 import type { RaceKey } from './leaderboard';
-import { suivreTunnel, etapeTunnel } from './tunnel';
+import { suivreTunnel, etapeTunnel, mesurerFinIntro } from './tunnel';
 import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
-import { DUEL_MARQUES_OUVERT } from './canal';
+import { DUEL_MARQUES_OUVERT, NOEL_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
+import { crediterEtape } from './pieces';
 import { jouerLeFauxDepart, rangerLeFauxDepart } from './faux-depart';
 import { lancerChargement, chargementFini, partChargee, stadeEnPreparation, avancerLePublic, avancerLesMaillages,
          courseLancee } from './chargement';
@@ -101,6 +103,24 @@ const STARTER_MUET = true;
 // Le moteur est du JavaScript ancien, sans acces aux modules : il previent
 // par ce crochet quand une course est terminee, et la couche moderne se
 // charge de l'envoyer.
+// le son coupe la derniere fois le reste a l'ouverture
+if (!sonGarde()) SprinterApp.Audio_.on = false;
+
+// Jeu passe a l'arriere-plan (autre appli, ecran verrouille) : on suspend le
+// son du jeu, sinon la musique continue de jouer hors de l'appli (9/11).
+function sonAuFond(cache: boolean) {
+  const c = SprinterApp.Audio_.ctx as AudioContext | null;
+  if (!c) return;
+  if (cache) c.suspend().catch(() => { });
+  else if (c.state === 'suspended') c.resume().catch(() => { });
+}
+document.addEventListener('visibilitychange', () => sonAuFond(document.hidden));
+// Dans l'appli, la WebView ne previent pas toujours : l'etat d'Android/iOS fait foi.
+if ((window as any).Capacitor?.isNativePlatform?.()) {
+  import('@capacitor/app').then(({ App }) =>
+    App.addListener('appStateChange', ({ isActive }) => sonAuFond(!isActive))).catch(() => { });
+}
+
 SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: number) => {
   // Le vrai mode se lit ICI, tant que les drapeaux de la course sont encore
   // poses : l'envoi part apres un import differe, et l'ecran de fin ou le
@@ -133,12 +153,40 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
     const cible = dm && SprinterApp.G.ghostSet ? String(dm.cible || '') || null : null;
     import('./marques').then(m => m.envoyerCourse(race, t, trace, ctx, cible)).catch(() => { /* hors ligne */ });
   }
+  // LE DUEL DES EPREUVES : toute course de vote envoie sa trace (elle devient
+  // le fantome du joueur) ; partie de la banderole contre un fantome, elle
+  // porte sa cible et juge l'attaque. Copiee ICI pour la meme raison qu'au-dessus.
+  if ((race === '60' || race === '200s' || race === '400s') && t != null && !SprinterApp.G.rejeu) {
+    const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
+    const de = (SprinterApp.G.shotOpts || {}).duelEpreuves;
+    const cible = de && SprinterApp.G.ghostSet ? String(de.cible || '') || null : null;
+    import('./duel-epreuves').then(m => m.envoyerCourse(race, t, trace, cible)).catch(() => { /* hors ligne */ });
+  }
+  // NOEL 2026 : une course partie de l'ecran de Noel (game/noel.ts) devient le
+  // fantome du joueur, et juge la cible si elle en avait une. Seulement si le
+  // depart portait `noel` : un 60 m ordinaire ne touche pas a l'arene.
+  const noel = (SprinterApp.G.shotOpts || {}).noel;
+  if (NOEL_OUVERT && noel && race === '60' && t != null && !SprinterApp.G.rejeu) {
+    const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
+    const cible = noel.cible && SprinterApp.G.ghostSet ? String(noel.cible) : null;
+    import('./noel').then(m => m.envoyerCourse(t, trace, cible)).catch(() => { /* hors ligne */ });
+  }
 };
 
 // Meme crochet, pour une CARRIERE gagnee de bout en bout : le compte qui
 // ouvre la Legende (game/legende/compte.ts). Il tourne sur les deux canaux —
 // la Legende, elle, ne se voit que sur celui de test (canal.ts).
 SprinterApp.G.onCarriereGagnee = (race: string) => { compterCarriere(race); };
+
+// Et pour CHAQUE ETAPE de carriere gagnee : les pieces (game/pieces.ts). Ce
+// qu'elles rapportent s'ajoute a G.runPieces, que l'ecran du sacre affiche
+// (GainsCarriere.tsx) — seulement si la carriere n'a pas change entre-temps.
+SprinterApp.G.onEtapeGagnee = (parcours: string, race: string, etape: number) => {
+  void crediterEtape(parcours, race, etape).then(n => {
+    const G = SprinterApp.G;
+    if (n > 0 && G.runId === parcours) G.runPieces = (G.runPieces || 0) + n;
+  });
+};
 
 // ...ET CELLES D'AVANT CE COMPTE, retrouvees une fois par appareil dans ce qu'il
 // a garde (un minimum : voir estimerLesCarrieresDAvant). Apres le chargement de
@@ -176,6 +224,9 @@ export type GameState = {
   reactFlash: number;
   transFlash: number;
   falseFlash: number;
+  /** Le dernier geste du joueur — le casse, un coup de coude, le couloir 2 (annoncerGeste, sprinter-app.js). */
+  geste: { cle: string; sous: string | null; ton: string } | null;
+  gesteFlash: number;
   cut: any;
   /** Le sacre qui s'efface par-dessus le generique, pendant le croisement. */
   sortie: any;
@@ -331,6 +382,7 @@ const { N } = SprinterI18N;
  * `Haptics.vibrate` garde la duree demandee ; `impact` ne reste qu'en repli.
  */
 export function buzz(ms: number) {
+  if (!vibrationActive()) return;
   try {
     const h = (window as any).Capacitor?.Plugins?.Haptics;
     if (h) {
@@ -645,6 +697,65 @@ export function padRelease(side: 'left' | 'right') {
   else { buzz(HAIE.rate); cue(side, 'trip'); }
 }
 
+/**
+ * LE CASSE — les deux pouces glissent vers l'exterieur (TouchControls.tsx), ou la fleche du bas.
+ *
+ * Une fois par course, dans les derniers metres (sprinter-core.js, CASSE) : la poitrine part vers la ligne, et
+ * c'est elle que le chrono attend. Trop tot, le buste se redresse avant la ligne et la vitesse est perdue ; une fois
+ * la ligne passee, il ne change plus rien — on le dit quand meme.
+ */
+export function casser() {
+  if (G.paused || G.state !== 'race' || G.rejeu || G.spectateur) return;
+  // (au saut, les deux pouces font le ramene : longueur-course.js)
+  if (G.sautEnCours || G.appuiSaut || G.pasSauteur) return;
+  const p = G.player;
+  if (!p || typeof p.casser !== 'function') return;
+  const avant = p.casseT;
+  const note = p.casser(G.elapsed);
+  if (note === 'tard') {
+    p.casseDite = true;
+    SprinterApp.annoncerGeste('casse_tard', null, 'alerte');
+    buzz(10);
+  } else if (avant == null && p.casseT != null) {
+    buzz(24);
+    cue('left', 'step'); cue('right', 'step');
+  }
+}
+
+/** Le coup de coude — un pouce glisse vers le haut, ou la fleche du haut (le peloton du 400 m en salle). */
+export function coupDeCoude() {
+  if (G.paused || G.rejeu || G.spectateur) return;
+  const r = SprinterApp.coupDeCoude();
+  if (r === 'touche') buzz(34);
+  else if (r === 'vide') buzz(8);
+}
+
+/** Le couloir 2 (2) ou le retour a la corde (1) — un pouce glisse vers l'exterieur, ou la touche C. */
+export function changerCouloir(vers: 1 | 2) {
+  if (G.paused || G.rejeu || G.spectateur) return;
+  if (SprinterApp.changerCouloir(vers)) buzz(12);
+}
+
+/**
+ * CE QUE LA CONSIGNE SOUS LES PAVES DOIT DIRE, A CET INSTANT (TouchControls.tsx) : la cle de traduction, ou null
+ * pour la consigne ordinaire. Enferme, le couloir 2 ; au coude a coude, le coup de coude ; dans les derniers
+ * metres, le casse — tant qu'il n'est pas donne.
+ */
+export function consigneDuGeste(clavier: boolean): string | null {
+  const p = G.player, T = G.track;
+  if (G.state !== 'race' || !p || p.finished || G.rejeu || G.spectateur || G.sautEnCours) return null;
+  const kb = clavier ? '_kb' : '';
+  if (T && T.salle && T.salle.rabat) {
+    if (p.enferme && !p.couloir2) return 'enferme_consigne' + kb;
+    const Z = T.salle.coude;
+    const voisin = (G.runners || []).some((o: any) => o !== p && !o.isLive && !o.isGhost && !o.fictif && !o.finished
+                                                    && T.auContact(p, o, Z));
+    if (voisin) return 'coude_consigne' + kb;
+  }
+  if (p.casseT == null && !p.casseNote && p.total - p.d > 0 && p.total - p.d <= SprinterCore.CASSE.consigne) return 'casse_consigne' + kb;
+  return null;
+}
+
 // Garde l'attribut lang du document aligne sur la langue du jeu. Sans ca
 // la page annonce une langue qui n'est pas celle affichee, et les
 // navigateurs proposent de la traduire — une traduction navigateur
@@ -662,7 +773,7 @@ export function toggleLang() {
 }
 
 export function toggleAudio() {
-  SprinterApp.Audio_.toggle();
+  garderSon(SprinterApp.Audio_.toggle());
   rafraichirTout();
 }
 
@@ -761,9 +872,13 @@ function pousserPosition() {
   if (!finEnvoyee && G.player.finished && G.player.finishTime != null) {
     finEnvoyee = true;
     salleLive.position(G.track.total, G.player.finishTime * 1000);
-    salleLive.fini(G.player.finishTime * 1000);
+    // La salle peut se debrancher ENTRE ces deux appels : le relais solo
+    // (salle-relais-solo.ts) est local, il boucle le relais des la ligne
+    // franchie et son onFini rappelle brancherSalle(null) sur-le-champ. Une
+    // salle en ligne, elle, ne repond qu'apres un aller-retour reseau.
+    salleLive?.fini(G.player.finishTime * 1000);
   }
-  if (G.elapsed >= prochainEnvoi) {
+  if (salleLive && G.elapsed >= prochainEnvoi) {
     prochainEnvoi = G.elapsed + 0.1;
     salleLive.position(G.player.d, G.elapsed * 1000);
   }
@@ -776,9 +891,9 @@ const ATTITUDES_S = 2.6;
 // au plus. Et les attitudes qui suivent ne descendent pas sous ATTITUDES_MIN_S.
 const ATTENTE_STADE_MIN_S = 0.25, ATTENTE_STADE_MAX_S = 12, ATTITUDES_MIN_S = 0.8;
 // Le public compose d'avance, par image : a l'ouverture, et a l'accueil.
-const OUVERTURE_PUBLIC_MS = 20, ACCUEIL_PUBLIC_MS = 4;
+const OUVERTURE_PUBLIC_MS = 2, ACCUEIL_PUBLIC_MS = 1;
 // Le son, fabrique de meme : voir plus bas, et Audio_.avancer (sprinter-app.js).
-const OUVERTURE_SON_MS = 8, ACCUEIL_SON_MS = 4;
+const OUVERTURE_SON_MS = 2, ACCUEIL_SON_MS = 1;
 
 /**
  * SES MAINS AVANT LES BLOCS (G.avantDepart.claps, pose par game/vedettes.ts).
@@ -1005,6 +1120,7 @@ export function updateLogic(dt: number) {
   G.reactFlash = Math.max(0, G.reactFlash - dt);
   G.transFlash = Math.max(0, G.transFlash - dt);
   G.falseFlash = Math.max(0, G.falseFlash - dt);
+  G.gesteFlash = Math.max(0, (G.gesteFlash || 0) - dt);
   G.shake = Math.max(0, G.shake - dt * 3.2);
   G.flash = Math.max(0, G.flash - dt * 1.4);
   G.stumbleFlash = Math.max(0, G.stumbleFlash - dt);
@@ -1045,13 +1161,10 @@ export function updateLogic(dt: number) {
   if (G.state === 'title') avancerLesMaillages();
   // LE SON AUSSI SE FABRIQUE D'AVANCE, quelques millisecondes par image : il
   // l'etait au premier appui de la course, et le depart gelait (voir
-  // Audio_.avancer). Ces images-la ne se jugent pas : un travail qui finit,
-  // comme le public d'avance (rendu-premium.js).
+  // Audio_.avancer). Des budgets courts gardent de la place pour dessiner et
+  // traiter les commandes, y compris pendant l'ouverture.
   if (G.state === 'open' || G.state === 'title') {
-    if (Audio_.avancer(G.state === 'open' ? OUVERTURE_SON_MS : ACCUEIL_SON_MS)) {
-      const P = (globalThis as any).RenduPremium;
-      if (P) P.composeDAvance = Math.max(P.composeDAvance || 0, performance.now() + 250);
-    }
+    Audio_.avancer(G.state === 'open' ? OUVERTURE_SON_MS : ACCUEIL_SON_MS);
   }
 
   if (G.state === 'open') {
@@ -1060,7 +1173,11 @@ export function updateLogic(dt: number) {
     // partaient pendant l'ouverture). Toucher l'ecran la termine
     // (passerLOuverture). Elle attend toujours les images (chargement.ts).
     G.openT += dt * OUVERTURE_VITESSE;
-    if (G.openT > OUVERTURE_FIN && chargementFini()) G.state = 'title';
+    if (G.openT > OUVERTURE_FIN) {
+      const passagePossible = chargementFini();
+      mesurerFinIntro(passagePossible);
+      if (passagePossible) G.state = 'title';
+    }
   } else if (G.state === 'cut') {
     G.cut.t += dt;
     // pendant la carte de l'adversaire, les coureurs s'echauffent (game/echauffement.ts)
@@ -1253,6 +1370,8 @@ export function updateLogic(dt: number) {
       // temps ne sont jamais calculees, la position devient NaN, et
       // l'adversaire disparait de la piste sans une erreur.
       for (const r of G.runners) if (!r.isPlayer && !r.isLive) r.stepAI(step, G.elapsed);
+      // le peloton du 400 m en salle : la place de chacun en travers, les gestes du coude (sprinter-app.js)
+      SprinterApp.placerPeloton(step);
       // la place a l'arrivee, des la ligne : les trois premiers celebrent (Runner.apresLigne)
       for (const r of G.runners) if (r.finished && r.place == null && r.finishTime != null)
         r.place = 1 + G.runners.filter((o: any) => o !== r && o.finished && o.finishTime != null && o.finishTime < r.finishTime).length;
@@ -1287,6 +1406,16 @@ export function updateLogic(dt: number) {
     if (G.player.transGrade !== null && !G.transShown) {
       G.transShown = true; G.transFlash = 2.4;
       if (G.player.transGrade) { Audio_.sfx('win'); G.flash = 0.6; }
+    }
+    // LE CASSE, JUGE SUR LA LIGNE (sprinter-core.js, jugerCasse) : sa note, et ce qu'il a fait au chrono
+    if (G.player.casseNote && !G.player.casseDite) {
+      const p = G.player, g = p.casseGain || 0, N = SprinterApp.N;
+      p.casseDite = true;
+      const sous = g >= 0.005 ? N.t('casse_gagne').replace('{s}', g.toFixed(2))
+        : g <= -0.005 ? N.t('casse_perdu').replace('{s}', (-g).toFixed(2)) : null;
+      SprinterApp.annoncerGeste('casse_' + p.casseNote, sous,
+        p.casseNote === 'parfait' ? 'or' : p.casseNote === 'bon' ? 'bon' : 'alerte');
+      if (p.casseNote === 'parfait') { Audio_.sfx('win'); G.flash = Math.max(G.flash, 0.5); }
     }
     SprinterApp.followCam(dt);
     
@@ -1343,7 +1472,7 @@ export function updateLogic(dt: number) {
       if (!G.rejeuFini && G.elapsed >= dernier + 2.5) {
         G.rejeuFini = true;
         for (const r of G.runners)
-          if (!r.finished && !r.isPlayer) r.finishTime = r.target;
+          if (!r.finished && !r.isPlayer) r.finishTime = r.target + (r.retard || 0);
         const fin = G.rejeuFin; G.rejeuFin = null;
         if (fin) fin(); else SprinterApp.goHome();
       }
@@ -1365,11 +1494,13 @@ export function updateLogic(dt: number) {
       // que si la salle se tait — cinq minutes, plus que la manche la plus
       // longue et sa limite de retardataires.
       if (G.elapsed >= 300) SprinterApp.goHome();
-    } else if (out || slow || mordu || plante || G.elapsed >= 90) {
+    } else if (out || slow || mordu || plante || G.elapsed >= 90
+               // PASSER L'APRES-LIGNE (l'auteur, 18/11) : le bouton du HUD pose le coureur de CETTE course, rien a remettre a zero
+               || (G.player.finished && G.passerFin === G.player)) {
       // Plante seulement : la serie s'arrete la (finishRace, one shot).
       G.finPlante = plante && !(out || slow || mordu);
       for (const r of G.runners)
-        if (!r.finished && !r.isPlayer) r.finishTime = r.target;
+        if (!r.finished && !r.isPlayer) r.finishTime = r.target + (r.retard || 0);
       SprinterApp.finishRace();
     }
   }
@@ -1391,6 +1522,8 @@ export function updateLogic(dt: number) {
     reactFlash: G.reactFlash,
     transFlash: G.transFlash,
     falseFlash: G.falseFlash,
+    geste: G.geste,
+    gesteFlash: G.gesteFlash,
     cut: G.cut,
     sortie: G.sortie,
     levelIdx: G.levelIdx,

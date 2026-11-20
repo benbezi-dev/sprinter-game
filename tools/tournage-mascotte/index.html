@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tournage mascotte</title>
+<style>
+  body { margin: 0; font: 14px system-ui, sans-serif; background: #1d1f24; color: #eee; }
+  #barre { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px; }
+  #barre label { display: flex; gap: 4px; align-items: center; }
+  #plateau { display: flex; justify-content: center; padding: 10px;
+    background: repeating-conic-gradient(#444 0% 25%, #555 0% 50%) 50% / 24px 24px; }
+  #etat { padding: 0 10px 10px; color: #9fd; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<!-- PAGE DE DEVELOPPEMENT SEULEMENT (servie par Vite en local, absente du site publie).
+     Mode d'emploi : tools/mascotte-tournage.mjs -->
+<div id="barre">
+  <label>Mascotte <select id="p"></select></label>
+  <label>Geste <select id="g"></select></label>
+  <label>Ensuite <select id="e"></select></label>
+  <label>Format <select id="f">
+    <option value="story">Story / Reel 1080×1920</option>
+    <option value="carre">Carré 1080×1080</option>
+    <option value="large">Large 1920×1080</option>
+  </select></label>
+  <label>Cadrage <select id="c"><option value="pied">en pied</option><option value="buste">buste</option></select></label>
+  <label>Lacet <input id="l" type="number" step="0.05" value="0.32" style="width:60px"></label>
+  <label>Suite (s) <input id="s" type="number" step="0.5" value="1" style="width:50px"></label>
+  <button id="voir">Voir</button>
+  <button id="tourner">Tourner</button>
+</div>
+<div id="plateau"><canvas id="toile"></canvas></div>
+<div id="etat"></div>
+<script type="module" src="./tournage.ts"></script>
+</body>
+</html>

@@ -19,6 +19,8 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 export type JoueurRelais = {
   id: string; nom: string; relais: number;
   pret: boolean; d: number; fini: boolean;
+  /** Tenu par un relayeur fictif (salle solo, places vides du salon). */
+  fictif?: boolean;
 };
 
 /** La zone de lancement d'un relayeur : trente metres, transmission comprise. */
@@ -37,9 +39,11 @@ export type EtatRelais = {
   total: number | null;
   /** Ma zone, envoyee a l'accueil. Le premier relayeur n'en a pas. */
   zone?: Zone | null;
+  /** Un salon de relais : places libres tenues par des fictifs. */
+  salon?: boolean;
 };
 
-type Ecouteurs = {
+export type Ecouteurs = {
   onEtat?: (e: EtatRelais) => void;
   /** Le pistolet : l'attente restante, et la date du coup en temps serveur. */
   onDepart?: (dansMs: number, departA: number) => void;
@@ -79,6 +83,38 @@ export const LEG = 100;
 export const TAILLE = 4;
 export const ARRIVEE = LEG * TAILLE;
 
+/**
+ * LA MARQUE D'ELAN : a combien de metres derriere sa place le receveur pose
+ * son repere au sol. Quand le porteur l'atteint, le receveur s'elance. Les
+ * relayeurs fictifs du solo partent a cette distance, la piste la dessine
+ * pour chaque receveur, et le bouton du temoin dit « PARS ! » a cet instant.
+ */
+export { ELAN } from '../../worker/src/relais-fictifs.js';
+// (une seule valeur pour tout le monde : celle du pilote des fictifs, 10,5 m depuis le 15/11 — voir
+// worker/src/relais-fictifs.js. Le joueur recoit le meme conseil que ses coequipiers suivent.)
+
+/**
+ * Ce que l'ecran de course demande a une salle. La salle en ligne et la salle
+ * solo (salle-relais-solo.ts, trois relayeurs fictifs) le fournissent toutes
+ * les deux.
+ */
+export type UneSalleRelais = {
+  monRelais: number;
+  maZone: Zone | null;
+  marque: number;
+  connecter(): void;
+  pret(v: boolean): void;
+  placer(d: number): void;
+  avancer(dAbs: number, c?: number): void;
+  terminer(): void;
+  temoin(): void;
+  fauxDepart(): void;
+  msCourse(): number;
+  fermer(): void;
+  /** Les marques d'elan des receveurs, quand la salle les connait (le solo). */
+  marquesElan?(): { relais: number; d: number }[];
+};
+
 export class SalleRelais {
   private lien: Liaison | null = null;
   private ec: Ecouteurs;
@@ -101,7 +137,17 @@ export class SalleRelais {
    */
   marque = 0;
 
-  constructor(equipe: string, ec: Ecouteurs) {
+  /**
+   * Salon de relais (`salon`) : une salle ouverte par un code, ou chacun
+   * choisit sa place (`relais`) et ou les places libres sont tenues par des
+   * fictifs — voir worker/src/salle-relais.js et relais-fictifs.js.
+   */
+  salon: boolean;
+  private placeVoulue: number;
+
+  constructor(equipe: string, ec: Ecouteurs, opts: { salon?: boolean; relais?: number } = {}) {
+    this.salon = !!opts.salon;
+    this.placeVoulue = opts.relais || 0;
     this.equipe = equipe.toUpperCase();
     this.ec = ec;
   }
@@ -112,7 +158,9 @@ export class SalleRelais {
     // distincts, et partir sans code menerait a la mauvaise piste.
     if (EST_TEST && !codeAcces()) { this.ec.onFerme?.('acces'); return; }
     const q = new URLSearchParams({ name: getSavedName() || 'Anonyme' });
-    this.lien = new Liaison(avecAcces(`${WS_BASE}/relay/room/${this.equipe}?${q}`), {
+    if (this.salon && this.placeVoulue) q.set('relais', String(this.placeVoulue));
+    const route = this.salon ? 'salon' : 'room';
+    this.lien = new Liaison(avecAcces(`${WS_BASE}/relay/${route}/${this.equipe}?${q}`), {
       onMessage: m => this.recu(m),
       onFerme: r => this.ec.onFerme?.(r),
     });
@@ -191,6 +239,8 @@ export class SalleRelais {
   private envoyer(o: any) { this.lien?.envoyer(o); }
 
   pret(v: boolean) { this.envoyer({ t: 'pret', pret: v }); }
+  /** Salon seulement : prendre une place libre avant le pistolet. */
+  choisirPlace(r: number) { this.placeVoulue = r; this.envoyer({ t: 'place', relais: r }); }
   /** Placer sa marque dans sa zone, avant le depart. */
   placer(d: number) { this.marque = d; this.envoyer({ t: 'marque', d }); }
   /** `c` : l'instant de notre course, en millisecondes. Une salle qui ne le

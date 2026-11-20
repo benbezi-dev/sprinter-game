@@ -44,19 +44,19 @@ export function OpenScreen() {
           })}
         </div>
       </div>
-      
+
       <div className="flex-1 flex flex-col items-center pt-4 md:pt-8 gap-2 md:gap-4 z-10 text-center px-4">
         {openT > 3.1 && (
-          <motion.div 
+          <motion.div
             {...MONTEE}
             className="text-lg sm:text-2xl font-bold tracking-widest text-foreground/90 font-display whitespace-nowrap"
           >
             100 &nbsp;&mdash;&nbsp; 200 &nbsp;&mdash;&nbsp; 400 METRES
           </motion.div>
         )}
-        
+
         {openT > 4.0 && (
-          <motion.div 
+          <motion.div
             {...FONDU}
             className="text-[10px] sm:text-sm md:text-base font-medium text-muted-foreground uppercase tracking-widest max-w-[280px] sm:max-w-none"
           >

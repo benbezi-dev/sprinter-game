@@ -61,6 +61,22 @@ export async function signaler(duel: string, motif: Motif): Promise<boolean> {
 /** Les noms bloques depuis cet appareil, tels qu'on les connait ici. */
 export function bloquesLocaux(): string[] { return lire(CLE_BLOQUES); }
 
+/**
+ * Les noms bloques, ceux de cet appareil et ceux que le serveur connait (bloques
+ * depuis un autre appareil du joueur, ou avant une reinstallation). Hors ligne :
+ * la liste locale seule.
+ */
+export async function tousLesBloques(): Promise<string[]> {
+  const ici = lire(CLE_BLOQUES);
+  const nom = getSavedName();
+  if (!nom) return ici;
+  try {
+    const r = await fetch(`${API_BASE}/moderation/bloques?name=${encodeURIComponent(nom)}`);
+    const d = r.ok ? await r.json() : null;
+    return Array.isArray(d?.bloques) ? [...new Set([...ici, ...d.bloques.map(String)])] : ici;
+  } catch { return ici; }
+}
+
 export function estBloque(nom: string): boolean {
   return lire(CLE_BLOQUES).includes(String(nom || '').trim().toLowerCase());
 }

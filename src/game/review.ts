@@ -162,7 +162,8 @@ const FORMATS_MUETS = [
 ];
 
 const FORMATS_SONORES = [
-  'video/mp4;codecs="avc1.42E01E,mp4a.40.2"',
+  // Le niveau 4.0 permet le Full HD a 30 images/s avec une piste AAC.
+  'video/mp4;codecs="avc1.42E028,mp4a.40.2"',
   'video/mp4;codecs=avc1,mp4a.40.2',
   'video/mp4',
   'video/webm;codecs="vp9,opus"',
@@ -285,25 +286,21 @@ async function partagerEnNatif(blob: Blob, nom: string): Promise<Sortie | null> 
 }
 
 /**
- * LE CADRE DU FILM : 9:16, A LA DEFINITION DU JEU, 2K AU PLUS.
+ * LE CADRE DU FILM : FULL HD, EN 9:16 OU EN 16:9.
  *
  * Le film prend le MILIEU de l'ecran au 9:16 — Instagram et TikTok ne montrent
  * que cela et rognent le reste a leur idee, le haut et le bas partaient avec la
  * barre du chrono.
  *
- * LE 2K EST UN PLAFOND, PLUS UNE CIBLE (7/11/2026). Du 20/10 au 7/11, le film
- * sortait toujours en 1440 x 2560, quitte a agrandir une toile de 800 a 1200 de
- * large : aucun detail de plus, et l'idee etait que seul l'encodeur en payait le
- * prix. C'etait faux sous Safari : `captureStream` y relit et convertit chaque
- * image filmee dans le processus GPU du navigateur, et en course 3D sur iPhone
- * 13 Pro c'etait plus de la moitie de son temps (Instruments) — la course
- * saccadait. Le film a donc la taille de la toile du jeu, jusqu'au 2K.
+ * Web, Android et iOS exportent en 1080 x 1920 (1920 x 1080 en paysage).
+ * Le rendu du jeu reste adaptatif ; seul le montage est mis a cette taille,
+ * avec le HUD et le carton repeints dans la definition du fichier.
  *
  * Le HUD et le carton se mettent en page sur la partie VISIBLE, en points CSS :
  * ils raisonnent deja en `l` x `h` et ne s'accrochent a aucune position de la
  * piste (hud-film.ts, carton-film.ts) ; `echelle` les met a la taille du film.
  *
- * Un ecran couche sort au plus en 2560 x 1440 ; un ecran presque carre
+ * Un ecran presque carre
  * (telephone plie ouvert, tablette) garde son cadre — le rogner en 9:16
  * couperait la course (voir cadreDuFilm).
  */
@@ -325,25 +322,19 @@ function debitDuFilm(): number {
   const duree = cles.reduce((s, k) => s + (SECONDES[String(k)] ?? 32), 0) + CARTON_MS / 1000;
   return Math.round(Math.max(1_500_000, Math.min(5_000_000, POIDS_MAX * 8 / duree - 128_000)));
 }
-/** La largeur visee, en pixels : le 2K d'un portrait tenu debout (1440 x 2560). */
-const LARGEUR_2K = 1440;
+/** Le petit cote du film Full HD, en pixels. */
+const LARGEUR_HD = 1080;
 interface Cadre { l: number; h: number; sx: number; sy: number; sl: number; sh: number; ecran?: string }
 
-// LE 2K AU PLUS, JAMAIS AU-DELA DE CE QUE LE JEU DESSINE (l'auteur, 7/11/2026, apres comparaison :
-// « applique ») : le film ne grandit plus au-dessus de la toile du jeu. Agrandi, il n'avait aucun
-// detail de plus — mais Safari relit et convertit chaque image filmee (captureStream) dans son
-// processus GPU : sur iPhone 13 Pro, plus de la moitie de ce processus en course 3D (Instruments,
-// 7/11). Un ecran couche sort au plus en 2560 x 1440 ; un ecran presque carre (telephone plie
-// ouvert, tablette) garde son cadre — le rogner couperait la course.
 function cadreDuFilm(sw: number, sh: number): Cadre {
   const ecran = `${sw}x${sh}`;
   if (!sw || !sh) return { l: sw, h: sh, sx: 0, sy: 0, sl: sw, sh, ecran };
   const portrait = sh / sw >= RATIO_PORTRAIT, couche = sw / sh >= RATIO_PORTRAIT;
   if (!portrait && !couche) {
-    const k = Math.min(1, (LARGEUR_2K * 16 / 9) / Math.max(sw, sh));
+    const k = LARGEUR_HD / Math.min(sw, sh);
     return { l: Math.round(sw * k) & ~1, h: Math.round(sh * k) & ~1, sx: 0, sy: 0, sl: sw, sh, ecran };
   }
-  const court = Math.min(LARGEUR_2K, portrait ? sw : sh) & ~1, long = Math.round(court * 16 / 9) & ~1;
+  const court = LARGEUR_HD, long = court * 16 / 9;
   const l = portrait ? court : long, h = portrait ? long : court;
   const k = Math.max(l / sw, h / sh);
   const sl = l / k, shv = h / k;
@@ -469,7 +460,7 @@ export class Review {
       this.morceaux = [];
       this.rec = new MediaRecorder(flux, {
         mimeType: format,
-        // Jusqu'a 5 Mbps pour le 2K (1440 x 2560), moins pour les longues epreuves :
+        // Jusqu'a 5 Mbps pour le Full HD, moins pour les longues epreuves :
         // le film reste sous ~15 Mo, voir debitDuFilm. 5 Mbps, c'est 6 Mo les dix
         // secondes — le poids reste affiche a cote du bouton de partage.
         videoBitsPerSecond: debitDuFilm(),
@@ -493,8 +484,7 @@ export class Review {
   /**
    * Ouvre le montage et lance la boucle qui le remplit.
    *
-   * Il fait exactement la taille du canvas du jeu — pas de mise a l'echelle,
-   * pas de perte : le film sort dans la definition ou la course a ete dessinee.
+   * Le montage Full HD recadre le stade puis repeint sa surcouche a cette taille.
    */
   private ouvrirLeMontage(source: HTMLCanvasElement, surcouche: Surcouche): HTMLCanvasElement {
     const m = document.createElement('canvas');

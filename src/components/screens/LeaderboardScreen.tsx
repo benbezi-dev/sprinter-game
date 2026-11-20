@@ -29,6 +29,10 @@ const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 // autres, et parce qu'elle se sert du meme selecteur de distance.
 type Cat = 'race' | 'run' | 'mine' | 'nations';
 
+const PUCE = 'shrink-0 min-w-[3.75rem] flex-1 px-3 py-2 rounded-xl font-bold tracking-wider whitespace-nowrap transition-all flex flex-col items-center justify-center leading-tight';
+const PUCE_ON = 'bg-primary text-background shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.25)]';
+const PUCE_OFF = 'text-muted-foreground hover:text-foreground hover:bg-white/5';
+
 export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceKey; onClose: () => void }) {
   // Le glissement depuis le bord gauche fait ce que fait la croix.
   useRetour(onClose);
@@ -122,7 +126,9 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
           </button>
         </div>
 
-        <div className="flex gap-2 w-full">
+        {/* Les epreuves sur une seule ligne qui defile : « 200 M EN SALLE »
+            s'ecrivait sur trois lignes et rendait la rangee inegale (09/11). */}
+        <div className="flex gap-1 p-1 w-full overflow-x-auto rounded-2xl bg-black/30 border border-white/10 [scrollbar-width:none]">
           {/* TOUTES n'existe que pour les nations, et pour une raison de fond :
               un palmares se lit d'abord en entier. Les trois autres categories
               classent des chronos, qui ne s'additionnent pas d'une distance a
@@ -130,10 +136,7 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
           {cat === 'nations' && !haies && (
             <button
               onClick={() => setToutesDistances(true)}
-              className={`flex-1 py-2 md:py-3 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
-                ${toutesDistances
-                  ? 'bg-primary/20 text-primary border-primary'
-                  : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
+              className={`${PUCE} ${toutesDistances ? PUCE_ON : PUCE_OFF}`}
             >
               {N.t('nations_tous')}
             </button>
@@ -144,12 +147,15 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
               <button
                 key={k}
                 onClick={() => { setRace(k); setToutesDistances(false); }}
-                className={`flex-1 py-2 md:py-3 rounded-xl font-bold tracking-wider transition-all border-b-2 text-sm md:text-base
-                  ${actif
-                    ? 'bg-primary/20 text-primary border-primary'
-                    : 'bg-card/80 text-muted-foreground border-transparent hover:bg-white/10'}`}
+                className={`${PUCE} ${actif ? PUCE_ON : PUCE_OFF}`}
               >
-                {nomCourt(k)}
+                {(() => {
+                  const salle = /^\d+s$/.test(k); // 200s, 400s : la salle passe sur une 2e ligne
+                  return <>
+                    <span className="text-sm md:text-base">{salle ? `${k.slice(0, -1)} M` : nomCourt(k)}</span>
+                    {salle && <span className="text-[8px] md:text-[9px] tracking-widest opacity-80">{N.t('lb_salle')}</span>}
+                  </>;
+                })()}
               </button>
             );
           })}
@@ -162,8 +168,8 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
             <button
               key={id}
               onClick={() => setCat(id)}
-              className={`flex-1 py-2 rounded-xl font-bold tracking-widest
-                          text-[9px] md:text-[11px] leading-tight transition-all
+              className={`flex-auto px-2 py-2 rounded-xl font-bold tracking-wider whitespace-nowrap
+                          text-[10px] md:text-[11px] leading-tight transition-all
                 ${cat === id
                   ? 'bg-primary text-background shadow-[0_0_15px_rgb(var(--primaire-rgb)/0.25)]'
                   : 'text-muted-foreground hover:text-foreground hover:bg-white/5'}`}

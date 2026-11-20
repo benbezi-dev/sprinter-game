@@ -256,6 +256,19 @@ export const DUEL_MARQUES_OUVERT = EST_TEST || (Date.now() >= LANCEMENT_DUEL_MAR
   && Date.now() < LANCEMENT_DUEL_MARQUES + DUREE_DUEL_MARQUES_MS);
 
 /**
+ * NOEL 2026 — boules de neige et etoile du sapin (10/11/2026). Ouvert sur le
+ * canal de test ; au public pendant DUREE_NOEL_MS a partir de LANCEMENT_NOEL
+ * (vite.config.ts), ferme tant que la date n'est pas fixee. Le serveur tient
+ * sa propre date (worker/src/noel.js, DEBUT_PROD) : les deux bougent ensemble.
+ */
+declare const __LANCEMENT_NOEL__: number | null;
+declare const __DUREE_NOEL_MS__: number;
+export const LANCEMENT_NOEL: number =
+  typeof __LANCEMENT_NOEL__ === 'number' ? __LANCEMENT_NOEL__ : Infinity;
+export const DUREE_NOEL_MS: number = typeof __DUREE_NOEL_MS__ === 'number' ? __DUREE_NOEL_MS__ : 0;
+export const NOEL_OUVERT = EST_TEST || (Date.now() >= LANCEMENT_NOEL && Date.now() < LANCEMENT_NOEL + DUREE_NOEL_MS);
+
+/**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
  *
  * Ce que Hurdlers a de casse aujourd'hui tient en une phrase : le joueur ne
@@ -642,4 +655,18 @@ export function brancherSignet() {
     }
     return rep;
   }) as typeof window.fetch;
+}
+
+/**
+ * LE RELAIS EN 2D, GARDE AU CANAL DE TEST (l'auteur, 14/11/2026 : « mets le relais 2D dans test »).
+ * Le public court le relais en 3D ; le canal de test garde le dessin 2D a cote, au choix, pour
+ * comparer. Hors canal de test, toujours faux : le choix n'existe pas.
+ */
+const CLE_RELAIS_2D = 'sprinter.relais.rendu';
+export function relais2D(): boolean {
+  if (!EST_TEST) return false;
+  try { return localStorage.getItem(CLE_RELAIS_2D) === '2d'; } catch { return false; }
+}
+export function poserRelais2D(oui: boolean): void {
+  try { localStorage.setItem(CLE_RELAIS_2D, oui ? '2d' : '3d'); } catch { /* sans memoire : 3D */ }
 }

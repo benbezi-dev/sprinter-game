@@ -67,8 +67,9 @@ for (const cle of ['200s', '400s']) {
 // LES ACCROCHAGES DU 400 M (27/10) : au second tour, deux coureurs colles se touchent ; ecartes en travers, non
 {
   const T = new Track(COURSES_EN_SALLE['400s']);
-  ok('400s : contact entre deux coureurs colles au second tour', T.auContact({ d: 300, lane: 0 }, { d: 300.4, lane: 3 }));
-  ok('400s : pas de contact a un metre en travers', !T.auContact({ d: 300, lane: 0 }, { d: 300, lane: 2 }));
+  // (la place en travers de chacun, une fois rabattu : `travers`, Track.placerPeloton ; 09/11)
+  ok('400s : contact entre deux coureurs colles au second tour', T.auContact({ d: 300, lane: 0, travers: 0 }, { d: 300.4, lane: 3, travers: 0.45 }));
+  ok('400s : pas de contact a un metre en travers', !T.auContact({ d: 300, lane: 0, travers: 0 }, { d: 300, lane: 2, travers: 1.0 }));
   ok('400s : pas de contact dans les couloirs du premier tour', !T.auContact({ d: 100, lane: 0 }, { d: 100.2, lane: 1 }));
   ok('200s : jamais de contact', !new Track(COURSES_EN_SALLE['200s']).auContact({ d: 150, lane: 0 }, { d: 150, lane: 1 }));
 }

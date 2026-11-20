@@ -6,6 +6,7 @@
 // n'est pas redeploye, /stats repond 404 et le tableau le dit au lieu
 // d'inventer des chiffres.
 
+import { mesureActive } from './mesure';
 import { getDeviceId, fetchLeaderboardRaw, rankByRaceTime, type RaceKey } from './leaderboard';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
@@ -105,6 +106,7 @@ export type LectureStats =
  * changement d'ecran : ce serait du bruit, pas de la frequentation.
  */
 export function pingVisit() {
+  if (!mesureActive()) return;
   try {
     if (sessionStorage.getItem(VISIT_KEY)) return;
     sessionStorage.setItem(VISIT_KEY, '1');

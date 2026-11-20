@@ -58,5 +58,12 @@ const d2 = await post('/challenge', { device_id: J.a.dev, name: J.a.nom, ...cour
 ok('joint C', d2.corps.target_name === J.c.nom && (d2.corps.target_names || []).length === 1, JSON.stringify(d2.corps));
 ok('boite de C le porte', (await boite(J.c.dev)).includes(d2.corps.id));
 
+console.log('\n── un joueur vu sur une AUTRE epreuve (200 m), defie sur le 100 m par son nom');
+const F = { dev: dev('f'), nom: 'MULTIF' + s };
+await post('/submit', { device_id: F.dev, race_key: '200', name: F.nom, time_ms: 21500, best_split_ms: 21500 });
+const d3 = await post('/challenge', { device_id: J.a.dev, name: J.a.nom, ...course, target_names: [F.nom] });
+ok('joint F', (d3.corps.target_names || []).includes(F.nom), JSON.stringify(d3.corps));
+ok('boite de F le porte', (await boite(F.dev)).includes(d3.corps.id));
+
 console.log(e ? `\n${e} echec(s)\n` : '\nTout tient.\n');
 process.exit(e ? 1 : 0);

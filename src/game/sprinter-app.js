@@ -1022,9 +1022,8 @@ import { sponsorDeLaCourse } from './panneaux';
      * l'accueil (engine.ts), quelques millisecondes par image. Le contexte
      * audio nait pour cela sans geste : les navigateurs le laissent alors
      * suspendu, muet, et c'est le premier geste qui le reveille (`init`). Ce
-     * qui reste a fabriquer a ce moment-la se finit d'une traite, comme
-     * avant. Memes calculs, dans le meme ordre : les memes echantillons, au
-     * bit pres.
+     * qui reste a fabriquer continue par tranches entre les evenements.
+     * Memes calculs, dans le meme ordre : les memes echantillons, au bit pres.
      */
     chantier: null,
     /** Le morceau propre a Hurdlers ou a Jumper en cours de fabrique : { cle, gen }. */
@@ -1070,9 +1069,20 @@ import { sponsorDeLaCourse } from './panneaux';
       if (this.ctx.state === 'suspended' && typeof this.ctx.resume === 'function') {
         try { const p = this.ctx.resume(); if (p && p.catch) p.catch(() => { /* muet */ }); } catch (e) { /* muet */ }
       }
+      // Un premier geste ne doit pas finir toute la synthese sur le fil
+      // des commandes. Le contexte est reveille ici, dans le geste ; les
+      // echantillons restants avancent par tranches, entre deux evenements.
+      this.continuerFabrique();
+    },
+    repriseFabrique: null,
+    continuerFabrique() {
+      if (!this.chantier || this.repriseFabrique !== null) return;
+      this.avancer(2);
       if (this.chantier) {
-        try { jusquAuBout(this.chantier); this.ok = true; } catch (e) { this.ok = false; }
-        this.chantier = null;
+        this.repriseFabrique = setTimeout(() => {
+          this.repriseFabrique = null;
+          this.continuerFabrique();
+        }, 0);
       }
     },
     /**
@@ -2013,6 +2023,8 @@ import { sponsorDeLaCourse } from './panneaux';
     // Le cadrage pose par un mode. 1 = celui du sprint. Voir zoomDuMode().
     zoomMode: 1,
     reactFlash: 0, transFlash: 0, falseFlash: 0,
+    // le dernier geste du joueur (le casse, un coup de coude, le couloir 2) : ce que le HUD en dit, et combien de temps
+    geste: null, gesteFlash: 0,
     reactShown: false, transShown: false,
     // Faux depart eliminatoire : vrai le temps de la cinematique et de
     // l'ecran de fin, remis a zero au depart de la course suivante.
@@ -2529,7 +2541,7 @@ import { sponsorDeLaCourse } from './panneaux';
       r.attitudeW = 0;
     }
     G.stumbleFlash = 0; G.acc = 0;
-    G.reactFlash = G.transFlash = G.falseFlash = 0;
+    G.reactFlash = G.transFlash = G.falseFlash = G.gesteFlash = 0; G.geste = null;
     G.reactShown = G.transShown = false;
     G.falseOut = false; G.falseOutT = 0;
     G.paused = false;
@@ -2644,7 +2656,7 @@ import { sponsorDeLaCourse } from './panneaux';
     G.mode = 'campaign'; G.ghost = null; G.ghostSet = null; G.challenge = null;
     G.etiquette = null;
     G.runTime = 0; G.runSplits = []; G.runRank = null; G.runTraces = [];
-    G.runId = nouveauParcours(); G.runContinues = 0; G.runPubs = 0;
+    G.runId = nouveauParcours(); G.runContinues = 0; G.runPubs = 0; G.runPieces = 0;
     startLevel(0);
   }
   // LA TOUTE PREMIERE COURSE PART SANS CINEMATIQUE (game/premiers-pas.ts) : un
@@ -2736,7 +2748,39 @@ import { sponsorDeLaCourse } from './panneaux';
     G.ghostSplits = opts.ghostSplits || [];
     G.ghostName = opts.ghostName || '';
     G.ghostTime = opts.ghostTime || 0;
+    // LES REPRISES DE CE ONE SHOT (pub ou pieces apres un faux depart, voir
+    // reprendreOneShot) : un identifiant neuf par one shot lance, que le
+    // serveur des pieces accepte ([a-zA-Z0-9-]{8,64}), et ses compteurs.
+    G.shotRunId = 'os-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+    G.shotRepAchats = 0; G.shotRepPubs = 0;
+    G.fauxDepartIdx = null;
     startShotRace();
+  }
+
+  /**
+   * REPRENDRE UN ONE SHOT A L'EPREUVE DU FAUX DEPART (l'auteur, 10/11/2026 :
+   * le faux depart se rachete partout, sauf en championnat, par une pub ou des
+   * pieces). Les epreuves deja courues gardent leur chrono et leur trace ;
+   * celle du faux depart repart, avec le meme plateau, le meme fantome, le
+   * meme defi. Ce n'est pas RECOMMENCER, qui repart de zero et seul.
+   *
+   * Refuse hors one shot, sans faux depart, en direct et en championnat.
+   */
+  function reprendreOneShot(parPub) {
+    if (G.mode !== 'oneshot' || !G.falseOut || G.liveOn || G.champDirect) return false;
+    const i = G.fauxDepartIdx;
+    if (i == null || i < 0 || !G.shotRaces || i >= G.shotRaces.length) return false;
+    if (parPub) G.shotRepPubs = (G.shotRepPubs || 0) + 1;
+    else G.shotRepAchats = (G.shotRepAchats || 0) + 1;
+    G.runSplits = G.runSplits.slice(0, i);
+    G.shotTraces = G.shotTraces.slice(0, i);
+    G.runTime = G.runSplits.reduce((t, x) => t + (x || 0), 0);
+    G.runRank = null;
+    G.falseOut = false; G.falseOutT = 0; G.falseFlash = 0;
+    G.fauxDepartIdx = null;
+    G.shotIdx = i;
+    startShotRace();
+    return true;
   }
   function startShotRace() {
     G.raceKey = G.shotRaces[G.shotIdx];
@@ -2812,6 +2856,9 @@ import { sponsorDeLaCourse } from './panneaux';
     G.falseOut = true; G.falseOutT = 0;
     G.player.jumped = true;
     if (G.mode === 'oneshot') {
+      // L'epreuve du faux depart, pour la reprendre contre une pub ou des
+      // pieces (reprendreOneShot) : shotIdx est pousse au bout juste apres.
+      G.fauxDepartIdx = G.shotIdx;
       while (G.runSplits.length < G.shotRaces.length) G.runSplits.push(null);
       while (G.shotTraces.length < G.shotRaces.length) G.shotTraces.push([]);
       G.shotIdx = G.shotRaces.length;
@@ -2961,11 +3008,41 @@ import { sponsorDeLaCourse } from './panneaux';
    */
   function porteurDuTemoin(rang) {
     for (const r of G.runners) {
-      if (r.relaisRang == null) continue;
+      // les equipes adverses ont leur propre temoin (temoinAdverse)
+      if (r.relaisRang == null || r.adverse) continue;
       // La main du cote de la camera : de dos, l'autre est masquee par le
       // corps, et un temoin a moitie cache ne raconte rien.
       r.temoin = (r.relaisRang === rang) ? -1 : null;
     }
+    // La camera suit le temoin quand je ne l'ai pas (voir cibleRelais).
+    G.relaisPorteur = rang;
+  }
+
+  /**
+   * AU RELAIS, LA CAMERA SUIT LE TEMOIN, PAS SEULEMENT MOI.
+   *
+   * Elle ne montre qu'une poignee de metres autour de sa cible. Collee au
+   * joueur, elle le regardait attendre a sa marque sans rien montrer du
+   * porteur qui arrivait, puis le regardait ralentir au bout de sa zone
+   * pendant que les coequipiers couraient le reste du relais hors champ
+   * (l'auteur, 14/11/2026 : « on ne voit pas les autres participants de
+   * notre equipe »). Elle suit donc le porteur tant que ce n'est pas moi, et
+   * revient sur moi quand il arrive a ma hauteur : la transmission se joue
+   * la, et c'est moi qui tape. Renvoie la distance a viser, ou null hors
+   * relais.
+   */
+  function cibleRelais() {
+    if (!G.liveOn || G.raceKey !== '4x100' || !G.player || G.player.relaisRang == null) return null;
+    const moi = G.player.relaisRang, p = G.relaisPorteur || 1;
+    if (p === moi) return null;
+    const porteur = G.runners.find(r => r !== G.player && !r.adverse && r.relaisRang === p);
+    if (!porteur) return null;
+    // Il arrive sur moi : on cadre entre nous deux, puis sur moi.
+    if (p === moi - 1) {
+      const ecart = G.player.d - porteur.d;
+      if (ecart <= 12) return Math.max(porteur.d, G.player.d - Math.max(0, ecart) * 0.5);
+    }
+    return porteur.d;
   }
 
   function armRelayeurs(autres, monRelais) {
@@ -3008,6 +3085,48 @@ import { sponsorDeLaCourse } from './panneaux';
     }
   }
 
+  /**
+   * LES EQUIPES ADVERSES DU RELAIS (game/relais-adverses.ts). Quatre relayeurs par couloir voisin,
+   * chacun dans SA moitie de couloir, attendus a sa marque — comme nos coequipiers (armRelayeurs),
+   * mais sans repere ni nom au-dessus de la tete : ce sont des adversaires, ils ne se suivent pas.
+   * Leurs positions arrivent par liveDistDe, rejouees depuis une course calculee d'avance.
+   */
+  // UN MAILLOT PAR EQUIPE : la couleur dit a quelle equipe appartient un relayeur, la silhouette
+  // (carnation, gabarit, cheveux) reste celle de chacun. Pas de jaune : c'est la couleur du joueur.
+  const MAILLOTS_ADVERSES = [[64, 178, 235], [236, 92, 88], [176, 108, 235], [46, 206, 190],
+                             [246, 166, 52], [226, 96, 168], [236, 238, 244], [120, 200, 90]];
+  function armerEquipesAdverses(equipes) {
+    if (!G.lives) G.lives = new Map();
+    const pool = LEVELS[G.levelIdx].pool;
+    (equipes || []).forEach((eq, i) => {
+      const maillot = MAILLOTS_ADVERSES[i % MAILLOTS_ADVERSES.length];
+      for (const a of eq.membres) {
+        const r = new Runner('', eq.lane, {
+          maxSpeed: G.race.maxSpeed, total: G.track.total, pool,
+        });
+        r.look = Object.assign({}, K.lookFor(a.nom || a.id, pool), {
+          jersey: maillot, shorts: maillot.map(c => Math.round(c * 0.35)),
+        });
+        r.isGhost = true; r.isLive = true; r.adverse = true; r.relaisRang = a.relais;
+        r.demi = demiCouloir(a.relais);
+        r.relaisFin = a.relais < 4 ? a.relais * 100 + 30 : null;
+        r.d = Math.max(0, (a.relais - 1) * 100);
+        r.v = 0;
+        r.temoin = a.relais === 1 ? -1 : null;
+        G.runners.push(r);
+        G.lives.set(a.id, suiviLive(r, 0, { equipier: true }));
+      }
+    });
+  }
+
+  /** Le temoin d'une equipe adverse change de main. */
+  function temoinAdverse(lane, rang) {
+    for (const r of G.runners) {
+      if (!r.adverse || Math.round(r.lane) !== lane) continue;
+      r.temoin = r.relaisRang === rang ? -1 : null;
+    }
+  }
+
   function startRelais(opts) {
     opts = opts || {};
     const relais = Math.max(1, Math.min(4, opts.relais || 1));
@@ -3015,7 +3134,11 @@ import { sponsorDeLaCourse } from './panneaux';
     startLive(['4x100'], {
       levelIdx: opts.levelIdx == null ? 4 : opts.levelIdx,
       adversaire: '', autres: opts.autres || [],
+      // PAS DE COUREURS DE L'ORDINATEUR SEULS SUR 400 M A COTE D'UN RELAIS : les couloirs voisins
+      // recoivent des equipes adverses (armerEquipesAdverses), ou les autres equipes d'une confrontation.
+      sansOrdinateur: true,
     });
+    G.relaisPlace = null;
     // APRES `startLive`, qui a monte la piste et arme d'eventuels adversaires :
     // les coequipiers viennent par-dessus, dans mon couloir a moi.
     if (opts.equipiers && opts.equipiers.length) armRelayeurs(opts.equipiers, relais);
@@ -3038,6 +3161,11 @@ import { sponsorDeLaCourse } from './panneaux';
       p.reaction = 0;
     }
     G.relaisRang = relais;
+    // Les marques d'elan des receveurs, a dessiner sur la piste (voir le
+    // dessin des zones). Remises a zero a chaque depart : celles d'un relais
+    // precedent n'ont rien a faire sur celui-ci.
+    G.relaisMarques = Array.isArray(opts.marquesElan) ? opts.marquesElan : [];
+    G.relaisPorteur = 1;
     return marque;
   }
 
@@ -3868,6 +3996,13 @@ import { sponsorDeLaCourse } from './panneaux';
       G.runTraces.push(G.recTrace || []);
       G.runTime += G.player.finishTime;
       G.furthest[G.raceKey] = Math.max(G.furthest[G.raceKey] || 0, G.levelIdx + 1);
+      // CHAQUE ETAPE GAGNEE RAPPORTE DES PIECES (1, 1, 2, 3, 5, puis 15 pour
+      // les ZEZE — le bareme vit sur le serveur, worker/src/pieces.js). Une
+      // carriere seulement, pas un rejeu. Le crochet ne doit rien casser.
+      if (G.mode === 'campaign' && !G.rejeu && G.onEtapeGagnee && G.runId
+          && G.levelIdx < NB_ETAPES) {
+        try { G.onEtapeGagnee(G.runId, String(G.raceKey), G.levelIdx); } catch (e) { /* pieces perdues, course intacte */ }
+      }
       if (G.levelIdx + 1 >= NB_ETAPES) {
         // Une carriere reprise par un Continue n'entre pas aux meilleurs
         // parcours : son cumul ne compte que les courses gagnees, la
@@ -4290,21 +4425,137 @@ import { sponsorDeLaCourse } from './panneaux';
    * garde ce qui le distingue — son nom, son couloir, son apparence, et ce
    * qui fait de lui le joueur ou un adversaire en direct.
    */
-  // LES ACCROCHAGES DU 400 M EN SALLE (piste-salle.js, CONTACT ; Track.auContact) : appelee par le joueur
-  // a chaque pas (this), elle cherche un adversaire colle a lui dans le peloton du second tour
+  // ---------------------------------------------------------------------
+  // LE PELOTON DU 400 M EN SALLE (piste-salle.js, PELOTON, CONTACT, COUDE)
+  // ---------------------------------------------------------------------
+  // Un adversaire dont la course se joue ici : ni en direct, ni fantome, ni fictif d'une salle (leur course est
+  // ecrite ailleurs, un coup de coude ne la changerait que sur cet ecran). Lui seul donne et prend des coups.
+  const adversaireLocal = (o) => !o.isPlayer && !o.isLive && !o.isGhost && !o.fictif;
+  // la part du peloton faite : rabattu (diagonale passee a moitie au moins), on y occupe une place
+  const auPeloton = (T, r) => T.rabattu(r.d, r.lane) >= 0.5;
+  // (le dessin 2D : la place en travers, prise pendant la diagonale — course-3d.ts fait de meme)
+  function enPelotonDessin(T, r, d) {
+    return T.salle && T.salle.rabat ? T.rabattu(d, r.lane) * (r.travers || 0) : 0;
+  }
+  // Le geste du coude, a l'image : monte en 0,08 s, tenu 0,1 s, rendu en 0,17 s (Runner.coude, voir pose).
+  const COUDE_IMAGE = { monte: 0.08, tient: 0.1, rend: 0.17 };
+  function poidsCoude(r) {
+    if (r.coudeT == null) return 0;
+    const t = G.elapsed - r.coudeT, K = COUDE_IMAGE;
+    if (t < 0 || t > K.monte + K.tient + K.rend) return 0;
+    return t < K.monte ? t / K.monte : t < K.monte + K.tient ? 1 : 1 - (t - K.monte - K.tient) / K.rend;
+  }
+  /** Ce que le joueur voit d'un geste : un mot, une ligne dessous, une couleur (RaceHUD.tsx, hud-film.ts). */
+  function annoncerGeste(cle, sous, ton) {
+    G.geste = { cle, sous: sous || null, ton: ton || 'neutre' };
+    G.gesteFlash = 1.6;
+  }
+
+  // LE PELOTON A CHAQUE PAS (engine.ts) : la place de chacun en travers (Track.placerPeloton), le geste du coude
+  function placerPeloton(dt) {
+    const T = G.track, P = T && T.salle;
+    if (!P || !P.rabat) return;
+    T.placerPeloton(G.runners, dt);
+    for (const r of G.runners) {
+      if (!r) continue;
+      // le geste du coude, et ce qu'il reste d'un coup pris (pose : fallShape ; stepAI ne l'use pas)
+      r.coude = poidsCoude(r);
+      if (!r.isPlayer) {
+        if (r.fallAnim > 0) r.fallAnim = Math.max(0, r.fallAnim - dt / C.FALL_TIME);
+        if (r.colere > 0) r.colere = Math.max(0, r.colere - dt);
+      }
+    }
+  }
+
+  // LE JOUEUR DANS LE PELOTON DU 400 M EN SALLE : appelee a chaque pas (this), avant qu'il n'avance (Runner.stepPlayer)
   function bousculade(dt) {
     const T = G.track;
     if (!T || !T.salle || !T.salle.rabat || this.finished) return;
+    const P = T.salle, Z = P.coude;
+    // son chemin : loin de la corde, un virage est plus long (Track.trajetPeloton)
+    this.trajet = T.trajetPeloton(this.d, this.lane, this.travers);
+    if (!auPeloton(T, this)) return;
+    // ENFERME (Track.placerPeloton) : derriere le coureur de sa place, il ne court pas plus vite que lui
+    if (T.retenir(this, G.runners)) {
+      if (!this.ditEnferme) { this.ditEnferme = true; annoncerGeste('enferme', null, 'alerte'); }
+    } else if (!this.enferme) this.ditEnferme = false;
+    // LES COUPS DE COUDE DES ADVERSAIRES : PAR_S par seconde a qui reste a leur hauteur, trois fois plus en colere
+    this.repitCoude = Math.max(0, (this.repitCoude || 0) - dt);
+    if (this.repitCoude <= 0) {
+      for (const o of G.runners) {
+        if (o === this || !adversaireLocal(o) || o.finished || !T.auContact(this, o, Z)) continue;
+        if (Math.random() >= Z.parS * (o.colere > 0 ? 3 : 1) * dt) continue;
+        o.coudeT = G.elapsed; o.coudeCote = (o.travers || 0) < (this.travers || 0) ? -1 : 1;
+        this.v *= Z.recu;
+        this.fallAnim = Math.max(this.fallAnim, 0.35);
+        this.repitCoude = Z.repitRecu;
+        this.coupsRecus = (this.coupsRecus || 0) + 1;
+        G.shake = Math.max(G.shake || 0, 0.5);
+        Audio_.sfx('trip', { gain: 0.5, rate: 1.3 });
+        annoncerGeste('coude_recu', o.name, 'alerte');
+        break;
+      }
+    }
+    // LES ACCROCHAGES avec un adversaire en direct, un fantome ou un fictif : un contact subi, comme avant (CONTACT)
     this.repitContact = Math.max(0, (this.repitContact || 0) - dt);
     if (this.repitContact > 0) return;
     for (const o of G.runners) {
-      if (o === this || !T.auContact(this, o)) continue;
-      this.v *= T.salle.contact.garde;
+      if (o === this || adversaireLocal(o) || !T.auContact(this, o)) continue;
+      this.v *= P.contact.garde;
       this.fallAnim = Math.max(this.fallAnim, 0.35);
-      this.repitContact = T.salle.contact.repit;
+      this.repitContact = P.contact.repit;
       this.contacts = (this.contacts || 0) + 1;
       break;
     }
+  }
+
+  /**
+   * LE JOUEUR DONNE UN COUP DE COUDE (engine.ts, coupDeCoude) : au voisin le plus proche s'il est au coude a coude
+   * (piste-salle.js, COUDE), sinon dans le vide. Rend ce qui s'est passe : 'touche', 'vide', ou null (rien a faire ici).
+   */
+  function coupDeCoude() {
+    const T = G.track, p = G.player;
+    if (!T || !T.salle || !T.salle.rabat || !p || p.finished || G.state !== 'race' || !auPeloton(T, p)) return null;
+    const Z = T.salle.coude;
+    if ((p.repitDonne || 0) > G.elapsed) return null;
+    p.repitDonne = G.elapsed + Z.repit;
+    let cible = null;
+    for (const o of G.runners) {
+      if (o === p || !adversaireLocal(o) || o.finished || !T.auContact(p, o, Z)) continue;
+      if (!cible || Math.abs(o.d - p.d) < Math.abs(cible.d - p.d)) cible = o;
+    }
+    p.coudeT = G.elapsed;
+    if (!cible) {
+      p.coudeCote = 1;
+      p.v *= Z.vide;
+      annoncerGeste('coude_vide', null, 'neutre');
+      return 'vide';
+    }
+    // (la corde est a gauche : le voisin plus pres d'elle prend le coude gauche)
+    p.coudeCote = (cible.travers || 0) < (p.travers || 0) ? 1 : (cible.travers || 0) > (p.travers || 0) ? -1 : 1;
+    p.v *= Z.cout;
+    cible.retardVise = Math.max(cible.retardVise || 0, cible.retard || 0) + Z.retard;
+    cible.fallAnim = Math.max(cible.fallAnim || 0, 0.45);
+    cible.colere = Z.colere;
+    p.coupsDonnes = (p.coupsDonnes || 0) + 1;
+    G.shake = Math.max(G.shake || 0, 0.35);
+    Audio_.sfx('trip', { gain: 0.45, rate: 0.85 });
+    annoncerGeste('coude_donne', cible.name, 'bon');
+    return 'touche';
+  }
+
+  /**
+   * LE JOUEUR CHANGE DE COULOIR AU PELOTON DU 400 M EN SALLE (engine.ts) : 2, le couloir 2 — ni coups ni
+   * enfermement, plus de chemin dans les virages ; 1, retour au couloir 1. Rend true si la place change.
+   */
+  function changerCouloir(vers) {
+    const T = G.track, p = G.player;
+    if (!T || !T.salle || !T.salle.rabat || !p || p.finished || G.state !== 'race' || !auPeloton(T, p)) return false;
+    const dehors = vers === 2;
+    if (!!p.couloir2 === dehors) return false;
+    p.couloir2 = dehors;
+    annoncerGeste(dehors ? 'couloir_2' : 'couloir_1', null, 'neutre');
+    return true;
   }
   function reposer(r) {
     const R = G.race;
@@ -4368,7 +4619,7 @@ import { sponsorDeLaCourse } from './panneaux';
     G.elapsed = 0; G.acc = 0;
     G.recTrace = []; G.recNext = 0;
     G.reactShown = G.transShown = false;
-    G.reactFlash = G.transFlash = G.falseFlash = G.stumbleFlash = 0;
+    G.reactFlash = G.transFlash = G.falseFlash = G.stumbleFlash = G.gesteFlash = 0; G.geste = null;
     G.photo = null; G.liveFin = null;
     if (reArmer) reArmer();
     if (dansMs != null) liveDepart(dansMs, departA);
@@ -4454,7 +4705,8 @@ import { sponsorDeLaCourse } from './panneaux';
     // chasse, et la camera va dans SON couloir. Au couloir 3, une camera aussi
     // basse le laissait au bord de l'ecran, a moitie dehors.
     const lane = G.spectateur && G.suivi && G.pasMolosse ? G.suivi.lane : 3;
-    const T = G.track, s = vise ? vise.d : 0;
+    const relais = G.spectateur ? null : cibleRelais();
+    const T = G.track, s = relais != null ? relais : (vise ? vise.d : 0);
     // La camera vise la position exacte du joueur (pas de decalage vers
     // l'avant) : combine a l'origine centree, il reste au milieu de l'ecran.
     //
@@ -7727,6 +7979,22 @@ import { sponsorDeLaCourse } from './panneaux';
           tick(z0 + 20, e, 'rgba(255,206,0,0.45)', 1.4);
         }
       }
+      // LA MARQUE D'ELAN DE CHAQUE RECEVEUR, dans le couloir de l'equipe.
+      //
+      // Sur une vraie piste, le receveur colle un ruban au sol quelques
+      // metres avant sa place : quand le porteur y arrive, il part. Le jeu
+      // n'en montrait rien — on voyait les zones, pas QUAND s'elancer, ni ou
+      // les coequipiers prendraient le leur (l'auteur, 14/11/2026). Posees par
+      // startRelais (`marquesElan`), en cyan pour ne pas se confondre avec le
+      // jaune des zones, un trait epais barre d'un second plus fin.
+      const marques = G.relaisMarques || [];
+      if (marques.length && G.player) {
+        const e = Math.round(G.player.lane);
+        for (const m of marques) {
+          tick(m.d, e, 'rgba(70,230,255,0.95)', 4.2);
+          tick(m.d - 0.6, e, 'rgba(70,230,255,0.55)', 1.8);
+        }
+      }
     }
 
     // Numeros de couloir, peints juste avant chaque ligne de depart. Ce
@@ -9143,7 +9411,8 @@ import { sponsorDeLaCourse } from './panneaux';
     const all = (G.ghost && G.runners.indexOf(G.ghost.runner) < 0)
       ? G.runners.concat([G.ghost.runner]) : G.runners;
     for (const r of all) {
-      const p = T.posDemi(r.d, r.lane, r.demi || 0), g2 = ground(p[0], p[1]);
+      // (au peloton du 400 m en salle, sa place en travers : la corde, l'epaule ou le couloir 2 — placerPeloton)
+      const p = T.posDemi(r.d, r.lane, (r.demi || 0) + enPelotonDessin(T, r, r.d)), g2 = ground(p[0], p[1]);
       if (g2[0] > -200 && g2[0] < G.VW + 200 && g2[1] > -260 && g2[1] < G.VH + 200)
         vis.push([r, g2, p]);
     }
@@ -9447,7 +9716,7 @@ import { sponsorDeLaCourse } from './panneaux';
       const recul = Math.max(0.35, r.v * 0.055) * k;
       const d = dNow - recul;
       if (d <= 0) continue;
-      const q = T.posDemi(d, r.lane, r.demi || 0), g2 = ground(q[0], q[1]);
+      const q = T.posDemi(d, r.lane, (r.demi || 0) + enPelotonDessin(T, r, d)), g2 = ground(q[0], q[1]);
       ctx.globalAlpha = force * 0.30 * (4 - k) / 3;
       r.d = d; r.stride = strideNow - recul * (Math.PI / r.strideLength());
       drawRunner(ctx, r, g2[0], g2[1], depthOf(q[0], q[1]),
@@ -9492,12 +9761,14 @@ import { sponsorDeLaCourse } from './panneaux';
     startLevel, continuerCarriere, finishRace, ground, solid, depthOf, followCam, drawWorld, ui,
     majFerveur,
     theme, themeBrut, PEINTRE,
-    startOneShot, recommencer, startShotRace, nextShotRace, stepGhost, ghostDistAt,
+    startOneShot, recommencer, reprendreOneShot, startShotRace, nextShotRace, stepGhost, ghostDistAt,
     finirLesSaluts,
+    // le peloton du 400 m en salle : la place de chacun, les coups de coude, le couloir 2 (engine.ts)
+    placerPeloton, coupDeCoude, changerCouloir, annoncerGeste,
     armLive, liveDist, armLives, majLives, liveDistDe, liveFiniDe, photoPourHud,
     startLive, liveDepart,
     rappelChamp, stepRappel, finRappelChamp, suivreCoureurChamp,
-    armRelayeurs, porteurDuTemoin,
+    armRelayeurs, porteurDuTemoin, armerEquipesAdverses, temoinAdverse,
     // Le rejeu d'une course de championnat repeint les huit couloirs avec les
     // noms et les chronos d'une course qui a deja eu lieu : il lui faut la
     // meme couleur de repere que celle que la piste pose d'elle-meme, sans

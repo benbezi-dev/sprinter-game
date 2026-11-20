@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef } from 'react';
 import { useInputHandlers } from '@/hooks/use-inputs';
-import { useGameStore, SprinterApp, setStepCue, HAS_VIBRATION } from '@/game/engine';
+import { useGameStore, SprinterApp, setStepCue, HAS_VIBRATION, casser, coupDeCoude, changerCouloir, consigneDuGeste } from '@/game/engine';
 import { useChampDirect } from '@/game/champ-direct';
 import { APPEL_JOUEUR } from '@/game/canal';
 import { approcheHaies, ciseauHaies } from '@/game/haies-course.js';
@@ -91,6 +91,27 @@ const ZONE_JAUGE: Record<string, { fond: string; halo: string }> = {
   traine:   { fond: 'rgba(239,68,68,0.70)', halo: 'none' },
 };
 
+/* ---------------------------------------------------------------------------
+   LES GESTES QUI GLISSENT (l'auteur, 09/11)
+   ---------------------------------------------------------------------------
+   Le pouce reste sur son pave, comme pour la haie : il y appuie (une foulee de
+   plus), puis il glisse. Le sens se lit sur le corps du coureur, pas sur
+   l'ecran — la camera tourne avec la piste, et « l'exterieur » y monte parfois
+   vers le haut :
+     - LES DEUX POUCES VERS L'EXTERIEUR, ensemble : le casse sur la ligne
+       (engine.ts, casser) — « glisse les deux pouces vers l'exterieur pour
+       casser sur la ligne » ;
+     - UN SEUL, au peloton du 400 m en salle : le droit vers la droite, le
+       couloir 2 ; le gauche vers la gauche, le retour a la corde (on court a
+       gauche, la corde est a gauche) ;
+     - UN POUCE VERS LE HAUT : le coup de coude, du cote du voisin.
+   Deux pouces partis a moins de PAIRE_MS l'un de l'autre font le casse : un
+   pouce seul attend donc PAIRE_MS avant de changer de couloir.
+--------------------------------------------------------------------------- */
+const SEUIL_GLISSE = 24;   // px avant de lire un sens (un appui tremble de moins de 10 px)
+const PAIRE_MS = 180;
+type Glisse = { id: number; x: number; y: number; fait: boolean };
+
 export function TouchControls() {
   const { handleLeftTouch, handleRightTouch, handleTouchEnd } = useInputHandlers();
   const state = useGameStore(s => s.state);
@@ -109,9 +130,10 @@ export function TouchControls() {
   const liveOn = useGameStore(s => !!s.liveOn);
   const pavesCaches = useGameStore(() => !!(SprinterApp.G.sautEnCours && SprinterApp.G.pavesSaut
                                              && !SprinterApp.G.pavesSaut()));
+  // (hors saut : le geste a faire — casse, coup de coude, couloir 2 — ou la consigne ordinaire ; engine.ts)
   const consigne = useGameStore((): string | null => SprinterApp.G.sautEnCours
     ? (SprinterApp.G.consigneSaut ? SprinterApp.G.consigneSaut() : null)
-    : 'alternate');
+    : (consigneDuGeste(!!SprinterApp.G.auClavier) || 'alternate'));
 
   const leftRef = useRef<HTMLDivElement | null>(null);
   const rightRef = useRef<HTMLDivElement | null>(null);
@@ -121,6 +143,35 @@ export function TouchControls() {
   const edgeTimers = useRef<{ left: number; right: number }>({ left: 0, right: 0 });
   const jaugeL = useRef<HTMLDivElement | null>(null);
   const jaugeR = useRef<HTMLDivElement | null>(null);
+  // LES GESTES QUI GLISSENT (voir plus haut) : le pouce pose de chaque cote, et l'instant ou chacun est parti vers
+  // l'exterieur
+  const glisse = useRef<{ left: Glisse | null; right: Glisse | null }>({ left: null, right: null });
+  const ecarte = useRef({ left: 0, right: 0, minuteur: 0 });
+  useEffect(() => () => clearTimeout(ecarte.current.minuteur), []);
+  const poser = useCallback((side: 'left' | 'right', e: React.PointerEvent<HTMLDivElement>) => {
+    glisse.current[side] = { id: e.pointerId, x: e.clientX, y: e.clientY, fait: false };
+    // (le pouce qui glisse sort parfois de son pave : il en garde les evenements)
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* deja lache */ }
+  }, []);
+  const ecarter = useCallback((side: 'left' | 'right') => {
+    const E = ecarte.current, now = performance.now(), autre = side === 'left' ? 'right' : 'left';
+    clearTimeout(E.minuteur);
+    if (now - E[autre] < PAIRE_MS) { E.left = E.right = 0; casser(); return; }
+    E[side] = now;
+    E.minuteur = window.setTimeout(() => { E[side] = 0; changerCouloir(side === 'right' ? 2 : 1); }, PAIRE_MS);
+  }, []);
+  const glisser = useCallback((side: 'left' | 'right', e: React.PointerEvent<HTMLDivElement>) => {
+    const g = glisse.current[side];
+    if (!g || g.fait || g.id !== e.pointerId) return;
+    const dx = e.clientX - g.x, dy = e.clientY - g.y;
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SEUIL_GLISSE) return;
+    g.fait = true;
+    if (-dy > Math.abs(dx) * 1.2) { coupDeCoude(); return; }
+    if (Math.abs(dx) > Math.abs(dy) * 1.2 && (side === 'left' ? dx < 0 : dx > 0)) ecarter(side);
+  }, [ecarter]);
+  const lever = useCallback((side: 'left' | 'right', e: React.PointerEvent<HTMLDivElement>) => {
+    if (glisse.current[side]?.id === e.pointerId) glisse.current[side] = null;
+  }, []);
 
   useEffect(() => () => {
     clearTimeout(timers.current.left);
@@ -329,9 +380,10 @@ export function TouchControls() {
     <div className="absolute bottom-0 w-full portrait:h-[20vh] landscape:h-[17vh] min-h-[70px] max-h-[250px] flex z-50 pointer-events-none">
       <div
         className={hitClass}
-        onPointerDown={(e) => { e.preventDefault(); light('left'); handleLeftTouch(); }}
-        onPointerUp={() => handleTouchEnd('left')}
-        onPointerCancel={() => handleTouchEnd('left')}
+        onPointerDown={(e) => { e.preventDefault(); light('left'); poser('left', e); handleLeftTouch(); }}
+        onPointerMove={(e) => glisser('left', e)}
+        onPointerUp={(e) => { lever('left', e); handleTouchEnd('left'); }}
+        onPointerCancel={(e) => { lever('left', e); handleTouchEnd('left'); }}
       >
         <div
           ref={leftRef}
@@ -351,9 +403,10 @@ export function TouchControls() {
 
       <div
         className={hitClass}
-        onPointerDown={(e) => { e.preventDefault(); light('right'); handleRightTouch(); }}
-        onPointerUp={() => handleTouchEnd('right')}
-        onPointerCancel={() => handleTouchEnd('right')}
+        onPointerDown={(e) => { e.preventDefault(); light('right'); poser('right', e); handleRightTouch(); }}
+        onPointerMove={(e) => glisser('right', e)}
+        onPointerUp={(e) => { lever('right', e); handleTouchEnd('right'); }}
+        onPointerCancel={(e) => { lever('right', e); handleTouchEnd('right'); }}
       >
         <div
           ref={rightRef}

@@ -38,7 +38,7 @@ export function jouerLeFauxDepart(dt: number) {
   // LA DECEPTION : debout, les mains montent sur la tete, la tete basse qui dodeline
   const w = doux((t - 0.9) / 0.6), m = doux((t - MAINS0) / (MAINS1 - MAINS0));
   const bal = Math.sin(t * 2.1);
-  const repos: [number, number] = [0.06, 0.28], tete: [number, number] = [2.55, 4.45];
+  const repos: [number, number] = [0.06, 0.28], tete: [number, number] = [2.3, 4.25];
   const bras: [number, number] = [mel(repos[0], tete[0], m), mel(repos[1], tete[1], m)];
   r.posture = {
     w,
@@ -47,8 +47,11 @@ export function jouerLeFauxDepart(dt: number) {
     buste: mel(0.02, -0.1, m),
     leve: -0.01 * Math.abs(bal),
     tete: mel(0.05, -0.38 + 0.07 * Math.sin(t * 1.3), m),
-    // les coudes s'ouvrent (loin de l'axe), les avant-bras reviennent sur le crane (vers l'axe)
-    roule: [mel(0, -0.45, m), mel(0, 0.7, m)],
+    // les coudes s'ouvrent (loin de l'axe), les avant-bras reviennent sur le crane (vers l'axe).
+    // Les doigts doivent toucher le crane (l'auteur, 9/11) : avec [2.55, 4.45] / [-0.45, 0.7] les
+    // mains restaient a 21 cm de l'axe de la tete. Meme posture, mains rapprochees : poignets a
+    // 13,6 cm de l'axe, doigts a 7,6 cm (contre le crane), mesure sur les os du modele 3D.
+    roule: [mel(0, -0.3, m), mel(0, 0.9, m)],
   };
 }
 

@@ -278,6 +278,7 @@ export function ChallengePanel() {
       {RELAIS_OUVERT && jeu === 'sprinter' && <RelaisPanel />}
 
       <Repliable
+        pleinEcran
         titre={N.t('challenge_code')}
         sous={N.t('versus_desc')}
         icone={<Swords className="w-4 h-4" />}

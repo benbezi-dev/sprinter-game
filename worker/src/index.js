@@ -17,6 +17,7 @@ export { Presence } from './presence.js';
 import { sonner } from './boite.js';
 import {
   BAREME as PIECES, COUTS_CONTINUE, PLAFOND_DUELS_PAR_JOUR,
+  GAINS_CARRIERE, PLAFOND_CARRIERE_PAR_JOUR, gainDeLEtape, doublerCarriere,
   crediter as crediterPieces, soldeDe, acheterContinue, piecesOuvertes,
 } from './pieces.js';
 import { identifiantsTurn } from './turn.js';
@@ -34,6 +35,8 @@ import {
   poserMotDeCourse, voixDuMot, poserBulle, moderer, moderation, salleNoireOuverte,
 } from './championnats.js';
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
+import { fenetre as fenetreNoel, tableau as tableauNoel, fantome as fantomeNoel,
+         noterCourse as noterCourseNoel, lancer as lancerNoel } from './noel.js';
 import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
          noterCourse as noterCourseMarques, changerEpreuve as changerEpreuveMarques,
          fantome as fantomeMarques, EPREUVES as EPREUVES_MARQUES } from './marques.js';
@@ -80,6 +83,10 @@ import {
   publicationsDuCompte,
 } from './instagram-envoi.js';
 import {
+  programmer, listerProgrammes, annuler as annulerProgramme, relancer as relancerProgramme,
+  publierLesProgrammes,
+} from './instagram-programme.js';
+import {
   inviterEnDirect, mesInvitationsDirectes, trancherInvitation,
 } from './direct-invitations.js';
 import {
@@ -91,7 +98,7 @@ import { empreinteIp, sousLimite, quotaAtteint, noterCodeRate, purgerLimites } f
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
 } from './plancher.js';
-import { noterVoix, tableauEpreuves } from './duel-epreuves.js';
+import { noterVoix, tableauEpreuves, fantomeAAffronter, noterCourseEpreuves } from './duel-epreuves.js';
 import { etapeConnue, noterEtape, etapeHalloweenPlausible, noterAppareil, lireTunnel, lireHalloween } from './tunnel.js';
 import { PROFIL_MAX_OCTETS, donneesValides, appareilRelie, lireProfil, ecrireProfil } from './profil.js';
 import {
@@ -506,7 +513,7 @@ async function ensureChallengeTarget(db) {
  * La boite de reception lit les deux. Un seul code pour tous : chacun court
  * contre le meme fantome, et le compteur des defis lances ne compte qu'un defi.
  */
-const MAX_CIBLES_DEFI = 20;
+const MAX_CIBLES_DEFI = 50;
 const ciblesReady = new WeakSet();
 async function ensureChallengeCibles(db) {
   if (ciblesReady.has(db)) return;
@@ -1171,6 +1178,17 @@ export default {
         .catch(e => console.log('objectifs KO', String(e && e.message || e)))
     );
 
+    // Les publications Instagram validees dans l'atelier et dont l'heure est
+    // venue : voir instagram-programme.js. Sur la base de production seule —
+    // le canal de test ne publie rien sur le compte du jeu.
+    ctx.waitUntil(
+      publierLesProgrammes(env.DB, outilsInstagram(env), quand)
+        .then(b => {
+          if (b.publiees.length || b.echecs.length) console.log('instagram programmees', JSON.stringify(b));
+        })
+        .catch(e => console.log('instagram programmees KO', String(e && e.message || e)))
+    );
+
     // Les compteurs anti-abus dont la fenetre est passee : voir limites.js.
     // Sur la base de production seule — le canal de test n'est pas compte.
     ctx.waitUntil(
@@ -1253,6 +1271,20 @@ export default {
  * qui s'appelle elle-meme par `this.servir` marche en developpement et lache
  * ailleurs, ce qui est la pire des deux options.
  */
+/** Les appels a Meta et au depot dont la tache planifiee a besoin. Rassembles
+    ici pour que instagram-programme.js ne connaisse ni D1 ni le jeton. */
+function outilsInstagram(env) {
+  return {
+    pret: () => envoiPret(env),
+    deposer: jpeg => deposerImage(env.DB, jpeg),
+    oublier: id => oublierImage(env.DB, id),
+    publierImage: o => publierInstagram(env, o),
+    etatConteneur: c => etatConteneur(env, c),
+    publierConteneur: c => publierConteneur(env, c),
+    marquer: id => marquerPublie(env.DB, id, ['instagram']),
+  };
+}
+
 async function envelopper(request, env, ctx) {
   const porteur = {};
   let reponse;
@@ -1648,7 +1680,40 @@ async function servir(request, env, ctx, porteur) {
         bareme: PIECES,
         couts_continue: COUTS_CONTINUE,
         plafond_duels_par_jour: PLAFOND_DUELS_PAR_JOUR,
+        gains_carriere: GAINS_CARRIERE,
+        plafond_carriere_par_jour: PLAFOND_CARRIERE_PAR_JOUR,
       });
+    }
+
+    // LA CARRIERE : une etape gagnee (/pieces/etape), puis le doublement par
+    // la pub du sacre (/pieces/doubler). Le montant se lit ici, jamais dans la
+    // requete. Il faut un nom reserve ET cet appareil lie a lui (`crediter`
+    // le verifie quand on lui passe deviceId) ; sinon rien n'est credite.
+    if ((url.pathname === '/pieces/etape' || url.pathname === '/pieces/doubler')
+        && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+      const nom = cleanName(body?.nom || '').trim();
+      const cle = nom.toLowerCase();
+      const deviceId = body?.device_id;
+      const parcours = String(body?.parcours || '');
+      const course = String(body?.course || '');
+      if (!cle) return json({ error: 'nom requis' }, 400);
+      if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+      if (!/^[a-zA-Z0-9-]{8,64}$/.test(parcours)) return json({ error: 'parcours invalide' }, 400);
+      if (!/^[a-zA-Z0-9_-]{0,24}$/.test(course)) return json({ error: 'course invalide' }, 400);
+      await ensurePlayerTables(env.DB);
+      const opts = { deviceId, test: canal.test };
+      if (url.pathname === '/pieces/doubler') {
+        const r = await doublerCarriere(env.DB, cle, parcours, course, opts);
+        return json({ ...r, solde: await soldeDe(env.DB, cle) });
+      }
+      const etape = Number(body?.etape);
+      const gain = gainDeLEtape(etape);
+      if (gain == null) return json({ error: 'etape invalide' }, 400);
+      const credite = await crediterPieces(env.DB, cle, 'carriere',
+        `${parcours}:${course}:${etape}`, gain, opts);
+      return json({ ok: true, credite, solde: await soldeDe(env.DB, cle) });
     }
 
     if (url.pathname === '/pieces/continue' && request.method === 'POST') {
@@ -2706,8 +2771,39 @@ async function servir(request, env, ctx, porteur) {
         const cible = new URL(request.url);
         cible.pathname = tail === 'etat' ? '/etat' : '/ws';
         cible.searchParams.set('team', code);
+        // LES DRAPEAUX DE LA SALLE SONT POSES ICI, JAMAIS PAR LE CLIENT. Recopies
+        // tels quels, `salon=1` faisait d'une salle d'equipe un salon (plus de
+        // controle d'appartenance, plus d'inscription au classement), et
+        // `canal=test` l'envoyait ecrire dans la base de test.
+        for (const k of ['salon', 'relais', 'canal']) cible.searchParams.delete(k);
         if (canal.test) cible.searchParams.set('canal', 'test');
         const id = env.SALLES_RELAIS.idFromName((canal.test ? 'RT-' : 'R-') + code);
+        const rep = await env.SALLES_RELAIS.get(id).fetch(new Request(cible, request));
+        if (rep.status === 101) return rep;
+        return cors(new Response(rep.body, { status: rep.status,
+          headers: { 'Content-Type': 'application/json' } }));
+      }
+
+      // LE SALON DE RELAIS : un code, et chacun choisit sa place. Les places
+      // que personne ne prend sont courues par des relayeurs fictifs
+      // (relais-fictifs.js) : on court a deux avec deux fictifs, a trois avec
+      // un. Ni equipe a monter ni classement : c'est le relais entre amis.
+      if (sous === 'salon' && request.method === 'POST') {
+        return json({ id: makeCode() });
+      }
+      if (sous.startsWith('salon/')) {
+        const reste = sous.slice('salon/'.length);
+        const [brut, tail] = reste.split('/');
+        const code = (brut || '').toUpperCase();
+        if (!/^[A-Z0-9]{4,10}$/.test(code)) return json({ error: 'code invalide' }, 400);
+        if (!env.SALLES_RELAIS) return json({ error: 'relais indisponible' }, 503);
+        const cible = new URL(request.url);
+        cible.pathname = tail === 'etat' ? '/etat' : '/ws';
+        cible.searchParams.set('team', code);
+        cible.searchParams.delete('canal');
+        cible.searchParams.set('salon', '1');
+        if (canal.test) cible.searchParams.set('canal', 'test');
+        const id = env.SALLES_RELAIS.idFromName((canal.test ? 'RST-' : 'RS-') + code);
         const rep = await env.SALLES_RELAIS.get(id).fetch(new Request(cible, request));
         if (rep.status === 101) return rep;
         return cors(new Response(rep.body, { status: rep.status,
@@ -2730,6 +2826,7 @@ async function servir(request, env, ctx, porteur) {
         const cible = new URL(request.url);
         cible.pathname = tail === 'etat' ? '/etat' : '/ws';
         cible.searchParams.set('conf', code);
+        cible.searchParams.delete('canal');   // le canal vient du worker, jamais du client
         if (canal.test) cible.searchParams.set('canal', 'test');
         const id = env.CONFRONTATIONS.idFromName((canal.test ? 'CT-' : 'C-') + code);
         const rep = await env.CONFRONTATIONS.get(id).fetch(new Request(cible, request));
@@ -2981,7 +3078,10 @@ async function servir(request, env, ctx, porteur) {
       cible.pathname = sous === 'etat' ? '/etat' : '/ws';
       cible.searchParams.set('code', code);
       // Le canal voyage jusqu'a la salle : c'est elle qui ecrit le resultat du
-      // duel, et elle doit l'ecrire dans la bonne base.
+      // duel, et elle doit l'ecrire dans la bonne base. Celui du client est
+      // retire d'abord : `?canal=test` envoyait sinon le resultat — celui de
+      // l'adversaire compris — dans la base de test, hors du classement reel.
+      cible.searchParams.delete('canal');
       if (canal.test) cible.searchParams.set('canal', 'test');
 
       // Deux salles portant le meme code, une de test et une de production, ne
@@ -3113,6 +3213,59 @@ async function servir(request, env, ctx, porteur) {
        selecteur restait vide (constat du 23 septembre 2026). Les applis
        publiees appellent ce chemin-ci : on ne le renomme pas, on y ajoute la
        liste. Elle ne depend pas de la base, et nommer les pays n'engage rien. */
+    /* ---------------------------------------------- Noel 2026
+       Boules de neige et etoile du sapin : voir noel.js. Quatre routes. */
+    if (url.pathname.startsWith('/noel')) {
+      const f = fenetreNoel(canal.test);
+      if (!f.ouvert) return json({ error: 'noel ferme' }, 404);
+      if (url.pathname === '/noel' && request.method === 'GET') {
+        const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+        const t = await tableauNoel(env.DB, { nameKey: nom && nom !== 'anonyme' ? nom : null });
+        return json({ ...t, debut: f.debut, fin: f.fin });
+      }
+      if (url.pathname === '/noel/fantome' && request.method === 'GET') {
+        const cible = (url.searchParams.get('cible') || '').trim().toLowerCase();
+        if (!cible) return json({ error: 'cible manquante' }, 400);
+        const r = await fantomeNoel(env.DB, { cibleKey: cible });
+        return json(r.corps, r.status);
+      }
+      if ((url.pathname === '/noel/course' || url.pathname === '/noel/lancer') && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        const { device_id } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const name = cleanName(body.name);
+        const key = name.trim().toLowerCase();
+        if (key === 'anonyme') return json({ error: 'choisis d abord ton nom' }, 409);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: url.pathname, nameKey: key, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        const cible = typeof body.cible === 'string' ? body.cible.trim().toLowerCase().slice(0, 40) || null : null;
+        let r;
+        if (url.pathname === '/noel/lancer') {
+          r = await lancerNoel(env.DB, { nameKey: key, name, cibleKey: cible, n: body.n });
+        } else {
+          const timeMs = Math.round(Number(body.time_ms));
+          if (!Number.isFinite(timeMs) || timeMs < MIN_TIME_MS || timeMs > MAX_TIME_MS) {
+            return json({ error: 'chrono invalide' }, 400);
+          }
+          r = await noterCourseNoel(env.DB, {
+            nameKey: key, name, epreuve: String(body.race_key || ''), timeMs, trace: body.trace, cibleKey: cible,
+          });
+        }
+        // La victime d'un vol d'etoile ou d'une volee de boules est prevenue.
+        if (r.sonner) {
+          const s = r.sonner;
+          ctx.waitUntil((async () => {
+            for (const appareil of await appareilsDe(env.DB, [s.pour])) await sonnerEtPush(env, appareil, s.genre, canal.test);
+          })().catch(() => {}));
+        }
+        return json(r.corps, r.status);
+      }
+      return json({ error: 'route inconnue' }, 404);
+    }
+
     /* ---------------------------------------------- le duel des marques
        Team adidas contre Team Nike : voir marques.js. Cinq routes, toutes
        muettes (404) tant que le duel n'est pas ouvert sur ce canal. */
@@ -3259,6 +3412,40 @@ async function servir(request, env, ctx, porteur) {
       return json(await tableauEpreuves(env.DB, {
         test: canal.test, deviceId: isValidDeviceId(deviceId) ? deviceId : null,
       }));
+    }
+
+    // Les fantomes du duel des epreuves : celui a battre, et la course qui juge.
+    if (url.pathname === '/duel-epreuves/fantome' && request.method === 'GET') {
+      const key = cleanName(url.searchParams.get('name') || '').trim().toLowerCase();
+      const r = await fantomeAAffronter(env.DB, {
+        test: canal.test, nameKey: key && key !== 'anonyme' ? key : null,
+        epreuve: url.searchParams.get('epreuve') || '',
+        cibleKey: (url.searchParams.get('cible') || '').trim().toLowerCase().slice(0, 40) || null,
+      });
+      return json(r.corps, r.status);
+    }
+    if (url.pathname === '/duel-epreuves/course' && request.method === 'POST') {
+      let body;
+      try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+      const { device_id } = body || {};
+      if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+      const name = cleanName(body.name);
+      const key = name.trim().toLowerCase();
+      if (key === 'anonyme') return json({ error: 'choisis d abord ton nom' }, 409);
+      if (!(await peutUtiliser(env.DB, key, device_id))) {
+        ctx.waitUntil(noterRefus(env.DB, { route: url.pathname, nameKey: key, deviceId: device_id }));
+        return json({ error: 'ce nom ne t appartient pas' }, 403);
+      }
+      const timeMs = Math.round(Number(body.time_ms));
+      if (!Number.isFinite(timeMs) || timeMs < MIN_TIME_MS || timeMs > MAX_TIME_MS) {
+        return json({ error: 'chrono invalide' }, 400);
+      }
+      const cible = typeof body.cible === 'string' ? body.cible.trim().toLowerCase().slice(0, 40) || null : null;
+      const r = await noterCourseEpreuves(env.DB, {
+        test: canal.test, deviceId: device_id, nameKey: key, name,
+        epreuve: String(body.race_key || ''), timeMs, trace: body.trace, cibleKey: cible,
+      });
+      return json(r.corps, r.status);
     }
 
     if (url.pathname === '/nations' && request.method === 'GET') {
@@ -4080,7 +4267,14 @@ async function servir(request, env, ctx, porteur) {
       let body;
       try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
       const r = await trancherRecuperation(env.DB, (body || {}).id, !!(body || {}).accepte);
-      return r.erreur ? json({ error: r.erreur }, 404) : json(r);
+      if (r.erreur) return json({ error: r.erreur }, 404);
+      // Le joueur ne guette pas la file : on sonne l'appareil qui a fait la
+      // demande. Sans abonnement push, il l'apprendra a la prochaine ouverture
+      // du jeu (RecuperationRendue.tsx). Un refus ne sonne pas.
+      if (r.etat === 'accepte') {
+        ctx.waitUntil(notifierAppareil(env.DB, r.device_id, 'recuperation', env));
+      }
+      return json({ ok: true, id: r.id, etat: r.etat });
     }
 
     // Lier son compte Instagram a son nom de joueur.
@@ -4526,7 +4720,9 @@ async function servir(request, env, ctx, porteur) {
       // qui ne sait encore publier que des images, et l'echec viendrait apres
       // la confirmation — le pire moment.
       if (quoi === 'envoi' && request.method === 'GET') {
-        return json({ pret: envoiPret(env), formats: FORMATS });
+        // `programmer` : ce Worker sait aussi envoyer a une heure choisie.
+        // L'atelier le lit avant d'afficher le champ « Quand ».
+        return json({ pret: envoiPret(env), formats: FORMATS, programmer: true });
       }
 
       // Les deux secrets, decrits sans etre montres : leur forme (longueur,
@@ -4646,6 +4842,42 @@ async function servir(request, env, ctx, porteur) {
         const r = await publierConteneur(env, (body || {}).creation);
         if (!r.ok) return json({ error: r.erreur, etape: r.etape, http: r.http }, statutDe(r));
         return json({ ok: true, publication: r.publication, lien: r.lien });
+      }
+
+      // Programmer une publication validee : voir instagram-programme.js.
+      // Image : `image` (JPEG base64). Video : `creation`, le conteneur que
+      // l'atelier vient de charger par video/ouvrir puis video/charger.
+      if (quoi === 'programmer' && request.method === 'POST') {
+        if (!envoiPret(env)) {
+          return json({ error: 'envoi non configure',
+                        detail: 'poser IG_JETON et IG_COMPTE avec wrangler secret put' }, 409);
+        }
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const b = body || {};
+        const r = await programmer(env.DB, {
+          format: b.format, quand: b.quand, legende: b.legende, image: b.image,
+          creation: b.creation, apercu: b.apercu, titre: b.titre, moment: b.id,
+          origine: url.origin,
+        });
+        if (!r.ok) return json({ error: r.erreur }, 400);
+        return json({ ok: true, id: r.id });
+      }
+
+      if (quoi === 'programmes' && request.method === 'GET') {
+        return json({ programmes: await listerProgrammes(env.DB, { limite: url.searchParams.get('limite') }) });
+      }
+
+      if (quoi === 'programmes/annuler' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        return (await annulerProgramme(env.DB, (body || {}).id))
+          ? json({ ok: true }) : json({ error: 'deja partie ou introuvable' }, 409);
+      }
+
+      if (quoi === 'programmes/relancer' && request.method === 'POST') {
+        let body; try { body = await request.json(); } catch { body = {}; }
+        const r = await relancerProgramme(env.DB, (body || {}).id, (body || {}).quand ?? null);
+        return r.ok ? json({ ok: true }) : json({ error: r.erreur }, 409);
       }
 
       if (quoi === 'ecarter' && request.method === 'POST') {

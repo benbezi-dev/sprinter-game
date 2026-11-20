@@ -67,6 +67,14 @@
     <script>
       (function () {
         try {
+          var test = new URLSearchParams(location.search).get('mesure') === 'test';
+          if (test) sessionStorage.setItem('sprinter_mesure_test', '1');
+          if ('__SPRINTER_PAGE_TEST__' === 'oui' || test || sessionStorage.getItem('sprinter_mesure_test') === '1'
+              || navigator.webdriver) return;
+          var agent = navigator.userAgent || '';
+          // Même détection qu'en jeu, avant de charger le moteur.
+          if (/\bbot\b|bot\/|crawl|spider|slurp|headless|lighthouse|pagespeed|facebookexternalhit|telegrambot|twitterbot|linkedinbot|discordbot|slackbot|skypeuri|preview|python-requests|curl\/|wget\//i.test(agent)
+              || /^WhatsApp\//i.test(agent)) return;
           var MEMO = 'sprinter_tunnel', CLE = 'sprinter_device_id';
           var lire = function () { try { return JSON.parse(localStorage.getItem(MEMO) || '[]'); } catch (e) { return []; } };
           if (lire().indexOf('page') >= 0) return;

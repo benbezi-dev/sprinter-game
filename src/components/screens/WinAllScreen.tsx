@@ -11,6 +11,8 @@ import { LeaderboardScreen } from './LeaderboardScreen';
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
 import { TenirDansLEcran } from '@/components/TenirDansLEcran';
+import { GainsCarriere } from './GainsCarriere';
+import { MascotteFin } from '@/components/MascotteFin';
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 
@@ -108,7 +110,7 @@ export function WinAllScreen() {
   return (
     <TenirDansLEcran className="w-full h-full flex flex-col pointer-events-auto bg-black/90 backdrop-blur-md overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] overflow-x-hidden">
         <motion.div {...SURGISSEMENT} className="flex flex-col items-center max-w-md w-full py-6 md:py-8 gap-4 md:gap-6">
-          
+          <MascotteFin />
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-4xl sm:text-5xl md:text-7xl font-black font-display text-primary tracking-tighter uppercase drop-shadow-[0_0_30px_rgb(var(--primaire-rgb)/0.4)]">
               {N.t('run_done')}
@@ -159,6 +161,9 @@ export function WinAllScreen() {
               {runRank === 1 ? N.t('best_run') : runRank <= 3 ? N.t('top3_runs') : N.t('top10_runs')}
             </motion.div>
           )}
+
+          {/* Les pieces de la carriere, et leur doublement par une pub */}
+          <GainsCarriere />
 
           {/* Classement mondial TOP 500 */}
           <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-3 sm:p-4 md:p-6 shadow-2xl flex flex-col gap-2 md:gap-3">

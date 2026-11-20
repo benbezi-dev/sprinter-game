@@ -85,6 +85,13 @@ function nomRelie(): string {
   return n && n.toLowerCase() !== 'anonyme' && savedCode() ? n : '';
 }
 
+const CLE_SAUVE = 'sprinter_profil_sauve';
+/** L'heure de la derniere sauvegarde reussie sur le serveur (ms), 0 si aucune. */
+export function derniereSauvegarde(): number {
+  try { return Number(localStorage.getItem(CLE_SAUVE)) || 0; } catch { return 0; }
+}
+function noterSauvegarde() { try { localStorage.setItem(CLE_SAUVE, String(Date.now())); } catch { /* sans memoire */ } }
+
 let enCours: Promise<void> | null = null;
 
 /**
@@ -101,7 +108,7 @@ export function envoyerProfil(keepalive = false): Promise<void> {
       const r = await poster('/profil/ecrire',
         { device_id: getDeviceId(), name: nom, rev: lireRev(), donnees }, keepalive);
       if (!r || r.non_relie) return;
-      if (r.ok) { poserRev(r.rev); return; }
+      if (r.ok) { poserRev(r.rev); noterSauvegarde(); return; }
       if (!r.conflit) return;
       appliquer(donnees, fusionnerProfils(donnees, r.donnees || {}));
       poserRev(r.rev);

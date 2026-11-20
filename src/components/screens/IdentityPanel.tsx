@@ -5,9 +5,7 @@ import { getSavedName, saveName } from '@/game/leaderboard';
 import { claimName, linkDevice, savedCode } from '@/game/identity';
 import { LiaisonQR } from './LiaisonQR';
 import { Recuperation } from './Recuperation';
-import { RecordChip } from './RecordPerso';
 import { lireRythme, poserRythme, type Rythme } from '@/game/objectif';
-import { useJeu, epreuvesDuJeu } from '@/game/jeux';
 
 /**
  * Identite du joueur : son nom, le code qui le lui reserve, et de quoi relier
@@ -16,8 +14,6 @@ import { useJeu, epreuvesDuJeu } from '@/game/jeux';
  */
 export function IdentityPanel() {
   const { N } = SprinterApp;
-  // Les records du jeu courant : la fiche de Hurdlers montre ses haies.
-  const jeu = useJeu();
   const [nom, setNom] = useState(getSavedName());
   const [code, setCode] = useState(savedCode());
   const [voirCode, setVoirCode] = useState(false);
@@ -91,15 +87,7 @@ export function IdentityPanel() {
         </h3>
       </div>
 
-      {/* Les trois records, la ou le joueur vient deja voir qui il est.
-          Chaque pastille se tait tant qu'il n'a pas couru l'epreuve : trois
-          lignes de tirets ne disent rien de plus qu'une absence. */}
-      <div className="flex flex-wrap gap-1.5">
-        {epreuvesDuJeu(jeu).map(r => (
-          <RecordChip key={r} race={r} compact avecEpreuve />
-        ))}
-      </div>
-
+      {/* Les records ont quitte ce panneau (09/11) : ils vivent dans le Profil. */}
       {rythme && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[9px] font-bold tracking-widest text-muted-foreground uppercase">

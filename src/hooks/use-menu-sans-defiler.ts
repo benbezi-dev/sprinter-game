@@ -50,37 +50,68 @@ export function useMenuSansDefiler(plancher = 0.5) {
       return parent.clientHeight - gap - hTitre - minScene + depasse;
     };
 
+    /**
+     * CE QUI DECIDE DU ZOOM, ET RIEN D'AUTRE (l'auteur, 10/11/2026, video a l'appui : « l'ecran
+     * bouge, ca donne mal a la tete » — encore apres le premier correctif du matin).
+     *
+     * La video montrait le menu deplace de 1 a 4 pixels une image sur deux, quarante-cinq fois par
+     * seconde : le rythme exact d'une boucle « on ecrit le zoom -> l'observateur de taille le voit
+     * -> on remesure a l'image suivante -> on ecrit un zoom un peu different ». Le calcul d'avant
+     * dependait de la valeur deja en place (raffinage, resserrage d'un cran, regle des 2 %) : il ne
+     * retombait pas toujours sur le meme chiffre, et chaque ecart relancait le tour suivant.
+     *
+     * Desormais le zoom ne depend que de deux grandeurs que le zoom lui-meme ne peut pas changer :
+     * la place offerte au menu (`place`, prise sur la colonne, le titre et la scene) et la hauteur
+     * du menu NON reduit, a largeur fixe. Tant qu'elles n'ont pas bouge de 2 px, on n'ecrit rien :
+     * nos propres ecritures ne peuvent donc plus relancer quoi que ce soit. Quand elles changent
+     * vraiment (un bandeau arrive, l'ecran tourne), le zoom est recalcule de zero, toujours de la
+     * meme facon, au centieme pres.
+     */
+    let vu: { dispo: number; besoin: number; largeur: number } | null = null;
+
     const mesurer = () => {
       const c = cadre.current, d = contenu.current;
       if (!vivant || !c || !d) return;
       // on tape dans un champ : le clavier rogne la hauteur, on ne touche a rien
       if (document.activeElement instanceof HTMLInputElement && d.contains(document.activeElement)) return;
-      // La mesure se fait sans reduction : sinon le calcul tourne en rond.
+
+      const dispo = place(c) - 2;   // deux pixels de marge : un arrondi ne doit pas faire defiler
+      const largeur = c.clientWidth;
+      // La hauteur du menu non reduit. Retirer puis remettre le zoom dans la meme tache ne se voit
+      // pas a l'ecran (aucune image n'est dessinee entre les deux) et, la valeur remise etant la
+      // meme, ne change aucune taille : l'observateur ne se reveille pas pour si peu.
+      const enPlace = d.style.zoom;
       d.style.zoom = '';
       const besoin = d.offsetHeight;
-      const dispo = place(c) - 2;   // deux pixels de marge : un arrondi ne doit pas faire defiler
+
+      const pareil = vu
+        && Math.abs(vu.dispo - dispo) < 2
+        && Math.abs(vu.besoin - besoin) < 2
+        && Math.abs(vu.largeur - largeur) < 2;
+      if (pareil) { d.style.zoom = enPlace; return; }
+      vu = { dispo, besoin, largeur };
+
       let e = 1;
       if (dispo > 0 && besoin > dispo) {
-        const r = Math.floor((dispo / besoin) * 1000) / 1000;
-        // sous le plancher, on reduit quand meme jusqu'au plancher : le moins de defilement possible
-        e = Math.max(r, plancher);
-      }
-      if (e < 1) {
-        d.style.zoom = String(e);
-        // reduit, le texte occupe moins de lignes dans la meme largeur : la colonne raccourcit
-        // plus que prevu, on peut souvent reduire un peu moins
-        const h = d.getBoundingClientRect().height;
-        if (h > 0 && h < dispo - 4) {
-          const e2 = Math.min(1, Math.floor(e * (dispo / h) * 1000) / 1000);
-          d.style.zoom = e2 < 1 ? String(e2) : '';
-          e = e2;
+        // Reduit, le texte occupe moins de lignes (la colonne garde sa largeur, son contenu
+        // rapetisse) : la hauteur vue n'est pas proportionnelle au zoom. On cherche donc, par
+        // dichotomie et au centieme, le plus grand zoom qui tient. Plus le zoom est petit, plus le
+        // menu vu est court : la recherche converge, et toujours vers la meme valeur.
+        const tient = (z: number) => {
+          d.style.zoom = String(z / 100);
+          return d.getBoundingClientRect().height <= dispo;
+        };
+        const bas = Math.ceil(plancher * 100);
+        let lo = bas, hi = 99;
+        if (!tient(lo)) hi = lo;            // meme au plancher ca deborde : le plancher, et ca defile
+        else while (lo < hi) {
+          const m = Math.ceil((lo + hi) / 2);
+          if (tient(m)) lo = m; else hi = m - 1;
         }
-        // les arrondis du zoom laissent parfois un pixel qui defile : on resserre d'un cran
-        for (let i = 0; i < 6 && c.scrollHeight > c.clientHeight + 0.5 && e > plancher; i++) {
-          e = Math.round((e - 0.01) * 1000) / 1000;
-          d.style.zoom = String(e);
-        }
+        e = lo / 100;
       }
+      const ecrit = e < 1 ? String(e) : '';
+      d.style.zoom = ecrit;
     };
 
     const planifier = () => {
@@ -90,7 +121,25 @@ export function useMenuSansDefiler(plancher = 0.5) {
 
     planifier();
     // Le menu change apres coup : un bandeau arrive du reseau, un onglet change de contenu.
-    const ro = new ResizeObserver(planifier);
+    // Un pixel n'est pas un changement : le menu reduit est centre dans son cadre, l'arrondi du
+    // texte zoome depend de sa position, et sa hauteur hesite d'un pixel d'une mesure a l'autre.
+    // Relancer la mesure sur ce pixel entretenait une boucle sans fin (le menu sautait d'un
+    // pixel plusieurs fois par seconde). Seul un vrai changement de taille relance.
+    const vues = new WeakMap<Element, { l: number; h: number }>();
+    const ro = new ResizeObserver(entrees => {
+      let reel = false;
+      for (const en of entrees) {
+        const { width: l, height: h } = en.contentRect;
+        const v = vues.get(en.target);
+        if (!v || Math.abs(v.l - l) >= 2 || Math.abs(v.h - h) >= 2) {
+          vues.set(en.target, { l, h });
+          reel = true;
+        }
+      }
+      // ... sauf si ce pixel fait defiler : la, on resserre.
+      const c = cadre.current;
+      if (reel || (c && c.scrollHeight > c.clientHeight + 0.5)) planifier();
+    });
     const mo = new MutationObserver(planifier);
     if (cadre.current) ro.observe(cadre.current);
     if (cadre.current?.parentElement) ro.observe(cadre.current.parentElement);

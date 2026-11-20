@@ -10,6 +10,7 @@ import { noterDefi, rapprocherBoite } from '@/game/journal-defis';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
 import { useRetour } from '@/hooks/use-retour';
+import { MascotteFin } from '@/components/MascotteFin';
 
 /**
  * Defi recu.
@@ -136,6 +137,8 @@ export function InboxPopup() {
               className="w-full max-w-sm bg-card/95 border border-primary/30 rounded-2xl
                          p-5 shadow-2xl flex flex-col gap-3 max-h-[80dvh] overflow-y-auto"
             >
+              {/* le rival provoque : on vient de te defier (components/MascotteFin.tsx) */}
+              <MascotteFin hauteur={130} rival="defi" />
               <div className="flex items-center gap-2 justify-center">
                 <Swords className="w-4 h-4 text-primary" />
                 <h2 className="font-black font-display tracking-tight text-primary text-lg md:text-xl">

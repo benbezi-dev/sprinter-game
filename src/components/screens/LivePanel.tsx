@@ -29,7 +29,7 @@ import { PanneauIdentite } from './NameChip';
 import { nomPourLeDirect } from '@/game/identity';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { useJeu, epreuvesDuJeu } from '@/game/jeux';
-import { Repliable } from './Repliable';
+import { Repliable, CartePage, PagePleinEcran } from './Repliable';
 import { Voix, type EtatVoix } from '@/game/voix';
 import { prechargerGlace } from '@/game/turn';
 import {
@@ -144,6 +144,15 @@ export function LivePanel() {
 
   const [etape, setEtape] = useState<Etape>('repos');
   const [code, setCode] = useState('');
+  /**
+   * LE SALON S'AFFICHE EN PAGE, PAS DANS LE MENU (14/11/2026). Deplie dans
+   * l'accueil, il le faisait reduire jusqu'a l'illisible, comme les panneaux
+   * des modes avant lui. Le retour ne fait pas quitter la piste — des amis y
+   * attendent peut-etre : il range la page, et la carte du menu, soulignee,
+   * dit qu'on y est toujours. Une nouvelle piste rouvre la page.
+   */
+  const [salonVu, setSalonVu] = useState(true);
+  useEffect(() => { if (code) setSalonVu(true); }, [code]);
   /**
    * Le classement des duels, ouvert par-dessus le salon pour y choisir des
    * adversaires.
@@ -854,6 +863,7 @@ export function LivePanel() {
     return (
       <>
       <Repliable
+        pleinEcran
         titre={N.t('live_title')}
         sous={N.t('live_desc')}
         icone={<Radio className="w-4 h-4" />}
@@ -1002,8 +1012,20 @@ export function LivePanel() {
   }
 
   // --- salon : on attend, on partage, on se declare pret --------------------
+  const prets = joueurs.filter(j => j.pret).length;
   return (
     <>
+    <CartePage
+      titre={`${N.t('live_room')} · ${code}`}
+      sous={`${joueurs.length}/${taille} · ${prets} ${N.t('live_ready').toLowerCase()}`}
+      icone={<Radio className="w-4 h-4 animate-pulse" />}
+      cadre="border-emerald-400/40"
+      ouverte={salonVu}
+      onOuvrir={() => setSalonVu(true)}
+    />
+    <PagePleinEcran ouverte={salonVu} titre={N.t('live_title')}
+                    icone={<Radio className="w-4 h-4" />}
+                    onRetour={() => setSalonVu(false)}>
     <motion.div
       {...MONTEE}
       className="bg-card/70 backdrop-blur-xl border border-emerald-400/30 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col gap-3"
@@ -1263,6 +1285,7 @@ export function LivePanel() {
         {N.t('live_leave')}
       </button>
     </motion.div>
+    </PagePleinEcran>
     </>
   );
 }

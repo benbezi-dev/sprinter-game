@@ -1,4 +1,4 @@
-import { ORIGINES, NOMS_ORIGINES, origineDe, cheminDe } from '@/game/athlete/corps-gens';
+import { cheminDe, peauxDesCorps, memeCorps } from '@/game/athlete/corps-gens';
 import { POSTURES } from '@/game/athlete/postures';
 import { charger as chargerMaillage, pret, dessiner } from '@/game/vedette-3d';
 import React, { useEffect, useReducer, useRef, useState } from 'react';
@@ -17,10 +17,11 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import {
   type Athlete, type Jour, type Stat, type Epreuve, type Origine, type Voie,
+  MONDE, JEUX, SELECTION_JEUX, SEMAINE_DES_JEUX, semaineDesProchainsJeux, anneeDesJeux, semaineDeSaison, changerDeDiscipline, garderSaDiscipline,
   moyenneDes, exigePourMonter, EPREUVES_SALLE, saisonEnSalle, niveauMaxDe, ageQuiOuvre, semainesAvantLaSalle, libelleEpreuve, type Course, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
   bonusMateriel, coutDuDeplacement, picDeForme,
-  type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COIFFURES, CHEVEUX, COULEURS,
+  type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
   soulager, REVEIL, boulotFait, BOULOTS_PAR_SEMAINE, paieDu, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
@@ -261,12 +262,6 @@ function Bouton({ onClick, disabled, children, plein = false, className = '' }:
    L'APPARENCE : LE CORPS QU'ON SE CHOISIT
    =========================================================================== */
 
-const NOMS_COIFFURES: Record<string, [string, string]> = {
-  crop: ['Court', 'Crop'], fade: ['Dégradé', 'Fade'], ras: ['Ras', 'Buzz'], flattop: ['Flat-top', 'Flat-top'],
-  twists: ['Twists', 'Twists'], braids: ['Tresses', 'Braids'], ponytail: ['Queue de cheval', 'Ponytail'],
-  bun: ['Chignon', 'Bun'], shaved: ['Crâne rasé', 'Shaved'],
-};
-const TEINTES_CHEVEUX: Record<string, string> = { noir: '#1C1616', brun: '#382418', chatain: '#5C3E24', blond: '#BC9A58', roux: '#944A26', gris: '#B0B0B6' };
 const rgb = (c: number[]) => `rgb(${c[0]},${c[1]},${c[2]})`;
 const PEAUX_RGB: Record<string, number[]> = {
   ebene: [74, 46, 32], cacao: [96, 60, 40], acajou: [108, 66, 42], noisette: [120, 76, 50], bronze: [142, 92, 58],
@@ -281,14 +276,17 @@ function Apercu({ ap, haut = 260 }: { ap: Apparence; haut?: number }) {
     const dpr = Math.min(3, Math.max(2, window.devicePixelRatio || 1));
     cv.width = Math.round(haut * 0.8 * dpr); cv.height = Math.round(haut * dpr);
     const c = cv.getContext('2d')!, A = SprinterApp as any;
-    // le corps MakeHuman de la ville (corps-gens.ts) : l'origine choisie s'y voit ; les facettes en attendant
-    const look = lookDe(ap, true, tenue(GARDE_ROBE_DE_DEPART.porte.ville));
+    // EN TENUE DE COMPETITION (16/11, l'auteur : « la taille et les couleurs [ne fonctionnent pas] ») : en tenue de
+    // ville, le t-shirt blanc et le jean de la garde-robe recouvraient « tes couleurs », qui ne se portent qu'au
+    // maillot. Le corps premium (corps-gens.ts) est en debardeur et short : c'est la tenue qu'il montre de toute facon.
+    const look = lookDe(ap, false, tenue(GARDE_ROBE_DE_DEPART.porte.competition));
     look.maillage = cheminDe(look); chargerMaillage(look.maillage);
     const corps = { look, stride: 0, v: 0, maxSpeed: 12, fallAnim: 0, celebrate: 0, drivePitch: 0, marche: 0, marcheT: 0, posture: POSTURES.debout() } as any;
     let id = 0;
     const tic = (t: number) => {
       c.clearRect(0, 0, cv.width, cv.height);
-      const k = cv.height * 0.47, cap = -Math.PI / 2 + Math.sin(t / 1400) * 1.2;
+      // A SA TAILLE : la toile est faite pour 2,00 m, la plus grande ; un athlete de 1,55 m y tient plus bas.
+      const k = cv.height * 0.47 * Math.min(1, (ap.taille || 1.72) / 2), cap = -Math.PI / 2 + Math.sin(t / 1400) * 1.2;
       const caps = A.personCapsules(corps, cap, 0, false, false, A.niveauDetail(k));
       if (!(pret(look.maillage) && dessiner(c, look.maillage, corps.squelette || null, A.repereDuCoureur(corps, cap, 0, false, false), cv.width / 2, cv.height * 0.96, k, look)))
         A.drawFacetFigure(c, caps, cv.width / 2, cv.height * 0.96, k);
@@ -312,18 +310,8 @@ function ChoixApparence({ ap, onChange }: { ap: Apparence; onChange: (a: Apparen
       </div>
       <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['PEAU', 'SKIN'])}</span>
       <div className={ligne}>
-        {PEAUX.map(p => <button key={p} aria-label={p} onClick={() => onChange({ ...ap, peau: p })} className={pastille(ap.peau === p)} style={{ background: rgb(PEAUX_RGB[p]) }} />)}
-      </div>
-      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['ORIGINE', 'HERITAGE'])}</span>
-      <div className={ligne}>
-        {ORIGINES.map(o => <Bouton key={o} plein={(ap.origine || origineDe('', PEAUX_RGB[ap.peau])) === o} onClick={() => onChange({ ...ap, origine: o })}>{dans(NOMS_ORIGINES[o])}</Bouton>)}
-      </div>
-      <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['COIFFURE', 'HAIR'])}</span>
-      <div className={ligne}>
-        {COIFFURES.map(h => <Bouton key={h} plein={ap.coiffure === h} onClick={() => onChange({ ...ap, coiffure: h })}>{dans(NOMS_COIFFURES[h])}</Bouton>)}
-      </div>
-      <div className={ligne}>
-        {CHEVEUX.map(h => <button key={h} aria-label={h} onClick={() => onChange({ ...ap, cheveux: h })} className={pastille(ap.cheveux === h)} style={{ background: TEINTES_CHEVEUX[h] }} />)}
+        {/* une pastille par corps premium ; origine, coiffure et cheveux ne s'y voient pas (corps-gens.ts, peauxDesCorps) */}
+        {peauxDesCorps(PEAUX, p => PEAUX_RGB[p]).map(p => <button key={p} aria-label={p} onClick={() => onChange({ ...ap, peau: p })} className={pastille(memeCorps(PEAUX_RGB[ap.peau] || PEAUX_RGB.miel, PEAUX_RGB[p]))} style={{ background: rgb(PEAUX_RGB[p]) }} />)}
       </div>
       <span className="text-[10px] font-black tracking-[0.22em] text-white/60">{dans(['TAILLE', 'HEIGHT'])} · {ap.taille.toFixed(2)} m</span>
       <input type="range" min={1.55} max={2} step={0.01} value={ap.taille} onChange={e => onChange({ ...ap, taille: +e.target.value })} className="w-full accent-[#3DDC84]" />
@@ -782,6 +770,23 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
 
       <Carte><Barres a={a} /></Carte>
 
+      {/* apres les 0.Games : changer de discipline (regles.ts, changerDeDiscipline) */}
+      {a.apresJeux && (
+        <Carte titre={dans(['Après les 0.Games', 'After the 0.Games'])} icone={Trophy}>
+          <p className="text-[11px] text-white/70 leading-relaxed">{dans([
+            'Tu peux changer de discipline : tu repars des Championnats de France, tes qualités à 80 %, et tu vises les prochains Jeux dans cette épreuve.',
+            'You can switch events: you go back to the national championships, your qualities at 80%, and aim for the next Games in that event.'])}</p>
+          <div className="flex gap-2">
+            {EPREUVES.filter(e => e !== a.specialite).map(e => (
+              <Bouton key={e} plein disabled={!!ev} className="flex-1" onClick={() => changer(() => changerDeDiscipline(a, e))}>{e} m</Bouton>
+            ))}
+            <Bouton disabled={!!ev} className="flex-1" onClick={() => changer(() => garderSaDiscipline(a))}>
+              {a.specialite ? dans([`Garder le ${a.specialite} m`, `Keep the ${a.specialite} m`]) : dans(['Rester polyvalent·e', 'Stay all-round'])}
+            </Bouton>
+          </div>
+        </Carte>
+      )}
+
       {/* la competition : le championnat du niveau, ou un meeting de club les autres dimanches */}
       <Carte titre={mot('competition')} icone={Trophy}>
         <div className="flex items-baseline justify-between gap-2">
@@ -801,7 +806,19 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
         {a.niveau < COMPETITIONS.length - 1 && a.niveau >= niveauMaxDe(a.age ?? 14) && (
           <span className="text-[11px] text-white/70">{dans([`Plus haut championnat de ta catégorie. ${mot(COMPETITIONS[a.niveau + 1].cle)} : à ${ageQuiOuvre(a.niveau)} ans.`, `Top championship of your age group. ${mot(COMPETITIONS[a.niveau + 1].cle)}: at ${ageQuiOuvre(a.niveau)}.`])}</span>
         )}
-        {a.niveau < COMPETITIONS.length - 1 && a.niveau < niveauMaxDe(a.age ?? 14) && (() => {
+        {a.niveau === MONDE && niveauMaxDe(a.age ?? 14) >= JEUX && (() => {
+          const m = moyenneDes(a), pret = m >= SELECTION_JEUX, n = semaineDesProchainsJeux(a.semaine) - a.semaine;
+          const cette = anneeDesJeux(a.semaine) && semaineDeSaison(a) < SEMAINE_DES_JEUX;
+          return (
+            <div className="flex flex-col gap-1">
+              <span className="text-[11px] text-white/70">{dans([
+                `0.Games dans ${n} semaines. ${cette ? 'C’est leur saison : un podium aux Mondes et' : 'La sélection se joue aux Mondes de leur saison : un podium et'} ${SELECTION_JEUX} de moyenne`,
+                `0.Games in ${n} weeks. ${cette ? 'It’s their season: a podium at the Worlds and' : 'Selection happens at the Worlds of their season: a podium and'} a ${SELECTION_JEUX} average`])} · <span className="font-black tabular-nums" style={{ color: pret ? VERT : '#F5A623' }}>{m.toFixed(1)}</span></span>
+              <Jauge v={Math.min(m, SELECTION_JEUX)} max={SELECTION_JEUX} couleur={pret ? VERT : '#F5A623'} />
+            </div>
+          );
+        })()}
+        {a.niveau < MONDE && a.niveau < niveauMaxDe(a.age ?? 14) && (() => {
           const m = moyenneDes(a), exige = exigePourMonter(a.niveau), pret = m >= exige;
           return (
             <div className="flex flex-col gap-1">
@@ -1084,7 +1101,7 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
     <div className="fixed inset-0 z-[70] bg-[#A9D3F0] text-foreground select-none">
       <div ref={hote} className="absolute inset-0 overflow-hidden" />
       {dedans && (
-        <Piece key={dedans} lieu={dedans} titre={nomLieu(dedans, a)} look={lookDe(apparenceDe(a), true, tenueVue)} nuit={heureDe(a) < 7 * 60 || heureDe(a) >= 20 * 60}
+        <Piece key={dedans} figee={!!seance} lieu={dedans} titre={nomLieu(dedans, a)} look={lookDe(apparenceDe(a), true, tenueVue)} nuit={heureDe(a) < 7 * 60 || heureDe(a) >= 20 * 60}
                gens={PERSONNES.flatMap(p => (ouEst(a, p) === dedans ? [{ id: p, nom: dans(GENS[p].nom(a)), lieu: dedans, look: lookDePersonne(a, p) }] : []))}
                ouvrir={m => {
                  const ids = m ? actionsDuMeuble(dedans, m) : [];
@@ -1296,8 +1313,8 @@ function EspaceSante({ a, ev, changer }: { a: Athlete; ev: boolean; changer: (f:
 
 /** Qui est la, dans ce lieu, en ce moment. */
 /** LA PIECE DU BATIMENT (interieur.ts) : on y marche, on touche un meuble ou quelqu'un ; la porte ramene en ville. */
-function Piece({ lieu, titre, look, nuit, gens, ouvrir, parler, sortir }: {
-  lieu: Lieu; titre: string; look: any; nuit: boolean; gens: { id: string; nom: string; lieu: Lieu; look: any }[];
+function Piece({ figee, lieu, titre, look, nuit, gens, ouvrir, parler, sortir }: {
+  figee?: boolean; lieu: Lieu; titre: string; look: any; nuit: boolean; gens: { id: string; nom: string; lieu: Lieu; look: any }[];
   ouvrir: (m?: Meuble) => void; parler: (id: string) => void; sortir: () => void;
 }) {
   const hote = useRef<HTMLDivElement>(null);
@@ -1315,6 +1332,8 @@ function Piece({ lieu, titre, look, nuit, gens, ouvrir, parler, sortir }: {
   }, []);
   // l'heure tourne : qui arrive, qui s'en va (gens.ts, ouEst)
   const presents = gens.map(g => g.id).join();
+  // une seance par-dessus : la piece s'arrete de rendre, la seance a le telephone pour elle
+  useEffect(() => { piece.current?.pause(!!figee); }, [figee]);
   useEffect(() => { piece.current?.majGens(gens); }, [presents]);
   // le miroir, la garde-robe : l'athlete se change sans sortir
   const habit = JSON.stringify(look);
@@ -1809,7 +1828,7 @@ export function FinDeCourseAthlete() {
             <span className={`font-black font-display text-3xl sm:text-4xl uppercase tracking-tight leading-[0.95]
                               ${r.chrono !== null && (r.place <= 3 || r.suivant) ? 'text-white' : 'text-destructive'}`}>
               {r.suivant ? `${dans(['QUALIFIÉ·E', 'THROUGH'])}${r.auTemps ? dans([' AU TEMPS', ' ON TIME']) : ''} ${dans(['POUR', 'TO'])} ${dans(vers)}`
-                : r.sommet ? mot('sommet') : r.chrono === null ? mot('faux')
+                : r.sommet ? mot('sommet') : r.mondial ? mot('mondial') : r.chrono === null ? mot('faux')
                 : r.tour === 'serie' ? dans(['ÉLIMINÉ·E EN SÉRIE', 'OUT IN THE HEATS']) : r.tour === 'demie' ? dans(['ÉLIMINÉ·E EN DEMI-FINALE', 'OUT IN THE SEMI-FINALS'])
                 : mot('place', { o: ordPlace(r.place) })}
             </span>
@@ -1823,7 +1842,12 @@ export function FinDeCourseAthlete() {
             {r.blessure && <span className="text-sm font-bold text-red-400">{dans(BLESSURES[r.blessure].nom)} · {dans(['va voir le médecin du sport', 'see the sports doctor'])}</span>}
             {!r.suivant && !r.meeting && (
               <span className="text-sm" style={{ color: suivant ? VERT : undefined }}>
-                {suivant ? mot('qualifie', { c: mot(suivant.cle) })
+                {r.selection ? `${mot('qualifie', { c: mot(suivant!.cle) })} · ${dans([`dans ${r.avantLesJeux} semaines`, `in ${r.avantLesJeux} weeks`])}`
+                  : r.jeux ? dans(['Les 0.Games sont passés. Tu peux changer de discipline, au tableau de bord.', 'The 0.Games are over. You can switch events, on your dashboard.'])
+                  : r.niveau === MONDE && r.chrono !== null && r.place <= 3 && r.avantLesJeux !== undefined ? dans([
+                      `Prochains 0.Games dans ${r.avantLesJeux} semaines. La sélection se joue aux Mondes de leur saison : un podium et ${SELECTION_JEUX} de moyenne.`,
+                      `Next 0.Games in ${r.avantLesJeux} weeks. Selection happens at the Worlds of their season: a podium and a ${SELECTION_JEUX} average.`])
+                  : suivant ? mot('qualifie', { c: mot(suivant.cle) })
                   : r.tropJeune ? dans([`Sur le podium ! Mais en ${categorie(r.tropJeune - 1)[0]}, c’est le plus haut championnat. ${mot(COMPETITIONS[r.niveau + 1].cle)} : à ${r.tropJeune} ans. D’ici là, cours, gagne, prépare-toi.`,
                       `On the podium! But in ${categorie(r.tropJeune - 1)[1]}, this is the top championship. ${mot(COMPETITIONS[r.niveau + 1].cle)}: at ${r.tropJeune}. Until then, race, win, get ready.`])
                   : r.pasPret ? dans([`Sur le podium, mais pas encore prêt·e pour la suite : il faut ${exigePourMonter(r.niveau)} de moyenne dans tes stats. Entraîne-toi, et retente dans ${ecart(r.niveau)} semaines.`, `On the podium, but not ready for the next level yet: you need a ${exigePourMonter(r.niveau)} stat average. Train, and try again in ${ecart(r.niveau)} weeks.`])

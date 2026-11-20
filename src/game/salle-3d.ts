@@ -19,8 +19,7 @@
 // z en haut. Les virages tournent autour de (0, -RS) et (-S, -RS).
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { chargeurGLTF } from './chargeur-gltf';
 import { SALLE, DROITE, profil, RAMPE, lisse, rabattement } from './piste-salle.js';
 import { textureStable, type NomStable } from './texture-stable';
 
@@ -44,6 +43,8 @@ const R_MUR = RS + W + 0.05;                          // le muret blanc
 const R_BOIS = RS + W + 1.9;                          // le bord de la coursive, au-dessus des gradins de bois
 const EV = 1.15;                                      // l'evasement de la coursive dans les virages
 const H_COURSIVE = 4.4;                               // (0463 : mesuree a l'echelle de la rambarde de 1 m)
+/** L'oeil d'un spectateur debout sur la coursive (le plan `tribune` de course-3d/camera.ts). */
+export const OEIL_COURSIVE = H_COURSIVE + 1.6;
 const R_G = R_MUR + 0.15;                             // le passage derriere le muret commence la
 // la halle (le plan) : ses pignons a 8,75 m du bord interieur au bout des virages ; le long cote
 // oppose a 29 m de l'axe, celui de la tribune a 35 m (le plan : ses gradins vont jusque-la)
@@ -55,6 +56,8 @@ const LY = LARGE + LARGE_T, YC = -RS + (LARGE_T - LARGE) / 2;     // la largeur 
 // rambarde vitree, puis dix rangs de beton gris de 0,80 m sur 0,40 m, aux sieges bleu ciel.
 const R_T = R_MUR + 1.2, N_T = 10, P_T = 0.8, Z_T = 1.1, M_T = 0.4;
 const H_TOIT = 12.5;
+/** Au-dessus, la camera est dans les fermes (membrure basse a 10,3 m, lampes a 10,2 m) : la charpente se cache. */
+const TOIT_CACHE = 10;
 const CW_DROITE = 1.22, NC_DROITE = SALLE.couloirsDroite; // la ligne droite centrale
 const W60 = NC_DROITE * CW_DROITE;
 // les lignes peintes a 8 cm, comme dans tout le jeu en 3D (plus fines, elles se crenelaient au loin ; l auteur, 24/10)
@@ -450,6 +453,13 @@ export function construireSalle(ctx: ContexteSalle) {
     return m;
   };
   const NEON_FROID = () => neon([255, 255, 255], [140, 196, 255]);
+  // LES LIGNES DE LA PISTE COURUE, CHACUNE SA MATIERE (la presentation les colore une a une : `lignes`), sur le meme
+  // tube que NEON_FROID ; `teinte` est leur couleur de repos, que le faux depart vire au rouge (`alerte`)
+  const lignesCourues: THREE.MeshBasicMaterial[] = [];
+  const ligneCourue = (k: number) => {
+    const m = NEON_FROID().clone(); m.userData.neon = 1; m.userData.teinte = new THREE.Color(1, 1, 1);
+    lignesCourues[k] = m; return m;
+  };
   const drapeau = (k: number, n: number) => {
     const f = (k + 0.5) / n;
     return f < 1 / 3 ? neon([225, 233, 255], [30, 80, 255]) : f < 2 / 3 ? neon([255, 255, 255], [232, 238, 255]) : neon([255, 228, 228], [255, 26, 46]);
@@ -489,7 +499,7 @@ export function construireSalle(ctx: ContexteSalle) {
   for (let k = 0; k < NC; k++) ajouter(bandeAnneau(RS + k * CW, RS + (k + 1) * CW, 0.004), k % 2 ? tartanAnthracite : tartanBleu, true, 'sol');
   for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - LIGNE / 2, RS + k * CW + LIGNE / 2, 0.008), ligne, false, 'sol');
   // (en competition, le tube de neon par-dessus : il s'allume quand la salle s'eteint)
-  if (ctx.finale) for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - NEON_L / 2, RS + k * CW + NEON_L / 2, 0.009), ctx.droite ? drapeau(k, NC + 1) : NEON_FROID(), false);
+  if (ctx.finale) for (let k = 0; k <= NC; k++) ajouter(bandeAnneau(RS + k * CW - NEON_L / 2, RS + k * CW + NEON_L / 2, 0.009), ctx.droite ? drapeau(k, NC + 1) : ligneCourue(k), false);
   // la corde : une lisse blanche en saillie au bord interieur
   ajouter(murAnneau(RS - 0.06, () => 0, () => 0.05), new THREE.MeshStandardMaterial({ color: 0xf2f2f2, roughness: 0.5 }), false);
 
@@ -510,7 +520,7 @@ export function construireSalle(ctx: ContexteSalle) {
   for (let k = 0; k < NC_DROITE; k++) entreLesVirages(yD + k * CW_DROITE, yD + (k + 1) * CW_DROITE, 0.004, k % 2 ? tartanAnthracite : tartanBleu);
   for (let k = 0; k <= NC_DROITE; k++) { const y = yD + k * CW_DROITE; entreLesVirages(y - LIGNE / 2, y + LIGNE / 2, 0.008, ligne, ''); }
   if (ctx.finale) for (let k = 0; k <= NC_DROITE; k++) {
-    const y = yD + k * CW_DROITE, m = entreLesVirages(y - NEON_L / 2, y + NEON_L / 2, 0.009, ctx.droite ? NEON_FROID() : drapeau(k, NC_DROITE + 1), '');
+    const y = yD + k * CW_DROITE, m = entreLesVirages(y - NEON_L / 2, y + NEON_L / 2, 0.009, ctx.droite ? ligneCourue(k) : drapeau(k, NC_DROITE + 1), '');
     // (les UV de ShapeGeometry sont x, y du monde : v recale sur le bord de la bande)
     const uv = m.geometry.getAttribute('uv') as THREE.BufferAttribute;
     for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) - (y - NEON_L / 2));
@@ -1177,6 +1187,24 @@ export function construireSalle(ctx: ContexteSalle) {
   let nl = 0;
   for (let x = X0 + 7.5; x < X1; x += 7.5) for (let y = Y0 + 6; y < Y1 - 3; y += 8) { M.makeRotationX(Math.PI / 2).setPosition(x, y, H_TOIT - 2.3); lampes.setMatrixAt(nl++, M); }
   lampes.count = nl; toit.add(lampes);
+  // LES PLAFONNIERS S'ETEIGNENT AUSSI (la competition dans le noir) : ils restaient blancs sous un toit noir. Trois
+  // rangees le long de la halle, chacune sa couleur par instance, que `eteindre` coupe l'une apres l'autre
+  // (la couleur d'instance multiplie celle de la matiere : blanc pour allume)
+  const rangeeLampe: number[] = [], _lampeOn = new THREE.Color(1, 1, 1), _lampeOff = new THREE.Color(0.035, 0.035, 0.035);
+  for (let i = 0; i < nl; i++) {
+    lampes.getMatrixAt(i, M); const x = M.elements[12];
+    rangeeLampe.push(Math.min(2, Math.floor(3 * (x - X0) / (X1 - X0))));
+    lampes.setColorAt(i, _lampeOn);
+  }
+  let lampesVues = -1;
+  /** `lumiere` : 1 toutes allumees, 2/3 la derniere rangee eteinte, 1/3 la seule premiere, 0 toutes eteintes. */
+  const plafonniers = (lumiere: number) => {
+    const n = Math.round(lumiere * 3);
+    if (n === lampesVues) return;
+    lampesVues = n;
+    for (let i = 0; i < nl; i++) lampes.setColorAt(i, rangeeLampe[i] < n ? _lampeOn : _lampeOff);
+    lampes.instanceColor!.needsUpdate = true;
+  };
 
   // LES BANDEROLES BLEU CIEL de la ville, accrochees a la lisse de la coursive (le nom de la ville, aucune marque)
   const banderole = toile(1024, 256, (c, w, h) => {
@@ -1216,8 +1244,8 @@ export function construireSalle(ctx: ContexteSalle) {
       if (!neuf) {
         // la coque n'a plus besoin des lumieres du jeu : sa lumiere est cuite (MeshBasic : albedo x lumiere / pi)
         neuf = coque
-          ? new THREE.MeshBasicMaterial({ map: ancien.map, color: ancien.color, side: ancien.side, lightMap: t, lightMapIntensity: LUMIERE_COQUE })
-          : Object.assign(ancien.clone(), { lightMap: t, lightMapIntensity: LUMIERE_SOL });
+          ? new THREE.MeshBasicMaterial({ map: ancien.map, color: ancien.color, side: ancien.side, lightMap: t, lightMapIntensity: LUMIERE_COQUE * (ctx.nuit ? NUIT_COQUE : 1) })
+          : Object.assign(ancien.clone(), { lightMap: t, lightMapIntensity: LUMIERE_SOL * (ctx.nuit ? NUIT_SOL : 1) });
         neuf.userData.cuite = (neuf as THREE.MeshBasicMaterial).lightMapIntensity;   // (sa pleine lumiere : `eteindre` la baisse)
         deja.set(ancien, neuf);
       }
@@ -1239,7 +1267,7 @@ export function construireSalle(ctx: ContexteSalle) {
     p.position.z = -0.05; dehors.add(p);
     const v = new THREE.Mesh(new THREE.PlaneGeometry(L + 16, LY + 16), new THREE.MeshStandardMaterial({ color: 0xb8b4ac, roughness: 0.95 }));
     v.position.z = -0.02; dehors.add(v); }
-  const chargeur = new GLTFLoader(); chargeur.setMeshoptDecoder(MeshoptDecoder);
+  const chargeur = chargeurGLTF();
   chargeur.load(ctx.base + 'modeles/salle/exterieur.glb', gl => {
     // le bardage est d'aluminium argent : la texture Tripo, prise sur une photo au soleil couchant, tire au beige
     // (le bardage reel est un gris neutre, rgb(117, 121, 116) a l'ombre, image cBlE 0011 : on retire la
@@ -1270,7 +1298,14 @@ export function construireSalle(ctx: ContexteSalle) {
       if (m.userData.neon) materiaux.neons.add(m);
     }
   });
-  let neonsAllumes = 1;
+  let neonsAllumes = 1, alerteVue = 0, lignesVues = '';
+  /** La couleur d'un tube : sa teinte de repos (blanc sans elle), viree au rouge du faux depart. */
+  // (le bleu du drapeau donne en sRGB : en valeurs lineaires, la sortie ecran les palissait en bleu ciel)
+  const _rouge = new THREE.Color(1, 0.03, 0.03), _blancVif = new THREE.Color(1.35, 1.35, 1.35), _blanc = new THREE.Color(1, 1, 1);
+  const _bleu = new THREE.Color().setRGB(0.1, 0.33, 1, THREE.SRGBColorSpace).multiplyScalar(1.4);
+  const peindre = (m: THREE.MeshBasicMaterial) => {
+    m.color.copy(m.userData.teinte || _blanc).lerp(_rouge, alerteVue);
+  };
   const voileCouloir: number[] = [];
   return {
     /** L'interieur (la foule s'y range aussi : cachee avec lui quand on survole dehors). */
@@ -1285,9 +1320,33 @@ export function construireSalle(ctx: ContexteSalle) {
     },
     /** La lumiere des fleches du couloir k, de 0 (eteinte : un nom s'y ecrit) a 1. */
     fleches: (k: number, a: number) => { voileCouloir[k] = a; for (const m of flechesCouloir[k] || []) m.opacity = a * neonsAllumes; },
+    /**
+     * LA PRESENTATION AUX COULEURS DU DRAPEAU (Championnat de France ; l'auteur, 15/11) : `bleu` (0..1) passe toutes les
+     * lignes de la piste courue en bleu le temps de la presentation ; les deux du couloir k presente (-1 : aucun)
+     * s'allument en blanc vif selon `a`, son fondu. Le nom, lui, s'ecrit en rouge (salle-noire.ts) : bleu, blanc, rouge.
+     */
+    lignes: (k: number, a: number, bleu: number) => {
+      if (!lignesCourues.length) return;
+      const cle = k + '/' + a.toFixed(3) + '/' + bleu.toFixed(3);
+      if (cle === lignesVues) return;
+      lignesVues = cle;
+      // (le trait blanc peint sous les tubes brille aussi : il s'efface sous le bleu, sinon le coeur des lignes reste blanc)
+      if (ctx.finale) ligne.emissiveIntensity = ligne.userData.emissif * neonsAllumes * (1 - 0.85 * bleu);
+      lignesCourues.forEach((m, i) => {
+        const t: THREE.Color = m.userData.teinte;
+        t.copy(_blanc).lerp(_bleu, bleu);
+        if (k >= 0 && (i === k || i === k + 1)) t.lerp(_blancVif, a);
+        peindre(m);
+      });
+    },
     /** LE FAUX DEPART : les tubes des lignes virent au rouge, de 0 (leur couleur) a 1 (rouge vif). */
     alerte: (k: number) => {
-      for (const m of neons.values()) m.color.setRGB(1, 1 - 0.97 * k, 1 - 0.97 * k);
+      // (appelee a chaque image : rien a faire tant que la teinte ne bouge pas)
+      if (k === alerteVue) return;
+      alerteVue = k;
+      for (const m of materiaux.neons) peindre(m as THREE.MeshBasicMaterial);
+      // les fleches LED des couloirs virent au rouge avec les lignes
+      for (const l of flechesCouloir) for (const m of (l || []) as THREE.MeshBasicMaterial[]) m.color.setRGB(1, 1 - 0.97 * k, 1 - 0.97 * k);
       // (les traits blancs qui brillent sont emissifs : leur couleur d'origine est gardee pour y revenir)
       for (const m of materiaux.emissifs as Set<THREE.MeshStandardMaterial>) {
         const b: THREE.Color = m.userData.emissiveBase ??= m.emissive.clone();
@@ -1300,6 +1359,7 @@ export function construireSalle(ctx: ContexteSalle) {
      * fleches, les logos, le tapis et les traits blancs qui brillent). course-3d.ts regle le ciel et les lumieres.
      */
     eteindre: (lumiere: number, neons: number) => {
+      plafonniers(lumiere);
       const lm = 0.07 + 0.93 * lumiere;
       for (const m of materiaux.cuites) (m as any).lightMapIntensity = m.userData.cuite * lm;
       for (const m of materiaux.emissifs) (m as THREE.MeshStandardMaterial).emissiveIntensity = m.userData.emissif * neons;
@@ -1312,7 +1372,11 @@ export function construireSalle(ctx: ContexteSalle) {
      * du 2D) ; l'exterieur ne se montre qu'au survol, la camera hors de la halle.
      */
     camera: (x: number, y: number, z: number, survol: boolean, cam?: THREE.Camera, vise?: THREE.Vector3) => {
-      toit.visible = z < H_TOIT - 0.3;
+      // LA CHARPENTE S'EFFACE DES QUE LA CAMERA MONTE DANS LES FERMES (17/11, « c'est le toit de la salle, a
+      // rectifier », l'auteur) : la plongee d'avant-course part du survol (9,2 m) et rejoint le plan venu du 2D
+      // (jusqu'a 24 m) ; cachee a 12,2 m seulement, elle traversait treillis, lampes et plafond — des images grises.
+      // Sous la membrure basse (10,3 m) : le survol et le plan `tribune` (9,3 m) la gardent.
+      toit.visible = z < TOIT_CACHE;
       // (un agres dans le champ, plus pres de la camera que ce qu'elle vise, s'efface ; au survol, tout reste)
       if (cam && vise) {
         cam.updateMatrixWorld();
@@ -1325,7 +1389,10 @@ export function construireSalle(ctx: ContexteSalle) {
           for (const o of a.objets) o.visible = !gene;
         }
       }
-      const dedans = x > X0 - 0.5 && x < X1 + 0.5 && y > Y0 - 0.5 && y < Y1 + 0.5 && z < H_TOIT + 1.5;
+      // (au-dessus de la halle, la camera reste « dedans » : le survol de la salle se fait sous le toit, et la
+      // plongee qui monte vers le plan du 2D doit montrer la salle sans toit, comme ce plan — pas le batiment
+      // vu de dehors, dont le toit gris remplissait l'image au-dessus de 14 m ; 17/11)
+      const dedans = x > X0 - 0.5 && x < X1 + 0.5 && y > Y0 - 0.5 && y < Y1 + 0.5;
       dehors.visible = survol && !dedans;
       g.visible = !dehors.visible;
     },
@@ -1388,6 +1455,11 @@ export function placesDuPublic(affluence: number, hasard: () => number): { x: nu
 
 /** Les intensites des lumieres cuites (les images sont gardees en dessous de 1 : voir cuire_lumiere.py, EXPO). */
 const LUMIERE_COQUE = Math.PI * 1.05, LUMIERE_SOL = 0.85;
+// LA SALLE DE NUIT DES VIDEOS DU 17/11 (deux 60 m de nuit a Jesse Owens) : sous les plafonniers LED, la halle est
+// presque aussi claire que de jour — sol clair, couloirs bleus francs, toit gris clair et poutres de bois bien
+// visibles ; seules les vitres sont noires. La lumiere cuite de nuit (cuire_lumiere.py, NUIT=1) sortait terne :
+// on la remonte.
+const NUIT_COQUE = 1.5, NUIT_SOL = 1.65;
 export const ATLAS = 2048;
 
 /**
@@ -1458,4 +1530,4 @@ export const SALLE_LUMIERE = { fond: 0xdde4ec, brume: 0xd4dce6, hemiCiel: 0xf4f7
 /** La nuit (28/10, la video du club : « lumiere de jour et de nuit ») : le noir derriere les vitres, les plafonniers seuls. */
 /** La finale dans le noir : presque rien, une lueur froide pour garder le public visible. */
 export const SALLE_FINALE = { fond: 0x010206, brume: 0x010206, hemiCiel: 0x5a6a9a, hemiSol: 0x05060c, hemi: 0.45, soleil: 0.12, soleilCouleur: 0x8a9acc };
-export const SALLE_NUIT = { fond: 0x05080f, brume: 0x0a0e18, hemiCiel: 0xfff1dc, hemiSol: 0x2a2620, hemi: 1.0, soleil: 0.9, soleilCouleur: 0xfff0d8 };
+export const SALLE_NUIT = { fond: 0x05080f, brume: 0x0a0e18, hemiCiel: 0xfbf8f2, hemiSol: 0x4a463e, hemi: 1.4, soleil: 1.15, soleilCouleur: 0xfff8ee };

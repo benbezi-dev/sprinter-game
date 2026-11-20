@@ -121,3 +121,47 @@ export async function acheterContinue(parcours: string, essai: number): Promise<
   return { ok: false, raison, solde: d.solde,
            ...(typeof d.essai === 'number' ? { essai: d.essai } : {}) };
 }
+
+// LA CARRIERE. Chaque etape gagnee rapporte des pieces (1, 1, 2, 3, 5, puis
+// 15 pour les ZEZE), et la pub du sacre double le total de la carriere. Les
+// montants vivent sur le serveur (GAINS_CARRIERE, worker/src/pieces.js) ;
+// ces deux fonctions ne font qu'annoncer, et ne levent jamais.
+
+/** La cle de course telle que le serveur l'accepte (lettres, chiffres, _ et -). */
+const cleCourse = (course: string) => String(course || '').replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 24);
+
+async function posterCarriere(route: string, corps: Record<string, unknown>): Promise<any | null> {
+  const nom = getSavedName().trim();
+  if (!PIECES_OUVERTES || !nom) return null;
+  try {
+    const r = await fetch(`${API_BASE}${route}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nom, device_id: getDeviceId(), ...corps }),
+    });
+    if (!r.ok) return null;
+    const d = await r.json();
+    if (etat && typeof d.solde === 'number') publier({ ...etat, solde: d.solde });
+    return d;
+  } catch {
+    return null;
+  }
+}
+
+/** Annonce l'etape `etape` (0 a 5) gagnee. Rend les pieces creditees, 0 si rien. */
+export async function crediterEtape(parcours: string, course: string, etape: number): Promise<number> {
+  if (!parcours) return 0;
+  const d = await posterCarriere('/pieces/etape', { parcours, course: cleCourse(course), etape });
+  return d ? Number(d.credite) || 0 : 0;
+}
+
+/**
+ * Double les pieces de cette carriere, apres la pub du sacre. Rend les pieces
+ * creditees (0 : deja double ou plafond du jour), ou null si le serveur n'a
+ * pas repondu — l'ecran laisse alors reessayer sans repasser la pub.
+ */
+export async function doublerCarriere(parcours: string, course: string): Promise<number | null> {
+  if (!parcours) return null;
+  const d = await posterCarriere('/pieces/doubler', { parcours, course: cleCourse(course) });
+  return d ? Number(d.credite) || 0 : null;
+}

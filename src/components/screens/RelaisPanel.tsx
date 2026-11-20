@@ -5,12 +5,14 @@ import { DefierEquipes } from './DefierEquipes';
 import { surCourrier } from '@/game/boite';
 import { ChoixCoureurs } from './ChoixCoureurs';
 import { entrerSurLaPiste } from '@/game/piste';
-import { Users, Loader2, Check, X, ArrowUpDown, Trophy, LogOut, Swords } from 'lucide-react';
+import { recordSolo } from '@/game/salle-relais-solo';
+import { EST_TEST, relais2D, poserRelais2D } from '@/game/canal';
+import { Users, Loader2, Check, X, ArrowUpDown, Trophy, LogOut, Swords, User } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
 import { Repliable } from './Repliable';
 import {
-  mesEquipes, creerEquipe, repondre, ordonner, classementRelais, mesDefis,
+  mesEquipes, creerEquipe, repondre, ordonner, classementRelais, mesDefis, ouvrirSalon,
   titulaires, ceQuiManque,
   type EquipeRelais, type LigneRelais, type DefiRelais,
 } from '@/game/relais';
@@ -196,6 +198,124 @@ function Equipe({ e, onChange, onCourir, onQuitter }: {
   );
 }
 
+/**
+ * COURIR SEUL, sans attendre personne.
+ *
+ * Le relais en equipe demande quatre joueurs sur la piste au meme moment, et
+ * c'est le plus souvent ce qui manque. Ici le joueur choisit sa place — partir
+ * des blocs, prendre et donner le temoin, ou finir — et le jeu court les trois
+ * autres portions (voir salle-relais-solo.ts). Memes regles, memes zones,
+ * memes eliminations ; seul le classement des equipes n'en sait rien.
+ *
+ * La place choisie est retenue d'une fois sur l'autre : on revient souvent
+ * travailler le meme passage.
+ */
+const CLE_RANG_SOLO = 'sprinter.relais.solo.rang';
+
+function lireRangSolo(): number {
+  try {
+    const v = Number(localStorage.getItem(CLE_RANG_SOLO));
+    return v >= 1 && v <= 4 ? v : 1;
+  } catch { return 1; }
+}
+
+function CourirSeul() {
+  const { N } = SprinterApp;
+  const [rang, setRang] = useState(lireRangSolo);
+  const [rendu, setRendu] = useState<'2d' | '3d'>(() => (relais2D() ? '2d' : '3d'));
+  const [code, setCode] = useState('');
+  const [occupe, setOccupe] = useState(false);
+  const [erreur, setErreur] = useState('');
+  const ouvrir = async () => {
+    setOccupe(true); setErreur('');
+    const r: any = await ouvrirSalon();
+    setOccupe(false);
+    if (!r || r.error || !r.id) { setErreur(N.t('relais_salon_erreur')); return; }
+    entrerSurLaPiste({ genre: 'relais_salon', code: String(r.id).toUpperCase(), rang });
+  };
+  const choisir = (r: number) => {
+    setRang(r);
+    try { localStorage.setItem(CLE_RANG_SOLO, String(r)); } catch { /* sans memoire */ }
+  };
+  return (
+    <div className="flex flex-col gap-2 p-3 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.04]">
+      <span className="flex items-center gap-1.5 text-[9px] tracking-widest text-emerald-400">
+        <User className="w-3 h-3" /> {N.t('relais_solo_titre')}
+      </span>
+      <p className="text-[10px] text-muted-foreground leading-snug">{N.t('relais_solo_desc')}</p>
+      {/* CANAL DE TEST : le relais en 2D reste disponible a cote de la 3D, pour comparer. */}
+      {EST_TEST && (
+        <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl border border-amber-300/30 bg-amber-300/[0.06]">
+          <span className="text-[9px] tracking-widest text-amber-300">{N.t('relais_rendu_test')}</span>
+          <div className="flex gap-1">
+            {(['3d', '2d'] as const).map(m => (
+              <button key={m} onClick={() => { poserRelais2D(m === '2d'); setRendu(m); }}
+                className={`px-2.5 py-1 rounded-lg text-[10px] font-black tracking-widest border
+                  ${rendu === m ? 'border-amber-300/60 bg-amber-300/20 text-amber-200' : 'border-white/10 text-muted-foreground'}`}>
+                {m.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="grid grid-cols-4 gap-1.5" role="radiogroup">
+        {[1, 2, 3, 4].map(r => (
+          <button key={r} role="radio" aria-checked={rang === r} onClick={() => choisir(r)}
+            className={`flex flex-col items-center gap-0.5 py-2 rounded-xl border transition-colors
+              ${rang === r ? 'border-emerald-400/60 bg-emerald-400/15 text-emerald-300'
+                           : 'border-white/10 bg-black/25 text-muted-foreground hover:text-foreground'}`}>
+            <span className="font-black font-display text-sm tracking-wide">{N.t('relais_solo_r' + r)}</span>
+            <span className="text-[8px] tracking-wider leading-none opacity-80">{N.t('relais_solo_s' + r)}</span>
+            {/* Le record perso de la place, quand il existe : ce qu'on vient battre. */}
+            {recordSolo(r) != null && (
+              <span className="font-mono text-[9px] tabular-nums leading-none text-foreground/80">
+                {(recordSolo(r)! / 1000).toFixed(2)}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+      <button onClick={() => entrerSurLaPiste({
+                genre: 'relais_solo', rang, equipe: N.t('relais_solo_equipe') })}
+        className="w-full py-3 rounded-xl font-black font-display tracking-widest text-sm
+                   text-background bg-emerald-400 hover:bg-emerald-400/90">
+        {N.t('relais_solo_courir')}
+      </button>
+
+      {/* A PLUSIEURS, A LA MEME PLACE CHOISIE. Un salon s'ouvre par un code qu'on
+          envoie aux autres ; chacun y prend sa place, et celles que personne ne
+          prend sont courues par des fictifs — deux joueurs et deux fictifs,
+          trois et un. Voir worker/src/salle-relais.js, le salon. */}
+      <div className="flex flex-col gap-1.5 pt-2 border-t border-white/8">
+        <span className="text-[9px] tracking-widest text-emerald-400">{N.t('relais_salon_titre')}</span>
+        <p className="text-[10px] text-muted-foreground leading-snug">{N.t('relais_salon_desc')}</p>
+        <button onClick={ouvrir} disabled={occupe}
+          className="w-full py-2.5 rounded-xl font-black font-display tracking-widest text-xs
+                     text-emerald-300 border border-emerald-400/50 bg-emerald-400/10 hover:bg-emerald-400/20
+                     disabled:opacity-40 flex items-center justify-center gap-2">
+          {occupe && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          {N.t('relais_salon_ouvrir')}
+        </button>
+        <div className="flex gap-1.5">
+          <input value={code} maxLength={10}
+            onChange={ev => setCode(ev.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+            placeholder={N.t('relais_salon_saisir')}
+            className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 text-sm font-mono
+                       tracking-widest text-foreground placeholder:text-muted-foreground placeholder:tracking-normal
+                       placeholder:font-sans focus:outline-none focus:border-emerald-400/50" />
+          <button onClick={() => code.length >= 4 && entrerSurLaPiste({ genre: 'relais_salon', code, rang })}
+            disabled={code.length < 4}
+            className="shrink-0 px-3 py-2 rounded-xl font-black font-display tracking-widest text-xs
+                       text-background bg-emerald-400 disabled:opacity-40">
+            {N.t('relais_salon_rejoindre')}
+          </button>
+        </div>
+        {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}
+      </div>
+    </div>
+  );
+}
+
 export function RelaisPanel() {
   const { N } = SprinterApp;
   const [equipes, setEquipes] = useState<EquipeRelais[]>([]);
@@ -260,6 +380,7 @@ export function RelaisPanel() {
 
   return (
     <Repliable
+      pleinEcran
       titre={N.t('relais_titre')}
       sous={N.t('relais_desc')}
       icone={<Users className="w-4 h-4" />}
@@ -349,6 +470,8 @@ export function RelaisPanel() {
           ))}
         </div>
       )}
+
+      <CourirSeul />
 
       {equipes.length > 0 && (
         <div className="flex flex-col gap-2">

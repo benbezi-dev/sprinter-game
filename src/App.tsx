@@ -19,6 +19,8 @@ import { TouchControls } from '@/components/TouchControls';
 import { CoachPremiereCourse } from '@/components/screens/CoachPremiereCourse';
 import { EST_TEST, RELAIS_OUVERT, TCHAT_RAPIDE_OUVERT } from '@/game/canal';
 import { preparerLaPub } from '@/game/pub';
+import { envoyerLeFauxDepartEnAttente } from '@/game/dsq-attente';
+import { verifierAchats } from '@/game/achats';
 import { MONDES_OUVERTS } from '@/game/mondes';
 import { PorteTest } from '@/components/screens/PorteTest';
 import { PisteRelais } from '@/components/screens/PisteRelais';
@@ -55,6 +57,7 @@ import { DuelResultPopup } from '@/components/screens/DuelResultPopup';
 import { SceneSelection } from '@/components/screens/Selection';
 import { InboxPopup } from '@/components/screens/InboxPopup';
 import { AnnoncePopup } from '@/components/screens/AnnoncePopup';
+import { RecuperationRendue } from '@/components/screens/RecuperationRendue';
 import { InvitationDirecte } from '@/components/screens/InvitationDirecte';
 import { DefiRelaisPopup } from '@/components/screens/DefiRelaisPopup';
 import { InstallPrompt } from '@/components/screens/InstallPrompt';
@@ -123,8 +126,9 @@ const PresentationBoss = /* @__PURE__ */ lazy(() => import('@/components/screens
 const FinDeCourseAthlete = /* @__PURE__ */ lazy(() => import('@/components/screens/CarriereAthlete')
   .then(m => ({ default: m.FinDeCourseAthlete })));
 // Les departs en blocs de la carriere, sur la piste du jeu (game/athlete/departs.ts).
-const DepartsEnPiste = /* @__PURE__ */ lazy(() => import('@/components/screens/SeancesAthlete')
-  .then(m => ({ default: m.DepartsEnPiste })));
+// hors canal de test, la carriere est absente : le module des seances ne part pas dans le build public
+const DepartsEnPiste = CARRIERE_ATHLETE_OUVERTE ? /* @__PURE__ */ lazy(() => import('@/components/screens/SeancesAthlete')
+  .then(m => ({ default: m.DepartsEnPiste }))) : null;
 // Le duel des marques : ce qu'un duel contre un fantome change a la bataille
 // (K.O., revanche), annonce par-dessus l'ecran de fin. Charge a la demande.
 const AnnonceDuelMarques = /* @__PURE__ */ lazy(() => import('@/components/screens/DuelMarques')
@@ -462,8 +466,8 @@ function MainGame() {
           et le reste de sa surface laisse passer les appuis. */}
       {tutoHaies && <TutorialHaies onClose={fermerLeTutoHaies} />}
       {tutoSprint && <Tutorial onClose={fermerLeTutoSprint} />}
-      {departs && <Suspense fallback={null}>
-        <DepartsEnPiste a={departs.a} jour={departs.jour} onFin={fermerLesDeparts} />
+      {departs && DepartsEnPiste && <Suspense fallback={null}>
+        <DepartsEnPiste a={departs.a} jour={departs.jour} ex={departs.ex} onFin={fermerLesDeparts} />
       </Suspense>}
 
       {/* Record mondial sur une course : passe au-dessus de tout ecran de fin,
@@ -473,6 +477,7 @@ function MainGame() {
       <QuitRace />
       <InboxPopup />
       <AnnoncePopup />
+      <RecuperationRendue />
       <InvitationDirecte />
       {RELAIS_OUVERT && <DefiRelaisPopup />}
       {/* Le lanceur d'un defi n'assiste pas a sa resolution : on la lui
@@ -572,7 +577,9 @@ function App() {
   // le tableau de bord ne doit pas gonfler ses propres chiffres.
   useEffect(() => { if (!stats && !file) pingVisit(); }, [stats, file]);
   // la demande d'accord pour la pub (RGPD) au lancement de l'appli, pas au premier clic sur une pub
-  useEffect(() => { preparerLaPub(); }, []);
+  useEffect(() => { preparerLaPub(); void verifierAchats(); }, []);
+  // Un duel perdu sur faux depart, laisse en suspens a la fermeture : il part maintenant.
+  useEffect(() => { envoyerLeFauxDepartEnAttente(); }, []);
 
   // LA PAGE PUBLIQUE D'UN CHAMPIONNAT — `?regarder=<edition>`. Meme convention
   // que le tableau de bord : un parametre, parce que Pages ne sert que des

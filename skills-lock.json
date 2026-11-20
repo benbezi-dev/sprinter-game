@@ -1,0 +1,53 @@
+{
+  "version": 2,
+  "skills": {
+    "capacitor-plugins": {
+      "source": "capawesome-team/skills",
+      "sourceType": "github",
+      "skillPath": "skills/capacitor-plugins/SKILL.md",
+      "computedHash": "07e6566dc4ec8799e36cf4da12d96ae2cda284f302bcc39d8bcbb738ffb26d4e"
+    },
+    "capacitor-push-notifications": {
+      "source": "capawesome-team/skills",
+      "sourceType": "github",
+      "skillPath": "skills/capacitor-push-notifications/SKILL.md",
+      "computedHash": "502ff2a289fa2ba3abcfa0052d555044f5b3cba82339584e719c3568c66b33a6"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "7bc223e2aafbdbf6e50ea243ba6ef67fe432bb069ab439fea0390795dac0bf7f"
+    },
+    "vercel-react-best-practices": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/react-best-practices/SKILL.md",
+      "computedHash": "7991ed4fbecdac23f47c1a40c243e00a212a9e7f3604db93959b3ae11dffe299"
+    },
+    "web-design-guidelines": {
+      "source": "vercel-labs/agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-design-guidelines/SKILL.md",
+      "computedHash": "4f68ae07187fb0d1fb78c88b503d089da4cf5a9d9625d1f2e425b1590bf96d92"
+    },
+    "web-perf": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/web-perf/SKILL.md",
+      "computedHash": "2716bf9bfafe4d8407b55c5213a143aea248686c4af92f8b43fc35327eaae41d"
+    },
+    "workers-best-practices": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/workers-best-practices/SKILL.md",
+      "computedHash": "7f941bbc549454872a4c7c261bf75a1ef7aaa69666bc85cec91e97cf40c11cc6"
+    },
+    "wrangler": {
+      "source": "cloudflare/skills",
+      "sourceType": "github",
+      "skillPath": "skills/wrangler/SKILL.md",
+      "computedHash": "182e370d8c26e6bcb896a57a63e6cab006b253b9278cc3515f7b9db2c4d07661"
+    }
+  }
+}

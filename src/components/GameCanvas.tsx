@@ -7,7 +7,7 @@ import { dessinerMateriel, dessinerLesHaies } from '@/game/materiel';
 import { mondeCourant } from '@/game/mondes';
 import { jeuCourant } from '@/game/jeux';
 import { cameraPour } from '@/game/cadrage';
-import { POUSSEE_OUVERTE, RENDU_3D, lieuParDefaut } from '@/game/canal';
+import { POUSSEE_OUVERTE, RENDU_3D, lieuParDefaut, relais2D } from '@/game/canal';
 import { guetteurDePoussee } from '@/game/poussee-gestes';
 import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRedessin, profondeurDeLaMeute } from '@/game/scene-accueil';
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
@@ -20,21 +20,24 @@ import { dessinSuspendu } from '@/game/dessin-suspendu';
 // (la 3D a tout le monde a son heure : canal.ts, TROIS_D_OUVERTE et RENDU_3D)
 // Les epreuves deja faites en 3D, et les nuits du molosse (`nuit-*`, la ruelle de ruelle-3d.ts) ;
 // les autres (relais, concours) restent en 2D. Les haies y sont depuis le 29/10 (« on passe Hurdlers en 3D aussi »).
-const EPREUVES_3D = new Set(['100', '200', '400', '60', '200s', '400s', '100h', '110h', '400h', '60h', '60hf']);
+// le relais aussi, depuis le 14/11 (course-3d/relais.ts : zones, marques d'elan, temoin, camera)
+const EPREUVES_3D = new Set(['100', '200', '400', '60', '200s', '400s', '100h', '110h', '400h', '60h', '60hf', '4x100']);
 let rendu3D: any = null;
 // LE REPERE DU JOUEUR EN 3D : un chevron jaune et « TOI » au-dessus de sa tete — le seul nom
 // ecrit sur la piste, comme en championnat
-function marquerLeJoueur(ctx: CanvasRenderingContext2D, e: { x: number; y: number }) {
+// Le fantome d'un duel porte aussi son nom, en cyan comme dans le HUD : savoir qui l'on bat
+// compte autant que savoir ou l'on est (demande du 18/11). Jamais en championnat (seul « TOI »).
+function marquerLeJoueur(ctx: CanvasRenderingContext2D, e: { x: number; y: number }, texte = 'TOI', couleur = '#ffd23a') {
   const y = e.y - 6;
   ctx.save();
   ctx.globalAlpha = 0.92;
-  ctx.fillStyle = '#ffd23a';
+  ctx.fillStyle = couleur;
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.55)';
   ctx.lineWidth = 2;
   ctx.beginPath(); ctx.moveTo(e.x - 7, y - 9); ctx.lineTo(e.x + 7, y - 9); ctx.lineTo(e.x, y); ctx.closePath();
   ctx.stroke(); ctx.fill();
   ctx.font = '800 11px system-ui, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-  ctx.strokeText('TOI', e.x, y - 12); ctx.fillText('TOI', e.x, y - 12);
+  ctx.strokeText(texte, e.x, y - 12); ctx.fillText(texte, e.x, y - 12);
   ctx.restore();
 }
 if (RENDU_3D) import('@/game/course-3d').then(m => { rendu3D = m; }).catch(() => { /* reste en 2D */ });
@@ -170,7 +173,10 @@ export function GameCanvas() {
     // noms des maintenant, bien avant que le joueur n'y arrive.
     primeTopNames();
 
+    // Images dessinées depuis l'arrivée sur un écran de fin (voir FOND FIGÉ dans frame)
+    let imagesSousLeVoile = 0;
     const resize = () => {
+      imagesSousLeVoile = 0; // la toile vient d'être vidée : il faut la repeindre
       const box = canvas.parentElement || canvas;
       const r = box.getBoundingClientRect();
       const w = Math.round(r.width) || window.innerWidth;
@@ -209,7 +215,9 @@ export function GameCanvas() {
     const observateur = new ResizeObserver(resize);
     observateur.observe(canvas.parentElement || canvas);
     // Filet : la densite de pixels peut changer sans que le parent ne bouge.
-    window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+    let orientationTimer = 0;
+    const orienter = () => { clearTimeout(orientationTimer); orientationTimer = window.setTimeout(resize, 120); };
+    window.addEventListener('orientationchange', orienter);
     
     // Initial game state setup if needed
     if (SprinterApp.G.state === 'open' && !SprinterApp.G.track) {
@@ -239,7 +247,7 @@ export function GameCanvas() {
     // game/scene-accueil.ts.
     const frame = (now: number, redessin = false) => {
       // une scene plein ecran (la ville de la carriere) couvre l'accueil : on ne le dessine pas
-      if (!redessin && dessinSuspendu() && SprinterApp.G.state === 'title') { rafRef.current = requestAnimationFrame(frame); return; }
+      if (!redessin && dessinSuspendu() && SprinterApp.G.state === 'title') { lastTime = now; rafRef.current = requestAnimationFrame(frame); return; }
       // LE TEMPO DU MONDE MULTIPLIE LE PAS, ET APRES LE PLAFOND. Plafonner
       // ensuite laisserait un ralenti relever un `dt` deja ecrete — le plafond
       // protege le moteur d'un bond apres un onglet en veille, le tempo ne doit
@@ -250,8 +258,9 @@ export function GameCanvas() {
       // jeu ralentir avec lui, et son 200 m durait vingt-trois secondes a
       // l'ecran pour dix-huit au chrono. Jusqu'a quinze images, la course
       // garde sa vraie duree ; en dessous, c'est l'onglet en veille.
+      const dtReel = redessin ? 0 : Math.max(0, (now - lastTime) / 1000);
       const dt = redessin ? 0
-        : Math.min(PAS_MAX_S, (now - lastTime) / 1000 || 0.016) * tempoDuMonde();
+        : Math.min(PAS_MAX_S, dtReel || 0.016) * tempoDuMonde();
       if (!redessin) {
         lastTime = now;
         updateLogic(dt);
@@ -262,7 +271,7 @@ export function GameCanvas() {
       // telephone tient le grain de piste et la poussiere ou s'il faut les
       // lui retirer. Voir game/rendu-premium.js.
       const Prem = (globalThis as any).RenduPremium;
-      if (Prem && !redessin) Prem.mesurer(dt);
+      if (Prem && !redessin && !document.hidden && dtReel <= 1) Prem.mesurer(dtReel);
 
       // LA DEFINITION NE CHANGE QU'AUX MENUS. Quitter l'ULTRA redimensionne la
       // toile, et l'enregistreur des revues la filme pendant la course (voir
@@ -272,6 +281,15 @@ export function GameCanvas() {
         const st = SprinterApp.G.state;
         if ((st === 'title' || st === 'open') && Prem.dpr() !== SprinterApp.G.dpr) resize();
       }
+
+      // FOND FIGÉ SOUS LES ÉCRANS DE FIN (9/11, « le jeu rame énormément »). Over, Result et
+      // WinAll posent un voile noir à 80-90 % avec backdrop-blur : redessiner le stade dessous à
+      // chaque image ne se voyait pas, mais obligeait le navigateur à refaire le flou plein écran
+      // à chaque image. Une demi-seconde de dessin (le temps que l'écran apparaisse), puis la
+      // toile garde sa dernière image ; la logique, elle, continue de tourner.
+      const sousLeVoile = SprinterApp.G.state === 'over' || SprinterApp.G.state === 'result' || SprinterApp.G.state === 'winall';
+      imagesSousLeVoile = sousLeVoile ? imagesSousLeVoile + 1 : 0;
+      if (!redessin && imagesSousLeVoile > 30) { rafRef.current = requestAnimationFrame(frame); return; }
 
       ctx.setTransform(SprinterApp.G.dpr, 0, 0, SprinterApp.G.dpr, 0, 0);
       ctx.clearRect(0, 0, SprinterApp.G.VW, SprinterApp.G.VH);
@@ -312,7 +330,8 @@ export function GameCanvas() {
       const scenette = G.state === 'cut' && G.cut && G.cut.kind !== 'ending';
       // ... sauf dans la salle Jesse Owens, ou le generique se joue dans la halle en 3D (l'auteur, 3/11 ; poserLeTourDHonneur)
       const generique3D = G.state === 'cut' && G.cut && G.cut.kind === 'ending' && !!G.race && !!(G.race.salle || G.race.salleDroite);
-      const en3D = !!rendu3D && (EPREUVES_3D.has(G.raceKey) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
+      // (au canal de test, le relais peut rester en 2D : canal.ts, relais2D)
+      const en3D = !!rendu3D && ((EPREUVES_3D.has(G.raceKey) && !(G.raceKey === '4x100' && relais2D())) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
         && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || scenette || generique3D);
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {
@@ -429,6 +448,12 @@ export function GameCanvas() {
               // juste au-dessus de la tete : plus haut, de loin, il semblait pose sur le coureur du fond
               const e = rendu3D.ecranDe(SprinterApp, G.player, 1.1);
               if (e) marquerLeJoueur(ctx, e);
+            }
+            const fantome = G.ghost && G.ghost.runner;
+            if (fantome && fantome.repere && fantome.repere.nom && !G.champDirect && !G.rejeu && !G.echauffementChamp
+                && G.raceKey !== '4x100' && rendu3D.ecranDe) {
+              const e = rendu3D.ecranDe(SprinterApp, fantome, 1.1);
+              if (e) marquerLeJoueur(ctx, e, fantome.repere.nom, '#67e8f9');
             }
           }
         } else if (G.state === 'title') {
@@ -551,6 +576,8 @@ export function GameCanvas() {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       brancherLeRedessin(null);
       observateur.disconnect();
+      window.removeEventListener('orientationchange', orienter);
+      clearTimeout(orientationTimer);
     };
   }, []);
   

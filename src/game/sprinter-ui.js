@@ -661,6 +661,7 @@
   }
   // Retour haptique : Capacitor sur telephone, sinon l'API Vibration.
   function buzz(ms) {
+    if (window.__sprinterVibre === false) return;
     try {
       const cap = window.Capacitor;
       if (cap && cap.Plugins && cap.Plugins.Haptics) {
@@ -748,7 +749,7 @@
         G.elapsed >= G.player.finishTime + 3;
       if (out || slow || G.elapsed >= 90) {
         for (const r of G.runners)
-          if (!r.finished && !r.isPlayer) r.finishTime = r.target;
+          if (!r.finished && !r.isPlayer) r.finishTime = r.target + (r.retard || 0);
         A.finishRace();
       }
     }

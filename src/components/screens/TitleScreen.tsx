@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { SprinterApp, useGameStore, toggleLang, toggleAudio } from '@/game/engine';
-import { Globe, Globe2 } from 'lucide-react';
+import { SprinterApp, useGameStore } from '@/game/engine';
+import { Globe2 } from 'lucide-react';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { RecordChip } from './RecordPerso';
 import { CarteObjectif } from './Revanche';
@@ -18,7 +18,8 @@ import { ouvrirLeTuto as ouvrirLeTutoSprint } from '@/game/sprint-tuto.js';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
 import { ouvrirLeTuto } from '@/game/haies-tuto.js';
 import { NameChip } from './NameChip';
-import { Coins } from 'lucide-react';
+import { Parametres } from './Parametres';
+import { PieceBB } from '@/components/PieceBB';
 import { rafraichirPieces, usePieces } from '@/game/pieces';
 import { NOM_CHANGE, getSavedName } from '@/game/leaderboard';
 import { bienvenueVue, BIENVENUE_CLOSE } from './Bienvenue';
@@ -40,6 +41,9 @@ const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
   .then(m => ({ default: m.BanderoleVedette })));
 // Le duel des marques (Team adidas contre Team Nike) : charge a la demande,
 // pour la meme raison — DUEL_MARQUES_OUVERT est ferme au public (canal.ts).
+// Noel 2026 : boules de neige et etoile du sapin (Noel.tsx), paresseux comme le duel.
+const BanderoleNoel = /* @__PURE__ */ lazy(() => import('./Noel')
+  .then(m => ({ default: m.BanderoleNoel })));
 const BanderoleMarques = /* @__PURE__ */ lazy(() => import('./DuelMarques')
   .then(m => ({ default: m.BanderoleMarques })));
 // Le tchat du duel lui survit (16/10) : apres la fermeture, il vit sur l'accueil.
@@ -67,8 +71,9 @@ import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, epreuvesDuLieu } from '@/game/jeux';
 import { useMenuSansDefiler } from '@/hooks/use-menu-sans-defiler';
 import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
-import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
+import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE, NOEL_OUVERT } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
+import { MascotteAccueil, MASCOTTE_OUVERTE } from '@/components/MascotteFin';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
 import { legendeAccessible, type ChoixCarriere } from '@/game/legende/compte';
@@ -165,7 +170,7 @@ export function TitleScreen() {
   // memes objets d'une course a l'autre — voir useGameStore)
   const runsIci = useGameStore(s => s.runs && s.runs[s.raceKey]);
   const furthestIci = useGameStore(s => s.furthest && s.furthest[s.raceKey]);
-  const { Audio_, N, RACES } = SprinterApp;
+  const { N, RACES } = SprinterApp;
   // Sprinter ou Hurdlers : le meme accueil, avec les epreuves du jeu courant.
   const jeu = useJeu();
   const haies = jeu === 'hurdlers';
@@ -381,13 +386,9 @@ export function TitleScreen() {
       <div ref={zoneGeste} className="flex-1 min-h-0 flex flex-col">
         {/* Header controls */}
         <div className="w-full flex justify-between items-start z-20 shrink-0 mb-2 md:mb-4 serre:mb-1">
-          <button 
-            onClick={() => toggleLang()}
-            className="bg-card/80 backdrop-blur-md border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 md:gap-2 hover:bg-white/10 transition-colors"
-          >
-            <Globe className="w-3.5 h-3.5 md:w-4 md:h-4 text-muted-foreground" />
-            <span className="font-bold text-xs md:text-sm text-foreground/90">{N.getLang().toUpperCase()}</span>
-          </button>
+          {/* La langue est passee dans les Parametres (roue dentee) ; la case
+              garde le nom au centre du bandeau. */}
+          <div aria-hidden="true" className="w-10 md:w-12 shrink-0" />
 
           {/* Le nom du joueur occupe le centre du bandeau, qui etait vide.
               C'est le seul ecran que tout le monde traverse. */}
@@ -395,16 +396,7 @@ export function TitleScreen() {
 
           <div className="flex items-start gap-2">
             <PucePieces />
-            <button
-              onClick={() => toggleAudio()}
-              className="bg-card/80 backdrop-blur-md border border-white/10 p-2 md:p-3 rounded-xl hover:bg-white/10 transition-colors"
-            >
-              <img
-                src={`${BASE}/icons/${Audio_.on ? 'audio-on' : 'audio-off'}.png`}
-                alt=""
-                className={`w-4 h-4 md:w-5 md:h-5 ${Audio_.on ? 'opacity-100' : 'opacity-40'}`}
-              />
-            </button>
+            <Parametres />
           </div>
         </div>
 
@@ -432,8 +424,15 @@ export function TitleScreen() {
               au milieu de sa moitie. */}
           <div className="flex-1 w-full flex flex-col items-center landscape:items-start text-center landscape:text-left">
             <div className="order-1 landscape:order-2 shrink-0 mt-2 md:mt-0 serre:mt-0 bg-card/60 backdrop-blur-sm border border-white/10 px-6 py-5 md:px-8 md:py-6 serre:px-5 serre:py-2 rounded-2xl landscape:w-full max-w-md border-t-white/20">
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl serre:text-4xl font-black font-display tracking-tight text-primary drop-shadow-md">
-                {haies ? 'HURDLERS' : 'SPRINTER'}
+              {/* le titre : mot penche et degrade, traits de vitesse, les deux mascottes dos a dos
+                  apres la derniere lettre (index.css, .logo-titre) */}
+              {/* (pas de text-7xl : avec les mascottes, le titre fait ~6 fois sa taille de police en
+                  largeur, et la carte (max-w-md) n'en tient que 384 px a l'interieur) */}
+              <h1 className="logo-titre text-[2.6rem] min-[400px]:text-5xl sm:text-[3.3rem] serre:text-4xl text-primary pl-[0.5em]">
+                <span className="logo-titre__mot">{haies ? 'HURDLERS' : 'SPRINTER'}</span>
+                {/* les mascottes ne sont pas pretes : canal de test seulement (MascotteFin.tsx) */}
+                {MASCOTTE_OUVERTE && <img src={`${import.meta.env.BASE_URL}logo/duo-mascottes-buste.webp`} alt=""
+                     className="logo-titre__duo" draggable={false} />}
               </h1>
               <p className="mt-1 md:mt-2 serre:mt-0 text-[10px] sm:text-xs md:text-base lg:text-xl serre:text-[10px] font-medium text-foreground/80 tracking-wide uppercase">
                 {tab === 'career'
@@ -448,7 +447,10 @@ export function TitleScreen() {
               </p>
             </div>
             <div data-accueil-scene aria-hidden
-                 className="order-2 landscape:order-1 w-full max-w-md flex-1 min-h-[84px] serre:min-h-0 landscape:min-h-[96px]" />
+                 className="relative order-2 landscape:order-1 w-full max-w-md flex-1 min-h-[84px] serre:min-h-0 landscape:min-h-[96px]">
+              {/* la mascotte salue, sur le cote de la scene (components/MascotteFin.tsx) */}
+              {!haies && <MascotteAccueil />}
+            </div>
             <div className="hidden landscape:block order-3 flex-1" />
           </div>
 
@@ -461,7 +463,7 @@ export function TitleScreen() {
               revelation, le boss et les podiums du championnat (Championnat.tsx
               les ouvre depuis sa carte). */}
           <div ref={n => { rouleau.current = n; menuCadre.current = n; }}
-               className="flex-initial landscape:flex-1 min-h-0 overflow-y-auto flex flex-col
+               className="flex-initial landscape:flex-1 min-h-0 overflow-y-auto [overflow-anchor:none] flex flex-col
                           w-[calc(100%+4rem)] max-w-[calc(28rem+4rem)] -mx-8 px-8 -mb-4">
           <div ref={menuContenu} className="my-auto flex flex-col gap-3 sm:gap-4 md:gap-6 serre:gap-2 w-full pt-2 pb-6 serre:pt-1 serre:pb-3">
 
@@ -484,6 +486,9 @@ export function TitleScreen() {
 
             {/* LE DUEL DES EPREUVES : le serveur dit s'il est ouvert. Sprinter seulement. */}
             {!haies && <Suspense fallback={null}><BanderoleEpreuves /></Suspense>}
+
+            {/* NOEL 2026, un 60 m : Sprinter seulement. */}
+            {!haies && NOEL_OUVERT && <Suspense fallback={null}><BanderoleNoel /></Suspense>}
 
             {/* LE DUEL DES MARQUES, un 100 m : Sprinter seulement. */}
             {!haies && DUEL_MARQUES_OUVERT && <Suspense fallback={null}><BanderoleMarques /></Suspense>}
@@ -850,10 +855,14 @@ function PucePieces() {
   }, []);
   if (!pieces || !pieces.reserve) return null;
   return (
-    <div title={SprinterApp.N.t('pieces_solde', { n: pieces.solde })}
-         className="bg-card/80 backdrop-blur-md border border-white/10 px-3 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1.5 text-amber-300">
-      <Coins className="w-3.5 h-3.5 md:w-4 md:h-4" />
-      <span className="font-bold text-xs md:text-sm tabular-nums">{pieces.solde}</span>
+    <div title={`${pieces.solde} BenbeDollar`}
+         className="bg-card/80 backdrop-blur-md border border-white/10 px-2 py-1.5 md:px-4 md:py-2 rounded-xl flex items-center gap-1 md:gap-1.5 text-amber-300">
+      <PieceBB className="h-4 w-4 md:h-5 md:w-5" />
+      {/* Affiche comme une vraie monnaie : montant puis symbole, a la francaise
+          (« 26 B$ » comme « 26 € »). Le nom complet, BenbeDollar, est dans le title. */}
+      <span className="font-bold text-xs md:text-sm tabular-nums whitespace-nowrap">
+        {pieces.solde.toLocaleString('fr-FR')}&nbsp;B$
+      </span>
     </div>
   );
 }

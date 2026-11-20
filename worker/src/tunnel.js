@@ -88,7 +88,9 @@ export const ETAPES_HALLOWEEN = [
   ...Array.from({ length: 13 }, (_, i) => `hw_tenue_${i + 1}`),
 ];
 
-const CONNUES = new Set([...ETAPES_TUNNEL, ...ETAPES_A_COTE, ...ETAPES_HALLOWEEN]);
+const CONNUES = new Set([...ETAPES_TUNNEL, ...ETAPES_A_COTE, ...ETAPES_HALLOWEEN,
+  'intro_mesuree', 'intro_directe', 'intro_attente', 'intro_attente_finie',
+  'decouverte', 'decouverte_arrivee']);
 export const etapeConnue = e => typeof e === 'string' && CONNUES.has(e);
 
 const pret = new WeakSet();
@@ -174,7 +176,7 @@ export async function noterAppareil(db, deviceId, fiche, now = Date.now()) {
   // La ligne existait peut-etre deja, avec l'autre moitie seulement.
   await db.prepare(
     `UPDATE tunnel_appareil
-        SET navigateur = COALESCE(navigateur, ?1),
+        SET navigateur = CASE WHEN ?1 = 'robot' THEN 'robot' ELSE COALESCE(navigateur, ?1) END,
             chargement_ms = COALESCE(chargement_ms, ?2)
       WHERE device_id = ?3`).bind(navigateur, chargement, deviceId).run();
 }
@@ -216,7 +218,7 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
 
   // La cohorte : ouverte dans la fenetre, jamais vue par `visits` avant ce
   // jour-la. `visits.day` est un jour UTC en texte, comme ici.
-  const cohorte = `
+  const cohorteBrute = `
     SELECT o.device_id, o.premier_at AS o_at
       FROM tunnel o
      WHERE o.etape = 'ouverture' AND o.premier_at >= ?1
@@ -224,17 +226,26 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
          SELECT 1 FROM visits v
           WHERE v.device_id = o.device_id
             AND v.day < date(o.premier_at / 1000, 'unixepoch'))`;
+  const cohorte = `${cohorteBrute}
+       AND NOT EXISTS (
+         SELECT 1 FROM tunnel_appareil a WHERE a.device_id = o.device_id AND a.navigateur = 'robot')`;
+  const robots = await db.prepare(
+    `WITH c AS (${cohorteBrute})
+     SELECT COUNT(*) AS n FROM c JOIN tunnel_appareil a ON a.device_id = c.device_id
+     WHERE a.navigateur = 'robot'`).bind(depuis).first();
 
   const { results } = await db.prepare(
     `WITH c AS (${cohorte})
-     SELECT t.etape, t.premier_at - c.o_at AS d
+     SELECT CASE WHEN t.etape IN ('decouverte', 'decouverte_arrivee') THEN 'accueil' ELSE t.etape END AS marche,
+            MIN(t.premier_at - c.o_at) AS d
        FROM tunnel t JOIN c ON c.device_id = t.device_id
+      GROUP BY t.device_id, marche
       LIMIT 200000`).bind(depuis).all();
 
   const parEtape = new Map();
   for (const r of results || []) {
-    if (!parEtape.has(r.etape)) parEtape.set(r.etape, []);
-    parEtape.get(r.etape).push(Math.max(0, r.d || 0));
+    if (!parEtape.has(r.marche)) parEtape.set(r.marche, []);
+    parEtape.get(r.marche).push(Math.max(0, r.d || 0));
   }
   const base = parEtape.get('ouverture')?.length || 0;
   const ligne = e => {
@@ -264,7 +275,7 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
     `WITH c AS (${cohorte})
      SELECT a.navigateur, a.chargement_ms,
             EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape = 'ecran')   AS ecran,
-            EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape = 'accueil') AS accueil,
+            EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape IN ('accueil', 'decouverte', 'decouverte_arrivee')) AS accueil,
             EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape = 'depart')  AS depart,
             EXISTS (SELECT 1 FROM tunnel t WHERE t.device_id = c.device_id AND t.etape = 'arrivee') AS arrivee
        FROM c LEFT JOIN tunnel_appareil a ON a.device_id = c.device_id
@@ -285,6 +296,29 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
     l.arrivee += r.arrivee ? 1 : 0;
   }
 
+  // Seulement les premières ouvertures instrumentées et vieilles de cinq minutes.
+  // Les signaux peuvent arriver en désordre ; la fin d’une attente prouve son début.
+  const intro = await db.prepare(
+    `WITH c AS (${cohorte}), mesures AS (
+       SELECT c.device_id,
+              MAX(t.etape = 'intro_directe') AS directe,
+              MAX(t.etape IN ('intro_attente', 'intro_attente_finie')) AS attente,
+              MAX(t.etape = 'intro_attente_finie') AS finie,
+              MAX(t.etape = 'decouverte') AS decouverte,
+              MAX(t.etape = 'decouverte_arrivee') AS decouverte_arrivee
+         FROM c JOIN tunnel t ON t.device_id = c.device_id
+           JOIN tunnel_appareil a ON a.device_id = c.device_id
+        WHERE a.navigateur IS NOT NULL AND a.navigateur <> 'robot'
+          AND c.o_at < ?2 AND t.etape IN ('intro_mesuree', 'intro_directe', 'intro_attente', 'intro_attente_finie', 'decouverte', 'decouverte_arrivee')
+        GROUP BY c.device_id)
+     SELECT COUNT(*) AS mesures,
+            COUNT(CASE WHEN directe AND NOT attente AND NOT decouverte THEN 1 END) AS directs,
+            COUNT(CASE WHEN attente AND NOT decouverte THEN 1 END) AS attendent,
+            COUNT(CASE WHEN finie AND NOT decouverte THEN 1 END) AS apres_attente,
+            COUNT(CASE WHEN decouverte OR decouverte_arrivee THEN 1 END) AS decouvertes,
+            COUNT(CASE WHEN decouverte_arrivee THEN 1 END) AS decouvertes_finies
+       FROM mesures`).bind(depuis, now - 5 * 60 * 1000).first();
+
   // LE TELECHARGEMENT (22/10/2026) : `page` part d'index.html avant le code du
   // jeu. Un appareil neuf qui a `page` sans `ouverture` est parti pendant le
   // telechargement — invisible pour la cohorte, qui commence a l'ouverture.
@@ -296,6 +330,8 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
        FROM tunnel p
       WHERE p.etape = 'page' AND p.premier_at >= ?1 AND p.premier_at < ?2
         AND NOT EXISTS (
+          SELECT 1 FROM tunnel_appareil a WHERE a.device_id = p.device_id AND a.navigateur = 'robot')
+        AND NOT EXISTS (
           SELECT 1 FROM visits v
            WHERE v.device_id = p.device_id
              AND v.day < date(p.premier_at / 1000, 'unixepoch'))`)
@@ -305,6 +341,8 @@ export async function lireTunnel(db, jours = 30, now = Date.now()) {
   return {
     jours, depuis, mesure_depuis: premier,
     telechargement: { pages: tele?.pages || 0, perdus: tele?.perdus || 0 },
+    intro,
+    robots_ecartes: robots?.n || 0,
     cohorte: base,
     etapes: ETAPES_TUNNEL.map(ligne),
     a_cote: ETAPES_A_COTE.map(ligne),

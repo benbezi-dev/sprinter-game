@@ -128,9 +128,22 @@ await appareil('c-ancien', 'chrome', 100, OEAD);
 await noterEtape(db, 'c-trop-vieux', 'ouverture', NOW - 60 * 86400000);
 await noterAppareil(db, 'c-trop-vieux', { navigateur: 'firefox' }, NOW - 60 * 86400000);
 
+for (const [id, etapesIntro] of [
+  ['c-sa-1', ['intro_mesuree', 'intro_directe']],
+  ['c-sa-2', ['intro_attente_finie']], // La requête de début peut être perdue.
+  ['c-sa-3', ['intro_mesuree', 'intro_attente']],
+  ['c-sa-4', ['intro_mesuree']], // Interruption avant la fin de l’animation.
+  ['c-ro-1', ['intro_attente']], ['c-ancien', ['intro_directe']], ['c-vieux-1', ['intro_directe']],
+]) {
+  for (const etape of etapesIntro) await noterEtape(db, id, etape, T + 4000);
+}
 const t = await lireTunnel(db, 30, NOW);
+ok('première intro : hors robots, appareils connus antérieurs et navigateurs inconnus',
+  t.intro.mesures === 4 && t.intro.directs === 1 && t.intro.attendent === 2 && t.intro.apres_attente === 1, t.intro);
+const recent = await lireTunnel(db, 30, T + 60000);
+ok('une ouverture récente ne ressemble pas à une attente interrompue', recent.intro.mesures === 0);
 const nav = n => t.par_navigateur.find(x => x.navigateur === n);
-ok('cohorte : 10 appareils neufs (ni l\'ancien ni le trop vieux)', t.cohorte === 10, t.cohorte);
+ok('cohorte : 9 appareils neufs hors robot et appareils déjà connus', t.cohorte === 9 && t.robots_ecartes === 1, t);
 ok('le format existant est intact',
   Array.isArray(t.etapes) && Array.isArray(t.a_cote) && t.rejoue && 'jours' in t && 'depuis' in t && 'mesure_depuis' in t
   && t.etapes[1].etape === 'ecran' && t.etapes[1].n === 6, t.etapes.map(x => [x.etape, x.n]));
@@ -138,9 +151,9 @@ ok('instagram : 3 ouvertures, 1 ecran, 1 accueil, 0 depart',
   JSON.stringify(nav('instagram')) === JSON.stringify({ navigateur: 'instagram', n: 3, ecran: 1, accueil: 1, depart: 0, arrivee: 0 }), nav('instagram'));
 ok('safari-ios : 4, 4 ecrans, 3 accueils, 2 departs, 1 arrivee',
   JSON.stringify(nav('safari-ios')) === JSON.stringify({ navigateur: 'safari-ios', n: 4, ecran: 4, accueil: 3, depart: 2, arrivee: 1 }), nav('safari-ios'));
-ok('robot : 1 ouverture, rien d\'autre', nav('robot')?.n === 1 && nav('robot')?.ecran === 0);
+ok('le robot est absent des parts par navigateur', !nav('robot'));
 ok('l\'appareil ancien et le trop vieux ne sont dans aucune classe', !nav('chrome') && !nav('firefox'));
-ok('trie du plus nombreux au moins nombreux', t.par_navigateur.map(x => x.navigateur).join() === 'safari-ios,instagram,robot', t.par_navigateur.map(x => x.navigateur));
+ok('trie du plus nombreux au moins nombreux', t.par_navigateur.map(x => x.navigateur).join() === 'safari-ios,instagram', t.par_navigateur.map(x => x.navigateur));
 ok('anciens clients : 2 sans fiche', t.sans_fiche === 2, t.sans_fiche);
 // Chargements : 4000, 1000, 2000, 3000, 5000 -> mediane 3000, p90 = rang 5 = 5000.
 ok('chargement : n = 5, mediane 3000 ms, 90e centile 5000 ms',
@@ -164,6 +177,15 @@ const tp = await lireTunnel(db, 30, NOW);
 ok('telechargement : 3 pages neuves, 2 perdus', tp.telechargement.pages === 3 && tp.telechargement.perdus === 2, tp.telechargement);
 ok('« page » ne change pas la cohorte (ancree sur l\'ouverture)', tp.cohorte === 1, tp.cohorte);
 
+titre('Le choix du 100 m compte comme passage du premier écran');
+await appareil('p-decouverte', 'chrome', null, [...OEA, 'decouverte', 'decouverte_arrivee']);
+await appareil('p-bot', 'robot', null, ['page', ...OEA, 'decouverte', 'decouverte_arrivee']);
+const decouverte = await lireTunnel(db, 30, NOW);
+ok('le bouton et le menu du même appareil ne sont comptés qu’une fois',
+  decouverte.etapes.find(e => e.etape === 'accueil')?.n === 1, decouverte.etapes);
+ok('seule la course découverte réelle est comptée dans le tunnel',
+  decouverte.intro.decouvertes === 1 && decouverte.intro.decouvertes_finies === 1
+  && decouverte.telechargement.pages === 3 && decouverte.robots_ecartes === 1, decouverte.intro);
 titre('lireTunnel : base sans aucune fiche');
 base.exec(`DELETE FROM tunnel; DELETE FROM tunnel_appareil`);
 await noterEtape(db, 'seul-sans-fiche', 'ouverture', T);

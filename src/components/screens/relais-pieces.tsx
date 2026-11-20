@@ -162,9 +162,12 @@ export function Couloir({ nom, code, d, porteur, couleur, moi, elimine, total, f
  * montre une seconde, sinon deux coureurs hors de portee tapent en boucle
  * sans comprendre que c'est la distance qui les separe, et non le minutage.
  */
-export function BoutonTemoin({ role, arme, bras, portee, rate, onTaper }: {
+export function BoutonTemoin({ role, arme, bras, portee, rate, pars, onTaper }: {
   role: 'donne' | 'recoit'; arme: boolean;
-  bras?: number | null; portee?: number; rate?: number; onTaper: () => void;
+  bras?: number | null; portee?: number; rate?: number;
+  /** Receveur : le porteur a atteint ma marque d'elan, c'est le moment de partir. */
+  pars?: boolean;
+  onTaper: () => void;
 }) {
   const { N } = SprinterApp;
   const donne = role === 'donne';
@@ -196,12 +199,13 @@ export function BoutonTemoin({ role, arme, bras, portee, rate, onTaper }: {
         disabled={!arme}
         className={`w-full py-5 rounded-2xl font-black font-display tracking-widest text-lg
           pointer-events-auto transition-colors
-          ${!arme ? 'bg-white/5 text-white/25 border border-white/10'
+          ${!arme && pars && !donne ? 'bg-amber-400/25 text-amber-200 border-2 border-amber-300 animate-pulse'
+            : !arme ? 'bg-white/5 text-white/25 border border-white/10'
             : donne ? 'bg-primary text-background animate-pulse'
                     : 'bg-emerald-400 text-background animate-pulse'}`}>
         <Hand className="w-6 h-6 mx-auto mb-1" />
         {N.t(donne ? (arme ? 'relais_donne' : 'relais_approche')
-                   : (arme ? 'relais_prends' : 'relais_attends_temoin'))}
+                   : (arme ? 'relais_prends' : pars ? 'relais_pars' : 'relais_attends_temoin'))}
       </button>
     </div>
   );
@@ -210,6 +214,35 @@ export function BoutonTemoin({ role, arme, bras, portee, rate, onTaper }: {
 /* ---------------------------------------------------------------- la fin */
 
 export type FinPasse = { de: number; vers: number; note: number };
+
+/**
+ * La raison d'une elimination, dite au joueur dans sa langue.
+ *
+ * La salle la nomme en francais sans accents (worker/src/relais-course.js) :
+ * l'afficher telle quelle donnait « temoin donne avant la zone » a un joueur
+ * anglophone. Une raison inconnue passe telle quelle plutot que de disparaitre.
+ */
+const RAISONS: Record<string, string> = {
+  'faux depart': 'relais_r_faux_depart',
+  'sortie de zone sans le temoin': 'relais_r_sortie_zone',
+  'le temoin a depasse la zone': 'relais_r_depasse_zone',
+  'temoin passe hors de la zone': 'relais_r_hors_zone',
+  'temoin donne avant la zone': 'relais_r_avant_zone',
+  'vitesse impossible': 'relais_r_vitesse',
+  'arrivee impossible': 'relais_r_arrivee',
+  'temps depasse': 'relais_r_temps',
+  'un relayeur a quitte la course': 'relais_r_quitte',
+};
+
+/** « au 2e relais : témoin donné avant la zone ». */
+export function pourquoiElimine(el: { raison: string; relais: number | null }): string {
+  const { N } = SprinterApp;
+  const cle = RAISONS[el.raison];
+  return N.t('relais_elimine_pourquoi', {
+    r: el.relais ? N.ord(el.relais) : '?',
+    c: cle ? N.t(cle) : el.raison,
+  });
+}
 
 export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfants }: {
   titre: string;
@@ -333,7 +366,7 @@ export function Fin({ titre, rate, detail, temps, passes, place, onFermer, enfan
 
 /** La liste des relayeurs et leur etat de preparation. */
 export function Vestiaire({ joueurs, monRelais }: {
-  joueurs: { id: string; nom: string; relais: number; pret: boolean }[];
+  joueurs: { id: string; nom: string; relais: number; pret: boolean; fictif?: boolean }[];
   monRelais: number;
 }) {
   const { N } = SprinterApp;
@@ -351,6 +384,13 @@ export function Vestiaire({ joueurs, monRelais }: {
               ${rang === monRelais ? 'text-emerald-300' : 'text-foreground'}`}>
               {j ? j.nom : '—'}
             </span>
+            {/* Un fictif court pour la place que personne ne tient. */}
+            {j?.fictif && (
+              <span className="text-[8px] tracking-widest text-muted-foreground/70 border border-white/10
+                               rounded px-1 py-px">
+                {N.t('relais_fictif')}
+              </span>
+            )}
             <span className={`text-[9px] tracking-widest
               ${j?.pret ? 'text-emerald-400' : 'text-muted-foreground'}`}>
               {j ? N.t(j.pret ? 'live_ready' : 'live_notready') : ''}

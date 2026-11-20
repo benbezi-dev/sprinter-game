@@ -425,6 +425,14 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
          CYAN, Math.min(G.transFlash, 1));
   }
 
+  // le dernier geste du joueur : le casse, un coup de coude, le couloir 2 (annoncerGeste, sprinter-app.js)
+  if (G.gesteFlash > 0 && G.geste) {
+    y += 8;
+    const t = G.geste.ton;
+    bloc(String(N.t(G.geste.cle)).toUpperCase(), t === 'or' ? OR : t === 'bon' ? VERT : t === 'alerte' ? ROUGE : TEXTE,
+         sm ? 20 : 18, G.geste.sous || null, CYAN, Math.min(G.gesteFlash, 1));
+  }
+
   const ph = p.phase ? p.phase() : 0;
   if (ph === 0 && (G.elapsed || 0) > 0.1 && G.transFlash <= 0 && G.reactFlash <= 0 && !p.finished) {
     y += 16;

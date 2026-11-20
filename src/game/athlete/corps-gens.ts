@@ -71,6 +71,19 @@ export function premiumCle(look: any): string {
   const ecart = (p: number[]) => (p[0] - s[0]) ** 2 + (p[1] - s[1]) ** 2 + (p[2] - s[2]) ** 2;
   return PREMIUM.filter((p) => p.femme === femme).sort((a, b) => ecart(a.peau) - ecart(b.peau))[0].cle;
 }
+/**
+ * LES PEAUX QUI SE VOIENT (16/11, l'auteur : « masque ce qui ne fonctionne pas »). Onze pastilles pour quatre corps
+ * premium par genre : plusieurs donnaient le meme athlete. On n'en montre qu'une par corps, la plus proche de sa peau
+ * (les peaux des femmes et des hommes sont les memes). La coiffure, la couleur des cheveux et l'origine ne se voient
+ * pas du tout sur ces corps, cuites dans la texture : les ecrans de reglage ne les proposent plus.
+ */
+export function peauxDesCorps<P extends string>(peaux: readonly P[], rgbDe: (p: P) => number[]): P[] {
+  const ecart = (a: number[], b: number[]) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  return PREMIUM.filter((c) => !c.femme)
+    .map((c) => peaux.reduce((m, p) => (ecart(rgbDe(p), c.peau) < ecart(rgbDe(m), c.peau) ? p : m)));
+}
+/** Vrai si ces deux peaux donnent le meme corps premium. */
+export const memeCorps = (a: number[], b: number[]) => premiumCle({ build: 'm', skin: a }) === premiumCle({ build: 'm', skin: b });
 /** Le fichier du corps de ce look (public/). */
 export const cheminDe = (look: any) => SANS_PREMIUM
   ? `modeles/coureur-${look && look.build === 'f' ? 'femme' : 'homme'}.glb`

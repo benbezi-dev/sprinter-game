@@ -3,8 +3,9 @@ import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
 import { EcartRecord } from './RecordPerso';
-import { ligneCadence } from '@/game/cadence';
 import { TenirDansLEcran } from '@/components/TenirDansLEcran';
+import { ligneCadence } from '@/game/cadence';
+import { MascotteFin } from '@/components/MascotteFin';
 
 export function ResultScreen() {
   const levelIdx = useGameStore(s => s.levelIdx);
@@ -37,7 +38,7 @@ export function ResultScreen() {
   return (
     <TenirDansLEcran className="w-full h-full flex flex-col pointer-events-auto bg-black/80 backdrop-blur-sm overflow-y-auto px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)] overflow-x-hidden">
         <motion.div {...MONTEE} className="flex flex-col items-center max-w-md w-full py-6 md:py-8 gap-4 md:gap-6">
-          
+          <MascotteFin />
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             <h1 className="text-3xl sm:text-4xl md:text-5xl font-black font-display text-emerald-400 tracking-tight uppercase drop-shadow-md">
               {oneShot

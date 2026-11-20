@@ -94,8 +94,9 @@
 import liste from 'virtual:precharge';
 
 /** Ce que l'ouverture attend : la premiere course, ou qu'elle parte. */
-const ESSENTIEL = ['/decors/tribune/', '/decors/day/', '/decors/mondiaux/',
-                   '/decors/materiel/', '/decors/nuit/', '/pubs/'];
+// Les Mondiaux et la nuit attendent leur course (stadeEnPreparation).
+// Les telecharger ici retardait meme les joueurs qui ne les ouvrent pas.
+const ESSENTIEL = ['/decors/tribune/', '/decors/day/', '/decors/materiel/', '/pubs/'];
 const essentiel = (u: string) => ESSENTIEL.some(d => u.startsWith(d));
 /** Les nuits d'Halloween et leur materiel, au palier ordinaire comme a l'ultra. */
 const halloween = (u: string) => /^\/decors(-ultra)?\/(halloween-|materiel-a\d)/.test(u);
@@ -125,11 +126,30 @@ const etat = { phase: 'attente', faits: 0, total: 0, ultraFaits: 0, ultraTotal: 
                 maillagesAvance: [] as string[] };
 (globalThis as any).SprinterChargement = etat;
 
-/** Telecharge `urls`, `EN_VOL` a la fois, et appelle `apres` a chacune. */
-async function telecharger(urls: string[], apres: () => void) {
+/** Le facultatif ne dispute ni le reseau ni le decodage a la course. */
+function accueilVisible() {
+  return !document.hidden && (globalThis as any).SprinterApp?.G?.state === 'title';
+}
+function economiserLesDonnees() {
+  const connexion = (navigator as Navigator & { connection?: { saveData?: boolean; effectiveType?: string } }).connection;
+  return !!connexion?.saveData || /^(slow-)?2g$/.test(connexion?.effectiveType || '');
+}
+async function attendreAccueil() {
+  while (!accueilVisible()) await new Promise(resolve => setTimeout(resolve, 250));
+}
+
+/** Six requetes essentielles, deux seulement pour le facultatif. */
+async function telecharger(urls: string[], apres: () => void, fond = false) {
   let i = 0;
   const suivant = async (): Promise<void> => {
     while (i < urls.length) {
+      if (fond) {
+        if (economiserLesDonnees()) return;
+        await attendreAccueil();
+        // Le menu a pu etre quitte pendant que cette promesse attendait.
+        if (!accueilVisible()) continue;
+        if (i >= urls.length) return;
+      }
       const u = urls[i++];
       try {
         // `force-cache` : une image deja telechargee se relit du cache sans
@@ -137,14 +157,14 @@ async function telecharger(urls: string[], apres: () => void) {
         // minutes de cache de GitHub Pages, chaque ouverture refaisait trois
         // cents allers-retours. Une image changee entre-temps, le module qui
         // la dessine la redemande de toute facon, lui.
-        const r = await fetch(BASE + u, { cache: 'force-cache' });
+        const r = await fetch(BASE + u, { cache: 'force-cache', ...(fond ? { priority: 'low' as const } : {}) });
         // lire la reponse jusqu'au bout : sinon elle n'entre pas au cache
         if (r.ok) await r.arrayBuffer();
       } catch { /* une image absente ne bloque pas les autres */ }
       apres();
     }
   };
-  await Promise.all(Array.from({ length: EN_VOL }, suivant));
+  await Promise.all(Array.from({ length: fond ? 2 : EN_VOL }, suivant));
 }
 
 /** Decode l'atlas du public que la toile va utiliser. */
@@ -186,15 +206,16 @@ export function lancerChargement() {
 
     // Les autres stades, sans rien bloquer : l'accueil est deja la.
     etat.phase = 'ensuite'; etat.ensuiteTotal = ensuite.length;
-    await telecharger(ensuite, () => { etat.ensuiteFaits++; });
+    await telecharger(ensuite, () => { etat.ensuiteFaits++; }, true);
     etat.phase = 'fini';
 
     const P = (globalThis as any).RenduPremium;
     // un appareil qui a deja perdu l'ultra n'en telecharge plus les images
     const ultra = liste.ultra.filter(servi);
-    if (P && P.DENSE && P.ultraAttendu && ultra.length) {
+    if (P && P.DENSE && P.ultraAttendu && P.niveau >= P.PLEIN && ultra.length && !economiserLesDonnees()) {
       etat.phase = 'ultra'; etat.ultraTotal = ultra.length;
-      await telecharger(ultra, () => { etat.ultraFaits++; });
+      await telecharger(ultra, () => { etat.ultraFaits++; }, true);
+      if (etat.ultraFaits !== ultra.length) return;
       P.apporterUltra();
       etat.ultraApporte = true;
       etat.phase = 'fini';
@@ -307,8 +328,8 @@ export function avancerLePublic(G: any, ms: number) {
     revoirA = debut + 2000;
   } else {
     etat.publicAvance = null;
-    // cette image a compose : elle ne compte pas pour la regle de qualite
-    g.RenduPremium && (g.RenduPremium.composeDAvance = performance.now() + 250);
+    // La preparation est bornee ; elle ne masque plus indefiniment la
+    // cadence du menu a la regle de qualite.
   }
 }
 

@@ -147,6 +147,12 @@ export type Athlete = {
   palmares: { s: number; niveau: number; epreuve: Course; place: number; chrono: number | null; meeting?: string }[];
   /** L'assiduite du cycle : seances proposees, seances faites. */
   assiduite: { proposees: number; faites: number };
+  /** Les Grands Jeux courus (la semaine, l'epreuve, la place). */
+  jeux?: { s: number; epreuve: Epreuve; place: number }[];
+  /** Les Jeux viennent de se courir : le changement de discipline est propose (changerDeDiscipline). */
+  apresJeux?: boolean;
+  /** Les changements de discipline (la semaine, la nouvelle epreuve). */
+  disciplines?: { s: number; epreuve: Epreuve }[];
 };
 
 /* ------------------------------------------------------------ les seances */
@@ -300,7 +306,8 @@ export type Competition = {
 /** La moyenne des quatre qualites. */
 export const moyenneDes = (a: Athlete) => STATS.reduce((s, k) => s + a.stats[k], 0) / STATS.length;
 /** La moyenne qu'il faut pour monter d'un niveau : 85 % du plafond du sien (l'endurance, seance du samedi, monte moins vite). */
-export const exigePourMonter = (niveau: number) => Math.round(COMPETITIONS[niveau].plafond * 0.85);
+// 85 % du plafond, 90 % a partir des France (15/11 : l'adulte montait aux Mondes en une saison)
+export const exigePourMonter = (niveau: number) => Math.round(COMPETITIONS[niveau].plafond * (niveau >= NATIONAL ? 0.9 : 0.85));
 /** Les stats sont-elles pretes pour le niveau suivant ? (le podium fait le reste) */
 export const pretPourLaSuite = (a: Athlete) => moyenneDes(a) >= exigePourMonter(a.niveau);
 
@@ -311,10 +318,39 @@ export const COMPETITIONS: Competition[] = [
   { cle: 'departementaux', plateau: 0, deplacement: 15, prime: 0, reputation: 8, ecart: 2, plafond: 45,
     chronos: { '100': [11.80, 13.40], '200': [23.60, 27.00], '400': [51.00, 57.00] } },
   { cle: 'regionaux', plateau: 1, deplacement: 40, prime: 0, reputation: 12, ecart: 2, plafond: 60 },
-  { cle: 'france', plateau: 2, deplacement: 150, prime: 400, reputation: 30, ecart: 4, plafond: 75 },
-  { cle: 'europe', plateau: 3, deplacement: 600, prime: 1500, reputation: 70, ecart: 4, plafond: 90 },
-  { cle: 'monde', plateau: 4, deplacement: 1500, prime: 5000, reputation: 160, ecart: 4, plafond: 100 },
+  // ALLONGER LA CARRIERE (l'auteur, 15/11 : « en moins d'une semaine c'est boucle […] minimum 1 mois ») : les grands
+  // championnats s'espacent (4 semaines partout jusque-la) : on s'y prepare.
+  { cle: 'france', plateau: 2, deplacement: 150, prime: 400, reputation: 30, ecart: 6, plafond: 75 },
+  { cle: 'europe', plateau: 3, deplacement: 600, prime: 1500, reputation: 70, ecart: 8, plafond: 90 },
+  { cle: 'monde', plateau: 4, deplacement: 1500, prime: 5000, reputation: 160, ecart: 12, plafond: 100 },
+  // Les Grands Jeux, tous les quatre saisons (voir JEUX) : `ecart` n'y sert pas, la date est fixe.
+  { cle: 'jeux', plateau: 4, deplacement: 2500, prime: 12000, reputation: 320, ecart: 12, plafond: 100 },
 ];
+
+/**
+ * LES 0.GAMES (l'auteur, 15/11 : « d'autres etapes apres les Mondes, genre JO », puis « pouvoir
+ * changer de discipline apres les J.O »). Nom generique : « Jeux olympiques », « olympique » et
+ * « olympiade » sont proteges en France (Code du sport, art. L141-5), comme on ne cite pas la FFA.
+ * Tous les quatre saisons (la 4e, la 8e…), la semaine 30 de la saison, en ete. La selection se joue
+ * aux Mondes de cette saison-la, avant les Jeux : un podium, les stats pretes. Les autres saisons,
+ * les Mondes rapportent le titre et la prime, sans monter. Les Jeux courus, on redescend aux Mondes
+ * et l'on peut changer de discipline.
+ */
+export const MONDE = 5, JEUX = 6;
+export const SEMAINE_DES_JEUX = 30;
+/** La moyenne des qualites qu'il faut, avec un podium aux Mondes, pour etre selectionne·e. */
+export const SELECTION_JEUX = 85;
+/** La saison (0, 1, 2…) de la semaine `s`. */
+export const saisonDe = (s: number) => Math.floor((s - 1) / SAISON);
+/** La saison de la semaine `s` est-elle celle des Jeux ? */
+export const anneeDesJeux = (s: number) => saisonDe(s) % 4 === 3;
+/** La semaine des prochains Jeux, a partir de la semaine `s` (comprise). */
+export function semaineDesProchainsJeux(s: number): number {
+  for (let k = saisonDe(s); ; k++) {
+    const w = k * SAISON + SEMAINE_DES_JEUX + 1;
+    if (k % 4 === 3 && w >= s) return w;
+  }
+}
 
 /** Le niveau vise par chaque objectif du programme. */
 export const NIVEAU_OBJECTIF: Record<Objectif, number> = { france: 3, europe: 4, monde: 5 };
@@ -395,7 +431,7 @@ export const SALAIRE = 65;
  * Espoir : l'Europe ; Senior : le Monde. Un podium au plafond de sa categorie attend l'anniversaire.
  * Une sauvegarde deja plus haut garde son niveau : on ne redescend jamais.
  */
-export const niveauMaxDe = (age: number) => (age <= 15 ? 2 : age <= 17 ? 3 : age <= 22 ? 4 : 5);
+export const niveauMaxDe = (age: number) => (age <= 15 ? 2 : age <= 17 ? 3 : age <= 22 ? 4 : 6);
 /** L'age ou la categorie ouvre le niveau au-dessus de `niveau` (null au sommet). */
 export function ageQuiOuvre(niveau: number): number | null {
   for (let age = 10; age <= 40; age++) if (niveauMaxDe(age) > niveau) return age;
@@ -492,7 +528,9 @@ export function seancePossible(a: Athlete, j: Jour): null | 'faite' | 'blesse' |
 }
 
 /** Ce que rapporte une qualite a ce niveau : plus elle est haute, moins on y gagne. */
-const reste = (v: number) => Math.max(0.08, 1 - v / 115);
+// Plus on monte, plus chaque point coute : au-dessus de 50, le frein s'ajoute (15/11, carriere bouclee en une
+// semaine par un testeur : 100 partout en 106 semaines) ; a 77, un gain vaut le tiers d'avant, a 90 le cinquieme.
+const reste = (v: number) => Math.max(0.08, 1 - v / 115) * (v <= 50 ? 1 : Math.max(0.12, Math.pow((105 - v) / 55, 1.5)));
 
 /**
  * Le gain d'une seance, sans l'appliquer. `score` : la qualite de la seance,
@@ -688,8 +726,16 @@ export type Resultat = {
   qualifie: boolean;
   prime: number;
   reputation: number;
-  /** Champion du monde ? */
+  /** Champion·ne des Grands Jeux ? */
   sommet: boolean;
+  /** Champion·ne du monde ? */
+  mondial?: boolean;
+  /** Selectionne·e pour les Grands Jeux par ce podium aux Mondes. */
+  selection?: boolean;
+  /** Une course des Grands Jeux. */
+  jeux?: boolean;
+  /** Semaines jusqu'aux prochains Grands Jeux (aux Mondes). */
+  avantLesJeux?: number;
   /** Un nouveau record personnel ? */
   record?: boolean;
   /** Le vent (m/s, 100 et 200 m), et si le chrono vaut record (vent de +2,0 au plus). */
@@ -747,18 +793,31 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   const homologue = vent === null || vent <= 2.0;
   const record = chrono !== null && homologue && (rec[epreuve] === undefined || chrono < rec[epreuve]!);
   if (record) rec[epreuve] = Math.round(chrono! * 100) / 100;
-  const sommet = niveau === COMPETITIONS.length - 1 && place === 1 && chrono !== null;
+  const sommet = niveau === JEUX && place === 1 && chrono !== null;
+  const mondial = niveau === MONDE && place === 1 && chrono !== null;
+  a.assiduite = { proposees: 0, faites: 0 };
+  // LES GRANDS JEUX COURUS : retour aux Mondes, et la discipline peut changer
+  if (niveau === JEUX) {
+    (a.jeux ||= []).push({ s: a.semaine, epreuve: epreuve as Epreuve, place });
+    a.niveau = MONDE; a.apresJeux = true;
+    a.prochaine = a.semaine + ecart(MONDE);
+    return { niveau, epreuve, place, chrono, qualifie: false, prime, reputation: rep, sommet, record, vent, homologue, jeux: true };
+  }
   // LE PODIUM ET LES STATS (l'auteur, 26/10 : « au depart les stats sont bridees sur le niveau
   // scolaire et les stats liberent les niveaux ») : on ne monte que les deux reunis.
-  const auSommet = niveau >= COMPETITIONS.length - 1;
+  // Aux Mondes, on ne monte aux Jeux que la saison des Jeux, avant eux.
+  const auSommet = niveau >= MONDE;
   const tropJeune = !auSommet && niveau >= niveauMaxDe(a.age ?? 14);
   const enHaut = auSommet || tropJeune, pret = pretPourLaSuite(a);
+  // la selection : 85 de moyenne (pas 90) : un athlete serieux court ses premiers Jeux a la 4e saison
+  const selection = niveau === MONDE && podium && moyenneDes(a) >= SELECTION_JEUX && niveauMaxDe(a.age ?? 14) >= JEUX
+    && anneeDesJeux(a.semaine) && semaineDeSaison(a) < SEMAINE_DES_JEUX;
   if (podium && pret && !enHaut) a.niveau += 1;
-  a.prochaine = a.semaine + ecart(a.niveau);
-  // Un nouveau cycle commence : l'assiduite se recompte jusqu'a la prochaine.
-  a.assiduite = { proposees: 0, faites: 0 };
-  return { niveau, epreuve, place, chrono, qualifie: podium && pret && !enHaut, pasPret: podium && !pret && !enHaut,
-           tropJeune: podium && tropJeune ? ageQuiOuvre(niveau) ?? undefined : undefined, prime, reputation: rep, sommet, record, vent, homologue };
+  if (selection) a.niveau = JEUX;
+  a.prochaine = a.niveau === JEUX ? semaineDesProchainsJeux(a.semaine) : a.semaine + ecart(a.niveau);
+  return { niveau, epreuve, place, chrono, qualifie: (podium && pret && !enHaut) || selection, pasPret: podium && !pret && !enHaut,
+           tropJeune: podium && tropJeune ? ageQuiOuvre(niveau) ?? undefined : undefined, prime, reputation: rep, sommet, record, vent, homologue,
+           mondial, selection, avantLesJeux: niveau === MONDE ? semaineDesProchainsJeux(a.semaine) - a.semaine : undefined };
 }
 
 /**
@@ -804,6 +863,8 @@ export function conclureLeMeeting(a: Athlete, epreuve: Course, place: number, ch
 
 /** Ne pas aller a la competition (pas les moyens, blesse, ou choix). */
 export function declarerForfait(a: Athlete) {
+  // forfait aux Jeux : ils sont passes, retour aux Mondes (sans changement de discipline : on ne les a pas courus)
+  if (a.niveau === JEUX) a.niveau = MONDE;
   a.prochaine = a.semaine + ecart(a.niveau);
   a.moral = borne(a.moral - 8, 0, 100);
   noter(a, 'Forfait : la compétition se fera sans toi.', 'Withdrawn: the meet goes on without you.');
@@ -1167,3 +1228,23 @@ export function soulager(a: Athlete, points: number, laPire = false) {
   else for (const z of ZONES) u[z] = Math.max(0, u[z] - points);
   majGene(a);
 }
+
+/**
+ * CHANGER DE DISCIPLINE apres les Grands Jeux (l'auteur, 15/11) : la nouvelle epreuve devient la specialite ;
+ * on repart des Championnats de France, les qualites a 80 % (le corps est la, pas encore la course), et l'on
+ * vise les Jeux suivants dans cette epreuve.
+ */
+export function changerDeDiscipline(a: Athlete, e: Epreuve) {
+  const avant = a.specialite;
+  a.voie = 'specialiste'; a.specialite = e;
+  a.niveau = NATIONAL;
+  for (const k of STATS) a.stats[k] = rond(a.stats[k] * 0.8);
+  a.apresJeux = false;
+  a.prochaine = a.semaine + ecart(NATIONAL);
+  a.assiduite = { proposees: 0, faites: 0 };
+  (a.disciplines ||= []).push({ s: a.semaine, epreuve: e });
+  noter(a, `Nouvelle discipline : le ${e} m${avant ? ` après le ${avant} m` : ''}. Retour aux Championnats de France.`,
+        `New event: the ${e} m${avant ? ` after the ${avant} m` : ''}. Back to the national championships.`);
+}
+/** Garder sa discipline apres les Jeux : rien ne change, on vise les suivants. */
+export function garderSaDiscipline(a: Athlete) { a.apresJeux = false; }

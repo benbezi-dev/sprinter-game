@@ -8,6 +8,7 @@
 // repond, l'appareil sert de repli.
 
 import { getDeviceId, getSavedName, estEpreuveIndividuelle, type RaceKey } from './leaderboard';
+import { mesureActive } from './mesure';
 import { noterNomRefuse, oublierNomRefuse } from './identity';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
@@ -44,6 +45,7 @@ export function localHistory(race: RaceKey): Course[] {
  * qu'aucun ecran ne lui signale que son nom ne le suivait plus.
  */
 export function pushRace(race: RaceKey, seconds: number, mode: string, level: number, contexte?: string) {
+  if (!mesureActive()) return;
   // Un relais ne va pas a l'historique individuel : son temps est celui de
   // l'equipe, deja range par la salle a son classement, et le serveur refuse
   // cette epreuve sur `/race`. Voir estEpreuveIndividuelle.
@@ -83,6 +85,7 @@ export function pushRace(race: RaceKey, seconds: number, mode: string, level: nu
  * le bouton sert.
  */
 export function pushReprise() {
+  if (!mesureActive()) return;
   fetch(`${API_BASE}/reprise`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

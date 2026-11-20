@@ -17,8 +17,8 @@
 // CE FICHIER NE DESSINE RIEN. Les ecrans vivent dans Legende.tsx, la carte
 // entre deux etapes dans carte.ts.
 
-import { SprinterApp } from '../engine';
-import { LEGENDE_OUVERTE } from '../canal';
+import { SprinterApp, SprinterCore } from '../engine';
+import { LEGENDE_OUVERTE, RENDU_3D } from '../canal';
 import { ETAPES, type Lieu } from './etapes';
 import { tirer, lieuDe, type Tirage } from './tirage';
 import { inscrireLesStades, indexDuLieu, DIFFICULTE } from './stades';
@@ -31,6 +31,8 @@ type Parcours = {
   tirage: Tirage;
   /** L'etape en cours, de 0 a 5. */
   rang: number;
+  /** L'etape d'ou ce parcours est parti : 0 pour une vraie Legende, plus pour un ESSAI. */
+  depuis: number;
   /** Le chrono gagnant de chaque etape deja passee. */
   chronos: number[];
   /** Nom du parcours aupres du serveur des pieces (8 a 64 caracteres). */
@@ -97,9 +99,23 @@ export function parcoursEnCours(): Readonly<Parcours> | null { return parcours; 
  */
 export function commencerLaLegende(depuis = 0, alea: () => number = Math.random) {
   if (!LEGENDE_OUVERTE) return;
-  parcours = { tirage: tirer(alea), rang: Math.max(0, Math.min(ETAPES.length - 1, depuis)), chronos: [],
+  const d = Math.max(0, Math.min(ETAPES.length - 1, Math.floor(depuis) || 0));
+  parcours = { tirage: tirer(alea), rang: d, depuis: d, chronos: [],
                id: nouveauParcours(), continues: 0, pubs: 0 };
 }
+
+/**
+ * RECOMMENCER apres une etape perdue. La regle est celle de la carriere
+ * classique : une vraie Legende repart de la plage. Un ESSAI (canal de test)
+ * repart de l'etape qu'on essayait — sinon il faudrait revenir a l'accueil
+ * pour la retenter.
+ */
+export function recommencerLaLegende(alea: () => number = Math.random) {
+  commencerLaLegende(parcours ? parcours.depuis : 0, alea);
+}
+
+/** Ce parcours est-il un ESSAI (parti plus loin que la plage) ? Il ne compte pas. */
+export function parcoursDEssai(): boolean { return !!parcours && parcours.depuis > 0; }
 
 function nouveauParcours(): string {
   try { if (crypto && crypto.randomUUID) return crypto.randomUUID(); } catch { /* pas de crypto */ }
@@ -208,6 +224,16 @@ export function conclureLEtape(): Verdict {
   const v = lireLArrivee();
   const m = memoire();
   let accomplie = false;
+  // UN ESSAI NE COMPTE PAS (14/11/2026) : parti d'une etape choisie, il n'a
+  // pas couru celles d'avant. Il montre le sacre, pour qu'on puisse le voir,
+  // mais n'ecrit ni la plus loin, ni les meilleurs chronos, ni « accomplie ».
+  if (v.gagne && v.moi !== null && parcours && parcours.depuis > 0) {
+    parcours.chronos[v.rang] = v.moi;
+    accomplie = v.rang === ETAPES.length - 1;
+    concluPour = G ? G.runners : null;
+    dernierVerdict = { ...v, accomplie };
+    return dernierVerdict;
+  }
   if (v.gagne && v.moi !== null && parcours) {
     parcours.chronos[v.rang] = v.moi;
     const prec = m.meilleurs[v.lieu.cle];
@@ -252,7 +278,14 @@ export function rangerLaLegende() {
   premierPlan = null;
 }
 
-/** Le chrono que le boss de l'etape court, pour l'annoncer avant la course. */
+/**
+ * Le chrono que le boss de l'etape court, pour l'annoncer avant la course.
+ * EN 3D LE MOTEUR CONVERTIT LES ADVERSAIRES (buildLevel, sprinter-app.js :
+ * cible x CONVERSION_ADVERSAIRES) : l'affiche annoncait 8,99 s a un boss qui
+ * en courait 10,79. On applique ici la meme conversion, lue a la meme table.
+ */
 export function chronoDuBoss(rang: number): number {
-  return DIFFICULTE[Math.max(0, Math.min(DIFFICULTE.length - 1, rang))].boss;
+  const base = DIFFICULTE[Math.max(0, Math.min(DIFFICULTE.length - 1, rang))].boss;
+  const table = RENDU_3D && SprinterCore ? SprinterCore.CONVERSION_ADVERSAIRES : null;
+  return base * ((table && table['100']) || 1);
 }

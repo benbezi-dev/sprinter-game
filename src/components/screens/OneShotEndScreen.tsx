@@ -2,13 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion } from 'motion/react';
 import { MONTEE, SURGISSEMENT } from '@/lib/mouvement';
+import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film, ChevronRight } from 'lucide-react';
 import { ligneCadence } from '@/game/cadence';
-import { Ghost, Loader2, Copy, Check, MessageCircle, MessageSquare, Share2, Globe2, Swords, Radio, RotateCcw, ImageDown, Film } from 'lucide-react';
 import {
   getSavedName, saveName, qualifyingRaces, submitRaceRecord, raisonDe, NO_RUN_MS,
   type RaceKey, type RaceOutcome,
 } from '@/game/leaderboard';
 import { garder, oublier } from '@/game/record-attente';
+import { MascotteFin } from '@/components/MascotteFin';
 import { primeTopNames } from '@/game/engine';
 import {
   createChallenge, submitAttempt, challengeLink,
@@ -37,6 +38,11 @@ import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { EcartRecord } from './RecordPerso';
 import { mesPointsDe, tournoiLance, type PointsDuel, type ResultatTournoi } from '@/game/live';
 import { RevancheDirecte } from './RevancheDirecte';
+import { RevanchePub, useRevancheRachetable } from './RevanchePub';
+import { Reprises, repriseOfferte } from './Reprises';
+import { usePieces, PIECES_OUVERTES } from '@/game/pieces';
+import { pubPossible, PUBS_PAR_CARRIERE } from '@/game/pub';
+import { garderLeFauxDepart, oublierLeFauxDepart, envoyerLeFauxDepartEnAttente } from '@/game/dsq-attente';
 import { BlocTournoi } from './TournoiDirect';
 import { voterRevanche, useSalonDirect } from '@/game/salon-direct';
 import { nomDeManche, maPlace } from '@/game/tournoi-direct';
@@ -249,6 +255,7 @@ export function OneShotEndScreen() {
   const msg = code ? shareText(code, shotRaces, runTime * 1000, N.getLang() === 'fr') : '';
 
   const ghostSplits: number[] = (SprinterApp.G.ghostSplits || []) as number[];
+  const topVisible = tops.length > 0 && topStatus !== 'checking' && topStatus !== 'done';
   const complete = runSplits.length === shotRaces.length && runSplits.every(s => s != null);
 
   /**
@@ -331,6 +338,48 @@ export function OneShotEndScreen() {
   const revancheNom = SprinterApp.G.revanche as string | null;
   const revancheMs = (SprinterApp.G.revancheMs as number) || 0;
   const revancheBattue = !!revancheId && !falseOut && complete && runTime * 1000 < revancheMs;
+  // Faux depart dans une revanche : une pub ou des pieces la rendent (RevanchePub.tsx).
+  const revancheRachetable = useRevancheRachetable(revancheId);
+
+  /**
+   * LE FAUX DEPART SE RACHETE (l'auteur, 10/11/2026 : « pareil pour tous les
+   * faux departs du jeu sauf en championnat »). Une pub (PUBS_PAR_CARRIERE par
+   * one shot) ou des pieces reprennent l'epreuve du faux depart, les chronos
+   * d'avant gardes (reprendreOneShot du moteur).
+   *
+   * Seulement la ou RECOMMENCER ne rend pas deja la meme chose gratuitement :
+   * un enchainement de plusieurs epreuves, un duel, un fantome. Jamais en
+   * direct (les autres n'attendent pas) ni en championnat. La revanche a son
+   * propre bloc (RevanchePub), le duel des marques recommence deja contre son
+   * fantome.
+   */
+  const pieces = usePieces();
+  const repriseOS = falseOut && !liveOn && !SprinterApp.G.champDirect && !revancheId
+    && !(SprinterApp.G.shotOpts as any)?.duelMarques && SprinterApp.G.fauxDepartIdx != null
+    && (shotRaces.length > 1 || !!challenge || ghostTime > 0);
+  const parcoursOS = repriseOS ? String(SprinterApp.G.shotRunId || '') : '';
+  const repriseOSOfferte = repriseOS && repriseOfferte(pieces, {
+    parcours: parcoursOS, achetes: SprinterApp.G.shotRepAchats || 0,
+    pubs: SprinterApp.G.shotRepPubs || 0, pubsMax: PUBS_PAR_CARRIERE,
+  });
+  /**
+   * UN DUEL PERDU SUR FAUX DEPART ATTEND QUE LE JOUEUR RENONCE avant de partir
+   * chez l'adversaire (dsq-attente.ts). Decide sur ce qui PEUT etre offert —
+   * pub possible ou pieces ouvertes — et pas sur le solde, qui arrive apres :
+   * sans quoi la defaite partirait avant que le bouton n'apparaisse.
+   */
+  const [renonce, setRenonce] = useState(false);
+  const dsqGarde = useRef(false);
+  const reprisLeDuel = useRef(false);
+  const duelEnSuspens = !!challenge && repriseOS && !renonce && (pubPossible() || PIECES_OUVERTES);
+  const reprendreLeOneShot = (parPub: boolean) => {
+    if (dsqGarde.current) { reprisLeDuel.current = true; oublierLeFauxDepart(); }
+    SprinterApp.reprendreOneShot(parPub);
+  };
+  // Quitter l'ecran sans racheter ni renoncer : la defaite part quand meme.
+  useEffect(() => () => {
+    if (dsqGarde.current && !reprisLeDuel.current) envoyerLeFauxDepartEnAttente();
+  }, []);
 
 
   // Defi en cours : on envoie le resultat une seule fois, des l'arrivee.
@@ -338,6 +387,13 @@ export function OneShotEndScreen() {
   // course qui n'a pas eu lieu, et l'adversaire doit toucher ses points.
   useEffect(() => {
     if (!challenge || submitted.current === challenge.id || (!complete && !falseOut)) return;
+    // Faux depart rachetable : la defaite attend que le joueur y renonce.
+    if (falseOut && duelEnSuspens) {
+      garderLeFauxDepart({ id: challenge.id, name: getSavedName() || undefined });
+      dsqGarde.current = true;
+      return;
+    }
+    if (dsqGarde.current) { oublierLeFauxDepart(); dsqGarde.current = false; }
     submitted.current = challenge.id;
     setDuel(null); setDuelEnCours(true); sonne.current = false;
     submitAttempt({
@@ -369,7 +425,7 @@ export function OneShotEndScreen() {
       .catch(() => { /* le chrono local reste affiche */ })
       .finally(() => setDuelEnCours(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [challenge && challenge.id, complete, falseOut]);
+  }, [challenge && challenge.id, complete, falseOut, duelEnSuspens]);
 
   // La musique du resultat. Elle ne part qu'une fois l'issue connue : jouer
   // une fanfare avant de savoir qui a gagne serait pire que le silence.
@@ -460,6 +516,16 @@ export function OneShotEndScreen() {
       levelIdx: opts.levelIdx == null ? SprinterApp.G.shotLevel : opts.levelIdx,
       challenge: null,
     });
+  };
+
+  /** Prendre sa revanche apres un duel perdu : le fantome qui vient de nous
+   *  battre repart avec elle, sa trace est deja celle du defi couru. */
+  const prendreLaRevanche = () => {
+    if (!challenge) return;
+    SprinterApp.G.revanche = challenge.owner_name;
+    SprinterApp.G.revancheId = challenge.id;
+    SprinterApp.G.revancheMs = challenge.total_ms;
+    memeCourseSansLeDefi();
   };
 
   const handleCreate = async () => {
@@ -913,6 +979,13 @@ export function OneShotEndScreen() {
                      py-2 md:py-6 court:py-1 gap-2 md:gap-5 court:gap-0
                      colonnes-si-bas ${remplir ? 'flex-1 justify-between' : ''}`}>
 
+          {/* la mascotte reagit a la course (MascotteFin) ; pas pendant un tournoi en direct.
+              Un DUEL releve : c'est le rival qui reagit — il toise tant que le serveur n'a pas
+              tranche, puis enrage si tu gagnes (issue « opponent »), te nargue si tu perds. */}
+          {!resTournoi && <MascotteFin rival={!challenge ? undefined
+            : !duel ? 'attente'
+            : duel.issue === 'opponent' ? 'gagne' : duel.issue === 'draw' ? 'nul' : 'perdu'} />}
+
           <div className="flex flex-col items-center text-center gap-1 md:gap-2">
             {/* Titre en trois mots : tracking-tighter les collait en un seul
                 bloc. On respire un peu et on garde le mot entier soude. */}
@@ -936,7 +1009,7 @@ export function OneShotEndScreen() {
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-bold text-destructive tracking-widest uppercase">
                 {/* En tournoi, le titre dit deja ELIMINE : on dit pourquoi. */}
                 {resTournoi ? N.t('false_out')
-                  : N.t(defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
+                  : N.t(duelEnSuspens ? 'false_out_suspens' : defaiteSeche ? 'false_out_sub' : 'false_out_seul')}
               </div>
             ) : (
               <div className="text-[10px] sm:text-xs md:text-base court:text-[10px] font-medium text-foreground/80 tracking-widest uppercase">
@@ -1124,7 +1197,7 @@ export function OneShotEndScreen() {
           {/* Resultat du duel : les points comptent pour le classement des
               duels, et une seule fois. On l'annonce comme definitif parce
               qu'il l'est — relancer le meme defi ne redistribue rien. */}
-          {challenge && (duelEnCours || duel) && (
+          {challenge && !duelEnSuspens && (duelEnCours || duel) && (
             <motion.div
               {...MONTEE}
               className={`w-full rounded-2xl border px-4 py-3 md:py-4 court:px-3 court:py-2 flex flex-col items-center gap-1.5 shadow-2xl
@@ -1232,16 +1305,14 @@ export function OneShotEndScreen() {
                                     px-2 mt-0.5">
                         « {pique(challenge.id, challenge.owner_name)} »
                       </p>
+                      {/* Perdu sur faux depart : la revanche coute une pub
+                          (RevanchePub.tsx) ou des pieces, decision du 10/11/2026. Sans pub
+                          possible, pas de bouton : RECOMMENCER, sans revanche. */}
+                      {falseOut ? (
+                        <RevanchePub cle={challenge.id} adversaire={challenge.owner_name || N.t('opponent')} onRevanche={prendreLaRevanche} />
+                      ) : (
                       <button
-                        onClick={() => {
-                          SprinterApp.G.revanche = challenge.owner_name;
-                          SprinterApp.G.revancheId = challenge.id;
-                          SprinterApp.G.revancheMs = challenge.total_ms;
-                          // Le fantome qui vient de nous battre repart avec la
-                          // revanche : sa trace est deja la, celle du defi
-                          // qu'on vient de courir.
-                          memeCourseSansLeDefi();
-                        }}
+                        onClick={prendreLaRevanche}
                         className="mt-1 px-5 py-2.5 rounded-xl font-black font-display tracking-widest
                                    text-background bg-primary hover:bg-primary/90 transition-colors
                                    flex flex-col items-center leading-tight text-sm"
@@ -1251,6 +1322,7 @@ export function OneShotEndScreen() {
                           {N.t('duel_revanche_sub')}
                         </span>
                       </button>
+                      )}
                     </>
                   )}
                   <span className="text-[10px] md:text-xs text-muted-foreground tracking-wide text-center">
@@ -1332,7 +1404,7 @@ export function OneShotEndScreen() {
               revanche, personne ne peut enregistrer a la place du joueur : le
               retirer aussi ferait perdre le record en silence. Le formulaire
               reste donc, seul, et seulement dans ce cas-la. */}
-          {tops.length > 0 && topStatus !== 'checking' && topStatus !== 'done' && (
+          {topVisible && (
             <div className="w-full bg-card/60 border border-white/10 rounded-2xl p-2 sm:p-3 md:p-4 court:p-2 shadow-2xl flex flex-col gap-1.5 court:gap-1">
               <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5">
                 <span className="flex items-center gap-2 shrink-0">
@@ -1346,7 +1418,7 @@ export function OneShotEndScreen() {
               <div className="flex gap-2">
                 <input
                   value={topName}
-                  onChange={e => setTopName(e.target.value)}
+                  onChange={e => { setTopName(e.target.value); setName(e.target.value); }}
                   placeholder={N.t('your_name')}
                   maxLength={20}
                   className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
@@ -1366,6 +1438,37 @@ export function OneShotEndScreen() {
             </div>
           )}
 
+          {/* LE FAUX DEPART SE RACHETE (voir repriseOS) : pub ou pieces, et
+              l'on repart a l'epreuve du faux depart. Dans un duel, renoncer
+              envoie la defaite — c'est seulement alors qu'elle part. */}
+          {repriseOSOfferte && (
+            <div className="w-full bg-card/60 border border-primary/40 rounded-2xl p-2 sm:p-3 md:p-5 court:p-2 shadow-2xl flex flex-col items-center gap-2 court:gap-1.5">
+              <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
+                {N.t(challenge ? 'fd_reprise_duel' : 'fd_reprise', { e: nomDiscipline(cleDiscipline([shotRaces[SprinterApp.G.fauxDepartIdx] as string])) })}
+              </p>
+              <Reprises parcours={parcoursOS}
+                achetes={SprinterApp.G.shotRepAchats || 0} pubs={SprinterApp.G.shotRepPubs || 0}
+                pubsMax={PUBS_PAR_CARRIERE} revanche
+                etape={nomDiscipline(cleDiscipline([shotRaces[SprinterApp.G.fauxDepartIdx] as string]))}
+                recaler={n => { SprinterApp.G.shotRepAchats = n; }}
+                reprendre={reprendreLeOneShot} />
+              {duelEnSuspens && (
+                <button onClick={() => setRenonce(true)}
+                  className="text-[10px] md:text-xs font-bold tracking-widest uppercase text-muted-foreground underline underline-offset-2 hover:text-foreground">
+                  {N.t('fd_renoncer_duel')}
+                </button>
+              )}
+            </div>
+          )}
+          {/* Duel en suspens mais rien a offrir (pas de solde, pas de pub) : le
+              seul bouton qui fasse partir la defaite et montrer l'issue. */}
+          {duelEnSuspens && !repriseOSOfferte && (
+            <button onClick={() => setRenonce(true)}
+              className="text-xs font-bold tracking-widest uppercase text-muted-foreground underline underline-offset-2">
+              {N.t('fd_renoncer_duel')}
+            </button>
+          )}
+
           {/* Creer un defi a partir de cette course. Hors defi c'est le
               partage normal ; une revanche part toute seule des qu'elle bat
               le chrono qu'elle venge. */}
@@ -1375,7 +1478,9 @@ export function OneShotEndScreen() {
               et avec lui le seul bouton qui gardait la trace de qui l'on
               venge : il fallait repasser par RECOMMENCER, qui sort de la
               chaine. On le garde donc ouvert, sans le formulaire de creation
-              — celui-la reste ferme, il n'y a pas de chrono a envoyer. */}
+              — celui-la reste ferme, il n'y a pas de chrono a envoyer. 
+              Depuis le 10/11/2026, la nouvelle tentative coute une pub ou
+              des pieces (RevanchePub.tsx) ; sans pub, RECOMMENCER repart sans revanche. */}
           {(!falseOut || !!revancheId) && (!challenge || beaten) && (
             <div className={`w-full bg-card/60 border rounded-2xl p-2 sm:p-3 md:p-6 court:p-2 shadow-2xl flex flex-col gap-2 court:gap-1.5
               ${beaten || revancheBattue || revancheFaite !== null
@@ -1400,11 +1505,6 @@ export function OneShotEndScreen() {
               </div>
               {/* Defi adresse a quelqu'un du TOP 500 : on le rappelle, sinon
                   le joueur ne sait plus a qui son code va partir. */}
-              {cible && !code && (
-                <p className="text-center text-[10px] md:text-xs text-cyan-300">
-                  {N.t('target_run', { n: cible.name, d: shotRaces[0] })}
-                </p>
-              )}
               {cible && code && prevenus && prevenus.length > 0 && (
                 <p className="text-center text-[10px] md:text-xs text-cyan-300">
                   {N.t('target_sent', { n: prevenus.join(', ') })}
@@ -1450,8 +1550,16 @@ export function OneShotEndScreen() {
               {!cible && revancheId && !revancheBattue && revancheFaite === null && (
                 <div className="flex flex-col items-center gap-2.5">
                   <p className="text-center text-[10px] md:text-xs text-amber-300/90 leading-snug">
-                    {N.t('duel_revanche_ratee', { n: revancheNom, s: (revancheMs / 1000).toFixed(2) })}
+                    {falseOut
+                      ? N.t(revancheRachetable ? 'duel_revanche_fd_pub' : 'duel_revanche_fd_perdue', { n: revancheNom })
+                      : N.t('duel_revanche_ratee', { n: revancheNom, s: (revancheMs / 1000).toFixed(2) })}
                   </p>
+                  {/* Faux depart : la tentative est brulee, une pub la rend
+                      ou des pieces la rendent (RevanchePub.tsx). Sinon RECOMMENCER,
+                      qui oublie la revanche. */}
+                  {falseOut ? (
+                    <RevanchePub cle={revancheId} adversaire={revancheNom || N.t('opponent')} onRevanche={memeCourseSansLeDefi} />
+                  ) : (
                   <button
                     onClick={memeCourseSansLeDefi}
                     className="px-5 py-2 rounded-xl font-black font-display tracking-widest text-xs md:text-sm
@@ -1459,6 +1567,7 @@ export function OneShotEndScreen() {
                   >
                     {N.t('duel_revanche')}
                   </button>
+                  )}
                 </div>
               )}
 
@@ -1466,14 +1575,33 @@ export function OneShotEndScreen() {
                   une revanche : elle part d'elle-meme, ou pas du tout. */}
               {!code && !revancheId && revancheFaite === null && (
                 <>
-                  <div className="flex gap-2">
+                  {/* Un seul champ nom a l'ecran : celui du TOP 500 sert aussi
+                      au defi ; sans lui, on ne le demande que s'il manque. */}
+                  {/* relu a chaque rendu : un nom enregistre via le TOP 500 l'efface aussi */}
+                  {!topVisible && !(getSavedName() || '').trim() && (
                     <input
                       value={name}
                       onChange={e => setName(e.target.value)}
                       placeholder={N.t('your_name')}
                       maxLength={20}
-                      className="flex-1 min-w-0 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
+                      className="w-full bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-sm court:text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary/50"
                     />
+                  )}
+                  <div className="flex gap-2">
+                    {/* Les destinataires a la place du champ : un clic ouvre
+                        les duels et le TOP 500, on y coche qui l'on veut. */}
+                    <button
+                      onClick={() => setChoisir(true)}
+                      disabled={busy}
+                      className="flex-1 min-w-0 flex items-center gap-2 bg-black/30 border border-white/10 rounded-xl px-3 py-2 court:px-2 court:py-1.5 text-left text-sm court:text-xs hover:border-primary/50 transition-colors"
+                    >
+                      <Swords className="w-4 h-4 shrink-0 text-primary" />
+                      <span className={`flex-1 min-w-0 truncate ${cibles.length ? 'text-foreground font-bold' : 'text-muted-foreground'}`}>
+                        {cibles.length ? cibles.map(c => c.name).join(', ') : N.t('defi_a_qui')}
+                      </span>
+                      {cibles.length > 1 && <span className="shrink-0 text-[10px] font-bold text-primary">{cibles.length}</span>}
+                      <ChevronRight className="w-4 h-4 shrink-0 text-muted-foreground" />
+                    </button>
                     <button
                       onClick={handleCreate}
                       disabled={busy || !complete}
@@ -1483,17 +1611,6 @@ export function OneShotEndScreen() {
                       {busy ? N.t('challenge_making') : N.t(beaten ? 'challenge_rematch' : 'challenge_make')}
                     </button>
                   </div>
-                  {/* Choisir un ou plusieurs destinataires dans les duels ou le TOP 500. */}
-                  <button
-                    onClick={() => setChoisir(true)}
-                    disabled={busy}
-                    className="self-center px-4 py-1.5 rounded-xl font-bold tracking-wide text-[10px] md:text-xs
-                               text-primary border border-primary/40 hover:bg-primary/15 transition-colors flex items-center gap-2"
-                  >
-                    <Swords className="w-3.5 h-3.5" />
-                    {cibles.length ? N.t('defi_choisis', { k: cibles.length, n: cibles.map(c => c.name).join(', ') })
-                                   : N.t('defi_choisir')}
-                  </button>
                   {err && <p className="text-center text-xs text-destructive">{N.t('challenge_net')}</p>}
                 </>
               )}
@@ -1730,7 +1847,7 @@ export function OneShotEndScreen() {
 
             {/* Ce qui est joue de la course precedente. Un constat, plus un
                 verrou : il n'empeche plus rien, il informe. */}
-            {verrou && (
+            {verrou && !duelEnSuspens && (
               <p className={`text-center text-[11px] md:text-xs tracking-wide leading-snug max-w-sm mx-auto
                 ${verrou === 'faux_depart_duel' ? 'text-destructive font-bold'
                                                 : 'text-muted-foreground'}`}>

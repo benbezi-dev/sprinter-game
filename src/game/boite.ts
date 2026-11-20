@@ -30,7 +30,8 @@ const WS_BASE = API_BASE.replace(/^http/, 'ws');
 // 'marques_tchat' / 'marques_invit' : un message prive ou une designation dans
 // le tchat du duel des marques, une invitation au duel. Voir DuelMarques.tsx.
 export type Courrier = 'defi' | 'duel' | 'mot' | 'reponse' | 'ouverte' | 'direct' | 'relais' | 'relais_defi'
-                     | 'objectif' | 'annonce' | 'annonce_dispo' | 'marques_tchat' | 'marques_invit';
+                     | 'objectif' | 'annonce' | 'annonce_dispo' | 'marques_tchat' | 'marques_invit'
+                     | 'noel_etoile' | 'noel_neige';
 
 const ecouteurs = new Set<(quoi: Courrier) => void>();
 let ws: WebSocket | null = null;

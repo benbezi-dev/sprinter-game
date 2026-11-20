@@ -11,6 +11,12 @@ import { HaiesHUD } from './HaiesHUD';
 import { HalloweenHUD, reboursDeLaNuit, couleurDuRebours, texteDuRebours } from './HalloweenHUD';
 import { HALLOWEEN_OUVERT } from '@/game/canal';
 
+// La couleur d'un geste annonce (annoncerGeste, sprinter-app.js) : l'or d'un casse parfait, le vert de ce qui a porte,
+// le rouge de ce qui a coute.
+const TON_GESTE: Record<string, string> = {
+  or: 'text-primary', bon: 'text-emerald-400', alerte: 'text-destructive', neutre: 'text-foreground',
+};
+
 export function RaceHUD() {
   // LE TABLEAU DE COURSE SE REDESSINE A CHAQUE IMAGE, ET C'EST VOULU : chrono,
   // vitesse, ecarts. `elapsed` (en course) et `countT` (au decompte) changent a
@@ -29,6 +35,9 @@ export function RaceHUD() {
   const falseFlash = useGameStore(s => s.falseFlash);
   const reactFlash = useGameStore(s => s.reactFlash);
   const transFlash = useGameStore(s => s.transFlash);
+  // le dernier geste : le casse, un coup de coude, le couloir 2 (annoncerGeste, sprinter-app.js)
+  const gesteFlash = useGameStore(s => s.gesteFlash);
+  const geste = useGameStore(s => s.geste);
   const stumbleFlash = useGameStore(s => s.stumbleFlash);
   const mode = useGameStore(s => s.mode);
   const shotRaces = useGameStore(s => s.shotRaces);
@@ -182,7 +191,10 @@ export function RaceHUD() {
 
   // Une egalite partage la place : on compte ceux qui sont arrives strictement
   // avant, pas ceux que le tri a poses devant.
-  const pos = player?.finished && player.finishTime != null
+  // Au relais, la place est celle de l'EQUIPE parmi les equipes adverses (CourseRelais, G.relaisPlace),
+  // pas le rang du coureur parmi les relayeurs : « 11e » ne voulait rien dire.
+  const placeRelais = SprinterApp.G.raceKey === '4x100' ? SprinterApp.G.relaisPlace : null;
+  const pos = placeRelais != null ? placeRelais : player?.finished && player.finishTime != null
     ? 1 + runners.filter((r: any) => r !== player && r.finished && msDe(r) < msDe(player)).length
     : order.indexOf(player) + 1;
   /**
@@ -218,6 +230,19 @@ export function RaceHUD() {
 
   return (
     <div className="w-full h-full pointer-events-none absolute inset-0 font-sans z-10">
+      {/* PASSER L'APRES-LIGNE (l'auteur, 18/11) : la ligne franchie, aller tout de suite a l'ecran de fin. Pas en
+          direct ni en championnat (c'est la salle qui tranche), ni au rejeu, ni au saut (pas de ligne). */}
+      {isRace && player?.finished && !rejeu && !SprinterApp.G.champDirect && !SprinterApp.G.liveOn
+        && !SprinterApp.G.sautEnCours && (
+        <button type="button"
+          onClick={() => { SprinterApp.G.passerFin = SprinterApp.G.player; }}
+          className="pointer-events-auto absolute right-[max(env(safe-area-inset-right),1rem)] top-[150px] landscape:top-[90px]
+                     z-20 rounded-full border border-white/25 bg-black/55 backdrop-blur-md px-4 py-2
+                     text-xs font-bold tracking-[0.2em] text-foreground active:scale-95">
+          {N.t('passer_fin')} ›
+        </button>
+      )}
+
       {/* Le verdict de chaque haie. Rien hors d'une course de haies. */}
       {isRace && <HaiesHUD />}
 
@@ -313,7 +338,11 @@ export function RaceHUD() {
       {/* Mode fantome : le seul repere qui compte pendant un duel. Il occupe
           la bande libre sous le HUD, la ou l'oeil revient naturellement entre
           deux foulees, et il disparait des que la course est finie. */}
-      {isRace && ghostOn && !player?.finished && !rejeu && (
+      {/* PAS AU RELAIS : les autres coureurs y sont des COEQUIPIERS, et ce panneau
+          les presentait comme un fantome a battre (« MODE FANTOME +46 m » sur un
+          relayeur de sa propre equipe). Le relais a son propre bandeau, le couloir
+          de l'equipe et la position du temoin (CourseRelais). */}
+      {isRace && ghostOn && !player?.finished && !rejeu && SprinterApp.G.raceKey !== '4x100' && (
         <div className="absolute top-[104px] landscape:top-[46px] w-full flex justify-center
                         px-[max(env(safe-area-inset-left),1rem)] pr-[max(env(safe-area-inset-right),1rem)] z-10">
           <div className={`w-full max-w-[300px] rounded-2xl border backdrop-blur-md px-3 py-1.5
@@ -510,8 +539,10 @@ export function RaceHUD() {
               </motion.div>
             )}
           </AnimatePresence>
-          {/* Pas de « record à battre » en championnat, en direct comme en rejeu. */}
-          {isCount && rival && !rejeu && !SprinterApp.G.champDirect && (
+          {/* Pas de « record à battre » en championnat, en direct comme en rejeu.
+              Ni au relais : un chrono individuel ne s'y bat pas, et la pastille
+              se posait sur le bouton du temoin, qui tient la meme hauteur. */}
+          {isCount && rival && !rejeu && !SprinterApp.G.champDirect && SprinterApp.G.raceKey !== '4x100' && (
             <div className={`bg-black/60 px-4 py-1.5 md:px-6 md:py-2 [@media(max-height:500px)]:px-4 [@media(max-height:500px)]:py-1 rounded-full border max-w-[90vw] text-center
               ${ghostName ? 'border-cyan-400/40' : 'border-fuchsia-500/30'}`}>
               <span className={`font-bold tracking-widest text-[10px] sm:text-xs md:text-base [@media(max-height:500px)]:text-xs block truncate
@@ -570,6 +601,19 @@ export function RaceHUD() {
           </div>
         )}
         
+        {gesteFlash > 0 && geste && (
+          <div className="flex flex-col items-center mt-2 md:mt-4" style={{ opacity: Math.min(gesteFlash, 1) }}>
+            <div className={`text-lg sm:text-xl md:text-2xl font-black tracking-widest uppercase drop-shadow-lg ${TON_GESTE[geste.ton] || 'text-foreground'}`}>
+              {N.t(geste.cle)}
+            </div>
+            {geste.sous && (
+              <div className="text-xs sm:text-sm md:text-base font-bold text-cyan-400 font-mono tracking-wide bg-black/50 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full mt-1">
+                {geste.sous}
+              </div>
+            )}
+          </div>
+        )}
+
         {ph === 0 && elapsed > 0.1 && transFlash <= 0 && reactFlash <= 0 && !player?.finished && (
           <div className="text-xs md:text-sm font-medium text-muted-foreground tracking-widest uppercase mt-4 md:mt-8 animate-pulse">
             {rejeu ? '' : N.t('drive_hint')}
@@ -609,6 +653,9 @@ export function RaceHUD() {
           // metres, l'ecart s'inversait et le montrait « derriere » ceux
           // qu'il venait de battre.
           if (directFini) return null;
+          // Au relais, le coureur d'a cote est un COEQUIPIER : « +105 m AMADOU » le presentait
+          // comme un rival a rattraper. Le couloir de l'equipe dit ou est le temoin (CourseRelais).
+          if (SprinterApp.G.raceKey === '4x100') return null;
           const me = order.indexOf(player);
           const other = me === 0 ? order[1] : order[me - 1];
           if (other) {
