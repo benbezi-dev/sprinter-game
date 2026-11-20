@@ -10,12 +10,12 @@
 // Variantes : `perdu` (le heros enrage : il ne supporte pas de perdre), `gagne` (il frime et rit),
 // `rival` (le rival te toise, puis te nargue).
 // La mascotte vient des clips transparents de tools/mascotte-tournage.mjs (.mov ProRes 4444), dans
-// assets-sources/mascotte/videos ; les rushes, des tournages 2K du jeu. Le texte est dessine par
-// sharp (ffmpeg de ce Mac n'a pas drawtext). Pas de son : la musique se pose dans l'appli.
+// assets-sources/mascotte/videos ; les rushes, des tournages 2K du jeu. Le texte vient de
+// tools/texte-video.mjs. Pas de son : la musique se pose dans l'appli.
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { createRequire } from 'node:module';
+import { texte } from './texte-video.mjs';
 
 const args = process.argv.slice(2);
 const arg = (nom, def) => { const k = args.indexOf('--' + nom); return k >= 0 ? args[k + 1] : def; };
@@ -40,19 +40,8 @@ for (const f of [COURSE, LIGNE, ...[V.avant, V.apres, 'heros-defi'].map((n) => p
   if (!fs.existsSync(f)) { console.error('introuvable : ' + f); process.exit(1); }
 fs.mkdirSync(SORTIE, { recursive: true });
 
-// le texte : blanc, gras, contour noir, centre, sur deux lignes au plus
-const req = createRequire(path.join(path.dirname(new URL(import.meta.url).pathname), '../package.json'));
-const sharp = req('sharp');
+// le texte : tools/texte-video.mjs (commun aux reels et aux stories)
 const tmp = fs.mkdtempSync(path.join(SORTIE, '.tmp-'));
-const echapper = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
-async function texte(fichier, txt, taille, couleur = '#FFFFFF') {
-  const mots = txt.split(' '), lignes = [''];
-  for (const m of mots) { const l = lignes[lignes.length - 1]; if ((l + ' ' + m).trim().length > 18 && l) lignes.push(m); else lignes[lignes.length - 1] = (l + ' ' + m).trim(); }
-  const h = lignes.length * taille * 1.15 + 40;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="${h}">${lignes.map((l, i) =>
-    `<text x="500" y="${taille * (1 + i * 1.15)}" font-family="Arial Black, Arial" font-weight="900" font-size="${taille}" fill="${couleur}" stroke="#000" stroke-width="${taille / 9}" paint-order="stroke" text-anchor="middle">${echapper(l)}</text>`).join('')}</svg>`;
-  await sharp(Buffer.from(svg)).png().toFile(fichier);
-}
 await texte(path.join(tmp, 'accroche.png'), ACCROCHE, 84);
 await texte(path.join(tmp, 'chute.png'), CHUTE, 84, '#FFD84A');
 await texte(path.join(tmp, 'fin1.png'), 'DÉFIE-LE', 120, '#FFD84A');

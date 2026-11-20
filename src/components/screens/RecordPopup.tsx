@@ -11,6 +11,7 @@ import {
 import { garder, oublier } from '@/game/record-attente';
 import { LeaderboardScreen } from './LeaderboardScreen';
 import { feterRecordDuMonde } from '@/game/fete';
+import { MascotteFin } from '@/components/MascotteFin';
 
 /** Ecrans qui suivent une course. La cinematique n'en fait pas partie. */
 const AFTER_RACE = new Set(['result', 'winall', 'over']);
@@ -152,6 +153,8 @@ export function RecordPopup() {
                 transition={TRANSITION.battement}
               />
 
+              {/* le heros n'en revient pas de rire : un record du monde (components/MascotteFin.tsx) */}
+              <MascotteFin hauteur={140} heros="recordMonde" />
               <motion.div
                 initial={{ rotate: -18, scale: 0.5 }}
                 animate={{ rotate: 0, scale: 1 }}

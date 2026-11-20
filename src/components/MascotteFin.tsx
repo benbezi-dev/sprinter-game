@@ -1,5 +1,5 @@
 import React, { Suspense, lazy } from 'react';
-import type { IssueRival } from '@/game/mascotte-reactions';
+import type { IssueRival, REACTIONS_COURSE } from '@/game/mascotte-reactions';
 
 // LA MASCOTTE DANS LES ECRANS, chargee a part : three.js et son fichier ne partent qu'ici, jamais
 // avec l'ouverture (3,2 s au plus, qui n'attend que les images du jeu — chargement.ts).
@@ -10,10 +10,12 @@ const Mascotte = lazy(() => import('./Mascotte').then((m) => ({ default: m.Masco
  * En tete d'un ecran : le heros reagit a la course, ou — avec `rival` — le rival de duel reagit a
  * son issue (game/mascotte-reactions.ts). La place est reservee d'emblee.
  */
-export function MascotteFin({ hauteur = 170, rival }: { hauteur?: number; rival?: IssueRival }) {
+export function MascotteFin({ hauteur = 170, rival, heros }: {
+  hauteur?: number; rival?: IssueRival; heros?: keyof typeof REACTIONS_COURSE;
+}) {
   return (
     <div className="pointer-events-none shrink-0 flex justify-center" style={{ height: hauteur }}>
-      <Suspense fallback={null}><MascotteReaction hauteur={hauteur} rival={rival} /></Suspense>
+      <Suspense fallback={null}><MascotteReaction hauteur={hauteur} rival={rival} heros={heros} /></Suspense>
     </div>
   );
 }

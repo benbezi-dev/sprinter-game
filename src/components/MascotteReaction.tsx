@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { Mascotte } from './Mascotte';
 import { REACTIONS_COURSE, REACTIONS_RIVAL, tirer, type IssueRival, type Reaction } from '@/game/mascotte-reactions';
+import { useFete } from '@/game/fete';
 
 /**
  * LA MASCOTTE REAGIT (20/11/2026). Elle n'est pas jouable.
@@ -11,9 +12,14 @@ import { REACTIONS_COURSE, REACTIONS_RIVAL, tirer, type IssueRival, type Reactio
  * Elle prend sa place dans l'ecran (jamais par-dessus les boutons) ; tant que son fichier charge,
  * ou sans WebGL, la place reste vide.
  */
-function issueCourse(): keyof typeof REACTIONS_COURSE {
+type IssueCourse = keyof typeof REACTIONS_COURSE;
+function issueCourse(fete: { perso: unknown; monde: unknown }, joueur: unknown, etat: string): IssueCourse {
   const G = SprinterApp.G;
   if (G.falseOut || !G.player || G.player.finishTime == null) return 'rate';
+  // LES RECORDS D'ABORD (game/fete.ts) : ils valent plus que la place. Pas de fete sur une
+  // elimination (`over`) — la consigne des confettis (FeteRecords.tsx) vaut pour la mascotte.
+  if (joueur && fete.monde === joueur) return 'recordMonde';
+  if (joueur && fete.perso === joueur && etat !== 'over') return 'record';
   const ordre: any[] = G.ranking || [];
   const place = ordre.indexOf(G.player) + 1;
   if (place === 1) return 'gagne';
@@ -22,13 +28,18 @@ function issueCourse(): keyof typeof REACTIONS_COURSE {
   return 'milieu';
 }
 
-export function MascotteReaction({ hauteur = 170, rival }: { hauteur?: number; rival?: IssueRival }) {
+export function MascotteReaction({ hauteur = 170, rival, heros }: { hauteur?: number; rival?: IssueRival; heros?: IssueCourse }) {
   const raceKey = useGameStore((s) => s.raceKey);
   const runTime = useGameStore((s) => s.runTime);
+  const joueur = useGameStore((s) => s.player);
+  const etat = useGameStore((s) => s.state);
+  // (le record du monde se decide apres un aller-retour au classement : la reaction suit)
+  const fete = useFete();
   // une reaction par course (ou par issue de duel) : elle ne change pas quand l'ecran se redessine
   const [personnage, geste] = useMemo<Reaction>(
-    () => tirer(rival ? REACTIONS_RIVAL[rival] : REACTIONS_COURSE[issueCourse()]),
-    [raceKey, runTime, rival],
+    () => tirer(rival ? REACTIONS_RIVAL[rival] : REACTIONS_COURSE[heros || issueCourse(fete, joueur, etat)]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [raceKey, runTime, rival, heros, fete.perso === joueur, fete.monde === joueur],
   );
 
   // DANS L'ECRAN, PAS PAR-DESSUS : posee en coin, elle couvrait les boutons du bas (« Defier
