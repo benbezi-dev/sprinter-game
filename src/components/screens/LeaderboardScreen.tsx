@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { PastilleFFA } from '@/components/NiveauFFA';
 import { Swords , Instagram } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import {
@@ -330,8 +331,13 @@ export function LeaderboardScreen({ initialRace, onClose }: { initialRace: RaceK
                     {/* Colonne des chronos calee sur son contenu le plus
                         large, pour que le reste revienne au nom. */}
                     <div className="flex flex-col items-end shrink-0 tabular-nums">
-                      <span className={`font-mono font-bold text-sm md:text-base whitespace-nowrap ${rank === 1 ? 'text-primary' : 'text-foreground'}`}>
-                        {(value(e) / 1000).toFixed(2)} s
+                      <span className="flex items-center gap-1.5">
+                        {/* Le niveau FFA du meilleur chrono de l'epreuve (pas
+                            du cumul d'un parcours, qui n'a pas de bareme). */}
+                        {cat === 'race' && <PastilleFFA cle={race} perf={value(e) / 1000} compact points={false} />}
+                        <span className={`font-mono font-bold text-sm md:text-base whitespace-nowrap ${rank === 1 ? 'text-primary' : 'text-foreground'}`}>
+                          {(value(e) / 1000).toFixed(2)} s
+                        </span>
                       </span>
                       {!!other(e) && (
                         <span className="font-mono text-[9px] md:text-[10px] text-muted-foreground whitespace-nowrap">

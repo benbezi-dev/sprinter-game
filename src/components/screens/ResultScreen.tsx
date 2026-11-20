@@ -6,6 +6,7 @@ import { EcartRecord } from './RecordPerso';
 import { TenirDansLEcran } from '@/components/TenirDansLEcran';
 import { ligneCadence } from '@/game/cadence';
 import { MascotteFin } from '@/components/MascotteFin';
+import { LigneNiveauFFA, PastilleFFA, TableauBaremeFFA } from '@/components/NiveauFFA';
 
 export function ResultScreen() {
   const levelIdx = useGameStore(s => s.levelIdx);
@@ -64,6 +65,10 @@ export function ResultScreen() {
                 feraient de la bonne nouvelle une corvee. */}
             <EcartRecord race={raceKey as any} ms={player?.finishTime != null
               ? player.finishTime * 1000 : null} />
+
+            {/* Le niveau au barème FFA (hommes, classement des clubs) : IA,
+                N2, R4… avec ce qui manque pour le niveau d'au-dessus. */}
+            <LigneNiveauFFA cle={raceKey} perf={player?.finishTime} />
             
             <div className="text-[10px] sm:text-xs md:text-sm font-bold tracking-widest text-cyan-400 uppercase">
               {startRecap()}
@@ -96,14 +101,21 @@ export function ResultScreen() {
                         </span>
                       )}
                     </div>
-                    <span className={`font-mono font-bold shrink-0 text-sm md:text-base ${tc}`}>
-                      {r.finishTime ? `${r.finishTime.toFixed(2)} s` : N.t('dnf')}
+                    <span className="flex items-center gap-2 shrink-0">
+                      {r.finishTime ? <PastilleFFA cle={raceKey} perf={r.finishTime} compact points={false} /> : null}
+                      <span className={`font-mono font-bold text-sm md:text-base ${tc}`}>
+                        {r.finishTime ? `${r.finishTime.toFixed(2)} s` : N.t('dnf')}
+                      </span>
                     </span>
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {/* Le barème complet de l'epreuve, replie : ou se situe le chrono
+              parmi les 23 niveaux de la Federation. */}
+          <TableauBaremeFFA cle={raceKey} perf={player?.finishTime} />
 
           {/* Badge */}
           {badge && (
