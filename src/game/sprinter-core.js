@@ -187,6 +187,14 @@
     // La reference qui fait le « loin derriere » : l'extension arriere la plus
     // marquee des tables de foulee (profil `power`, cuisse a -0,64).
     DRIVE_ARRIERE: 0.64,
+    // LE REPLI DU GENOU AU TALON-FESSE, POUR TOUS (« cycle arriere trop importante », puis « reduit »,
+    // l'auteur, 20/11/2026) : mesure en 3D, le genou s'y fermait a 1-10 degres (repli de ~4,1 rad : le
+    // tibia traversait la cuisse). Le repli est donc BORNE, en douceur : intact jusqu'a REPLI_LIBRE,
+    // jamais au-dela de REPLI_MAX (2,6 rad : un genou ferme a ~31 degres, celui d'un sprinteur). Une
+    // borne et pas un facteur : un facteur abaissait aussi le pied qui revient, et a la pose du pied
+    // (canon, powell) la jambe en l'air descendait sous celle d'appui (tools/haies-rendu-test.mjs).
+    REPLI_LIBRE: 2.2,
+    REPLI_MAX: 2.6,
     // temps de reaction : 0,100 s est le plancher legal, l'elite tourne
     // autour de 0,13 s, au-dela de 0,30 s il n'y a plus rien a gagner
     REACT_BEST: 0.12,
@@ -3277,6 +3285,19 @@
       const ligne = C.DRIVE_LIGNE * sortie * derriere;
       th *= (1 - ligne);
       kn *= (1 - ligne);
+      // LE CYCLE ARRIERE (« cycle arriere trop importante », puis « reduit », l'auteur, 20/11/2026).
+      // Pour tous, le repli du genou est borne (C.REPLI_LIBRE, C.REPLI_MAX). Une mascotte
+      // (L.cycleArriere, 0 a 1) — cuisses courtes, gros mollets, grands pieds — reduit en plus son
+      // repli au talon-fesse et la cuisse qui part derriere. Le genou devant reste haut, la poussee entiere.
+      if (L.cycleArriere != null) {
+        const ca = L.cycleArriere;
+        if (gt < 0) th *= ca;
+        if (kn < 0) kn *= 1 - (1 - ca) * Math.min(1, 1.5 * replie);
+      }
+      if (-kn > C.REPLI_LIBRE) {
+        const marge = C.REPLI_MAX - C.REPLI_LIBRE;
+        kn = -(C.REPLI_LIBRE + marge * Math.tanh((-kn - C.REPLI_LIBRE) / marge));
+      }
       // La cheville ne recoit pas la sortie : au depart le pied reste arme,
       // il ne fouette pas. L'amplifier donnait un coup de talon de patineur.
       const an = gait(P.ankle, q) * (0.50 + 0.50 * A) * LIMB_BOOST;

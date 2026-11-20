@@ -1,6 +1,6 @@
 // UN CORPS RIGGE PAR TRIPO (squelette UE5 Mannequin) -> LE SQUELETTE ET LE REPOS DU JEU, sans Blender.
 //
-//   node tools/assets/tripo-vers-jeu.mjs <tripo-rig.glb> <reference coureur-homme.glb> <sortie.glb> [--normale 1024] [--couleur 2048] [--pied 0.06] [--bras 0]
+//   node tools/assets/tripo-vers-jeu.mjs <tripo-rig.glb> <reference coureur-homme.glb> <sortie.glb> [--normale 1024] [--couleur 2048] [--pied 0.06] [--bras 0] [--garder-pieds]
 //   puis : node tools/assets/optimiser-glb.mjs <sortie.glb> && node tools/assets/textures-ktx2.mjs <sortie.glb>
 //
 // POURQUOI (12-13/11/2026) : la chaine Blender (remaillage voxel) deformait les corps crees dans Tripo — l'auteur :
@@ -23,9 +23,16 @@ import { MeshoptDecoder } from 'meshoptimizer';
 import sharp from 'sharp';
 import * as THREE from 'three';
 
-const [src, ref, sortie] = process.argv.slice(2).filter((a, i, t) => !a.startsWith('--') && !t[i - 1]?.startsWith('--'));
+// (--garder-pieds est un drapeau sans valeur : l'argument qui le suit reste un chemin)
+const DRAPEAUX = new Set(['--garder-pieds']);
+const [src, ref, sortie] = process.argv.slice(2).filter((a, i, t) => !a.startsWith('--') && !(t[i - 1]?.startsWith('--') && !DRAPEAUX.has(t[i - 1])));
 const opt = (n, d) => { const i = process.argv.indexOf('--' + n); return i < 0 ? d : Number(process.argv[i + 1]); };
-const COTE_NORMALE = opt('normale', 1024), COTE_COULEUR = opt('couleur', 2048), PIED = opt('pied', 0.06), BRAS = opt('bras', 0);
+// LA MASCOTTE GARDE SES POINTES (--garder-pieds, 19/11/2026) : ses chaussures de sprint sont dans son maillage et sa
+// texture (l'auteur : « ce ne sont pas des crampons, ce sont des pointes de sprint »). Rien n'est coupe sous la
+// cheville et les tiges de la reference ne sont pas recopiees ; le jeu la charge en look.maillage avec piedsNus,
+// sans ajouter de pointes.
+const GARDER_PIEDS = process.argv.includes('--garder-pieds');
+const COTE_NORMALE = opt('normale', 1024), COTE_COULEUR = opt('couleur', 2048), PIED = GARDER_PIEDS ? -Infinity : opt('pied', 0.06), BRAS = opt('bras', 0);
 if (!sortie) { console.error('usage : tripo-vers-jeu.mjs <tripo-rig.glb> <reference.glb> <sortie.glb>'); process.exit(1); }
 
 await MeshoptDecoder.ready;
@@ -171,7 +178,7 @@ const corps = doc.createMesh('Coureur').addPrimitive(doc.createPrimitive().setMa
 racine.addChild(doc.createNode('Coureur').setMesh(corps).setSkin(peau));
 
 // les tiges des chaussures de la reference, glissees sous les chevilles du nouveau corps (memes os, meme ordre)
-for (const c of ['l', 'r']) {
+for (const c of GARDER_PIEDS ? [] : ['l', 'r']) {
   const nd = R.listNodes().find((n) => n.getName() === 'Tige_foot_' + c); if (!nd) continue;
   const o = rang.get('foot_' + c), glisse = P1[o].clone().sub(posRef[o]);
   const mesh = doc.createMesh('Tige_foot_' + c);
