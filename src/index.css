@@ -12,6 +12,15 @@
    retour reseau a chaque demarrage a froid — et une adresse IP de moins
    envoyee a un tiers. */
 
+/* La Bowlby One : le titre du jeu seulement (.logo-titre__mot), sous-ensemble latin, 21 Ko. */
+@font-face {
+  font-family: 'Bowlby One';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/BowlbyOne-latin.woff2') format('woff2');
+}
+
 @font-face {
   font-family: 'Outfit';
   font-style: normal;
@@ -532,4 +541,59 @@
   .hw-float, .hw-twinkle, .hw-bat-wing, .hw-sway, .hw-drift {
     animation: none !important;
   }
+}
+
+/* LE TITRE DU JEU, PLUS DYNAMIQUE (l'auteur, 20/11/2026 : « une fonte plus dynamique, avec les deux
+   icones dos a dos apres la derniere lettre, visibles et moins sombres », puis « l'Outfit est trop
+   generique, il manque d'ame et de force » : choix sur planche, Bowlby One). La Bowlby One, ronde et
+   lourde — du caractere, et le trait cartoon des mascottes —, penchee comme un coureur lance, remplie
+   d'un degrade (blanc chaud en haut, la couleur du jeu au milieu, plus chaude en bas), cernee d'une
+   ombre franche pour se lire sur le panneau sombre, et trois traits de vitesse qui partent du S. Les
+   deux mascottes (heros et rival, dos a dos, public/logo/) suivent le R sur le canal de test seulement
+   (MASCOTTE_OUVERTE, components/MascotteFin.tsx). */
+.logo-titre {
+  display: inline-flex;
+  align-items: flex-end;
+  position: relative;
+}
+.logo-titre__mot {
+  position: relative;
+  display: inline-block;
+  font-family: 'Bowlby One', var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+  transform: skewX(-8deg);
+  background: linear-gradient(180deg, #fffbe6 0%, rgb(var(--primaire-rgb)) 40%, rgb(var(--primaire-rgb)) 62%,
+              color-mix(in srgb, rgb(var(--primaire-rgb)) 72%, #e2560b) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0.045em 0 rgba(30, 14, 0, 0.85)) drop-shadow(0 0 0.28em rgb(var(--primaire-rgb) / 0.45));
+  padding: 0 0.06em;
+}
+/* les traits de vitesse : trois barres qui s'effilent vers la gauche, devant le S */
+.logo-titre__mot::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 22%;
+  width: 0.62em;
+  height: 56%;
+  background:
+    linear-gradient(90deg, transparent, rgb(var(--primaire-rgb))) 0 0 / 100% 0.09em no-repeat,
+    linear-gradient(90deg, transparent, rgb(var(--primaire-rgb))) 30% 50% / 70% 0.09em no-repeat,
+    linear-gradient(90deg, transparent, rgb(var(--primaire-rgb))) 100% 100% / 85% 0.09em no-repeat;
+  border-radius: 0.05em;
+  opacity: 0.9;
+}
+.logo-titre__duo {
+  height: 1.8em;
+  width: auto;
+  margin-left: -0.06em;
+  margin-top: -0.4em;
+  margin-bottom: -0.22em;
+  filter: drop-shadow(0 0.03em 0.06em rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+  user-select: none;
 }

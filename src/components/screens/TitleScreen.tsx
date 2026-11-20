@@ -73,7 +73,7 @@ import { useMenuSansDefiler } from '@/hooks/use-menu-sans-defiler';
 import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
 import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE, NOEL_OUVERT } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
-import { MascotteAccueil } from '@/components/MascotteFin';
+import { MascotteAccueil, MASCOTTE_OUVERTE } from '@/components/MascotteFin';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
 // en production l'appel se replie et le bundler le retire.
 import { legendeAccessible, type ChoixCarriere } from '@/game/legende/compte';
@@ -424,8 +424,15 @@ export function TitleScreen() {
               au milieu de sa moitie. */}
           <div className="flex-1 w-full flex flex-col items-center landscape:items-start text-center landscape:text-left">
             <div className="order-1 landscape:order-2 shrink-0 mt-2 md:mt-0 serre:mt-0 bg-card/60 backdrop-blur-sm border border-white/10 px-6 py-5 md:px-8 md:py-6 serre:px-5 serre:py-2 rounded-2xl landscape:w-full max-w-md border-t-white/20">
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl serre:text-4xl font-black font-display tracking-tight text-primary drop-shadow-md">
-                {haies ? 'HURDLERS' : 'SPRINTER'}
+              {/* le titre : mot penche et degrade, traits de vitesse, les deux mascottes dos a dos
+                  apres la derniere lettre (index.css, .logo-titre) */}
+              {/* (pas de text-7xl : avec les mascottes, le titre fait ~6 fois sa taille de police en
+                  largeur, et la carte (max-w-md) n'en tient que 384 px a l'interieur) */}
+              <h1 className="logo-titre text-[2.6rem] min-[400px]:text-5xl sm:text-[3.3rem] serre:text-4xl text-primary pl-[0.5em]">
+                <span className="logo-titre__mot">{haies ? 'HURDLERS' : 'SPRINTER'}</span>
+                {/* les mascottes ne sont pas pretes : canal de test seulement (MascotteFin.tsx) */}
+                {MASCOTTE_OUVERTE && <img src={`${import.meta.env.BASE_URL}logo/duo-mascottes-buste.webp`} alt=""
+                     className="logo-titre__duo" draggable={false} />}
               </h1>
               <p className="mt-1 md:mt-2 serre:mt-0 text-[10px] sm:text-xs md:text-base lg:text-xl serre:text-[10px] font-medium text-foreground/80 tracking-wide uppercase">
                 {tab === 'career'
