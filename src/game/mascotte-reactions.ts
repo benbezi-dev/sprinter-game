@@ -6,7 +6,11 @@ import type { Personnage } from './mascotte-3d';
 export type Reaction = [Personnage, string];
 
 /** LE HEROS vit ta course comme la sienne : le frimeur et le mauvais perdant du jeu. */
-export const REACTIONS_COURSE: Record<'gagne' | 'podium' | 'milieu' | 'dernier' | 'rate', Reaction[]> = {
+export const REACTIONS_COURSE: Record<'gagne' | 'podium' | 'milieu' | 'dernier' | 'rate' | 'record' | 'recordMonde', Reaction[]> = {
+  // un record perso (les confettis, game/fete.ts) passe avant la place : il le fete
+  record: [['heros', 'celebration'], ['heros-hilare', 'joie'], ['heros', 'frime']],
+  // le record du monde (les feux d'artifice) : il n'en revient pas de rire
+  recordMonde: [['heros-hilare', 'fourire'], ['heros', 'celebration']],
   // gagne : il frime
   gagne: [['heros', 'celebration'], ['heros-hilare', 'rire'], ['heros-hilare', 'joie'], ['heros', 'frime']],
   // sur le podium sans gagner : il ne le supporte pas
