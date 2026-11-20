@@ -48,6 +48,13 @@ jobs:
       - name: Retirer l'edition close de la production
         run: rm -rf dist/halloween dist/modeles/molosse-chien.glb dist/modeles/boss-plein/molosse.glb
 
+      # LES MASCOTTES NE SONT PAS PRETES (20/11/2026, l'auteur : « retire les mascottes du jeu
+      # pour l'instant, mets-les dans la version test ») : le jeu ne les montre plus que sur le
+      # canal de test (components/MascotteFin.tsx, MASCOTTE_OUVERTE) ; leurs fichiers (~58 Mo)
+      # ne partent donc plus en production.
+      - name: Retirer les mascottes de la production
+        run: rm -rf dist/modeles/mascotte
+
       # LES VERSIONS DE TEST NE SONT PLUS CONSTRUITES ICI (10/11/2026, l'auteur : « deplace
       # la partie test pour alleger le jeu »). Le depot benbezi-dev/sprinter les construit
       # depuis ce depot-ci (main pour /test/, test-ferme/course-3d pour /test3d/) et les
