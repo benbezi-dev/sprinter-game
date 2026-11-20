@@ -44,6 +44,8 @@ import { usePieces, PIECES_OUVERTES } from '@/game/pieces';
 import { pubPossible, PUBS_PAR_CARRIERE } from '@/game/pub';
 import { garderLeFauxDepart, oublierLeFauxDepart, envoyerLeFauxDepartEnAttente } from '@/game/dsq-attente';
 import { BlocTournoi } from './TournoiDirect';
+import { PastilleFFA, LigneNiveauFFA } from '@/components/NiveauFFA';
+import { pointsFFA, ligneBaremeFFA } from '@/game/bareme-ffa';
 import { voterRevanche, useSalonDirect } from '@/game/salon-direct';
 import { nomDeManche, maPlace } from '@/game/tournoi-direct';
 
@@ -1353,6 +1355,7 @@ export function OneShotEndScreen() {
                           {his.toFixed(2)} s
                         </span>
                       )}
+                      {mine != null && <PastilleFFA cle={r} perf={mine} compact points={shotRaces.length > 1} />}
                       <span className={`font-mono font-bold text-base md:text-lg court:text-xs
                         ${mine == null ? 'text-destructive' : his == null ? 'text-primary' : ahead ? 'text-emerald-400' : 'text-destructive'}`}>
                         {fmt(mine, dnf)}
@@ -1379,6 +1382,22 @@ export function OneShotEndScreen() {
             {!falseOut && shotRaces.length === 1 && (
               <div className="flex justify-center mt-2">
                 <EcartRecord race={shotRaces[0] as any} ms={runTime * 1000} />
+              </div>
+            )}
+            {/* Le niveau FFA. Sur une epreuve seule, la ligne entiere ; sur un
+                programme, le total des points du bareme, comme une equipe
+                additionne les siens au classement des clubs. */}
+            {!falseOut && shotRaces.length === 1 && (
+              <div className="flex justify-center mt-2">
+                <LigneNiveauFFA cle={shotRaces[0] as string} perf={runTime} />
+              </div>
+            )}
+            {!falseOut && shotRaces.length > 1 && shotRaces.some(r => ligneBaremeFFA(r as string)) && (
+              <div className="flex justify-between items-center px-2 md:px-4 gap-2 mt-1 text-xs md:text-sm court:text-[10px] font-bold tracking-widest uppercase">
+                <span className="text-muted-foreground">{N.getLang() === 'en' ? 'FFA scale points' : 'Points barème FFA'}</span>
+                <span className="font-mono font-black text-amber-300">
+                  {shotRaces.reduce((t, r, i) => t + pointsFFA(r as string, [runSplits[i]]), 0)} pts
+                </span>
               </div>
             )}
             {aFantome && (
