@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { Mascotte } from './Mascotte';
-import { REACTIONS_COURSE, REACTIONS_RIVAL, tirer, type IssueRival, type Reaction } from '@/game/mascotte-reactions';
+import { REACTIONS_COURSE, REACTIONS_RIVAL, tirer, programme, type IssueRival, type Programme } from '@/game/mascotte-reactions';
 import { useFete } from '@/game/fete';
 
 /**
@@ -36,8 +36,9 @@ export function MascotteReaction({ hauteur = 170, rival, heros }: { hauteur?: nu
   // (le record du monde se decide apres un aller-retour au classement : la reaction suit)
   const fete = useFete();
   // une reaction par course (ou par issue de duel) : elle ne change pas quand l'ecran se redessine
-  const [personnage, geste] = useMemo<Reaction>(
-    () => tirer(rival ? REACTIONS_RIVAL[rival] : REACTIONS_COURSE[heros || issueCourse(fete, joueur, etat)]),
+  // (la reaction tiree devient une suite : geste fort, second geste, puis le visage neutre)
+  const prog = useMemo<Programme>(
+    () => programme(tirer(rival ? REACTIONS_RIVAL[rival] : REACTIONS_COURSE[heros || issueCourse(fete, joueur, etat)])),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [raceKey, runTime, rival, heros, fete.perso === joueur, fete.monde === joueur],
   );
@@ -51,7 +52,8 @@ export function MascotteReaction({ hauteur = 170, rival, heros }: { hauteur?: nu
       transition={{ type: 'spring', stiffness: 140, damping: 18, delay: 0.2 }}
       className="pointer-events-none shrink-0"
       style={{ width: 'min(60vw, 240px)', height: hauteur }}>
-      <Mascotte personnage={personnage} geste={geste} ensuite="idle" lacet={rival ? -0.4 : 0.4} />
+      <Mascotte personnage={prog.etapes[0][0]} geste={prog.etapes[0][1]} suite={prog.etapes.slice(1)} repos={prog.repos}
+        lacet={rival ? -0.4 : 0.4} />
     </motion.div>
   );
 }

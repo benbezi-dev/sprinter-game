@@ -41,3 +41,50 @@ export type IssueRival = keyof typeof REACTIONS_RIVAL;
 export function tirer(liste: Reaction[]): Reaction {
   return liste[Math.floor(Math.random() * liste.length)];
 }
+
+/**
+ * UNE REACTION DEVIENT UNE SUITE (20/11/2026, « il garde la bouche ouverte, passe d'une animation
+ * a une autre pour changer de pose et creer plus de possibilites ; de facon fluide, sans
+ * cassure », l'auteur). Le visage est sculpte dans chaque fichier : rester sur heros-hilare, c'est
+ * garder la bouche ouverte pour toujours. La suite :
+ *   1. le geste tire (le visage fort),
+ *   2. un second geste du MEME visage (fondu des gestes, aucun changement de corps),
+ *   3. le corps neutre — bouche fermee — dans un geste qui prolonge l'humeur (fondu des corps),
+ * puis le repos neutre, qui change de pose de temps en temps.
+ */
+export type Programme = { etapes: Reaction[]; repos: { p: Personnage; gestes: string[] } };
+
+const GESTES_FORTS: Partial<Record<Personnage, string[]>> = {
+  'heros-hilare': ['rire', 'fourire', 'applaudit', 'joie'],
+  'heros-furieux': ['trepigne', 'rage', 'colere'],
+  'heros-larmes': ['pleure', 'abattu'],
+  'heros-choque': ['doubletake', 'stupeur'],
+  'rival-sourire': ['nargue', 'victoire', 'doigt'],
+  'rival-fureur': ['colere', 'controle'],
+  'rival-stupeur': ['stupeur', 'silence'],
+};
+/** Le geste neutre qui prolonge l'humeur, et les poses du repos qui suit. */
+const NEUTRE: Record<Personnage, { p: Personnage; relais: string[]; repos: string[] }> = {
+  // content : il frime encore un peu
+  'heros': { p: 'heros', relais: ['frime'], repos: ['frime', 'defi', 'echauffement'] },
+  'heros-hilare': { p: 'heros', relais: ['celebration', 'frime'], repos: ['frime', 'celebration', 'defi'] },
+  // vexe : il veut sa revanche
+  'heros-furieux': { p: 'heros', relais: ['defi'], repos: ['defi', 'echauffement', 'attente'] },
+  'heros-larmes': { p: 'heros', relais: ['echauffement'], repos: ['echauffement', 'defi', 'attente'] },
+  'heros-choque': { p: 'heros', relais: ['defi', 'echauffement'], repos: ['defi', 'echauffement', 'attente'] },
+  // le rival : il toise, ou promet la revanche
+  'rival': { p: 'rival', relais: ['toise'], repos: ['toise', 'defi', 'echauffement'] },
+  'rival-sourire': { p: 'rival', relais: ['applaudit', 'toise'], repos: ['toise', 'applaudit', 'defi'] },
+  'rival-fureur': { p: 'rival', relais: ['defi'], repos: ['defi', 'toise', 'echauffement'] },
+  'rival-stupeur': { p: 'rival', relais: ['toise', 'defi'], repos: ['toise', 'defi', 'echauffement'] },
+};
+
+export function programme([p, g]: Reaction): Programme {
+  const etapes: Reaction[] = [[p, g]];
+  const forts = (GESTES_FORTS[p] || []).filter((x) => x !== g);
+  if (forts.length) etapes.push([p, forts[Math.floor(Math.random() * forts.length)]]);
+  const n = NEUTRE[p];
+  const relais = n.relais.filter((x) => !(n.p === p && x === etapes[etapes.length - 1][1]));
+  if (relais.length) etapes.push([n.p, relais[Math.floor(Math.random() * relais.length)]]);
+  return { etapes, repos: { p: n.p, gestes: n.repos } };
+}
