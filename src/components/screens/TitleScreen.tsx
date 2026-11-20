@@ -424,13 +424,10 @@ export function TitleScreen() {
               au milieu de sa moitie. */}
           <div className="flex-1 w-full flex flex-col items-center landscape:items-start text-center landscape:text-left">
             <div className="order-1 landscape:order-2 shrink-0 mt-2 md:mt-0 serre:mt-0 bg-card/60 backdrop-blur-sm border border-white/10 px-6 py-5 md:px-8 md:py-6 serre:px-5 serre:py-2 rounded-2xl landscape:w-full max-w-md border-t-white/20">
-              {/* le titre : mot penche et degrade, traits de vitesse, les deux mascottes dos a dos
-                  apres la derniere lettre (index.css, .logo-titre) */}
-              {/* (pas de text-7xl : avec les mascottes, le titre fait ~6 fois sa taille de police en
-                  largeur, et la carte (max-w-md) n'en tient que 384 px a l'interieur) */}
-              <h1 className="logo-titre text-[2.6rem] min-[400px]:text-5xl sm:text-[3.3rem] serre:text-4xl text-primary pl-[0.5em]">
-                <span className="logo-titre__mot">{haies ? 'HURDLERS' : 'SPRINTER'}</span>
-                {/* les mascottes ne sont pas pretes : canal de test seulement (MascotteFin.tsx) */}
+              {/* le titre d'origine (l'auteur, 20/11/2026 : « le tout premier logo etait meilleur ») ;
+                  les deux mascottes apres le R restent au canal de test (MASCOTTE_OUVERTE) */}
+              <h1 className={`text-5xl sm:text-6xl lg:text-7xl serre:text-4xl font-black font-display tracking-tight text-primary drop-shadow-md${MASCOTTE_OUVERTE ? ' logo-titre' : ''}`}>
+                {haies ? 'HURDLERS' : 'SPRINTER'}
                 {MASCOTTE_OUVERTE && <img src={`${import.meta.env.BASE_URL}logo/duo-mascottes-buste.webp`} alt=""
                      className="logo-titre__duo" draggable={false} />}
               </h1>
