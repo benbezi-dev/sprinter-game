@@ -18,14 +18,37 @@ import * as THREE from 'three';
 import { clone as clonerSquelette } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { chargeurGLTF, brancherKTX2 } from './chargeur-gltf';
 
+/**
+ * LES GESTES EN PLUS (20/11/2026, « ajoute les 36 clips Tripo restants », l'auteur). Les exports
+ * Tripo du heros et du rival ont 43 et 42 clips ; le fichier de base n'en porte que 7 et 5. Les
+ * autres vivent dans anime/<nom>-gestes.glb (os + animations, sans corps ni textures, 4 Mo,
+ * tools/assets/mascotte-gestes.mjs), charge APRES le corps : la mascotte s'affiche aussi vite
+ * qu'avant. Memes clips, memes noms chez les deux.
+ */
+const GESTES_COMMUNS = [
+  // le depart (sans les trois positions « prets » de Tripo — pret, immobile, depart : leur bassin
+  // monte a 1,27 m et descend 68 cm sous le sol, inutilisables tels quels)
+  'installation', 'rituel', 'course100', 'course200', 'course',
+  // l'echauffement et l'attente
+  'montre', 'bras_croises', 'demarche', 'etirements', 'danse',
+  // la victoire, la frime
+  'provoc', 'pointe', 'moquerie', 'epaules', 'depoussiere', 'lunettes', 'numero1', 'glissade', 'encourage', 'rire',
+  // la defaite, la colere (sans le « caprice » de Tripo : allonge, le corps tournoie en l'air)
+  'boude', 'rageur', 'arbitre', 'ecrase', 'rage_muette', 'fache', 'frustre', 'defaite',
+] as const;
+/** Les personnages qui ont un fichier de gestes en plus. */
+const AVEC_GESTES = new Set(['heros', 'rival']);
+
 /** Les fichiers et leurs gestes (noms courts poses par mascotte-animee.mjs). */
 export const MASCOTTES = {
-  'heros': ['idle', 'echauffement', 'salut', 'frime', 'attente', 'defi', 'celebration'],
+  'heros': ['idle', 'echauffement', 'salut', 'frime', 'attente', 'defi', 'celebration', ...GESTES_COMMUNS,
+    'toise', 'applaudit', 'gammes', 'sanglot'],
   'heros-hilare': ['idle', 'rire', 'fourire', 'applaudit', 'joie'],
   'heros-furieux': ['idle', 'trepigne', 'rage', 'colere'],
   'heros-larmes': ['idle', 'pleure', 'genoux', 'abattu'],
   'heros-choque': ['idle', 'doubletake', 'stupeur'],
-  'rival': ['idle', 'defi', 'toise', 'applaudit', 'echauffement'],
+  'rival': ['idle', 'defi', 'toise', 'applaudit', 'echauffement', ...GESTES_COMMUNS,
+    'montees', 'salut', 'frime', 'celebration', 'repos'],
   'rival-sourire': ['idle', 'nargue', 'victoire', 'doigt'],
   'rival-fureur': ['idle', 'colere', 'controle'],
   'rival-stupeur': ['idle', 'stupeur', 'silence'],
@@ -68,11 +91,39 @@ export function chargerMascotte(p: Personnage): Promise<Modele | null> {
   let m = modeles.get(p);
   if (!m) {
     m = chargeurGLTF().loadAsync(url(p))
-      .then((g) => { preparerClips(g.scene, g.animations); return { scene: g.scene, clips: g.animations }; })
+      .then((g) => {
+        preparerClips(g.scene, g.animations);
+        const mod = { scene: g.scene, clips: g.animations };
+        chargerGestes(p, mod);   // en arriere-plan : le corps n'attend pas ses gestes en plus
+        return mod;
+      })
       .catch(() => { modeles.delete(p); return null; });   // un echec ne condamne pas la demande suivante
     modeles.set(p, m);
   }
   return m;
+}
+
+const gestesEnPlus = new Map<Personnage, Promise<void>>();
+/** Les gestes en plus d'un personnage, rattaches a ses clips (rien s'il n'en a pas). */
+function chargerGestes(p: Personnage, mod: Modele): Promise<void> {
+  if (!AVEC_GESTES.has(p)) return Promise.resolve();
+  let g = gestesEnPlus.get(p);
+  if (!g) {
+    g = chargeurGLTF().loadAsync(url((p + '-gestes') as Personnage))
+      .then((f) => {
+        // les pistes visent les os par leur nom : le meme squelette que le corps de base, et le
+        // meme repos (meme export Tripo) — on les remet d'aplomb avec le repos du corps
+        preparerClips(mod.scene, f.animations);
+        for (const c of f.animations) if (!mod.clips.some((x) => x.name === c.name)) mod.clips.push(c);
+      })
+      .catch(() => { gestesEnPlus.delete(p); });
+    gestesEnPlus.set(p, g);
+  }
+  return g;
+}
+/** S'assurer que les gestes demandes sont la (attend le fichier de gestes s'il en manque un). */
+async function assurer(p: Personnage, m: Modele, noms: string[]) {
+  if (noms.some((n) => !m.clips.some((c) => c.name === n))) await chargerGestes(p, m);
 }
 
 /** Les gestes joues en boucle (l'attente apres chaque geste, celle de l'accueil). */
@@ -522,6 +573,7 @@ export function vueMascotte(o: Options): Vue {
   async function jouer(p: Personnage, geste: string, ensuite: string | null = 'idle') {
     const n = ++demande;
     const m = await chargerMascotte(p);
+    if (m) await assurer(p, m, [geste, ...(ensuite ? [ensuite] : [])]);
     if (!m || n !== demande || !rendu) return false;
     charges.set(p, m);
     file = []; repos = null;
@@ -533,6 +585,11 @@ export function vueMascotte(o: Options): Vue {
     // tout charger d'abord : un passage d'un corps a l'autre ne doit jamais attendre le reseau
     const noms = [...new Set([...etapes.map((e) => e[0]), ...(r ? [r.p] : [])])];
     const ms = await Promise.all(noms.map((p) => chargerMascotte(p)));
+    await Promise.all(noms.map((p, k) => {
+      const m = ms[k];
+      const voulus = [...etapes.filter((e) => e[0] === p).map((e) => e[1]), ...(r && r.p === p ? r.gestes : [])];
+      return m ? assurer(p, m, voulus) : null;
+    }));
     if (n !== demande || !rendu || !etapes.length) return false;
     noms.forEach((p, k) => { const m = ms[k]; if (m) charges.set(p, m); });
     // (un fichier qui n'a pas pu se charger est saute)
