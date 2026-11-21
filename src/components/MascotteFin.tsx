@@ -39,7 +39,9 @@ export function MascotteAccueil() {
   return (
     <div className="pointer-events-none absolute right-0 bottom-0 h-full" style={{ width: '34%', maxWidth: 170 }}>
       <Suspense fallback={null}>
-        <Mascotte personnage="heros" geste="salut" ensuite="attente" lacet={-0.35} />
+        {/* il salue, attend en frimant, puis change de pose de temps en temps */}
+        <Mascotte personnage="heros" geste="salut" suite={[['heros', 'attente']]} lacet={-0.35}
+          repos={{ p: 'heros', gestes: ['attente', 'frime', 'defi', 'echauffement', 'montre', 'bras_croises', 'gammes', 'epaules', 'lunettes'] }} />
       </Suspense>
     </div>
   );

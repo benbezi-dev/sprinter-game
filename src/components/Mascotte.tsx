@@ -1,15 +1,18 @@
 import React, { useEffect, useRef } from 'react';
-import { vueMascotte, type Personnage, type Cadrage, type Vue } from '@/game/mascotte-3d';
+import { vueMascotte, type Personnage, type Cadrage, type Vue, type Repos } from '@/game/mascotte-3d';
 
 /**
  * LA MASCOTTE ANIMEE DANS UN ECRAN (game/mascotte-3d.ts). Une toile transparente qui prend la
  * taille de sa boite ; la mascotte y joue `geste`, puis `ensuite` en boucle (idle par defaut).
  * Tant que son fichier charge, ou sans WebGL, la toile reste vide : rien ne bloque l'ecran.
  */
-export function Mascotte({ personnage, geste, ensuite = 'idle', lacet, cadrage = 'pied', className, style }: {
+export function Mascotte({ personnage, geste, ensuite = 'idle', suite, repos, lacet, cadrage = 'pied', className, style }: {
   personnage: Personnage;
   geste: string;
   ensuite?: string | null;
+  /** Les gestes qui suivent le premier, d'un visage a l'autre (fondu), puis le repos qui varie. */
+  suite?: [Personnage, string][];
+  repos?: Repos;
   lacet?: number;
   cadrage?: Cadrage;
   className?: string;
@@ -32,9 +35,15 @@ export function Mascotte({ personnage, geste, ensuite = 'idle', lacet, cadrage =
     return () => { v.liberer(); vue.current = null; toile.remove(); };
   }, [lacet, cadrage]);
 
+  // (la suite se compare par son contenu : un tableau recree a chaque rendu ne relance rien)
+  const cleSuite = JSON.stringify([suite || null, repos || null]);
   useEffect(() => {
-    vue.current?.jouer(personnage, geste, ensuite);
-  }, [personnage, geste, ensuite, lacet, cadrage]);
+    const v = vue.current;
+    if (!v) return;
+    if (suite?.length || repos) v.enchainer([[personnage, geste], ...(suite || [])], repos);
+    else v.jouer(personnage, geste, ensuite);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [personnage, geste, ensuite, cleSuite, lacet, cadrage]);
 
   return <div ref={boite} aria-hidden className={className}
     style={{ width: '100%', height: '100%', pointerEvents: 'none', ...style }} />;

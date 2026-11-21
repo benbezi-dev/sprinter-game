@@ -1,7 +1,7 @@
 // LA MASCOTTE ANIMEE : un GLB Tripo (squelette UE5, ses clips) allege pour le jeu et les videos
 //
 //   node tools/assets/mascotte-animee.mjs <tripo.glb> <sortie.glb> "court=debut du nom;court2=autre debut;..."
-//        [--couleur 2048] [--normale 1024] [--rugosite 512]
+//        [--couleur 2048] [--normale 1024] [--rugosite 512] [--plus autre-tripo.glb]...
 //
 // Contrairement a tripo-vers-jeu.mjs (le corps de COURSE, pose par le code sur le squelette du
 // jeu, sans clip), ce fichier garde le squelette UE5 de Tripo et SES animations : la mascotte
@@ -21,6 +21,10 @@ import sharp from 'sharp';
 const args = process.argv.slice(2);
 const opt = (nom, def) => { const i = args.indexOf('--' + nom); if (i < 0) return def; const v = +args[i + 1]; args.splice(i, 2); return v; };
 const COULEUR = opt('couleur', 2048), NORMALE = opt('normale', 1024), RUGOSITE = opt('rugosite', 512);
+// --plus : les clips d'un autre export Tripo du MEME corps (le rival v2 a ete exporte en deux
+// fichiers, 30 clips IA + 12 prereglages) ; ses pistes sont rattachees aux os de meme nom.
+const PLUS = [];
+for (let i; (i = args.indexOf('--plus')) >= 0;) { PLUS.push(args[i + 1]); args.splice(i, 2); }
 const [src, sortie, liste] = args;
 if (!src || !sortie || !liste) {
   console.error('usage : mascotte-animee.mjs <tripo.glb> <sortie.glb> "court=debut;..." [--couleur 2048] [--normale 1024] [--rugosite 512]');
@@ -34,6 +38,25 @@ const voulus = liste.split(';').map((s) => s.trim()).filter(Boolean).map((s) => 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 const doc = await io.read(src);
 const racine = doc.getRoot();
+
+for (const f of PLUS) {
+  const autre = (await io.read(f)).getRoot();
+  const parNom = new Map(racine.listNodes().map((n) => [n.getName(), n]));
+  const tampon = racine.listBuffers()[0];
+  const copier = (acc) => doc.createAccessor().setArray(acc.getArray().slice()).setType(acc.getType())
+    .setNormalized(acc.getNormalized()).setBuffer(tampon);
+  for (const a of autre.listAnimations()) {
+    const b = doc.createAnimation(a.getName());
+    for (const c of a.listChannels()) {
+      const cible = parNom.get(c.getTargetNode()?.getName());
+      if (!cible) continue;
+      const s = c.getSampler();
+      const e = doc.createAnimationSampler().setInput(copier(s.getInput())).setOutput(copier(s.getOutput()))
+        .setInterpolation(s.getInterpolation());
+      b.addSampler(e).addChannel(doc.createAnimationChannel().setTargetNode(cible).setTargetPath(c.getTargetPath()).setSampler(e));
+    }
+  }
+}
 
 // 1. les clips
 const anims = racine.listAnimations();

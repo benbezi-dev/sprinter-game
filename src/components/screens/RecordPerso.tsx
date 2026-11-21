@@ -5,6 +5,7 @@ import { Timer, Trophy } from 'lucide-react';
 import { RESSORT, SURGISSEMENT } from '@/lib/mouvement';
 import type { RaceKey } from '@/game/leaderboard';
 import { nomCourt } from '@/game/jeux';
+import { PastilleFFA } from '@/components/NiveauFFA';
 import {
   useRecord, recordAvant, ecartAuRecord, estUnRecord, s2,
 } from '@/game/record';
@@ -48,6 +49,7 @@ export function RecordChip({
                         ${compact ? 'text-xs' : 'text-sm'}`}>
         {s2(record.ms)}<span className="text-primary/70"> s</span>
       </span>
+      <PastilleFFA cle={race} perf={record.ms / 1000} compact points={false} />
       {/* La place ne s'affiche que si le serveur a repondu : annoncer un rang
           calcule sur le seul appareil serait un rang invente. */}
       {!compact && record.distant && record.rang !== null && (
@@ -70,6 +72,7 @@ export function RecordTuile({ race }: { race: RaceKey }) {
       <span className="font-mono font-black tabular-nums text-lg leading-none text-foreground">
         {s2(record.ms)}<span className="text-primary/70 text-xs"> s</span>
       </span>
+      <span className="self-start"><PastilleFFA cle={race} perf={record.ms / 1000} compact /></span>
       {record.distant && record.rang !== null && (
         <span className="text-[10px] font-bold text-primary tracking-wide">{N.t('pb_rank', { o: N.ord(record.rang) })}</span>
       )}
