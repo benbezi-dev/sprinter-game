@@ -3,7 +3,7 @@ import { Clapperboard } from 'lucide-react';
 import { PieceBB } from '@/components/PieceBB';
 import { SprinterApp } from '@/game/engine';
 import { doublerCarriere, usePieces } from '@/game/pieces';
-import { pubPossible, regarderUnePub } from '@/game/pub';
+import { pubPossible, regarderUnePub, raisonEchecPub } from '@/game/pub';
 import { sansPubs } from '@/game/achats';
 
 /**
@@ -76,7 +76,7 @@ export function GainsCarriere() {
           {!offert && !pubVue && <Clapperboard className="w-5 h-5 md:w-6 md:h-6 shrink-0" />}
         </button>
       )}
-      {etat === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}</div>}
+      {etat === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}{raisonEchecPub && <span className="opacity-60"> · {raisonEchecPub}</span>}</div>}
       {etat === 'reseau' && <div className="text-xs text-destructive">{N.t('pieces_reseau')}</div>}
       {etat === 'fait' && (
         <div className="text-sm font-bold text-primary">
