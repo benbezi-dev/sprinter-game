@@ -199,6 +199,62 @@ const ZONE = 0.12;
  *    exactement sur le debut.
  */
 function preparerClips(scene: THREE.Object3D, clips: THREE.AnimationClip[]) {
+  preparerPistes(scene, clips);
+}
+
+/**
+ * LA FIN UTILE D'UN GESTE (21/11/2026, « la transition est trop lente », l'auteur, sur la video de
+ * la victoire). Beaucoup de clips Tripo finissent par une pose presque tenue : sur le dernier
+ * 0,75 s du rire, le corps ne bouge plus qu'au tiers de son activite habituelle. Attendre la fin
+ * du clip, puis fondre, figeait la mascotte plus d'une seconde. L'activite (somme des rotations des
+ * os d'une image a l'autre, par tranches de 0,25 s) est comparee a sa mediane ; la fin utile est
+ * la fin de la derniere tranche encore a 35 % au moins. Calculee au premier usage, gardee ensuite.
+ */
+function finUtile(clip: THREE.AnimationClip): number {
+  const deja = clip.userData?.fin;
+  if (typeof deja === 'number') return deja;
+  const its = clip.tracks.filter((t) => t instanceof THREE.QuaternionKeyframeTrack).map((t) => (t as any).createInterpolant() as { evaluate(t: number): ArrayLike<number> });
+  const dt = 1 / 30, n = Math.floor(clip.duration / dt);
+  const act: number[] = [];
+  let prec: number[][] | null = null;
+  for (let i = 0; i <= n; i++) {
+    const vals = its.map((it) => Array.from(it.evaluate(i * dt) as ArrayLike<number>));
+    if (prec) {
+      let somme = 0;
+      for (let k = 0; k < vals.length; k++) {
+        const d = Math.abs(vals[k][0] * prec[k][0] + vals[k][1] * prec[k][1] + vals[k][2] * prec[k][2] + vals[k][3] * prec[k][3]);
+        somme += 2 * Math.acos(Math.min(1, d));
+      }
+      act.push(somme);
+    }
+    prec = vals;
+  }
+  let fin = clip.duration, debut = 0;
+  if (act.length > 8) {
+    const med = [...act].sort((x, y) => x - y)[Math.floor(act.length / 2)];
+    const tranche = 8;   // 0,25 s
+    const moyenne = (i0: number) => { const s = act.slice(i0, i0 + tranche); return s.reduce((x, y) => x + y, 0) / s.length; };
+    for (let i1 = act.length; i1 - tranche >= 0; i1 -= tranche) {
+      if (moyenne(i1 - tranche) >= 0.35 * med) { fin = Math.min(clip.duration, i1 * dt); break; }
+    }
+    // et le debut : la pose tenue avant que le geste parte (0,6 s avant que le doigt du numero 1
+    // ne se leve) est sautee aussi, a 0,1 s pres pour garder l'elan
+    for (let i0 = 0; i0 + tranche <= act.length; i0 += tranche) {
+      if (moyenne(i0) >= 0.35 * med) { debut = Math.max(0, i0 * dt - 0.1); break; }
+    }
+  }
+  fin = Math.max(fin, clip.duration * 0.5);
+  debut = Math.min(debut, fin * 0.4);
+  clip.userData = { ...(clip.userData || {}), fin, debut };
+  return fin;
+}
+/** Le debut utile d'un geste (voir finUtile). */
+function debutUtile(clip: THREE.AnimationClip): number {
+  finUtile(clip);
+  return clip.userData.debut as number;
+}
+
+function preparerPistes(scene: THREE.Object3D, clips: THREE.AnimationClip[]) {
   scene.updateMatrixWorld(true);
   const bassin = scene.getObjectByName('pelvis');
   const haut = new THREE.Box3().setFromObject(scene).getSize(new THREE.Vector3()).y || 1.6;
@@ -263,6 +319,8 @@ export type Options = {
   cadrage?: Cadrage;
   /** Horloge manuelle (tournage image par image) : rien ne bouge sans avancer(). */
   manuelle?: boolean;
+  /** Vrai : chaque geste joue du debut a la fin, sans sauter ses poses tenues (mesure, tournage d'un geste seul). */
+  manuelleBrute?: boolean;
   /** Faux : sans les corrections de mains de corrections.json (mesure du geste brut). */
   corriger?: boolean;
 };
@@ -270,8 +328,15 @@ export type Options = {
 /** Le repos d'une suite : le corps qui reste, et les poses qu'il prend de temps en temps. */
 export type Repos = { p: Personnage; gestes: string[] };
 
+/** Le fondu d'un geste a l'autre, sur le meme corps (secondes). */
+const FONDU_GESTE = 0.35;
 /** Le fondu d'un visage a l'autre (secondes). */
-const FONDU = 0.55;
+// LE VISAGE CHANGE D'UN COUP (21/11/2026, « on voit toujours les images qui passent d'un etat a
+// l'autre », l'auteur). Un fondu, meme de 0,2 s, superposait le visage qui part — bouche ouverte,
+// mains transparentes — sur celui qui arrive. La pose etant deja la meme des deux cotes (transfert
+// + raccord), il n'y a rien a fondre : l'ancien corps disparait a l'image ou le nouveau apparait,
+// et seule l'expression change, comme sur un vrai visage. (Mettre une duree ici refait le fondu.)
+const FONDU = 0;
 
 export type Vue = {
   /** Montrer cette mascotte et lui faire jouer ce geste ; `ensuite` en boucle a la fin (par defaut idle). */
@@ -453,7 +518,7 @@ export function vueMascotte(o: Options): Vue {
   // mains a 5-7 cm de l'ancien corps. A la bascule, on mesure l'ecart — le corps entier (bassin),
   // puis le bout de chaque membre — et on l'ajoute, en s'eteignant en douceur sur RACCORD
   // secondes : le nouveau corps part exactement d'ou etait l'ancien.
-  const RACCORD = 0.6;
+  const RACCORD = 0.35;
   let raccord: { t: number; corps: THREE.Vector3; m: Record<Membre, THREE.Vector3> } | null = null;
   function poidsRaccord() {
     if (!raccord) return 0;
@@ -562,7 +627,7 @@ export function vueMascotte(o: Options): Vue {
     // (suivre en dernier : la nouvelle action n'a son vrai poids qu'a la mise a jour suivante)
     effacer(dt);
     if (raccord && (raccord.t += dt) > RACCORD) raccord = null;
-    if (actuel) { rendre(); actuel.mel.update(dt); retenir(); mainsBasses(); corriger(); suivre(); varier(dt); }
+    if (actuel) { rendre(); actuel.mel.update(dt); anticiper(); retenir(); mainsBasses(); corriger(); suivre(); varier(dt); }
     dessiner();
   }
 
@@ -580,6 +645,14 @@ export function vueMascotte(o: Options): Vue {
   // suite — le geste fort, un second geste du meme visage, puis le corps neutre, bouche fermee —
   // et le repos change de pose de temps en temps au lieu de boucler la meme attente.
   let aSuivre = false;
+  // LE GESTE SUIVANT PART AVANT LA FIN DU GESTE EN COURS : des que celui-ci arrive a sa fin utile
+  // (finUtile, sans sa pose tenue), moins AVANCE — le mouvement ne s'arrete jamais entre deux.
+  const AVANCE = 0.15;
+  function anticiper() {
+    if (aSuivre || !action || action.loop !== THREE.LoopOnce || !action.isRunning()) return;
+    const fin = finUtile(action.getClip());
+    if (action.time >= fin - AVANCE) aSuivre = true;
+  }
   let file: [Personnage, string][] = [];
   let repos: Repos | null = null;
   let avantPose = 0;          // secondes de repos avant le prochain changement de pose
@@ -773,21 +846,26 @@ export function vueMascotte(o: Options): Vue {
     aSuivre = false;
     const a = actuel.mel.clipAction(c);
     a.reset();
-    if (ensuite && ensuite !== c.name) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; }
-    else a.setLoop(THREE.LoopRepeat, Infinity);
+    if (ensuite && ensuite !== c.name) {
+      a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true;
+      // un geste qui suit un autre part la ou il bouge (pas pour le tout premier, ni le tournage)
+      if ((action || pose) && !o.manuelleBrute) a.time = debutUtile(c);
+    } else a.setLoop(THREE.LoopRepeat, Infinity);
     a.play();
     if (pose) {
       // le nouveau corps part de la pose de l'ancien et glisse vers son geste
       const ap = actuel.mel.clipAction(pose);
       ap.setLoop(THREE.LoopRepeat, Infinity).play();
-      ap.crossFadeTo(a, 0.6, false);
+      ap.crossFadeTo(a, 0.35, false);
       // la pose prise des cette image (sinon une image du corps au repos, entre les deux)
       actuel.mel.update(0);
       // (tenu sur place comme a chaque image, AVANT la mesure : sinon la premiere image du nouveau
       // corps n'etait pas tenue et la suivante si — la tete reculait de 5 cm d'un coup)
       retenir();
       if (sortant) mesurerRaccord(sortant.corps);
-    } else if (action && action !== a) action.crossFadeTo(a, 0.5, false);   // (0,3 s : une main a 5 % de la taille en une image)
+      // (sans fondu, l'ancien corps n'a servi qu'a la mesure du raccord)
+      if (sortant && FONDU <= 0) { pivot.remove(sortant.corps); sortant.mel.stopAllAction(); sortant = null; }
+    } else if (action && action !== a) action.crossFadeTo(a, FONDU_GESTE, false);
     action = a;
     if (c.name === 'idle') avantPose = 5 + Math.random() * 4;
     if (!o.manuelle && !anim) anim = requestAnimationFrame(boucle);
