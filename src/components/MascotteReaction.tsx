@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'motion/react';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { Mascotte } from './Mascotte';
-import { REACTIONS_COURSE, REACTIONS_RIVAL, tirer, type IssueRival, type Reaction } from '@/game/mascotte-reactions';
+import { REACTIONS_COURSE, SCENES_RIVAL, sceneCourse, suivreSerie, tirer, type IssueRival, type Programme, type Serie } from '@/game/mascotte-reactions';
 import { useFete } from '@/game/fete';
 
 /**
@@ -28,6 +28,19 @@ function issueCourse(fete: { perso: unknown; monde: unknown }, joueur: unknown, 
   return 'milieu';
 }
 
+// LA SERIE DU JOUEUR, d'une course a l'autre (dans ce navigateur seulement). Une course ne compte
+// qu'une fois : l'ecran se redessine, la reaction se recalcule quand le record du monde tombe —
+// on garde donc la serie d'AVANT cette course pour la recompter a l'identique.
+const CLE_SERIE = 'mascotte_serie';
+function serieApres(cle: string, issue: IssueCourse): Serie {
+  let st: { cle: string; avant: Serie } | null = null;
+  try { st = JSON.parse(localStorage.getItem(CLE_SERIE) || 'null'); } catch { /* refuse */ }
+  const avant: Serie = st ? (st.cle === cle ? st.avant : (st as any).apres || { sorte: '', n: 0 }) : { sorte: '', n: 0 };
+  const apres = suivreSerie(avant, issue);
+  try { localStorage.setItem(CLE_SERIE, JSON.stringify({ cle, avant, apres })); } catch { /* refuse */ }
+  return apres;
+}
+
 export function MascotteReaction({ hauteur = 170, rival, heros }: { hauteur?: number; rival?: IssueRival; heros?: IssueCourse }) {
   const raceKey = useGameStore((s) => s.raceKey);
   const runTime = useGameStore((s) => s.runTime);
@@ -36,8 +49,14 @@ export function MascotteReaction({ hauteur = 170, rival, heros }: { hauteur?: nu
   // (le record du monde se decide apres un aller-retour au classement : la reaction suit)
   const fete = useFete();
   // une reaction par course (ou par issue de duel) : elle ne change pas quand l'ecran se redessine
-  const [personnage, geste] = useMemo<Reaction>(
-    () => tirer(rival ? REACTIONS_RIVAL[rival] : REACTIONS_COURSE[heros || issueCourse(fete, joueur, etat)]),
+  // une scene selon la situation (game/mascotte-reactions.ts) : l'issue, et la serie du joueur
+  const prog = useMemo<Programme>(() => {
+    if (rival) return tirer(SCENES_RIVAL[rival]);
+    const issue = heros || issueCourse(fete, joueur, etat);
+    // (une scene imposee — le record du monde du popup — ne compte pas dans la serie)
+    if (heros) return sceneCourse(issue, { sorte: '', n: 0 });
+    return sceneCourse(issue, serieApres(`${raceKey}:${runTime}`, issue));
+  },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [raceKey, runTime, rival, heros, fete.perso === joueur, fete.monde === joueur],
   );
@@ -51,7 +70,8 @@ export function MascotteReaction({ hauteur = 170, rival, heros }: { hauteur?: nu
       transition={{ type: 'spring', stiffness: 140, damping: 18, delay: 0.2 }}
       className="pointer-events-none shrink-0"
       style={{ width: 'min(60vw, 240px)', height: hauteur }}>
-      <Mascotte personnage={personnage} geste={geste} ensuite="idle" lacet={rival ? -0.4 : 0.4} />
+      <Mascotte personnage={prog.etapes[0][0]} geste={prog.etapes[0][1]} suite={prog.etapes.slice(1)} repos={prog.repos}
+        lacet={rival ? -0.4 : 0.4} />
     </motion.div>
   );
 }
