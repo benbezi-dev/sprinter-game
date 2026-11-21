@@ -3,7 +3,7 @@ import { SprinterApp } from '@/game/engine';
 import { Clapperboard } from 'lucide-react';
 import { PieceBB } from '@/components/PieceBB';
 import { rafraichirPieces, usePieces, coutDuContinue, acheterContinue, type EtatPieces } from '@/game/pieces';
-import { pubPossible, regarderUnePub, PUBS_PAR_CARRIERE } from '@/game/pub';
+import { pubPossible, regarderUnePub, raisonEchecPub, PUBS_PAR_CARRIERE } from '@/game/pub';
 import { sansPubs } from '@/game/achats';
 
 /**
@@ -127,7 +127,7 @@ export function Reprises({ parcours, achetes, pubs, pubsMax = PUBS_PAR_CARRIERE,
             className="w-full py-2.5 md:py-4 [@media(max-height:780px)]:py-2 rounded-xl font-black font-display text-[clamp(0.7rem,3.7cqw,1.5rem)] whitespace-nowrap tracking-widest text-primary bg-primary/10 hover:bg-primary/20 disabled:opacity-60 transition-all border-2 border-primary active:translate-y-1 flex items-center justify-center gap-2">
             {sansPubs() ? N.t('pub_offerte') : N.t(pub === 'envoi' ? 'pub_charge' : revanche ? 'pub_revanche' : 'pub_continuer')}{!sansPubs() && <Clapperboard className="w-5 h-5 md:w-6 md:h-6" />}
           </button>
-          {pub === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}</div>}
+          {pub === 'rate' && <div className="text-xs text-destructive">{N.t('pub_rate')}{raisonEchecPub && <span className="opacity-60"> · {raisonEchecPub}</span>}</div>}
         </div>
       )}
       {pieces && pieces.reserve && cout == null && (
