@@ -307,7 +307,7 @@ export function vueMascotte(o: Options): Vue {
     rendu.setPixelRatio(o.pixels ?? Math.min(2, window.devicePixelRatio || 1));
     rendu.outputColorSpace = THREE.SRGBColorSpace;
     rendu.toneMapping = THREE.ACESFilmicToneMapping;
-    rendu.toneMappingExposure = 1.05;
+    rendu.toneMappingExposure = 1.12;
     rendu.setClearColor(0x000000, 0);
   } catch { rendu = null; }
 
@@ -315,8 +315,14 @@ export function vueMascotte(o: Options): Vue {
   const camera = new THREE.PerspectiveCamera(26, 1, 0.05, 50);
   // UNE LUMIERE DE PLATEAU : une cle chaude de trois quarts haut, un debouche froid, un contre-jour
   // qui detache le contour sur n'importe quel fond (ecran de fin, ouverture, video)
-  scene.add(new THREE.HemisphereLight(0xdfe8ff, 0x3a2f28, 1.25));
-  const cle = new THREE.DirectionalLight(0xfff1e0, 2.4); cle.position.set(1.6, 2.6, 3.0); scene.add(cle);
+  //
+  // LES OMBRES DEBOUCHEES (« un peu sombres, la luminosite est trop basse sur les zones d'ombre »,
+  // l'auteur, 21/11/2026) : 10 % de la peau etait a 7-8 sur 255, presque noire. Le sol de la
+  // lumiere d'ambiance passe d'un brun sombre a un beige chaud, et une lumiere douce de face
+  // eclaire ce qui regarde la camera ; la cle baisse un peu pour garder les hautes lumieres.
+  scene.add(new THREE.HemisphereLight(0xeef3ff, 0x9a8676, 1.9));
+  const cle = new THREE.DirectionalLight(0xfff1e0, 2.2); cle.position.set(1.6, 2.6, 3.0); scene.add(cle);
+  const face = new THREE.DirectionalLight(0xfff8f0, 1.1); face.position.set(-0.4, 1.0, 4.0); scene.add(face);
   const contre = new THREE.DirectionalLight(0xbfd8ff, 2.0); contre.position.set(-2.2, 2.0, -2.6); scene.add(contre);
 
   const pivot = new THREE.Group();
