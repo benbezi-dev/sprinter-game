@@ -83,7 +83,7 @@ function coureurDuCouloir(couloir: number) {
 function Presentation({ titre, sousTitre, grille, fiches }: {
   titre: string; sousTitre: string;
   grille: { couloir: number; nom: string; cle?: string; bulle?: string | null }[];
-  fiches: (SourceFiches & { epreuve: string }) | null;
+  fiches: (SourceFiches & { epreuve: string; titreChampion?: string }) | null;
 }) {
   // −1 : le generique. 0..n−1 : l'athlete. n : fini, le starter prend la main.
   const [index, setIndex] = useState(-1);
@@ -217,7 +217,7 @@ function Presentation({ titre, sousTitre, grille, fiches }: {
             </div>
             {/* Puis ce qu'il a gagne, a quel niveau il se bat, et son bilan. */}
             {fiches && courant.cle && (
-              <FichePresentation fiche={fiche(courant.cle)} epreuve={fiches.epreuve}
+              <FichePresentation fiche={fiche(courant.cle)} epreuve={fiches.epreuve} titre={fiches.titreChampion}
                                  favori={favori === courant.cle} />
             )}
           </motion.div>

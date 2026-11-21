@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { zSol } from '../salle-3d';
 import { presentationCourante } from '../presentation-directe';
 import { LANE_W } from './reglages';
-import { milieu, ici, capIci } from './repere';
+import { milieu, ici, capIci, ouCourt } from './repere';
 import { nCouloirs } from '../course-3d';
 
 // LA PRESENTATION DE LA FINALE, ECRITE DANS LA PISTE (Championnat de France du 19/12, l'auteur, 7/11 ;
@@ -14,9 +14,20 @@ import { nCouloirs } from '../course-3d';
 // Le joueur : « TOI », en or. Au pistolet, plus rien sur la piste — on court dans le noir, lignes allumees.
 const PRES_PAS = 3;
 export let presente = -1, presenteTexte = '', presenteMoi = false;
+/** Le plan de l'extinction (camera.ts) : de la premiere rangee qui tombe au premier nom. */
+export let planExtinction = false;
+/** Ou en est le creneau de l'athlete presente, en secondes (camera.ts : son gros plan, puis son nom). */
+export let presenteDans = 0;
+/** L'arrivee en or, de 0 a 1 : les fleches LED s'effacent devant elle (laPresentationAuSol). */
+export let orA = 0;
+/** Le chrono du vainqueur et son nom (TOI pour le joueur) : l'ecran geant les affiche (stade.ts). */
+export let orTexte = '', orNom = '', orMoi = false;
+/** Ou s'ecrit le chrono en or (camera.ts : le plan de l'arrivee), et son couloir. */
+export const orOu = new THREE.Vector3(); export let orCouloir = -1;
 /** « TOI » dans la langue du joueur (YOU en anglais). */
 const toi = () => { try { return String((globalThis as any).SprinterApp?.N?.t('you') || 'TOI').toUpperCase(); } catch { return 'TOI'; } };
-export const presenteOu = new THREE.Vector3(), finCam = new THREE.Vector3(), finVise = new THREE.Vector3();
+/** presenteAthlete : ou se tient l'athlete presente (son gros plan, camera.ts). */
+export const presenteOu = new THREE.Vector3(), presenteAthlete = new THREE.Vector3(), finCam = new THREE.Vector3(), finVise = new THREE.Vector3();
 function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: number, h: number) => void) {
   const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
   peindre(cv.getContext('2d')!, w, h);
@@ -24,12 +35,27 @@ function peinte(w: number, h: number, peindre: (c: CanvasRenderingContext2D, w: 
   return t;
 }
 /**
- * L'EXTINCTION DE LA SALLE, avant la presentation d'une serie (l'auteur, 8/11) : quatre secondes. Les plafonniers
- * s'eteignent en trois rangees, chacune avec son clignotement (0,8 s, 1,4 s, 2 s) ; puis les neons s'allument comme
- * de vrais tubes, en hesitant (2,6 a 3,4 s) — les couloirs, les fleches, les logos, le tapis. Elle part au premier
- * moment d'avant-course (la cinematique d'intro ou le decompte) et ne revient jamais en arriere : la salle reste noire.
+ * L'EXTINCTION DE LA SALLE, entre l'appel et le premier nom d'une serie (l'auteur, 8/11 ; refaite le 16/11 : « plus
+ * spectaculaire, qui reste en tete », puis « pas assez spectaculaire et trop rapide, il faut de la tension »). Onze
+ * secondes, en cinq temps :
+ *  1. les plafonniers tombent en trois rangees (0,6 / 1,4 / 2,2 s), chacune son clignotement et son contacteur ;
+ *  2. le noir complet, plus de deux secondes : un coeur qui bat dans la halle, et un tube du couloir 1 qui tente de
+ *     s'allumer, gresille... et meurt ;
+ *  3. les lignes de la piste courue s'allument UNE PAR UNE, lentement d'abord puis de plus en plus vite, comme le
+ *     coeur : chaque tube hesite (trois amorces) et sonne une note plus haute que la precedente ;
+ *  4. le souffle : toutes les lignes allumees battent avec le coeur, une montee de bruit blanc enfle ;
+ *  5. le coup : tout le reste s'allume d'un bloc (la piste qu'on ne court pas, les fleches, les logos, le tapis), un
+ *     grand eclair qui fait gonfler les halos et retombe en une seconde et demie, un choc grave et la clameur.
+ * La camera (camera.ts) avance lentement vers la piste pendant toute la montee, puis recule d'un coup au dernier coup
+ * pour montrer la salle entiere. Elle part au premier moment d'avant-course (le decompte suspendu de l'appel) et ne
+ * revient jamais en arriere. La salle du championnat laisse ce temps avant la presentation
+ * (worker/src/salle-championnat.js, avantPresentation).
  */
-export const DUREE_EXTINCTION = 4;
+export const DUREE_EXTINCTION = 11;
+/** Le dernier coup, en secondes depuis le debut de l'extinction (camera.ts recule a cet instant). */
+export const EXT_COUP = 9.2;
+/** Ou en est l'extinction, en secondes (camera.ts : son lent travelling). */
+export let extinctionE = 0;
 /**
  * LE SON DE L'EXTINCTION : le « clonk » d'un contacteur par rangee de plafonniers, qui roule dans la halle ; le
  * public qui monte d'un cran quand le noir tombe ; le gresillement des tubes neon qui s'allument. Synthetise sur
@@ -91,6 +117,50 @@ const sonDeSalle = {
     const cl = this.bruit(ctx, d), bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 650; bp.Q.value = 0.9;
     const gc = this.enveloppe(ctx, t, 0.12 * f, 0.4, d - 0.4); cl.connect(bp).connect(gc).connect(A.sortie); cl.start(t);
   },
+  /** Une ligne qui s'allume : une note claire (son rang dans la montee), sur le bourdon du tube. */
+  note(rang: number) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.01;
+    const GAMME = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21];   // (pentatonique majeure, depuis le la grave)
+    const f = 220 * Math.pow(2, GAMME[Math.min(GAMME.length - 1, rang)] / 12);
+    for (const [mult, a, type] of [[1, 0.09, 'triangle'], [2, 0.03, 'sine']] as const) {
+      const o = ctx.createOscillator(); o.type = type; o.frequency.value = f * mult;
+      const g = this.enveloppe(ctx, t, a, 0.006, 0.9); o.connect(g).connect(A.sortie); o.start(t); o.stop(t + 1);
+    }
+    this.neon(0.1);
+  },
+  /** Le dernier coup : un choc grave qui tient, le claquement de tous les contacteurs, et la clameur. */
+  coup() {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.01;
+    const o = ctx.createOscillator(); o.type = 'sine';
+    o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(34, t + 1.2);
+    const g = this.enveloppe(ctx, t, 0.7, 0.005, 1.4); o.connect(g).connect(A.sortie); o.start(t); o.stop(t + 1.5);
+    this.clonk(1.5); this.ovation(true);
+    // la halle renvoie le choc : un grondement qui tient deux secondes
+    const n = this.bruit(ctx, 2.2), lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 180;
+    const gn = this.enveloppe(ctx, t, 0.5, 0.01, 2.1); n.connect(lp).connect(gn).connect(A.sortie); n.start(t);
+  },
+  /** Un battement de coeur, deux coups sourds (lub-dub), plus fort a mesure que la tension monte. */
+  coeur(force = 1) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t0 = ctx.currentTime + 0.01;
+    for (const [dt, a] of [[0, 0.5], [0.16, 0.32]] as const) {
+      const t = t0 + dt, o = ctx.createOscillator(); o.type = 'sine';
+      o.frequency.setValueAtTime(62, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.18);
+      const g = this.enveloppe(ctx, t, a * force, 0.008, 0.22); o.connect(g).connect(A.sortie); o.start(t); o.stop(t + 0.3);
+    }
+  },
+  /** La montee d'avant le coup : un bruit blanc dont le filtre s'ouvre pendant `d` secondes. */
+  souffle(d: number) {
+    const A = this.audio(); if (!A) return;
+    const ctx: AudioContext = A.ctx, t = ctx.currentTime + 0.01;
+    const n = this.bruit(ctx, d + 0.1), f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.5;
+    f.frequency.setValueAtTime(300, t); f.frequency.exponentialRampToValueAtTime(5200, t + d);
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16, t + d);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.08);
+    n.connect(f).connect(g).connect(A.sortie); n.start(t);
+  },
   /** Un tube neon qui s'amorce : un ping, puis le bourdon du ballast. */
   neon(dur = 0.12) {
     const A = this.audio(); if (!A) return;
@@ -102,33 +172,66 @@ const sonDeSalle = {
     const gp = this.enveloppe(ctx, t, 0.04, 0.002, 0.06); p.connect(gp).connect(A.sortie); p.start(t); p.stop(t + 0.1);
   },
 };
-export function lExtinction(eteindre: (lumiere: number, neons: number) => void, eclairer: (k: number) => void) {
-  const RANGEES = [0.8, 1.4, 2.0];
-  const ALLUMAGE: [number, number][] = [[2.6, 0.6], [2.7, 0], [2.8, 1], [2.95, 0.2], [3.05, 1], [3.3, 0.7], [3.4, 1]];
-  let debut = -1, fini = false, vu = -1;
+export function lExtinction(eteindre: (lumiere: number, neons: number, lignesA?: (i: number, n: number) => number, eclat?: number) => void,
+                            eclairer: (k: number) => void) {
+  const RANGEES = [0.6, 1.4, 2.2];
+  // le tube qui rate (couloir 1), la premiere ligne, la derniere : entre elles, des ecarts qui raccourcissent
+  // d'un quart a chaque ligne — lent, puis de plus en plus vite —, quel que soit le nombre de lignes
+  const RATE = 3.5, LIGNE0 = 4.9, LIGNE_FIN = 8.0, COUP = EXT_COUP, RESSERRE = 0.75;
+  const heureLigne = (i: number, n: number) => {
+    if (n <= 1) return LIGNE0;
+    const S = (k: number) => (1 - Math.pow(RESSERRE, k)) / (1 - RESSERRE);
+    return LIGNE0 + (LIGNE_FIN - LIGNE0) * S(i) / S(n - 1);
+  };
+  /** Une amorce de tube a `f` secondes de son heure : trois hesitations, puis il tient. */
+  const amorce = (f: number) => f < 0 ? 0 : f < 0.06 ? 0.7 : f < 0.13 ? 0 : f < 0.2 ? 0.9 : f < 0.27 ? 0.12 : f < 0.33 ? 1 : f < 0.37 ? 0.45 : 1;
+  /** Le tube qui rate : quelques sursauts faibles, de plus en plus faibles, puis plus rien. */
+  const rate = (f: number) => f < 0 || f > 0.75 ? 0 : [0.35, 0, 0.5, 0.1, 0, 0.25, 0, 0, 0.12, 0, 0, 0, 0.05, 0, 0][Math.floor(f / 0.05)] || 0;
+  // le coeur : de plus en plus vite et de plus en plus fort, du noir jusqu'au coup
+  const COEUR0 = 2.6;
+  const battements: number[] = [];
+  for (let b = COEUR0, p = 0.95; b < COUP - 0.15; b += p, p = Math.max(0.36, p * 0.93)) battements.push(b);
+  let debut = -1, fini = false, vu = -1, nVu = 9;
   return (t: number) => {
     if (fini) return;
     const dt = vu < 0 ? 0 : t - vu; vu = t;
     const G = (globalThis as any).SprinterApp?.G;
     const avant = !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
-    if (debut < 0) { if (!avant) return; debut = t; }
-    const e = t - debut;
-    // la lumiere : un tiers de moins a chaque rangee, et 0,18 s de clignotement au moment ou elle tombe
+    if (debut < 0) { if (!avant) return; debut = t; planExtinction = true; }
+    const e = t - debut, avantE = e - dt;
+    extinctionE = e;
+    // 1. la lumiere : un tiers de moins a chaque rangee, et 0,25 s de clignotement au moment ou elle tombe
     let lumiere = 1;
     for (let i = 0; i < RANGEES.length; i++) {
       const f = e - RANGEES[i];
       if (f < 0) break;
       const avantR = 1 - i / RANGEES.length, apres = 1 - (i + 1) / RANGEES.length;
-      lumiere = f < 0.18 && Math.floor(f / 0.045) % 2 === 0 ? avantR : apres;
+      lumiere = f < 0.25 && Math.floor(f / 0.05) % 2 === 0 ? avantR : apres;
     }
-    let neons = 0;
-    for (const [a, v] of ALLUMAGE) if (e >= a) neons = v;
-    // le son : un clonk a chaque rangee qui tombe, la rumeur au premier, le gresillement a chaque amorce de neon
-    const avantE = e - dt;
+    // le souffle avant le coup : les lignes allumees battent avec le coeur
+    let pouls = 1;
+    if (e > LIGNE_FIN + 0.4 && e < COUP) {
+      let dernier = -1; for (const b of battements) if (b <= e) dernier = b;
+      const fb = dernier < 0 ? 1 : e - dernier;
+      pouls = 0.55 + 0.45 * Math.min(1, fb / 0.3);
+    }
+    // 2. le rate ; 3. les lignes, une par une, de plus en plus vite ; 5. le reste d'un bloc, l'eclair en 1,5 s
+    const lignesA = (i: number, n: number) => {
+      nVu = n;
+      const allume = amorce(e - heureLigne(i, n)) * pouls;
+      return Math.max(i === 0 ? rate(e - RATE) : 0, allume, e >= COUP ? 1 : 0);
+    };
+    const neons = e >= COUP ? amorce(e - COUP) : 0;
+    const fc = e - COUP, eclat = fc >= 0.1 && fc < 1.6 ? 2.4 * Math.pow(1 - (fc - 0.1) / 1.5, 2) : 0;
+    // le son
     RANGEES.forEach((r, i) => { if (avantE < r && e >= r) { sonDeSalle.clonk(1 - i * 0.15); if (i === 0) sonDeSalle.rumeur(); } });
-    ALLUMAGE.forEach(([a, v]) => { if (v > 0 && avantE < a && e >= a) sonDeSalle.neon(v === 1 ? 0.25 : 0.08); });
-    eteindre(lumiere, neons); eclairer(lumiere);
-    if (e > DUREE_EXTINCTION) fini = true;
+    battements.forEach((b, k) => { if (avantE < b && e >= b) sonDeSalle.coeur(0.5 + 0.5 * k / Math.max(1, battements.length - 1)); });
+    if (avantE < RATE && e >= RATE) { sonDeSalle.neon(0.08); setTimeout(() => sonDeSalle.neon(0.05), 110); setTimeout(() => sonDeSalle.neon(0.04), 280); }
+    for (let i = 0; i < nVu; i++) { const a = heureLigne(i, nVu); if (avantE < a && e >= a) sonDeSalle.note(i); }
+    if (avantE < LIGNE_FIN + 0.4 && e >= LIGNE_FIN + 0.4) sonDeSalle.souffle(COUP - LIGNE_FIN - 0.4);
+    if (avantE < COUP && e >= COUP) sonDeSalle.coup();
+    eteindre(lumiere, neons, lignesA, eclat); eclairer(lumiere);
+    if (e > DUREE_EXTINCTION) { eteindre(0, 1, () => 1, 0); fini = true; }
   };
 }
 
@@ -216,18 +319,24 @@ export function lArriveeEnOr(T: any, groupe: THREE.Group) {
     }
     pos.needsUpdate = true; m.geometry.computeBoundingSphere();
   };
-  let pose = '', depuis = -1;
+  let pose = '', depuis = -1, garde: any = null;
   return (t: number) => {
     const G = (globalThis as any).SprinterApp?.G;
     let best: any = null;
     // (les adversaires connaissent leur temps des le depart, finished compris : on attend qu'ils passent la ligne)
     for (const r of G?.runners || []) if (r.finished && r.finishTime > 0 && r.d >= T.total && (!best || r.finishTime < best.finishTime)) best = r;
-    if (!best) { bande.visible = chrono.visible = false; pose = ''; depuis = -1; return; }
-    const k = best.lane | 0, texte = (+best.finishTime).toFixed(2), cle = k + '/' + texte;
+    // (elle tient jusqu'a la course suivante : a l'arrivee du resultat, les coureurs de la salle sont remplaces et le
+    // vainqueur disparaissait de G.runners — l'or s'eteignait au bout de 0,7 s)
+    if (!best && pose && G?.state !== 'count') best = garde;
+    if (!best) { bande.visible = chrono.visible = false; pose = ''; depuis = -1; orA = 0; orCouloir = -1; garde = null; orTexte = ''; return; }
+    if (best !== garde) garde = { lane: best.lane, finishTime: best.finishTime, nom: best.isPlayer ? toi() : String(best.name || '').toUpperCase(), moi: !!best.isPlayer };
+    orNom = garde.nom; orMoi = garde.moi;
+    const k = garde.lane | 0, texte = (+garde.finishTime).toFixed(2), cle = k + '/' + texte;
     if (cle !== pose) {
-      pose = cle; if (depuis < 0) depuis = t;
+      pose = cle; if (depuis < 0) depuis = t; orTexte = texte;
       plier(bande, k, T.total / 2, T.total);
       plier(chrono, k, Math.max(4, T.total - 7), 1, Math.PI);   // (lu depuis la tribune, comme les noms)
+      { const q = ici(T.posDemi(Math.max(4, T.total - 7), k, milieu(T, k))); orOu.set(q[0], q[1], 0); orCouloir = k; }
       matC.map?.dispose();
       matC.map = peinte(1024, 160, (x, w, h) => {
         x.translate(0, h); x.scale(1, -1);   // (le monde est en miroir)
@@ -238,8 +347,10 @@ export function lArriveeEnOr(T: any, groupe: THREE.Group) {
       matC.needsUpdate = true;
     }
     const a = Math.min(1, (t - depuis) / 0.6);
-    bande.visible = chrono.visible = true;
+    // LE CHRONO SUR L'ECRAN GEANT, PLUS AU SOL (l'auteur, 16/11) : le couloir reste en or, le temps passe a l'ecran
+    bande.visible = true; chrono.visible = false;
     matB.opacity = 0.85 * a; matC.opacity = a;
+    orA = a;   // (au 200 m, les fleches tricolores d'apres la ligne noyaient l'or : elles s'effacent)
   };
 }
 export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: number, a: number) => void, retard = 0,
@@ -253,7 +364,13 @@ export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: n
     g.addColorStop(0, 'rgba(90,210,255,0)'); g.addColorStop(0.85, 'rgba(120,225,255,0.55)'); g.addColorStop(1, 'rgba(235,252,255,1)');
     c.fillStyle = g; c.fillRect(0, 0, w, h);
   });
-  const LN = 9, D_NOM = 7;                         // le nom : 9 m de long, centre a 7 m des blocs
+  // le nom : 6 m de long, de 1,2 a 7,2 m de la ligne (« on ne voit plus les noms au sol, ils commencent trop loin »,
+  // l'auteur, 16/11 : a 9 m de long et de 2,5 a 11,5 m, il sortait du plan de l'athlete)
+  const LN = 6, D_NOM = 4.2;
+  // L'ATHLETE PRESENTE DANS SA LUMIERE (l'auteur, 16/11 : « on doit voir le personnage presente ») : une lampe au-dessus
+  // de ses blocs, qui monte et descend avec son nom ; les autres restent dans le noir
+  const lampe = new THREE.SpotLight(0xfff1dc, 0, 9, 0.32, 0.7, 1.4);
+  groupe.add(lampe, lampe.target);
   for (let k = 0; k < n; k++) {
     const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
     // (decoupes en tranches : chaque sommet se pose sur la ligne du couloir, le nom epouse le virage — plier)
@@ -330,7 +447,8 @@ export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: n
       : !!G && ((G.state === 'cut' && G.cut && G.cut.kind === 'intro') || G.state === 'count');
     if (!avant) {
       debut = -1; presente = -1; presenteMoi = false; lisser(t, 0); lignes?.(-1, 0, drapeau);
-      for (let k = 0; k < n; k++) { couloirs[k].mat.opacity = couloirs[k].tmat.opacity = 0; fleches?.(k, 1 - drapeau); }
+      for (let k = 0; k < n; k++) { couloirs[k].mat.opacity = couloirs[k].tmat.opacity = 0; fleches?.(k, (1 - drapeau) * (1 - orA)); }
+      lampe.intensity = 0;
       return;
     }
     if (debut < 0) debut = t;
@@ -341,12 +459,18 @@ export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: n
     const avD = G.avantDepart; if (G.state === 'count' && avD?.attitudes) avD.reste = Math.max(avD.reste, ordre.length * PRES_PAS + 0.5 - e);
     const avantP = presente;
     presente = lui ? (lui.lane | 0) : -1;
+    if (presente >= 0) planExtinction = false;
+    presenteDans = Math.max(0, dans);
     presenteMoi = !!lui?.isPlayer;
     presenteTexte = lui ? (lui.isPlayer ? toi() : String(lui.name || '').toUpperCase()) : '';
     if (presente >= 0 && presente !== avantP) sonDeSalle.ovation(!!lui?.isPlayer);   // le public salue chaque nom
     lisser(t, lui ? 1 : 0);
-    if (lui) { const q = ici(T.posDemi(D_NOM, presente, milieu(T, presente))); presenteOu.set(q[0], q[1], 0); }
-    else lignes?.(-1, 0, drapeau);
+    if (lui) {
+      const q = ici(T.posDemi(D_NOM, presente, milieu(T, presente))); presenteOu.set(q[0], q[1], 0);
+      // L'ATHLETE DANS LE CADRE, PAS SEULEMENT SON NOM (l'auteur, 16/11) : il attend un metre derriere la ligne
+      const a = ouCourt(T, lui); presenteAthlete.set(a[0], a[1], 0);
+    }
+    else { lignes?.(-1, 0, drapeau); lampe.intensity = 0; }
     for (let k = 0; k < n; k++) {
       const c = couloirs[k], r = lui && (lui.lane | 0) === k ? lui : null;
       if (!r) { c.mat.opacity = c.tmat.opacity = 0; fleches?.(k, 1 - drapeau); continue; }
@@ -357,6 +481,8 @@ export function laPresentationAuSol(T: any, groupe: THREE.Group, fleches?: (k: n
       // le nom prend la place des fleches de lumiere de son couloir, qui reviennent quand il se retire (l'auteur, 8/11)
       fleches?.(k, (1 - Math.max(0, fondu)) * (1 - drapeau));
       plier(c.nom, k, D_NOM, 1, Math.PI);   // (le nom se lit depuis la tribune : retourne d'un demi-tour)
+      { const b = ouCourt(T, r), z = zSol(b[0], b[1]);
+        lampe.position.set(b[0], b[1], z + 5.5); lampe.target.position.set(b[0], b[1], z); lampe.intensity = 60 * Math.max(0, fondu); }
       // le fantome : sa vitesse moyenne sur l'epreuve courue (sa distance, son chrono vise), parti 0,4 s apres le nom.
       // (les coureurs portent `target` et `total` ; `announced`, `chrono`, `pb` n'existaient pas : tous filaient a
       // 60 m en 6,9 s, au 200 et au 400 m compris)

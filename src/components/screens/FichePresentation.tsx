@@ -133,7 +133,9 @@ function LigneDePalmares({ l }: { l: LignePalmares }) {
   );
 }
 
-export function FichePresentation({ fiche, epreuve, favori = false }: {
+export function FichePresentation({ fiche, epreuve, favori = false, titre }: {
+  /** Le ruban du champion sortant : « CHAMPION DE FRANCE EN TITRE » (championEnTitre), sinon le libelle general. */
+  titre?: string;
   /** `undefined` tant qu'elle n'est pas arrivee, `null` s'il n'y en a pas. */
   fiche: FicheAthlete | null | undefined;
   /** La distance de l'edition : c'est sur elle que le niveau se lit. */
@@ -163,7 +165,7 @@ export function FichePresentation({ fiche, epreuve, favori = false }: {
             <span className="px-3 py-0.5 rounded-sm text-[10px] font-black tracking-[0.3em]
                              uppercase text-black shadow-[0_2px_12px_rgba(0,0,0,0.6)]"
                   style={{ background: OR }}>
-              {N.t('champ_boss')}
+              {titre || N.t('champ_boss')}
             </span>
           )}
           {favori && (

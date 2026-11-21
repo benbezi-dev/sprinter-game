@@ -1,6 +1,8 @@
 // LA COURSE EN VRAIE 3D — le stade de l'etape, aux couleurs du theme du jeu (decoupe de course-3d.ts, 11/11/2026).
 
 import { sponsorDeLaCourse } from '../panneaux';
+import { presentationCourante } from '../presentation-directe';
+import { ficheDe } from '../fiches-champ';
 import * as THREE from 'three';
 import { construirePlage } from '../plage-3d';
 import { construireAmsalem, habillerLeTartan, pelouseAmsalem, TRIBUNE_AMSALEM, RANGS_AMSALEM } from '../amsalem-3d';
@@ -20,7 +22,7 @@ import { monde, texteCanvas, scene, hemi, soleil, renderer } from './scene';
 import { salleActive, ici, milieu, capIci } from './repere';
 import { chargerLaPlage, uFoule, atlasPlage, atlasPublic, P_SIL, P_GESTES, laFoule } from './public';
 import { carteNeon, retirerLaPluie, oublierLEspace, espaceAutour, pieceDuStade, planetesSousLaPiste, voute, villeNeon, poserLesPieces } from './decors';
-import { lExtinction, presente, presenteTexte, presenteMoi, lesLampesDuPublic, laPresentationAuSol, DUREE_EXTINCTION, lesLignesRouges, lArriveeEnOr } from './salle-noire';
+import { lExtinction, presente, presenteTexte, presenteMoi, lesLampesDuPublic, laPresentationAuSol, DUREE_EXTINCTION, lesLignesRouges, lArriveeEnOr, orA, orTexte, orNom, orMoi } from './salle-noire';
 import { uLisere, eclairerLesCorps, uLisereCoul, uLisereForce, uLisereFace, blocLots, _T } from './corps';
 import { soleilDecal } from './camera';
 
@@ -82,6 +84,8 @@ export const blocsSalle: THREE.Object3D[] = [];
 // du toit en porte-a-faux (21 m aux Mondiaux), qui remplissait tout l'ecran. On le cache quand la camera passe au-dessus de lui, hors survol — comme le plafond
 // de la salle (salle-3d.ts). zTop : la hauteur du toit, dans le repere du stade.
 export const toitsStade: { obj: THREE.Object3D; zTop: number }[] = [];
+/** L'ecran geant de la salle (son maillage), ou nul hors de la salle : camera.ts y cadre le chrono du vainqueur. */
+export let ecranSalle: THREE.Object3D | null = null;
 export let cameraSalle: ((x: number, y: number, z: number, survol: boolean, cam?: THREE.Camera, vise?: THREE.Vector3) => void) | null = null;
 /** La finale : le couloir presente (-1 : aucun) et le point ou s'ecrit son nom — la camera le cadre. */
 export let finaleVue = false;
@@ -323,7 +327,7 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
     eclairerLesCorps(envPalais);
     const base = (import.meta as any).env?.BASE_URL || '/';
     const salle = construireSalle({ stade, renderer, base, nuit: nuitSalle, finale: finaleNoire, droite: !T.curved });
-    pubAnim.push(salle.animer); cameraSalle = salle.camera;
+    pubAnim.push(salle.animer); cameraSalle = salle.camera; ecranSalle = salle.ecranMaillage;
     if (tourChamp) {
       salle.eteindre(tourChamp === 'noir' ? 0 : 1, tourChamp === 'noir' ? 1 : 0);
       if (tourChamp === 'serie') pubAnim.push(lExtinction(salle.eteindre, eclairerSalle));
@@ -345,6 +349,34 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
         if (film.paused) film.play().catch(() => {});
         // PENDANT LA PRESENTATION, l'ecran montre l'athlete presente, comme a la television (l'auteur, 9/11 : « une
         // atmosphere de grande competition ») : son couloir, son nom (TOI pour le joueur), le titre de l'epreuve
+        // L'ARRIVEE EN OR SUR L'ECRAN GEANT (l'auteur, 16/11 : « pas de chrono au sol mais sur l'ecran geant ») : le
+        // temps du vainqueur en or, son nom, le drapeau ; il entre en fondu avec l'or du couloir
+        if (finaleVue && orA > 0 && orTexte) {
+          matG.map = tE;
+          const img = Math.floor(t * 30); if (img === imageE) return; imageE = img;
+          const w = 1024, h = 512;
+          ce.globalCompositeOperation = 'source-over';
+          ce.fillStyle = '#03040a'; ce.fillRect(0, 0, w, h);
+          ce.globalAlpha = orA;
+          const fond = ce.createRadialGradient(w / 2, h * 0.45, 20, w / 2, h * 0.45, w * 0.6);
+          fond.addColorStop(0, '#3a2600'); fond.addColorStop(1, '#03040a');
+          ce.fillStyle = fond; ce.fillRect(0, 0, w, h);
+          ce.textAlign = 'center'; ce.textBaseline = 'middle';
+          ce.shadowColor = 'rgba(255,190,50,0.95)'; ce.shadowBlur = 40; ce.fillStyle = '#ffd34a';
+          ce.font = '900 250px Outfit, system-ui, sans-serif'; ce.fillText(orTexte, w / 2, h * 0.42, w * 0.92);
+          ce.shadowBlur = 14; ce.fillStyle = orMoi ? '#ffd34a' : '#f2f8ff';
+          ce.font = '900 76px Outfit, system-ui, sans-serif'; ce.fillText(orNom, w / 2, h * 0.76, w * 0.9);
+          ce.shadowBlur = 0;
+          ce.fillStyle = '#1f4fe0'; ce.fillRect(0, h - 22, w / 3, 22);
+          ce.fillStyle = '#f4f6fb'; ce.fillRect(w / 3, h - 22, w / 3, 22);
+          ce.fillStyle = '#e8202f'; ce.fillRect(2 * w / 3, h - 22, w - 2 * w / 3, 22);
+          const x = ((t % 2.4) / 2.4 * 1.6 - 0.3) * w, g = ce.createLinearGradient(x - 110, 0, x + 110, 0);
+          g.addColorStop(0, 'rgba(255,230,160,0)'); g.addColorStop(0.5, 'rgba(255,230,160,0.16)'); g.addColorStop(1, 'rgba(255,230,160,0)');
+          ce.globalCompositeOperation = 'lighter'; ce.fillStyle = g; ce.fillRect(0, 0, w, h);
+          ce.globalAlpha = 1;
+          tE.needsUpdate = true;
+          return;
+        }
         if (finaleVue && presente >= 0) {
           matG.map = tE;
           const img = Math.floor(t * 30); if (img === imageE) return; imageE = img;
@@ -356,10 +388,41 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
           ce.textAlign = 'center'; ce.textBaseline = 'middle'; ce.fillStyle = '#04050a';
           ce.font = '900 44px Outfit, system-ui, sans-serif'; ce.fillText('COULOIR', 115, 150, 196);
           ce.font = '900 230px Outfit, system-ui, sans-serif'; ce.fillText(String(presente + 1), 115, 315);
-          ce.textAlign = 'left'; ce.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
-          ce.font = '900 110px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 250, w - 300);
-          ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 38px Outfit, system-ui, sans-serif';
-          ce.fillText('CHAMPIONNAT DE FRANCE · SALLE', 274, 360, w - 300);
+          // SON PALMARES SOUS SON NOM (l'auteur, 16/11 : « indique le palmares des athletes lors de la presentation ») :
+          // la fiche du speaker (fiches-champ.ts, la meme que FichePresentation), ses trois plus belles medailles
+          const pc = presentationCourante(), N = (globalThis as any).SprinterApp?.N;
+          const sien = pc?.presentation.ordre.find(o => (o.couloir | 0) === presente + 1);
+          const fiche = pc?.fiches && sien ? ficheDe(pc.fiches, sien.id) : null;
+          const medailles = (fiche?.palmares || []).slice(0, 3), t_ = (k: string, d: string) => (N ? N.t(k) : d);
+          ce.textAlign = 'left';
+          ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 32px Outfit, system-ui, sans-serif';
+          ce.fillText('CHAMPIONNAT DE FRANCE · SALLE', 274, 82, w - 300);
+          if (fiche?.tenant) {
+            const titre = String(pc?.fiches?.titreChampion || t_('champ_boss', 'CHAMPION EN TITRE')).toUpperCase();
+            ce.font = '900 26px Outfit, system-ui, sans-serif';
+            const lt = Math.min(w - 300, ce.measureText(titre).width + 24);
+            ce.fillStyle = '#ffd34a'; ce.fillRect(270, 112, lt, 40);
+            ce.fillStyle = '#04050a'; ce.fillText(titre, 282, 133, lt - 24);
+          }
+          ce.fillStyle = moi ? '#ffd34a' : '#f2f8ff';
+          ce.font = '900 104px Outfit, system-ui, sans-serif'; ce.fillText(presenteTexte, 270, 222, w - 300);
+          if (medailles.length) {
+            ce.fillStyle = '#F8CD4A'; ce.font = '900 26px Outfit, system-ui, sans-serif';
+            ce.fillText(String(t_('fiche_palmares', 'PALMARÈS')).toUpperCase(), 274, 304, w - 300);
+            const COUL = ['#F8CD4A', '#D9DEE8', '#E0965A'], MOT = ['nations_or', 'nations_argent', 'nations_bronze'], DEF = ['Or', 'Argent', 'Bronze'];
+            medailles.forEach((l, j) => {
+              const i = Math.min(2, Math.max(0, l.place - 1)), y = 352 + j * 44;
+              const zone = l.echelon === 'mondial' ? t_('fiche_monde', 'MONDE') : (N?.getLang?.() === 'en' ? l.zoneNomEn || l.zoneNom : l.zoneNom);
+              ce.fillStyle = COUL[i]; ce.beginPath(); ce.arc(290, y, 13, 0, Math.PI * 2); ce.fill();
+              ce.font = '900 34px Outfit, system-ui, sans-serif';
+              const ligne = `${String(t_(MOT[i], DEF[i])).toUpperCase()}  ${String(zone).toUpperCase()}  ${l.epreuve} M${l.n > 1 ? '  ×' + l.n : ''}`;
+              ce.fillText(ligne, 316, y + 2, w - 340);
+            });
+          } else if (fiche) {
+            // (pas de medaille : on ne le presente pas par ce qui lui manque — son bilan en duel, comme la fiche)
+            ce.fillStyle = 'rgba(200,220,255,0.75)'; ce.font = '700 34px Outfit, system-ui, sans-serif';
+            ce.fillText(`${fiche.bilan.v} V · ${fiche.bilan.d} D · ${fiche.bilan.n} N`, 274, 330, w - 300);
+          }
           // (le drapeau en pied d'ecran, comme les habillages des championnats nationaux a la television)
           ce.fillStyle = '#1f4fe0'; ce.fillRect(0, h - 22, w / 3, 22);
           ce.fillStyle = '#f4f6fb'; ce.fillRect(w / 3, h - 22, w / 3, 22);

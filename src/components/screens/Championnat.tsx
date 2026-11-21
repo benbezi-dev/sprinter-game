@@ -20,6 +20,7 @@ import {
   etatEdition, fluxDirect, prochain, grille, arrivee, telephoneRelie,
   bossVu, marquerBossVu,
   type Edition, type Annonce, type Partant, type TenantEnTitre,
+  championEnTitre,
 } from '@/game/championnats';
 
 /**
@@ -522,7 +523,7 @@ function Boss({ t, e, onFini }: { t: TenantEnTitre; e: Edition; onFini: () => vo
 
         <p className="text-[10px] font-black tracking-[0.3em] text-center"
            style={{ color: OR }}>
-          {N.t('champ_boss')}
+          {championEnTitre(e.echelon, e.zone, e.zoneNom, e.zoneNomEn)}
         </p>
 
         {/* Le nom, seul et grand. C'est la seule information de cet ecran qui
