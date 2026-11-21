@@ -13,6 +13,7 @@ import { placerLaCameraDeLAccueil, dessinerLesCoureursDeLAccueil, brancherLeRede
 import { appliquerAmbiance } from '@/game/sauts-stades.js';
 import { chargementFini, partChargee } from '@/game/chargement';
 import { dessinSuspendu } from '@/game/dessin-suspendu';
+import { image as imageEffetsPixel } from '@/game/effets-pixel';
 
 // LA COURSE EN VRAIE 3D (22/10/2026). Sur la branche de test ferme test-ferme/course-3d,
 // elle est la par defaut (`?rendu=2d` revient au dessin du jeu) ; chargee a part pour
@@ -456,6 +457,9 @@ export function GameCanvas() {
               if (e) marquerLeJoueur(ctx, e, fantome.repere.nom, '#67e8f9');
             }
           }
+          // Les effets pixel art (pistolet, faux depart, haie, victoire) : en 2D
+          // seulement, par-dessus les coureurs. Voir game/effets-pixel.ts.
+          imageEffetsPixel(dt, ctx, SprinterApp, !en3D);
         } else if (G.state === 'title') {
           // Les trois coureurs de l'accueil : sur la piste, hors des cartes.
           dessinerLesCoureursDeLAccueil(ctx, SprinterApp, theme);
