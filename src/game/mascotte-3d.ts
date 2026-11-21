@@ -198,6 +198,53 @@ const ZONE = 0.12;
  *    en boucle, l'ecart fin-debut de chaque piste est reparti sur toute la duree : la fin retombe
  *    exactement sur le debut.
  */
+/** Catmull-Rom : la courbe qui passe par b (u=0) et c (u=1), tangentes prises sur a et d. */
+function cr(a: number, b: number, c: number, d: number, u: number) {
+  const u2 = u * u, u3 = u2 * u;
+  return 0.5 * (2 * b + (c - a) * u + (2 * a - 5 * b + 4 * c - d) * u2 + (3 * b - a - 3 * c + d) * u3);
+}
+
+/**
+ * LE MOUVEMENT EN COURBE (21/11/2026, « on dirait du 10 images par seconde alors qu'on cherche du
+ * 120 »). Les clips Tripo ont 24 cles par seconde, reliees en ligne droite : la vitesse d'un os
+ * change d'un coup 24 fois par seconde, ce qui se voit sur un ecran a 120 Hz. Au premier usage
+ * d'un geste, ses pistes animees sont reechantillonnees a 120 cles par seconde le long d'une
+ * courbe de Catmull-Rom (rotations comprises, renormalisees). Seuls les gestes joues sont
+ * traites : la memoire n'en paie que ce qui sert.
+ */
+const CLES_PAR_SECONDE = 120;
+function lisserClip(clip: THREE.AnimationClip) {
+  if (clip.userData?.lisse) return;
+  clip.userData = { ...(clip.userData || {}), lisse: true };
+  for (const piste of clip.tracks) {
+    const n = piste.times.length, taille = piste.getValueSize();
+    if (n < 4 || (taille !== 3 && taille !== 4)) continue;
+    const t = piste.times, v = piste.values, quat = piste instanceof THREE.QuaternionKeyframeTrack;
+    // (une rotation et son oppose sont la meme : on garde chaque cle du cote de la precedente)
+    if (quat) for (let k = 1; k < n; k++) {
+      let d = 0; for (let c = 0; c < 4; c++) d += v[k * 4 + c] * v[(k - 1) * 4 + c];
+      if (d < 0) for (let c = 0; c < 4; c++) v[k * 4 + c] = -v[k * 4 + c];
+    }
+    const t0 = t[0], t1 = t[n - 1], m = Math.max(n, Math.round((t1 - t0) * CLES_PAR_SECONDE) + 1);
+    const nt = new Float32Array(m), nv = new Float32Array(m * taille);
+    let k = 0;
+    for (let j = 0; j < m; j++) {
+      const x = t0 + (t1 - t0) * j / (m - 1);
+      while (k < n - 2 && t[k + 1] <= x) k++;
+      const u = Math.min(1, Math.max(0, (x - t[k]) / (t[k + 1] - t[k] || 1)));
+      const a = Math.max(0, k - 1), b = k, c = k + 1, d = Math.min(n - 1, k + 2);
+      nt[j] = x;
+      let norme = 0;
+      for (let q = 0; q < taille; q++) {
+        const val = cr(v[a * taille + q], v[b * taille + q], v[c * taille + q], v[d * taille + q], u);
+        nv[j * taille + q] = val; norme += val * val;
+      }
+      if (quat) { norme = Math.sqrt(norme) || 1; for (let q = 0; q < 4; q++) nv[j * 4 + q] /= norme; }
+    }
+    piste.times = nt; piste.values = nv;
+  }
+}
+
 function preparerClips(scene: THREE.Object3D, clips: THREE.AnimationClip[]) {
   preparerPistes(scene, clips);
 }
@@ -329,7 +376,7 @@ export type Options = {
 export type Repos = { p: Personnage; gestes: string[] };
 
 /** Le fondu d'un geste a l'autre, sur le meme corps (secondes). */
-const FONDU_GESTE = 0.35;
+const FONDU_GESTE = 0.6;   // (courbe lente aux deux bouts : 0,6 s ne trainent pas)
 /** Le fondu d'un visage a l'autre (secondes). */
 // LE VISAGE CHANGE D'UN COUP (21/11/2026, « on voit toujours les images qui passent d'un etat a
 // l'autre », l'auteur). Un fondu, meme de 0,2 s, superposait le visage qui part — bouche ouverte,
@@ -518,8 +565,31 @@ export function vueMascotte(o: Options): Vue {
   // mains a 5-7 cm de l'ancien corps. A la bascule, on mesure l'ecart — le corps entier (bassin),
   // puis le bout de chaque membre — et on l'ajoute, en s'eteignant en douceur sur RACCORD
   // secondes : le nouveau corps part exactement d'ou etait l'ancien.
-  const RACCORD = 0.35;
-  let raccord: { t: number; corps: THREE.Vector3; m: Record<Membre, THREE.Vector3> } | null = null;
+  const RACCORD = 0.6;
+  let raccord: { t: number; corps: THREE.Vector3; m: Record<Membre, THREE.Vector3>; coudes: Record<Membre, THREE.Vector3>; tours: { os: string; q: THREE.Quaternion }[] } | null = null;
+  // (la tete aussi : les repos differents la deplacaient de quelques millimetres d'un coup au
+  // changement de visage — le seul a-coup qui restait, mesure a 120 i/s. Le cou tourne d'autant,
+  // dans le repere du bassin, et ce tour s'eteint avec le reste.)
+  const _qr = new THREE.Quaternion(), _qi = new THREE.Quaternion();
+  // le haut du dos puis le cou : chacun tourne pour ramener l'articulation suivante (cou, tete) ou
+  // etait celle de l'ancien corps
+  const TOURS: [string, string][] = [['spine_03', 'neck_01'], ['neck_01', 'head']];
+  function tourner1(nom: string, q: THREE.Quaternion, w: number) {
+    const os = actuel?.corps.getObjectByName(nom);
+    if (!os || !actuel?.bassin) return;
+    actuel.bassin.getWorldQuaternion(_qb);
+    _qr.identity().slerp(q, w);
+    _qr.premultiply(_qb).multiply(_qi.copy(_qb).invert());   // du repere du bassin au monde
+    noter(os);
+    os.getWorldQuaternion(_qm).premultiply(_qr);
+    os.parent!.getWorldQuaternion(_qp);
+    os.quaternion.copy(_qp.invert().multiply(_qm));
+    os.updateMatrixWorld(true);
+  }
+  function raccorderTete(w: number) {
+    if (!raccord || w <= 0) return;
+    for (const t of raccord.tours) tourner1(t.os, t.q, w);
+  }
   function poidsRaccord() {
     if (!raccord) return 0;
     const f = Math.max(0, 1 - raccord.t / RACCORD);
@@ -545,17 +615,21 @@ export function vueMascotte(o: Options): Vue {
       rien = false;
       const boucle = a.loop === THREE.LoopRepeat;
       const f = Math.max(0, a.time) / cor.pas, i = Math.floor(f), u = f - i;
-      const at = (n: number, k: number) => (boucle ? ((k % n) + n) % n : Math.min(k, n - 1));
-      const lire1 = (l: number[]) => { const n = l.length; return l[at(n, i)] + (l[at(n, i + 1)] - l[at(n, i)]) * u; };
+      // (EN COURBE, PAS EN LIGNES DROITES, 21/11/2026 : « on dirait du 10 images par seconde ».
+      // Les corrections sont echantillonnees tous les 0,1 s ; reliees en ligne droite, la main
+      // changeait de direction 10 fois par seconde. Une courbe de Catmull-Rom passe par les memes
+      // echantillons sans cassure.)
+      const at = (n: number, k: number) => (boucle ? ((k % n) + n) % n : Math.max(0, Math.min(k, n - 1)));
+      const lire1 = (l: number[]) => { const n = l.length; return cr(l[at(n, i - 1)], l[at(n, i)], l[at(n, i + 1)], l[at(n, i + 2)], u); };
       if (cor.y && cor.y.length) y += lire1(cor.y) * w;
       if (cor.tete && cor.tete.length) tete += lire1(cor.tete) * w;
       for (const m of ['l', 'r', 'jl', 'jr'] as const) {
         const l = cor[m];
         if (!l || !l.length) continue;
-        const A = l[at(l.length, i)], B = l[at(l.length, i + 1)];
-        somme[m].x += (A[0] + (B[0] - A[0]) * u) * w;
-        somme[m].y += (A[1] + (B[1] - A[1]) * u) * w;
-        somme[m].z += (A[2] + (B[2] - A[2]) * u) * w;
+        const n = l.length, P = l[at(n, i - 1)], A = l[at(n, i)], B = l[at(n, i + 1)], N = l[at(n, i + 2)];
+        somme[m].x += cr(P[0], A[0], B[0], N[0], u) * w;
+        somme[m].y += cr(P[1], A[1], B[1], N[1], u) * w;
+        somme[m].z += cr(P[2], A[2], B[2], N[2], u) * w;
       }
     }
     if (rien) return;
@@ -563,12 +637,18 @@ export function vueMascotte(o: Options): Vue {
     actuel.corps.updateMatrixWorld(true);
     // le menton qui rentrait dans la poitrine : la tete relevee (angle, autour de l'axe des epaules)
     if (tete) leverTete(tete);
+    raccorderTete(wr);
     actuel.bassin.getWorldQuaternion(_qb);
     for (const m of ['l', 'r', 'jl', 'jr'] as const) {
       const bout = actuel.corps.getObjectByName(CHAINES[m][2]);
       if (!bout || somme[m].lengthSq() < 1e-10) continue;
       _o.copy(somme[m]).applyQuaternion(_qb);
-      plier(m, bout.getWorldPosition(_t).add(_o));
+      let coude: THREE.Vector3 | undefined;
+      if (raccord && wr > 0) {
+        const mil = actuel.corps.getObjectByName(CHAINES[m][1]);
+        if (mil) coude = mil.getWorldPosition(new THREE.Vector3()).add(raccord.coudes[m].clone().applyQuaternion(_qb).multiplyScalar(wr));
+      }
+      plier(m, bout.getWorldPosition(_t).add(_o), coude);
     }
   }
 
@@ -589,7 +669,7 @@ export function vueMascotte(o: Options): Vue {
   }
 
   /** Replier le membre `m` (deux os, longueurs gardees, coude ou genou de son cote) pour poser son bout en `cible`. */
-  function plier(m: Membre, cible: THREE.Vector3) {
+  function plier(m: Membre, cible: THREE.Vector3, coude?: THREE.Vector3) {
     if (!actuel) return;
     const [n0, n1, n2] = CHAINES[m];
     const bras = actuel.corps.getObjectByName(n0), avant = actuel.corps.getObjectByName(n1),
@@ -606,7 +686,8 @@ export function vueMascotte(o: Options): Vue {
       if (_s.distanceTo(_t) < 1e-6) return;
       _d.subVectors(_t, _s).normalize();
       // le coude reste du cote ou il etait (le « pole »)
-      _pole.subVectors(_e, _s); _pole.addScaledVector(_d, -_pole.dot(_d));
+      // (le coude se replie du cote du coude demande, sinon de celui ou il etait)
+      _pole.subVectors(coude ?? _e, _s); _pole.addScaledVector(_d, -_pole.dot(_d));
       if (_pole.lengthSq() < 1e-8) return;
       _pole.normalize();
       const cosA = Math.min(1, Math.max(-1, (a * a + d * d - b * b) / (2 * a * d)));
@@ -627,7 +708,7 @@ export function vueMascotte(o: Options): Vue {
     // (suivre en dernier : la nouvelle action n'a son vrai poids qu'a la mise a jour suivante)
     effacer(dt);
     if (raccord && (raccord.t += dt) > RACCORD) raccord = null;
-    if (actuel) { rendre(); actuel.mel.update(dt); anticiper(); retenir(); mainsBasses(); corriger(); suivre(); varier(dt); }
+    if (actuel) { rendre(); avancerFondus(dt); actuel.mel.update(dt); anticiper(); retenir(); mainsBasses(); corriger(); suivre(); varier(dt); }
     dessiner();
   }
 
@@ -644,10 +725,34 @@ export function vueMascotte(o: Options): Vue {
   // rire garde la bouche ouverte tant qu'on reste sur heros-hilare. Une reaction est donc une
   // suite — le geste fort, un second geste du meme visage, puis le corps neutre, bouche fermee —
   // et le repos change de pose de temps en temps au lieu de boucler la meme attente.
+  // LES FONDUS EN DOUCEUR (21/11/2026, « les transitions sont bonnes mais trop brutales »). Ceux de
+  // three.js vont a vitesse constante : le poids d'un geste part et s'arrete d'un coup. Ici le
+  // poids suit une courbe lente aux deux bouts (smootherstep) : le geste qui arrive s'installe,
+  // celui qui part s'efface sans a-coup.
+  type Fondu = { de: THREE.AnimationAction | null; w0: number; vers: THREE.AnimationAction | null; t: number; d: number };
+  let fondus: Fondu[] = [];
+  function fondre(de: THREE.AnimationAction | null, vers: THREE.AnimationAction, d: number) {
+    // un geste qui montait et qu'on quitte deja : il cesse de monter, et s'efface depuis son poids
+    // du moment (le fondu precedent continue seulement d'effacer le sien)
+    for (const f of fondus) if (f.vers === de || f.vers === vers) f.vers = null;
+    fondus = fondus.filter((f) => f.de !== vers);
+    vers.setEffectiveWeight(0);
+    fondus.push({ de, w0: de ? de.getEffectiveWeight() : 0, vers, t: 0, d });
+  }
+  function avancerFondus(dt: number) {
+    for (const f of fondus) {
+      f.t += dt;
+      const x = Math.min(1, f.t / f.d), e = x * x * x * (x * (6 * x - 15) + 10);
+      if (f.vers) f.vers.setEffectiveWeight(e);
+      if (f.de) f.de.setEffectiveWeight(f.w0 * (1 - e));
+      if (x >= 1 && f.de) f.de.stop();
+    }
+    fondus = fondus.filter((f) => f.t < f.d);
+  }
   let aSuivre = false;
   // LE GESTE SUIVANT PART AVANT LA FIN DU GESTE EN COURS : des que celui-ci arrive a sa fin utile
   // (finUtile, sans sa pose tenue), moins AVANCE — le mouvement ne s'arrete jamais entre deux.
-  const AVANCE = 0.15;
+  const AVANCE = 0.3;   // (la moitie du fondu avant la fin utile, la moitie apres)
   function anticiper() {
     if (aSuivre || !action || action.loop !== THREE.LoopOnce || !action.isRunning()) return;
     const fin = finUtile(action.getClip());
@@ -667,9 +772,10 @@ export function vueMascotte(o: Options): Vue {
     if (repos && actuel.p !== repos.p && charges.has(repos.p)) { lancer(repos.p, 'idle', 'idle'); return; }
     const c = clipDe(suite);
     if (!c) return;
+    lisserClip(c);
     const a = actuel.mel.clipAction(c);
     a.reset().setLoop(THREE.LoopRepeat, Infinity).play();
-    action.crossFadeTo(a, 0.35, false);
+    fondre(action, a, FONDU_GESTE);
     action = a;
     avantPose = 5 + Math.random() * 4;
   }
@@ -761,27 +867,41 @@ export function vueMascotte(o: Options): Vue {
     pivot.updateMatrixWorld(true);
     const bA = ancien.getObjectByName('pelvis');
     if (!bA) return;
-    // le corps entier : de bassin a bassin, dans le repere de la scene tournee
-    const pa = pivot.worldToLocal(bA.getWorldPosition(new THREE.Vector3()));
-    const pn = pivot.worldToLocal(actuel.bassin.getWorldPosition(new THREE.Vector3()));
+    const pos = (o: THREE.Object3D | undefined) => o!.getWorldPosition(new THREE.Vector3());
+    // 1. le corps entier : de bassin a bassin, dans le repere de la scene tournee
+    const pa = pivot.worldToLocal(pos(bA));
+    const pn = pivot.worldToLocal(pos(actuel.bassin));
     const corps = pa.sub(pn);
     nouv.position.add(corps); nouv.updateMatrixWorld(true);
-    // puis le bout de chaque membre, une fois le corps decale, dans le repere du bassin
-    const qb = actuel.bassin.getWorldQuaternion(new THREE.Quaternion()).invert();
-    const m = {} as Record<Membre, THREE.Vector3>;
+    // 2. le haut du dos, puis le cou (repere du bassin), appliques tout de suite pour cette image
+    const qb = actuel.bassin.getWorldQuaternion(new THREE.Quaternion());
+    const tours: { os: string; q: THREE.Quaternion }[] = [];
+    const zero = () => ({ l: new THREE.Vector3(), r: new THREE.Vector3(), jl: new THREE.Vector3(), jr: new THREE.Vector3() });
+    raccord = { t: 0, corps, m: zero(), coudes: zero(), tours };
+    for (const [nomOs, nomBout] of TOURS) {
+      const os = nouv.getObjectByName(nomOs), bout = nouv.getObjectByName(nomBout), boutA = ancien.getObjectByName(nomBout);
+      if (!os || !bout || !boutA) continue;
+      const c = pos(os), de = pos(bout).sub(c), vers = pos(boutA).sub(c);
+      if (de.lengthSq() < 1e-10 || vers.lengthSq() < 1e-10) continue;
+      const qw = new THREE.Quaternion().setFromUnitVectors(de.normalize(), vers.normalize());
+      const q = qb.clone().invert().multiply(qw).multiply(qb);   // du monde au repere du bassin
+      tours.push({ os: nomOs, q });
+      tourner1(nomOs, q, 1);
+    }
+    // 3. puis le bout de chaque membre, le dos deja replace, dans le repere du bassin
+    const qbi = qb.clone().invert();
     for (const k of ['l', 'r', 'jl', 'jr'] as const) {
       const a = ancien.getObjectByName(CHAINES[k][2]), n = nouv.getObjectByName(CHAINES[k][2]);
-      m[k] = a && n ? a.getWorldPosition(new THREE.Vector3()).sub(n.getWorldPosition(new THREE.Vector3())).applyQuaternion(qb) : new THREE.Vector3();
+      if (!a || !n) continue;
+      raccord.m[k] = pos(a).sub(pos(n)).applyQuaternion(qbi);
+      // et le coude (le genou) : ou il etait, pour que le bras se replie du meme cote, au meme endroit
+      const ca = ancien.getObjectByName(CHAINES[k][1]), cn = nouv.getObjectByName(CHAINES[k][1]);
+      if (ca && cn) raccord.coudes[k] = pos(ca).sub(pos(cn)).applyQuaternion(qbi);
     }
-    nouv.position.sub(corps); nouv.updateMatrixWorld(true);
-    // (le decalage du corps est exprime dans le repere de la scene : corps.position l'est aussi)
-    raccord = { t: 0, corps, m };
-    // et cette premiere image, deja raccordee
-    nouv.position.add(corps); nouv.updateMatrixWorld(true);
-    for (const k of ['l', 'r', 'jl', 'jr'] as const) {
-      const b = nouv.getObjectByName(CHAINES[k][2]);
-      if (b && m[k].lengthSq() > 1e-10) plier(k, b.getWorldPosition(new THREE.Vector3()).add(m[k].clone().applyQuaternion(qb.clone().invert())));
-    }
+    // les mesures faites, le corps est rendu tel que le mixeur l'a pose : la premiere image passe
+    // ensuite par le MEME chemin que les suivantes (retenir, corriger) — un chemin a part pour elle
+    // pliait coudes et genoux autrement, et ils sautaient d'une image a l'autre
+    rendre();
   }
 
   function lancer(p: Personnage, geste: string, ensuite: string | null) {
@@ -813,6 +933,7 @@ export function vueMascotte(o: Options): Vue {
         sortant = { corps: actuel.corps, mel: actuel.mel, t: 0, mats };
       }
       retouches.clear();
+      fondus = [];   // (les fondus de l'ancien corps partent avec lui)
       const corps = clonerSquelette(m.scene);
       corps.traverse((x: any) => {
         if (!x.isMesh) return;
@@ -842,6 +963,7 @@ export function vueMascotte(o: Options): Vue {
     }
     const c = clipDe(geste) || clipDe('idle');
     if (!c) return false;
+    lisserClip(c);
     suite = ensuite;
     aSuivre = false;
     const a = actuel.mel.clipAction(c);
@@ -856,16 +978,17 @@ export function vueMascotte(o: Options): Vue {
       // le nouveau corps part de la pose de l'ancien et glisse vers son geste
       const ap = actuel.mel.clipAction(pose);
       ap.setLoop(THREE.LoopRepeat, Infinity).play();
-      ap.crossFadeTo(a, 0.35, false);
+      ap.setEffectiveWeight(1);
+      fondre(ap, a, FONDU_GESTE);
       // la pose prise des cette image (sinon une image du corps au repos, entre les deux)
       actuel.mel.update(0);
       // (tenu sur place comme a chaque image, AVANT la mesure : sinon la premiere image du nouveau
       // corps n'etait pas tenue et la suivante si — la tete reculait de 5 cm d'un coup)
       retenir();
-      if (sortant) mesurerRaccord(sortant.corps);
+      if (sortant) { mesurerRaccord(sortant.corps); retenir(); mainsBasses(); corriger(); }
       // (sans fondu, l'ancien corps n'a servi qu'a la mesure du raccord)
       if (sortant && FONDU <= 0) { pivot.remove(sortant.corps); sortant.mel.stopAllAction(); sortant = null; }
-    } else if (action && action !== a) action.crossFadeTo(a, FONDU_GESTE, false);
+    } else if (action && action !== a) fondre(action, a, FONDU_GESTE);
     action = a;
     if (c.name === 'idle') avantPose = 5 + Math.random() * 4;
     if (!o.manuelle && !anim) anim = requestAnimationFrame(boucle);
