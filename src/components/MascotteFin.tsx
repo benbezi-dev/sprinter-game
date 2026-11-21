@@ -41,7 +41,7 @@ export function MascotteAccueil() {
       <Suspense fallback={null}>
         {/* il salue, attend en frimant, puis change de pose de temps en temps */}
         <Mascotte personnage="heros" geste="salut" suite={[['heros', 'attente']]} lacet={-0.35}
-          repos={{ p: 'heros', gestes: ['attente', 'frime', 'defi', 'echauffement'] }} />
+          repos={{ p: 'heros', gestes: ['attente', 'frime', 'defi', 'echauffement', 'montre', 'bras_croises', 'gammes', 'epaules', 'lunettes'] }} />
       </Suspense>
     </div>
   );

@@ -39,19 +39,36 @@ const GESTES_COMMUNS = [
 /** Les personnages qui ont un fichier de gestes en plus. */
 const AVEC_GESTES = new Set(['heros', 'rival']);
 
+/**
+ * LES GESTES PRETES AUX VISAGES (21/11/2026, « passer entre plusieurs poses selon la situation »).
+ * Visage et corps disent la meme chose (EXPRESSIONS.md) : un geste de rage se joue sur le visage
+ * furieux, pas sur le neutre. Les gestes en plus n'existent que sur le corps neutre ; ceux-ci sont
+ * donc pretes au visage qui leur va, recibles au chargement (meme squelette UE5, repos un peu
+ * differents : q = q_neutre · inv(repos_neutre) · repos_visage, la formule validee le 19/11).
+ */
+const EMPRUNTS: Record<string, { de: 'heros' | 'rival'; gestes: readonly string[] }> = {
+  'heros-hilare': { de: 'heros', gestes: ['moquerie', 'glissade', 'encourage'] },
+  'heros-furieux': { de: 'heros', gestes: ['rageur', 'arbitre', 'fache', 'frustre', 'rage_muette', 'boude'] },
+  'heros-larmes': { de: 'heros', gestes: ['sanglot', 'defaite', 'ecrase', 'boude'] },
+  'heros-choque': { de: 'heros', gestes: ['frustre', 'boude'] },
+  'rival-sourire': { de: 'rival', gestes: ['moquerie', 'epaules', 'depoussiere', 'lunettes', 'numero1', 'provoc', 'pointe'] },
+  'rival-fureur': { de: 'rival', gestes: ['rageur', 'arbitre', 'fache', 'frustre', 'rage_muette', 'boude'] },
+  'rival-stupeur': { de: 'rival', gestes: ['defaite', 'boude', 'frustre'] },
+};
+
 /** Les fichiers et leurs gestes (noms courts poses par mascotte-animee.mjs). */
 export const MASCOTTES = {
   'heros': ['idle', 'echauffement', 'salut', 'frime', 'attente', 'defi', 'celebration', ...GESTES_COMMUNS,
     'toise', 'applaudit', 'gammes', 'sanglot'],
-  'heros-hilare': ['idle', 'rire', 'fourire', 'applaudit', 'joie'],
-  'heros-furieux': ['idle', 'trepigne', 'rage', 'colere'],
-  'heros-larmes': ['idle', 'pleure', 'genoux', 'abattu'],
-  'heros-choque': ['idle', 'doubletake', 'stupeur'],
+  'heros-hilare': ['idle', 'rire', 'fourire', 'applaudit', 'joie', ...EMPRUNTS['heros-hilare'].gestes],
+  'heros-furieux': ['idle', 'trepigne', 'rage', 'colere', ...EMPRUNTS['heros-furieux'].gestes],
+  'heros-larmes': ['idle', 'pleure', 'genoux', 'abattu', ...EMPRUNTS['heros-larmes'].gestes],
+  'heros-choque': ['idle', 'doubletake', 'stupeur', ...EMPRUNTS['heros-choque'].gestes],
   'rival': ['idle', 'defi', 'toise', 'applaudit', 'echauffement', ...GESTES_COMMUNS,
     'montees', 'salut', 'frime', 'celebration', 'repos'],
-  'rival-sourire': ['idle', 'nargue', 'victoire', 'doigt'],
-  'rival-fureur': ['idle', 'colere', 'controle'],
-  'rival-stupeur': ['idle', 'stupeur', 'silence'],
+  'rival-sourire': ['idle', 'nargue', 'victoire', 'doigt', ...EMPRUNTS['rival-sourire'].gestes],
+  'rival-fureur': ['idle', 'colere', 'controle', ...EMPRUNTS['rival-fureur'].gestes],
+  'rival-stupeur': ['idle', 'stupeur', 'silence', ...EMPRUNTS['rival-stupeur'].gestes],
 } as const;
 export type Personnage = keyof typeof MASCOTTES;
 
@@ -103,20 +120,54 @@ export function chargerMascotte(p: Personnage): Promise<Modele | null> {
   return m;
 }
 
+// Les fichiers de gestes bruts, lus une fois ; chaque corps en prend des copies (ses pistes sont
+// remises d'aplomb ou reciblees pour lui).
+const fichiersGestes = new Map<string, Promise<{ scene: THREE.Object3D; clips: THREE.AnimationClip[] } | null>>();
+function fichierGestes(de: string) {
+  let f = fichiersGestes.get(de);
+  if (!f) {
+    f = chargeurGLTF().loadAsync(url((de + '-gestes') as Personnage))
+      .then((g) => ({ scene: g.scene, clips: g.animations }))
+      .catch(() => { fichiersGestes.delete(de); return null; });
+    fichiersGestes.set(de, f);
+  }
+  return f;
+}
+
+/** Recibler un clip du corps `src` vers le corps `dst` (meme squelette, repos differents). */
+function recibler(clip: THREE.AnimationClip, src: THREE.Object3D, dst: THREE.Object3D) {
+  const q = new THREE.Quaternion(), inv = new THREE.Quaternion(), v = new THREE.Vector3();
+  for (const piste of clip.tracks) {
+    const [nom, prop] = piste.name.split('.');
+    const a = src.getObjectByName(nom), b = dst.getObjectByName(nom);
+    if (!a || !b) continue;
+    const val = piste.values, n = piste.times.length;
+    if (prop === 'quaternion') {
+      inv.copy(a.quaternion).invert();
+      for (let k = 0; k < n; k++) q.fromArray(val, k * 4).multiply(inv).multiply(b.quaternion).toArray(val, k * 4);
+    } else if (prop === 'position') {
+      for (let k = 0; k < n; k++) v.fromArray(val, k * 3).sub(a.position).add(b.position).toArray(val, k * 3);
+    }
+  }
+}
+
 const gestesEnPlus = new Map<Personnage, Promise<void>>();
-/** Les gestes en plus d'un personnage, rattaches a ses clips (rien s'il n'en a pas). */
+/** Les gestes en plus d'un personnage (les siens, ou ceux qu'on lui prete), rattaches a ses clips. */
 function chargerGestes(p: Personnage, mod: Modele): Promise<void> {
-  if (!AVEC_GESTES.has(p)) return Promise.resolve();
+  const emprunt = EMPRUNTS[p];
+  const de = AVEC_GESTES.has(p) ? p : emprunt?.de;
+  if (!de) return Promise.resolve();
   let g = gestesEnPlus.get(p);
   if (!g) {
-    g = chargeurGLTF().loadAsync(url((p + '-gestes') as Personnage))
-      .then((f) => {
-        // les pistes visent les os par leur nom : le meme squelette que le corps de base, et le
-        // meme repos (meme export Tripo) — on les remet d'aplomb avec le repos du corps
-        preparerClips(mod.scene, f.animations);
-        for (const c of f.animations) if (!mod.clips.some((x) => x.name === c.name)) mod.clips.push(c);
-      })
-      .catch(() => { gestesEnPlus.delete(p); });
+    g = fichierGestes(de).then((f) => {
+      if (!f) { gestesEnPlus.delete(p); return; }
+      const voulus = emprunt ? f.clips.filter((c) => emprunt.gestes.includes(c.name)) : f.clips;
+      const clips = voulus.filter((c) => !mod.clips.some((x) => x.name === c.name)).map((c) => c.clone());
+      if (emprunt) for (const c of clips) recibler(c, f.scene, mod.scene);
+      // les pistes visent les os par leur nom ; on les remet d'aplomb avec le repos de CE corps
+      preparerClips(mod.scene, clips);
+      mod.clips.push(...clips);
+    });
     gestesEnPlus.set(p, g);
   }
   return g;
@@ -726,8 +777,11 @@ export function vueMascotte(o: Options): Vue {
       ap.crossFadeTo(a, 0.6, false);
       // la pose prise des cette image (sinon une image du corps au repos, entre les deux)
       actuel.mel.update(0);
+      // (tenu sur place comme a chaque image, AVANT la mesure : sinon la premiere image du nouveau
+      // corps n'etait pas tenue et la suivante si — la tete reculait de 5 cm d'un coup)
+      retenir();
       if (sortant) mesurerRaccord(sortant.corps);
-    } else if (action && action !== a) action.crossFadeTo(a, 0.3, false);
+    } else if (action && action !== a) action.crossFadeTo(a, 0.5, false);   // (0,3 s : une main a 5 % de la taille en une image)
     action = a;
     if (c.name === 'idle') avantPose = 5 + Math.random() * 4;
     if (!o.manuelle && !anim) anim = requestAnimationFrame(boucle);
