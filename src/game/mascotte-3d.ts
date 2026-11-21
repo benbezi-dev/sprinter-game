@@ -331,9 +331,12 @@ export type Repos = { p: Personnage; gestes: string[] };
 /** Le fondu d'un geste a l'autre, sur le meme corps (secondes). */
 const FONDU_GESTE = 0.35;
 /** Le fondu d'un visage a l'autre (secondes). */
-// (21/11 : 0,55 s laissait voir deux visages l'un sur l'autre ; la pose etant deja la meme des
-// deux cotes, un fondu court suffit a cacher le changement de visage)
-const FONDU = 0.2;
+// LE VISAGE CHANGE D'UN COUP (21/11/2026, « on voit toujours les images qui passent d'un etat a
+// l'autre », l'auteur). Un fondu, meme de 0,2 s, superposait le visage qui part — bouche ouverte,
+// mains transparentes — sur celui qui arrive. La pose etant deja la meme des deux cotes (transfert
+// + raccord), il n'y a rien a fondre : l'ancien corps disparait a l'image ou le nouveau apparait,
+// et seule l'expression change, comme sur un vrai visage. (Mettre une duree ici refait le fondu.)
+const FONDU = 0;
 
 export type Vue = {
   /** Montrer cette mascotte et lui faire jouer ce geste ; `ensuite` en boucle a la fin (par defaut idle). */
@@ -860,6 +863,8 @@ export function vueMascotte(o: Options): Vue {
       // corps n'etait pas tenue et la suivante si — la tete reculait de 5 cm d'un coup)
       retenir();
       if (sortant) mesurerRaccord(sortant.corps);
+      // (sans fondu, l'ancien corps n'a servi qu'a la mesure du raccord)
+      if (sortant && FONDU <= 0) { pivot.remove(sortant.corps); sortant.mel.stopAllAction(); sortant = null; }
     } else if (action && action !== a) action.crossFadeTo(a, FONDU_GESTE, false);
     action = a;
     if (c.name === 'idle') avantPose = 5 + Math.random() * 4;
