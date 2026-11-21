@@ -35,6 +35,18 @@ export function pubPossible(): boolean {
 
 let pret: Promise<any> | null = null;
 
+/** Pourquoi la derniere pub n'a pas tourne : le code d'erreur de Google
+ *  (1 = aucune pub a servir, 2 = reseau, 0/3 = requete ou compte...), ou
+ *  « init » si le SDK n'a meme pas demarre. Affiche discretement sous le
+ *  message d'echec : sans lui, une panne iOS ne se distingue pas d'une autre. */
+export let raisonEchecPub: string | null = null;
+
+function noterEchec(e: any): void {
+  const code = e?.code ?? e?.data?.code;
+  raisonEchecPub = code != null && code !== '' ? String(code) : (e?.message ? String(e.message).slice(0, 40) : '?');
+  console.warn('[pub] echec', raisonEchecPub, e?.message ?? e);
+}
+
 /** Charge le greffon, l'initialise et passe le consentement (UMP) une fois. */
 function admob(): Promise<any> {
   if (!pret) {
@@ -82,8 +94,16 @@ export async function regarderUnePub(): Promise<boolean> {
     await new Promise(r => setTimeout(r, 1500));
     return true;
   }
+  raisonEchecPub = null;
+  let m: any;
   try {
-    const m = await admob();
+    m = await admob();
+  } catch (e) {
+    raisonEchecPub = 'init';
+    console.warn('[pub] init', e);
+    return false;
+  }
+  try {
     const ios = (window as any).Capacitor?.getPlatform?.() === 'ios';
     const E = m.RewardAdPluginEvents;
     await m.AdMob.prepareRewardVideoAd({ adId: ios ? UNITE_IOS : UNITE_ANDROID, isTesting: DE_TEST });
@@ -95,16 +115,17 @@ export async function regarderUnePub(): Promise<boolean> {
     const ecoutes = await Promise.all([
       m.AdMob.addListener(E.Rewarded, () => { recompense = true; }),
       m.AdMob.addListener(E.Dismissed, () => fin()),
-      m.AdMob.addListener(E.FailedToShow, () => fin()),
+      m.AdMob.addListener(E.FailedToShow, (e: any) => { noterEchec(e); fin(); }),
     ]);
     try {
-      m.AdMob.showRewardVideoAd().catch(() => fin());
+      m.AdMob.showRewardVideoAd().catch((e: any) => { noterEchec(e); fin(); });
       await fermee;
     } finally {
       ecoutes.forEach((e: any) => e.remove());
     }
     return recompense;
-  } catch {
+  } catch (e) {
+    noterEchec(e);
     return false;
   }
 }
