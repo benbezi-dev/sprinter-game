@@ -70,7 +70,8 @@ import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
 import { Regarder } from '@/components/screens/Regarder';
 import { demandeDeLUrl } from '@/game/regarder';
-import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE } from '@/game/canal';
+import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE, NOEL_OUVERT } from '@/game/canal';
+import { caseEnCours } from '@/game/avent';
 
 /* LA NUIT DU MOLOSSE SE CHARGE A LA DEMANDE, ET C'EST UNE CONDITION POUR
    QU'ELLE SORTE DU BUILD PUBLIC.
@@ -110,6 +111,9 @@ const PanneauMolosse = /* @__PURE__ */ lazy(() => import('@/components/screens/H
   .then(m => ({ default: m.PanneauMolosse })));
 const FinDeLaNuit = /* @__PURE__ */ lazy(() => import('@/components/screens/Halloween')
   .then(m => ({ default: m.FinDeLaNuit })));
+// La fin d'une case du calendrier de l'Avent (Avent.tsx).
+const FinDeCase = /* @__PURE__ */ lazy(() => import('@/components/screens/Avent')
+  .then(m => ({ default: m.FinDeCase })));
 const FinDeLaMeute = /* @__PURE__ */ lazy(() => import('@/components/screens/MeuteMolosse')
   .then(m => ({ default: m.FinDeLaMeute })));
 const BandeauDeLaMeute = /* @__PURE__ */ lazy(() => import('@/components/screens/MeuteMolosse')
@@ -443,6 +447,7 @@ function MainGame() {
             de la carriere d'athlete : place, prime, qualification (game/athlete/). */}
         {state === 'winall' && (
           DUELS_OUVERTS && SprinterApp.G.defiDemie ? <FinDuDefi />
+            : NOEL_OUVERT && caseEnCours() ? <Suspense fallback={null}><FinDeCase /></Suspense>
             : HALLOWEEN_OUVERT && nuitEnCours() ? <Suspense fallback={null}>{nuitAPlusieurs() ? <FinDeLaMeute /> : <FinDeLaNuit />}</Suspense>
             : DEFI_VEDETTE_OUVERT && defiVedetteEnCours() ? <Suspense fallback={null}><FinDuDefiVedette /></Suspense>
             : LEGENDE_OUVERTE && finDEtapeLegende(SprinterApp.G) ? <Suspense fallback={null}><FinDEtapeLegende /></Suspense>

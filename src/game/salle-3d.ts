@@ -127,7 +127,19 @@ export function calageSalle(T: any): { sx: number; x0: number; y0: number } {
   if (T.salle) return { sx: -1, x0: 0, y0: -RS };
   return { sx: 1, x0: DEPART_60, y0: -RS - (NC_DROITE / 2) * CW_DROITE };
 }
-export const estEnSalle = (T: any, race: any) => !!(T && (T.salle || (race && race.salleDroite)));
+/**
+ * LE 60 M DE NOEL SE COURT DEHORS (l'auteur, 16/11/2026 : le Village de l'Etoile ne se voyait pas). Le 60 m
+ * est la ligne droite de la salle, et la salle s'imposait quel que soit le stade : le mode Noel, qui ne court
+ * que le 60 m, montrait la halle bleue de Val-de-Reuil au lieu du village enneige. Sur le stade `noel`, le 60 m
+ * reste dehors, pose sur la ligne droite du stade, l'arrivee sur la ligne peinte (course-3d/repere.ts, caler).
+ */
+export const salleDroiteDehors = () => {
+  const A = (globalThis as any).SprinterApp;
+  const l = A?.LEVELS?.[A?.G?.levelIdx];
+  return !!(l && l.cle === 'noel');
+};
+export const estEnSalle = (T: any, race: any) =>
+  !!(T && (T.salle || (race && race.salleDroite && !salleDroiteDehors())));
 /**
  * Le survol de presentation, DANS la salle (« la vue de presentation doit commencer du ciel, mais dans
  * le stade, pas depuis le toit », l'auteur, 26/10) : un tour au-dessus de l'anneau, sous les treillis

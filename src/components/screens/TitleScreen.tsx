@@ -44,6 +44,9 @@ const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
 // Noel 2026 : boules de neige et etoile du sapin (Noel.tsx), paresseux comme le duel.
 const BanderoleNoel = /* @__PURE__ */ lazy(() => import('./Noel')
   .then(m => ({ default: m.BanderoleNoel })));
+// Le calendrier de l'Avent, « La Course de l'Etoile » (Avent.tsx) : meme fenetre que Noel.
+const BanderoleAvent = /* @__PURE__ */ lazy(() => import('./Avent')
+  .then(m => ({ default: m.BanderoleAvent })));
 const BanderoleMarques = /* @__PURE__ */ lazy(() => import('./DuelMarques')
   .then(m => ({ default: m.BanderoleMarques })));
 // Le tchat du duel lui survit (16/10) : apres la fermeture, il vit sur l'accueil.
@@ -485,6 +488,7 @@ export function TitleScreen() {
             {!haies && <Suspense fallback={null}><BanderoleEpreuves /></Suspense>}
 
             {/* NOEL 2026, un 60 m : Sprinter seulement. */}
+            {!haies && NOEL_OUVERT && <Suspense fallback={null}><BanderoleAvent /></Suspense>}
             {!haies && NOEL_OUVERT && <Suspense fallback={null}><BanderoleNoel /></Suspense>}
 
             {/* LE DUEL DES MARQUES, un 100 m : Sprinter seulement. */}
