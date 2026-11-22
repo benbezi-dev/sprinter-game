@@ -1,0 +1,38 @@
+Tu tapes sprinter-game.com. La course est finie avant la fin de cette phrase.
+
+Le chronomètre en haut de l'image est réel : il part au premier caractère tapé
+et s'arrête sur la ligne d'arrivée. __,__ s du clavier à la ligne, une seule
+prise, sans coupe.
+
+Le 100 m se court en deux touches alternées, avec une cadence à tenir et une
+réaction au coup de pistolet. Pas d'installation, pas de compte, pas de
+publicité.
+
+Chrono de la course dans la vidéo : _,__ s.
+
+@sprintergame
+
+
+-- -------------------------------------------------------------------------
+-- CE FICHIER EST UN MODÈLE, ET LES DEUX TROUS SONT VOLONTAIRES.
+--
+-- Le premier est le total mesuré sur le rush, du premier caractère à la ligne.
+-- Le second est le chrono de la course, lu à l'écran du jeu à l'arrivée.
+-- Aucun des deux ne s'invente ni ne se recopie d'une publication précédente.
+--
+-- Le monteur écrit la légende finale, le premier trou déjà rempli avec le
+-- chiffre qu'il vient de mesurer : bouton « legende.txt ». Le second se remplit
+-- à la main, en regardant l'écran d'arrivée.
+--
+-- LE CHIFFRE COMMANDE, LE TEXTE SUIT. Si la prise donne dix-sept secondes là où
+-- on en attendait vingt, ce sont le titre et cette légende qui changent — le
+-- chiffre, jamais.
+--
+-- Ce qui ne doit pas y entrer, et qui a déjà coûté une reprise : « lien en
+-- bio », les émojis empilés, « épique », « incroyable », « ultime »,
+-- « révolutionnaire », « gamers », « la commu », « next-gen », et toute mention
+-- d'un magasin d'applications — les comptes développeur ne sont pas ouverts,
+-- l'annoncer serait faux. Un point d'exclamation au maximum : celle-ci n'en a
+-- aucun. Le présent de l'indicatif partout.
+-- Les lignes de ce bloc ne se collent pas.
+-- -------------------------------------------------------------------------

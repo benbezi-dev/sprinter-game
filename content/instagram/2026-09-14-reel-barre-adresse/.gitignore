@@ -1,0 +1,15 @@
+# Les sorties du banc d essai sont des mires, pas des prises : elles se
+# refabriquent par `node verifier-monteur.mjs` et n ont rien a faire dans un
+# depot public.
+banc-essai/
+
+# La video elle-meme, et la couverture. La racine exclut deja content/**/*.mp4,
+# *.jpg et *.png pour une raison qui vaut pour tous les formats : le depot est
+# public, et une video poussee ne se retire pas de l'historique en la
+# supprimant. Le .webm y avait echappe par omission d'extension.
+# Elles se refabriquent par `node filmer-la-demonstration.mjs`, et se livrent
+# par le Drive, pas par git.
+*.webm
+couverture.png
+video.mp4
+couverture.jpg
