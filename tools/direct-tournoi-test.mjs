@@ -148,6 +148,8 @@ titre('a huit : sept manches jusqu a la finale');
       spect.envoyer({ t: 'pos', d: 40, c: 1500 });
       await attendre(250);
       if (manche === 2) {
+        // Les duels de la manche d'avant s'ecrivent encore : la position peut suivre.
+        await jusqua(() => spect.positions.has(coureur.moi));
         ok('un elimine recoit les positions de ceux qui courent', spect.positions.get(coureur.moi) === 12.5);
         ok('les siennes ne partent nulle part', !coureur.positions.has(spect.moi));
       }

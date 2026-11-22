@@ -212,7 +212,8 @@ titre('le client rouvre la piste fermee, sous le meme code');
     leaderboard: `export const getSavedName = () => globalThis.__nom || 'Anonyme';
                   export const getDeviceId = () => 'appareil-test';`,
     canal: `export const EST_TEST = false; export const codeAcces = () => '';
-            export const avecAcces = u => u;`,
+            export const avecAcces = u => u;
+            export const adressePublique = () => 'https://sprinter-game.com/';`,
     'tchat-rapide': `export const brancherRapide = () => {}; export const debrancherRapide = () => {};
                      export const recevoirRapide = () => {}; export const refusRapide = () => {};`,
   };
@@ -259,7 +260,7 @@ titre('le client rouvre la piste fermee, sous le meme code');
   h.pret(true); j.pret(true);
   ok('la course part', await jusqua(() => vus.h.length === 1 && vus.j.length === 1));
   ok('chacun se voit pret, d apres la salle', h.pretMoi && j.pretMoi);
-  h.fini(10300); j.fini(10600);
+  h.fini(50300); j.fini(50600);
   ok('apres le verdict, personne n est plus pret',
      await jusqua(() => !h.pretMoi && !j.pretMoi && !!h.dernierEtat?.termine));
 
