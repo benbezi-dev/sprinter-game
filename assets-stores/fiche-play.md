@@ -50,10 +50,13 @@ Un classement mondial, un drapeau à côté de ton nom, et un pseudo que tu peux
 réserver pour qu'il reste le tien. Pas d'inscription, pas d'e-mail, pas de
 mot de passe : tu choisis un nom et tu cours.
 
-CE QUE LE JEU NE FAIT PAS
-Pas de publicité. Aucun achat. Aucun traceur publicitaire, aucun outil
-d'analyse d'audience. Le jeu ne demande ni ton e-mail, ni ton numéro, ni ton
-identité. Ce qu'il enregistre est écrit noir sur blanc, et tient sur une page.
+PUBS, ACHAT ET DONNÉES
+Aucune vidéo publicitaire ne se lance sans que tu la choisisses : tu peux en
+regarder une pour reprendre une course ou doubler des pièces. Un achat
+facultatif, « Sans pubs », donne ces récompenses sans vidéo. Les pubs passent
+par Google AdMob, qui utilise des identifiants de l'appareil. Le jeu ne demande
+ni ton e-mail, ni ton numéro. Ce qu'il enregistre est écrit dans sa politique
+de confidentialité.
 
 Bonne course.
 ```
@@ -68,8 +71,9 @@ Bonne course.
 | Catégorie | Sport |
 | Tags | athlétisme, course, sprint, arcade |
 | Audience cible | 13 ans et plus |
-| Publicités | Non |
-| Achats intégrés | Non |
+| Publicités | Oui : vidéos récompensées Google AdMob |
+| Achats intégrés | Oui : « Sans pubs » (`sans_pubs`), achat unique |
+| Identifiant publicitaire | Oui : publicité, analyse, lutte contre la fraude |
 
 **Ne pas déclarer une audience de moins de 13 ans.** Cela ferait basculer
 l'application en politique Familles, où le message vocal entre joueurs devient
@@ -86,46 +90,59 @@ Ce qu'il faut pouvoir montrer, et qui existe :
 
 | Exigence Play | Où |
 |---|---|
-| Signalement dans l'app | Fenêtre de lecture du mot — `LireLeMot`, `src/components/screens/MotDuel.tsx` |
-| Blocage d'un joueur | Même endroit, effet immédiat |
+| Signalement dans l'app | Mot d'un duel : `LireLeMot`, `src/components/screens/MotDuel.tsx`. Tchat : toucher le nom, `TchatMarques.tsx` |
+| Blocage d'un joueur | Mêmes endroits, effet immédiat |
+| Bulles et mots de championnat | Pas de bouton : signalement par e-mail, retrait par `/champ/moderer` |
 | Conditions publiques | https://sprinter-game.com/conditions.html |
 | Lien depuis l'app | Pied de l'écran-titre — `TitleScreen.tsx` |
 | Traitement des signalements | Console de modération, `suivi/moderation.html` |
 | Retrait d'un contenu / sanction | `/moderation/trancher`, `worker/src/moderation.js` |
 
-Le cadre est étroit et c'est un argument : seul le vainqueur écrit, une seule
-fois, à une seule personne, sans réponse possible. Il n'y a pas de chat libre.
+Il y a un tchat en texte libre, à déclarer : fil commun et messages privés
+entre pseudos réservés, 140 caractères, filtrés. Il y a aussi des contenus
+publics au championnat : bulles, mots écrits ou vocaux du vainqueur. Le mot
+d'un duel, lui, ne va qu'au perdant, qui répond par une phrase toute faite.
 
 ---
 
 ## Sécurité des données
 
+« Partagée » s'entend au sens de Play : les prestataires qui traitent pour le
+compte du jeu (Cloudflare, Firebase, Resend) n'en sont pas.
+
 | Donnée | Collectée | Partagée | Pourquoi |
 |---|---|---|---|
-| Identifiant d'appareil | Oui | Non | Retrouver ses scores |
+| Identifiants de l'appareil ou autres (identifiant du jeu, jeton de notification ; par AdMob : identifiant publicitaire, app set ID) | Oui | Oui, ceux d'AdMob | Fonctionnement, publicité, analyse, lutte contre la fraude |
 | Pseudo | Oui | Non | Classement |
-| Pays approximatif | Oui | Non | Drapeau au classement |
-| Pseudo Instagram | Optionnel | Non | Affiché au classement |
+| Position approximative (pays ; adresse IP lue par AdMob) | Oui | Oui, par AdMob | Drapeau, publicité, analyse, lutte contre la fraude |
+| Pseudo Instagram | Optionnel | Non | Affiché au classement, récupération du pseudo |
 | Temps et tracés de course | Oui | Non | Classement, fantômes |
-| Messages entre joueurs | Oui | Non | Le mot du vainqueur |
-| Enregistrements vocaux | Oui | Non | Le mot du vainqueur |
-| Interactions dans l'appli (étapes des premières parties) | Oui | Non | Analyse : où un nouveau joueur s'arrête, qui revient |
+| Progression sauvegardée, solde de pièces | Oui | Non | Retrouver sa partie |
+| Messages entre joueurs | Oui | Non | Mot du vainqueur, tchat commun et privé |
+| Enregistrements vocaux | Oui | Non | Mots du vainqueur, duel et championnat |
+| Autre contenu des utilisateurs (bulles, texte de récupération) | Optionnel | Non | Championnat, assistance |
+| Interactions dans l'appli (étapes, jours d'ouverture ; par AdMob : lancement, appuis, vidéos vues) | Oui | Oui, par AdMob | Analyse, publicité, lutte contre la fraude |
+| Diagnostics et performances (temps de chargement ; par AdMob : blocages, énergie) | Oui | Oui, par AdMob | Analyse, publicité, lutte contre la fraude |
 
-- Aucune donnée n'est vendue ni partagée avec un tiers.
-- Le transit est chiffré (HTTPS).
+- Aucune donnée n'est vendue. Le SDK AdMob collecte et partage avec Google dès
+  le lancement, même sans vidéo regardée :
+  https://developers.google.com/admob/android/privacy/play-data-disclosure
+- Le paiement passe par Google Play : le serveur du jeu ne reçoit rien de l'achat.
+- Le transit est chiffré (HTTPS, WSS, WebRTC).
 - Suppression sur demande à `contact@sprinter-game.com`.
-- **Pas** d'identifiant publicitaire, **pas** d'outil d'analyse tiers.
-- ⚠️ Corrigé le 1er octobre 2026 : depuis le tunnel des premiers pas (29/09)
-  le jeu MESURE lui-même ses nouveaux joueurs. Dans la console : Activité
-  dans l'appli → Interactions dans l'appli → collectée, non partagée,
-  finalité « Analyse ». À changer de nouveau le jour où AdMob arrive.
+- Hors AdMob, pas d'outil d'analyse tiers : le jeu mesure lui-même ses
+  nouveaux joueurs.
+- ⚠️ Corrigé dans ce fichier le 22 novembre 2026. La Play Console n'a pas été
+  consultée : y vérifier Publicités, Identifiant publicitaire, Sécurité des
+  données, la description longue et la classification du contenu
+  (interactions entre utilisateurs, achats).
 
-✅ **Fait le 1er septembre 2026.** La politique de confidentialité porte
+**Signalements.** La politique de confidentialité porte
 désormais une section « Signalement et modération », en français et en
 anglais, qui nomme l'exception et la borne : le contenu signalé — texte et
 enregistrement — est copié dans le signalement au moment de l'envoi, lu par
-le seul éditeur, supprimé une fois traité. Le blocage ne transporte aucun
-contenu. Les deux déclarations, la page et le code, disent la même chose.
+le seul éditeur, et gardé après traitement jusqu'à demande de suppression.
+Le blocage ne transporte aucun contenu.
 
 ---
 
@@ -136,8 +153,9 @@ Le jeu s'ouvre sans compte : rien à fournir. Note à joindre :
 ```
 Aucun identifiant n'est nécessaire : le jeu se lance et se joue directement.
 Cette application contient le jeu entier : le duel, la course en direct et le
-mot du vainqueur y sont ouverts. Le signalement et le blocage se trouvent sous
-chaque message reçu, dans la fenêtre de lecture — pour y arriver : accueil ▸
+mot du vainqueur y sont ouverts, ainsi qu'un tchat pour les pseudos réservés :
+y toucher un nom permet de signaler ou bloquer. Pour un mot de duel, les deux
+boutons sont dans la fenêtre de lecture — pour y arriver : accueil ▸
 DÉFIER, lancer un défi, et ouvrir le message annoncé au retour. Deux appareils
 sont nécessaires pour recevoir un mot, l'expéditeur et le destinataire étant
 forcément deux joueurs distincts.

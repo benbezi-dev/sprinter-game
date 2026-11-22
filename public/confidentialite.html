@@ -60,7 +60,7 @@
   <body>
     <main>
       <h1>Confidentialité — Sprinter</h1>
-      <p class="maj">Dernière mise à jour : 5 novembre 2026</p>
+      <p class="maj">Dernière mise à jour : 22 novembre 2026</p>
 
       <p>Sprinter est un jeu d'athlétisme arcade. Ce document explique ce que
       le jeu enregistre sur un serveur distant pour faire fonctionner le
@@ -80,7 +80,7 @@
         <li><strong>Le pseudo</strong> que vous choisissez pour apparaître au
         classement. Il peut être réservé par un code, pour qu'un autre
         appareil que le vôtre ne puisse pas s'en servir — ce code remplace un
-        compte, sans qu'aucune information personnelle ne soit demandée.</li>
+        compte, sans e-mail ni mot de passe.</li>
         <li><strong>Un pays approximatif</strong>, déduit automatiquement de
         votre connexion réseau (via l'infrastructure Cloudflare) pour afficher
         un drapeau à côté de votre nom. Aucune adresse IP n'est conservée dans
@@ -103,90 +103,149 @@
         sert à savoir où un nouveau joueur s'arrête, et à mesurer combien
         reviennent jouer les jours suivants. Ces mesures sont faites par le
         jeu lui-même et restent sur son serveur : elles ne passent par aucun
-        service tiers.</li>
+        service tiers. S'y ajoutent les jours où le jeu a été ouvert, le type
+        de navigateur et le temps de chargement.</li>
         <li><strong>Les panneaux du stade</strong> : quand une course part avec
         un panneau de sponsor, une ligne par panneau et par jour, rattachée à
         l'identifiant d'appareil, compte ces courses. Le sponsor ne reçoit que
         des totaux, jamais d'identifiant.</li>
         <li><strong>Dans le mode duel</strong> : un court message texte ou un
-        enregistrement vocal de quelques secondes, que seul le joueur battu
-        peut lire ou écouter. L'enregistrement vocal est supprimé du serveur
-        dès qu'il a été écouté. Une seule exception, décrite plus bas : s'il
-        est signalé comme abusif, il est conservé le temps d'être examiné.</li>
+        enregistrement vocal de quelques secondes, remis au joueur battu.
+        Dans un défi, l'enregistrement est supprimé du serveur quand ce joueur
+        referme le message ; en direct, au bout d'un quart d'heure environ.
+        S'il est signalé, une copie est conservée (voir plus bas). Le joueur
+        battu peut répondre par une phrase choisie dans une liste.</li>
+        <li><strong>Le tchat</strong> : vos messages, votre pseudo, l'heure,
+        vos « j'aime » et les conversations privées que vous avez lues. Le fil
+        commun est lisible par tous les joueurs qui ont réservé un pseudo. Un
+        message privé ne s'affiche que chez ses deux participants, mais il
+        n'est pas chiffré de bout en bout : il est enregistré sur le
+        serveur.</li>
+        <li><strong>Au championnat</strong> : la bulle de présentation et le
+        mot du vainqueur, texte ou voix. Ils sont publics et restent
+        consultables après la course, notamment au rejeu.</li>
+        <li><strong>La sauvegarde de votre progression</strong>, si vous avez
+        réservé un pseudo : carrière, 300 dernières courses, tenues et défis
+        gagnés, pour les retrouver sur un autre appareil, ainsi que le compte
+        de vos pièces.</li>
+        <li><strong>Votre présence</strong> : tant que le jeu est ouvert, les
+        autres joueurs peuvent voir votre pseudo réservé et ce que vous
+        faites (menu, course, duel…).</li>
+        <li><strong>Une demande de récupération de pseudo</strong> : le
+        pseudo, l'identifiant d'appareil, le pseudo Instagram lié et le texte
+        facultatif que vous écrivez (280 caractères au plus). N'y mettez que
+        le nécessaire : ce texte est enregistré et envoyé par e-mail à
+        l'éditeur du jeu.</li>
+        <li><strong>Si vous acceptez les notifications</strong> : l'adresse
+        technique qui permet de vous les envoyer, et vos réglages.</li>
       </ul>
 
       <h2>Ce qui n'est jamais collecté</h2>
       <ul>
         <li>Pas d'e-mail, pas de numéro de téléphone, pas de mot de passe.</li>
         <li>Aucun identifiant publicitaire n'est envoyé au serveur du jeu, et
-        aucune donnée n'est revendue à un tiers. La seule publicité est la
-        vidéo que l'on choisit de regarder dans l'application, décrite
-        ci-dessous.</li>
+        aucune donnée n'est revendue à un tiers. La publicité se limite aux
+        vidéos que l'on choisit de regarder dans l'application, décrites
+        ci-dessous, et aux panneaux de sponsor du stade quand une campagne est
+        en cours.</li>
+        <li>Aucune donnée bancaire n'est reçue par le jeu.</li>
         <li>Aucun outil d'analyse d'audience tiers (Google Analytics ou
-        équivalent) n'est intégré au jeu : les seules mesures sont celles
-        décrites plus haut, faites par le jeu sur son propre serveur.</li>
+        équivalent) n'est intégré au jeu. En dehors des mesures que Google
+        AdMob fait pour la publicité dans l'application, les mesures sont
+        celles décrites plus haut, faites par le jeu sur son propre
+        serveur.</li>
       </ul>
 
       <h2>Prestataires techniques</h2>
-      <p>Le jeu et sa base de données sont hébergés sur l'infrastructure de
-      <strong>Cloudflare</strong> (Workers, D1). Les polices d'écriture sont
-      livrées avec le jeu : aucune n'est téléchargée depuis un service tiers.
-      Cloudflare ne reçoit pas de données personnelles au-delà de ce qui est
-      nécessaire à son fonctionnement technique (adressage réseau).</p>
+      <p>Le site est hébergé par <strong>GitHub Pages</strong>, le serveur du
+      jeu et sa base de données par <strong>Cloudflare</strong> (Workers, D1).
+      Ces hébergeurs voient l'adresse IP nécessaire à la connexion. Les
+      polices d'écriture sont livrées avec le jeu : aucune n'est téléchargée
+      depuis un service tiers.</p>
+      <p>L'e-mail qui prévient l'éditeur d'une demande de récupération est
+      acheminé par <strong>Resend</strong>, qui reçoit donc le pseudo, le
+      pseudo Instagram lié et le texte de la demande.</p>
+      <p>Pendant une course en direct, la voix passe d'un joueur à l'autre ou,
+      si le réseau l'empêche, par un relais Cloudflare. Pour établir cette
+      liaison, votre adresse IP est transmise aux serveurs de connexion de
+      Cloudflare et de Google, et peut être visible de l'autre joueur. Cette
+      conversation n'est pas enregistrée par le serveur.</p>
       <p>Dans l'application installée depuis l'App Store ou le Play Store, les
       notifications passent par <strong>Firebase Cloud Messaging</strong>
       (Google). Ce service reçoit un identifiant technique propre à
-      l'installation et le texte affiché — « Un défi pour toi », « On te veut
-      dans une équipe » — qui ne nomme personne et ne dit rien de la partie.
-      Il n'est sollicité qu'après acceptation des notifications, et le refus
-      n'enlève rien au jeu. Sur le site, les notifications passent par le
-      service de votre navigateur, sans Google.</p>
+      l'installation et le texte affiché, qui ne reprend jamais le contenu
+      d'un message de joueur. Il n'est sollicité qu'après acceptation des
+      notifications, et le refus n'enlève rien au jeu. Sur le site, les
+      notifications passent par le service de votre navigateur (celui de
+      Google pour Chrome, d'Apple pour Safari).</p>
 
       <h2>Publicité (application seulement)</h2>
-      <p>Dans l'application installée depuis l'App Store ou le Play Store,
-      après une défaite en carrière, un bouton propose de regarder une vidéo
-      publicitaire pour reprendre l'étape. Il n'y a de publicité que si vous
-      appuyez sur ce bouton : aucune ne s'affiche d'elle-même, et le site
-      n'en montre jamais.</p>
+      <p>Dans l'application installée depuis l'App Store ou le Play Store, un
+      bouton peut proposer une vidéo publicitaire en échange d'une
+      récompense : reprendre une course perdue ou un faux départ, prendre une
+      revanche, ou doubler les pièces d'une carrière gagnée. Aucune vidéo ne
+      se lance si vous n'appuyez pas sur ce bouton, et le site n'en propose
+      pas.</p>
       <p>Ces vidéos sont fournies par <strong>Google AdMob</strong>. Le module
-      de Google n'est chargé qu'au premier appui sur le bouton ; il échange
-      alors directement avec Google, sans passer par le serveur du jeu :</p>
+      de Google est initialisé <strong>à chaque lancement de
+      l'application</strong>, même si vous ne regardez aucune vidéo et même
+      avec l'achat « Sans pubs ». Il échange directement avec Google, sans
+      passer par le serveur du jeu, et peut lui transmettre :</p>
       <ul>
-        <li>l'adresse IP et des informations techniques sur l'appareil
-        (modèle, système, langue) ;</li>
+        <li>l'adresse IP, qui peut donner une position approximative, et des
+        informations techniques sur l'appareil (modèle, système, langue) ;</li>
+        <li>les interactions avec l'application et les publicités (lancement,
+        appuis, vidéos vues) et des diagnostics de performance ;</li>
         <li>sur Android, l'identifiant publicitaire de l'appareil, que vous
-        pouvez réinitialiser ou supprimer dans les réglages d'Android ;</li>
+        pouvez réinitialiser ou supprimer dans les réglages d'Android, et
+        d'autres identifiants techniques de l'appareil ;</li>
         <li>sur iPhone, le jeu ne demande pas l'autorisation de suivi :
         l'identifiant publicitaire d'Apple (IDFA) ne lui est pas
         accessible.</li>
       </ul>
-      <p>Dans l'Espace économique européen et au Royaume-Uni, le formulaire de
-      consentement de Google s'affiche avant la première vidéo. Si vous
-      refusez, les publicités ne sont pas personnalisées. Google traite ces
-      données selon ses propres règles :
+      <p>Google s'en sert pour la publicité, la mesure et la lutte contre la
+      fraude. Quand Google l'exige, notamment dans l'Espace économique
+      européen et au Royaume-Uni, son formulaire de consentement s'affiche au
+      lancement, juste après l'initialisation du module. Vous pouvez le
+      rouvrir depuis les paramètres du jeu. Si vous refusez, les publicités ne
+      sont pas personnalisées. Google traite ces données selon ses propres
+      règles :
       <a href="https://policies.google.com/technologies/partner-sites">comment
       Google utilise les données des applications partenaires</a>.</p>
-      <p>Le serveur du jeu ne reçoit rien de tout cela. Le nombre de vidéos
-      regardées pendant une carrière reste sur l'appareil.</p>
+      <p>Le serveur du jeu ne reçoit rien de ce que Google collecte. Quand
+      vous doublez vos pièces, il enregistre seulement ce doublement.</p>
+
+      <h2>Achat « Sans pubs »</h2>
+      <p>L'application Android propose un achat facultatif, payé une seule
+      fois, qui donne les récompenses des vidéos sans les regarder. Le
+      paiement est traité par Google Play. À chaque lancement, l'application
+      demande au magasin de l'appareil (Google Play ou App Store) si cet achat
+      est possédé et garde la réponse sur l'appareil : le serveur du jeu ne
+      reçoit ni le paiement ni cette réponse. Le site ne propose aucun
+      achat.</p>
 
       <h2>Combien de temps ces données sont gardées</h2>
       <p>Les scores et le classement sont conservés tant que le jeu est en
-      activité. Un enregistrement vocal de duel disparaît dès sa lecture par
-      son destinataire, ou au plus tard quelques heures après, en cas de
-      panne inhabituelle.</p>
+      activité, comme la progression sauvegardée, les messages, les contenus
+      du championnat, les demandes de récupération et les signalements, sauf
+      demande de suppression. L'enregistrement vocal d'un défi reste sur le
+      serveur tant que son destinataire n'a pas refermé le message ; celui
+      d'un duel en direct est effacé au bout d'un quart d'heure environ.</p>
 
       <h2>Signalement et modération</h2>
-      <p>Le joueur qui reçoit un message peut le signaler, et bloquer celui
-      qui l'a écrit. Comme un enregistrement s'efface dès qu'il a été écouté,
-      un signalement fait après coup ne montrerait plus rien : le contenu
-      signalé — texte et enregistrement — est donc copié dans le signalement
-      au moment où celui-ci est envoyé.</p>
-      <p>C'est la seule exception à l'effacement décrit plus haut, et elle ne
-      porte que sur ce qu'un joueur a lui-même désigné comme abusif. Ces
-      copies ne servent qu'à l'examen du signalement, ne sont lues que par
-      l'éditeur du jeu, et sont supprimées une fois le signalement traité.
-      Le blocage, lui, n'envoie aucun contenu : il n'enregistre que les deux
-      pseudonymes concernés.</p>
+      <p>Le mot d'un duel et les messages du tchat peuvent être signalés, et
+      leur auteur bloqué. Le contenu signalé — texte et, pour un duel,
+      enregistrement s'il existe encore — est copié dans le signalement au
+      moment où celui-ci est envoyé, car l'original peut disparaître.</p>
+      <p>Cette copie ne porte que sur ce qu'un joueur a lui-même désigné comme
+      abusif. Elle ne sert qu'à la modération et n'est lue que par l'éditeur
+      du jeu. Elle n'est pas effacée automatiquement une fois le signalement
+      traité : sa suppression se demande à l'adresse de contact. Le blocage,
+      lui, n'envoie aucun contenu : il n'enregistre que les deux pseudonymes
+      concernés et la date.</p>
+      <p>Les bulles et les mots du championnat n'ont pas de bouton de
+      signalement : écrivez à l'adresse de contact, l'éditeur peut les
+      retirer.</p>
 
       <h2>Vos droits</h2>
       <p>Il n'y a pas de compte au sens habituel : un pseudo réservé et son
@@ -206,7 +265,7 @@
       <hr />
 
       <h1 lang="en">Privacy — Sprinter</h1>
-      <p class="maj">Last updated: November 5, 2026</p>
+      <p class="maj">Last updated: November 22, 2026</p>
 
       <p>Sprinter is an arcade athletics game. This page explains what the
       game sends to a remote server to run the world leaderboard, challenges
@@ -224,8 +283,8 @@
         sessions.</li>
         <li><strong>The nickname</strong> you pick to appear on the
         leaderboard. It can be reserved with a short code so another device
-        can't use it — this code replaces an account without ever asking for
-        any personal information.</li>
+        can't use it — this code replaces an account, with no e-mail and no
+        password.</li>
         <li><strong>An approximate country</strong>, inferred automatically
         from your network connection (via Cloudflare's infrastructure) to
         show a flag next to your name. No IP address is stored in the
@@ -245,80 +304,139 @@
         the device identifier above. This shows where new players stop, and
         how many come back to play on the following days. These measurements
         are made by the game itself and stay on its own server: they go
-        through no third-party service.</li>
-        <li><strong>In duel mode</strong>: a short text message or a few-second voice
-        recording, readable only by the player who lost. The voice recording
-        is deleted from the server as soon as it has been listened to. There
-        is one exception, described below: if it is reported as abusive, it
-        is kept for as long as it takes to review it.</li>
+        through no third-party service. They also include the days the game was
+        opened, the type of browser and the loading time.</li>
+        <li><strong>The stadium boards</strong>: when a race starts with a
+        sponsor board, one line per board and per day, tied to the device
+        identifier, counts those races. The sponsor only receives totals,
+        never an identifier.</li>
+        <li><strong>In duel mode</strong>: a short text message or a few-second
+        voice recording, delivered to the player who lost. In a challenge, the
+        recording is deleted from the server when that player closes the
+        message; in a live duel, after about fifteen minutes. If it is
+        reported, a copy is kept (see below). The player who lost can answer
+        with a sentence picked from a list.</li>
+        <li><strong>The chat</strong>: your messages, your nickname, the time,
+        your likes and the private conversations you have read. The common
+        thread can be read by every player who reserved a nickname. A private
+        message is only shown to its two participants, but it is not
+        end-to-end encrypted: it is stored on the server.</li>
+        <li><strong>In championships</strong>: the introduction bubble and the
+        winner's message, text or voice. They are public and remain available
+        after the race, including in replays.</li>
+        <li><strong>A backup of your progress</strong>, if you reserved a
+        nickname: career, last 300 races, outfits and challenges won, so you
+        can get them back on another device, along with your coin
+        balance.</li>
+        <li><strong>Your presence</strong>: while the game is open, other
+        players can see your reserved nickname and what you are doing (menu,
+        race, duel…).</li>
+        <li><strong>A nickname recovery request</strong>: the nickname, the
+        device identifier, the linked Instagram handle and the optional text
+        you write (280 characters at most). Only include what is needed: this
+        text is stored and e-mailed to the game's publisher.</li>
+        <li><strong>If you accept notifications</strong>: the technical address
+        used to send them to you, and your settings.</li>
       </ul>
 
       <h2 lang="en">What is never collected</h2>
       <ul>
         <li>No e-mail, no phone number, no password.</li>
         <li>No advertising identifier is sent to the game's server, and no
-        data is sold to a third party. The only advertising is the video you
-        choose to watch in the app, described below.</li>
+        data is sold to a third party. Advertising is limited to the videos you
+        choose to watch in the app, described below, and to the stadium's
+        sponsor boards while a campaign is running.</li>
+        <li>The game receives no bank details.</li>
         <li>No third-party audience-analytics tool (Google Analytics or
-        equivalent) is built into the game: the only measurements are those
+        equivalent) is built into the game. Apart from the measurements Google
+        AdMob makes for advertising in the app, the measurements are those
         described above, made by the game on its own server.</li>
       </ul>
 
       <h2 lang="en">Technical providers</h2>
-      <p>The game and its database are hosted on <strong>Cloudflare</strong>'s
-      infrastructure (Workers, D1). The typefaces ship with the game: none is
-      downloaded from a third-party service. Cloudflare receives no personal
-      data beyond what its technical operation requires (network
-      addressing).</p>
+      <p>The website is hosted by <strong>GitHub Pages</strong>, the game's
+      server and database by <strong>Cloudflare</strong> (Workers, D1). These
+      hosts see the IP address needed for the connection. The typefaces ship
+      with the game: none is downloaded from a third-party service.</p>
+      <p>The e-mail that alerts the publisher to a recovery request is
+      delivered by <strong>Resend</strong>, which therefore receives the
+      nickname, the linked Instagram handle and the text of the request.</p>
+      <p>During a live race, voice travels from one player to the other or,
+      when the network prevents it, through a Cloudflare relay. To set up this
+      link, your IP address is sent to Cloudflare's and Google's connection
+      servers, and may be visible to the other player. This conversation is
+      not recorded by the server.</p>
       <p>In the app installed from the App Store or the Play Store,
       notifications go through <strong>Firebase Cloud Messaging</strong>
       (Google). That service receives a technical identifier specific to the
-      installation and the text shown — "A challenge for you", "A relay team
-      wants you" — which names nobody and says nothing about the game. It is
-      only called upon once notifications have been accepted, and declining
-      takes nothing away from the game. On the website, notifications go
-      through your browser's own service, without Google.</p>
+      installation and the text shown, which never repeats the content of a
+      player's message. It is only called upon once notifications have been
+      accepted, and declining takes nothing away from the game. On the
+      website, notifications go through your browser's own service (Google's
+      for Chrome, Apple's for Safari).</p>
 
       <h2 lang="en">Advertising (app only)</h2>
-      <p>In the app installed from the App Store or the Play Store, after a
-      loss in career mode, a button offers to watch an advertising video to
-      retry the stage. There is advertising only if you tap that button: no
-      ad ever shows up on its own, and the website never shows any.</p>
+      <p>In the app installed from the App Store or the Play Store, a button
+      may offer an advertising video in exchange for a reward: retrying a lost
+      race or a false start, taking a rematch, or doubling the coins of a won
+      career. No video starts unless you tap that button, and the website
+      offers none.</p>
       <p>These videos are provided by <strong>Google AdMob</strong>. Google's
-      module is only loaded the first time you tap the button; it then talks
-      directly to Google, without going through the game's server:</p>
+      module is initialised <strong>every time the app starts</strong>, even
+      if you watch no video and even with the "No ads" purchase. It talks
+      directly to Google, without going through the game's server, and may
+      send:</p>
       <ul>
-        <li>the IP address and technical information about the device
-        (model, operating system, language);</li>
+        <li>the IP address, which may indicate an approximate location, and
+        technical information about the device (model, operating system,
+        language);</li>
+        <li>interactions with the app and the ads (launch, taps, videos
+        watched) and performance diagnostics;</li>
         <li>on Android, the device's advertising ID, which you can reset or
-        delete in Android's settings;</li>
+        delete in Android's settings, and other technical device
+        identifiers;</li>
         <li>on iPhone, the game does not ask for tracking permission: Apple's
         advertising identifier (IDFA) is not available to it.</li>
       </ul>
-      <p>In the European Economic Area and the United Kingdom, Google's
-      consent form is shown before the first video. If you decline, ads are
-      not personalised. Google processes this data under its own rules:
+      <p>Google uses it for advertising, measurement and fraud prevention.
+      When Google requires it, in particular in the European Economic Area and
+      the United Kingdom, its consent form is shown at launch, right after the
+      module is initialised. You can reopen it from the game's settings. If
+      you decline, ads are not personalised. Google processes this data under
+      its own rules:
       <a href="https://policies.google.com/technologies/partner-sites">how
       Google uses information from partner apps</a>.</p>
-      <p>The game's server receives none of this. The number of videos
-      watched during a career stays on the device.</p>
+      <p>The game's server receives nothing of what Google collects. When you
+      double your coins, it only records that doubling.</p>
+
+      <h2 lang="en">"No ads" purchase</h2>
+      <p>The Android app offers an optional one-time purchase that gives the
+      rewards of the videos without watching them. Payment is handled by
+      Google Play. At each launch, the app asks the device's store (Google
+      Play or App Store) whether this purchase is owned and keeps the answer
+      on the device: the game's server receives neither the payment nor that
+      answer. The website offers no purchase.</p>
 
       <h2 lang="en">How long data is kept</h2>
-      <p>Scores and the leaderboard are kept as long as the game is live. A
-      duel's voice recording disappears as soon as its recipient listens to
-      it, or within a few hours at most in case of an unusual failure.</p>
+      <p>Scores and the leaderboard are kept as long as the game is live, as
+      are backed-up progress, messages, championship content, recovery
+      requests and reports, unless deletion is requested. A challenge's voice
+      recording stays on the server until its recipient closes the message;
+      a live duel's is erased after about fifteen minutes.</p>
 
       <h2 lang="en">Reporting and moderation</h2>
-      <p>A player who receives a message can report it, and block its author.
-      Because a recording is erased as soon as it has been played, a report
-      made afterwards would have nothing left to show: the reported content —
-      both text and recording — is therefore copied into the report at the
-      moment it is sent.</p>
-      <p>This is the only exception to the deletion described above, and it
-      covers only what a player has themselves flagged as abusive. These
-      copies are used solely to review the report, are read only by the game's
-      publisher, and are deleted once the report has been handled. Blocking
-      sends no content at all: it records only the two nicknames involved.</p>
+      <p>A duel message and chat messages can be reported, and their author
+      blocked. The reported content — text and, for a duel, the recording if
+      it still exists — is copied into the report at the moment it is sent,
+      because the original may disappear.</p>
+      <p>This copy covers only what a player has themselves flagged as
+      abusive. It is used solely for moderation and is read only by the game's
+      publisher. It is not erased automatically once the report has been
+      handled: its deletion can be requested at the contact address. Blocking
+      sends no content at all: it records only the two nicknames involved and
+      the date.</p>
+      <p>Championship bubbles and messages have no report button: write to the
+      contact address, and the publisher can remove them.</p>
 
       <h2 lang="en">Your rights</h2>
       <p>There is no account in the usual sense: a reserved nickname and its
