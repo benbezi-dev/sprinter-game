@@ -8,6 +8,7 @@ cd "$(dirname "$0")/.."
 
 TESTS=(direct-couloirs-test direct-huit-test direct-presentation-test
   direct-revanche-accord-test direct-revanche-duel-test direct-tournoi-test
+  depassement-test
   revanche-test defi-plusieurs-test defi-camera-test relais-confrontation-test
   relais-defis-test relais-salle-test relais-vestiaire-test mot-direct-test
   mot-test boite-test classement-integration-test duels-disciplines-test

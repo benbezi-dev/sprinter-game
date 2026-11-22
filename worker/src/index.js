@@ -22,6 +22,8 @@ import {
 } from './pieces.js';
 import { identifiantsTurn } from './turn.js';
 import { notifierAppareil, diagnostiquerAppareil } from './push.js';
+import { prevenirRecordsBattus, ordreDesDuels, prevenirDepassesAuxDuels } from './depassement.js';
+import { cleDiscipline as disciplineDuDuel } from './epreuves.js';
 import {
   ensureChampTables, noterPays, choisirPays, imposerPays, demanderPays, demandeDe, demandesEnAttente, traiterDemande, paysEligibles, effectifPays,
   ouvrirNational, ouvrirEchelon, ouvrirCycle, calendrierCycle,
@@ -2129,6 +2131,11 @@ async function servir(request, env, ctx, porteur) {
       // n'a pas a payer l'ecriture d'une ligne qui ne le concerne pas. Si le
       // signalement echoue, il echoue seul et en silence — voir `noter()`.
       ctx.waitUntil(regarderClassement(canal, race_key, cleanedName, bestSplit, entries));
+      if (nouveauMeilleur) {
+        ctx.waitUntil(prevenirRecordsBattus(env, env.DB, {
+          epreuve: race_key, deviceId: device_id, ancien: existing?.best_split_ms, ms: split,
+        }));
+      }
 
       // Les caps de frequentation. Ils se regardent ici plutot que dans /stats :
       // /stats est une lecture, et une lecture ne doit pas ecrire — un tableau
@@ -4581,6 +4588,9 @@ async function servir(request, env, ctx, porteur) {
       // Meme regard que `/submit`, sur le classement relu apres l'ecriture.
       // Un nom refuse court sous « Anonyme » et n'a pas de ligne : rien a dire.
       if (record && !nomRefuse) {
+        ctx.waitUntil(prevenirRecordsBattus(env, env.DB, {
+          epreuve: race_key, deviceId: device_id, ancien: record.ancien_ms, ms: record.ms,
+        }));
         ctx.waitUntil((async () => {
           const entries = await getLeaderboard(env.DB, race_key);
           await regarderClassement(canal, race_key, nom, record.ms, entries);
@@ -5749,6 +5759,8 @@ async function servir(request, env, ctx, porteur) {
       // Le premier resultat fait foi : un defi ne se rejoue pas, et une
       // seconde tentative ne redistribue donc aucun point. Le bareme vit dans
       // duels.js, partage avec la course en direct.
+      const discipline = disciplineDuDuel(epreuvesDuDefi);
+      const classementAvant = await ordreDesDuels(env.DB, discipline);
       const duel = await appliquerDuel(env.DB, {
         id: code,
         challengerName: ch.owner_name,
@@ -5788,6 +5800,15 @@ async function servir(request, env, ctx, porteur) {
         ctx.waitUntil(regarderDuel(canal,
           { nom: ch.owner_name, total_ms: ch.total_ms, epreuves },
           { nom: cleanName(name), total_ms: t, epreuves }));
+      }
+
+      // Un duel sans-nom a un verdict, mais `lp` manque : personne n'a bouge.
+      if (duel && !duel.deja && typeof duel.lp === 'number' && duel.issue !== 'draw') {
+        const gagnant = duel.issue === 'opponent' ? cleanName(name) : String(ch.owner_name || '');
+        ctx.waitUntil(prevenirDepassesAuxDuels(env, env.DB, {
+          discipline, avant: classementAvant, gagnants: [gagnant.trim().toLowerCase()],
+          saufAppareil: duel.issue === 'opponent' ? device_id : ch.owner_device,
+        }));
       }
 
       // Celui qui a lance le defi n'est pas la : c'est tout l'objet de sa

@@ -23,7 +23,8 @@
 
 import { appliquerDuel } from './duels.js';
 import { crediter as crediterPieces, BAREME } from './pieces.js';
-import { EPREUVES } from './epreuves.js';
+import { EPREUVES, cleDiscipline } from './epreuves.js';
+import { ordreDesDuels, prevenirDepassesAuxDuels } from './depassement.js';
 import { sousLePlancherTotal } from './plancher.js';
 
 /**
@@ -1191,6 +1192,11 @@ export class SalleDirecte {
         code: this.code, course, hote: this.hote,
       });
       const bilans = new Map();
+      // Le classement se compare d'un bout a l'autre de la course, pas paire par
+      // paire : a huit, une place prise au deuxieme duel se reperd au cinquieme.
+      const discipline = cleDiscipline(this.epreuves);
+      const classementAvant = rencontres.length ? await ordreDesDuels(base, discipline) : null;
+      const gagnants = [];
       // Les duels s'ecrivent UN PAR UN, dans l'ordre rendu : chacun lit le
       // classement que le precedent vient d'ecrire, comme le recalcul qui
       // rejouera l'historique dans ce meme ordre.
@@ -1213,6 +1219,10 @@ export class SalleDirecte {
         // Un duel deja tranche ne redistribue rien : il n'y a pas de points a
         // annoncer, et un « 0 LP » se lirait comme un match nul.
         if (!points || points.deja || typeof points.lp !== 'number') continue;
+        if (points.issue !== 'draw') {
+          const gagnant = points.issue === 'challenger' ? r.lanceur : r.releveur;
+          gagnants.push(String(gagnant.nom || '').trim().toLowerCase());
+        }
         noterBilan(bilans, r.lanceur, r.releveur, points.issue === 'challenger',
                    points.issue === 'draw', {
           lp: points.lp_adverse, rang: points.rang_adverse,
@@ -1228,6 +1238,7 @@ export class SalleDirecte {
       }
       this.annoncerPoints(tous, bilans, course);
       if (rencontres.length) await this.crediterVainqueur(base, tous, course);
+      await prevenirDepassesAuxDuels(this.env, base, { discipline, avant: classementAvant, gagnants });
     } catch (e) { /* le classement se passera de cette course */ }
   }
 

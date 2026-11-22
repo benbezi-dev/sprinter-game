@@ -471,15 +471,15 @@ titre('LA NOTIFICATION EN ANNONCE UN, ET CITE LES AUTRES');
 
   const deux = texteObjectif(o, 3, 'fr', true, null, ['400']);
   ok('un autre defi tient en une phrase',
-     deux.corps.endsWith('Le 400 m attend aussi.'), deux.corps);
+     deux.corps.endsWith('Le 400\u00a0m attend aussi.'), deux.corps);
 
   const trois = texteObjectif(o, 3, 'fr', true, null, ['100', '400']);
   ok('deux autres s accordent au pluriel',
-     trois.corps.endsWith('Le 100 m et le 400 m attendent aussi.'), trois.corps);
+     trois.corps.endsWith('Le 100\u00a0m et le 400\u00a0m attendent aussi.'), trois.corps);
 
   const en = texteObjectif(o, 3, 'en', true, null, ['100', '400']);
   ok('...et l anglais s accorde aussi',
-     en.corps.endsWith('The 100 m and the 400 m are waiting too.'), en.corps);
+     en.corps.endsWith('The 100\u00a0m and the 400\u00a0m are waiting too.'), en.corps);
 
   // Les tournures nommaient la distance EN DUR — « tu es 3e au 100 m ». Avec
   // trois defis, cette phrase ment sur un defi de 200 m, et elle ment sur le
@@ -490,10 +490,10 @@ titre('LA NOTIFICATION EN ANNONCE UN, ET CITE LES AUTRES');
       texteObjectif({ ...o, name_key: 'joueur' + i }, 3, 'fr', true, null, []).corps);
   }
   ok('aucune tournure ne parle du 100 m sur un defi de 200 m',
-     variantes.every(c => !/100 m/.test(c)),
-     variantes.find(c => /100 m/.test(c)));
+     variantes.every(c => !/100\sm/.test(c)),
+     variantes.find(c => /100\sm/.test(c)));
   ok('...et celles qui nomment la distance disent la bonne',
-     variantes.some(c => /200 m/.test(c)));
+     variantes.some(c => /200\sm/.test(c)));
 
   // L'AUTRE JEU SE DIT PAR SON NOM. Classe partout, un joueur a cinq autres
   // defis : les nommer un a un ferait une liste plus longue que la
@@ -501,19 +501,19 @@ titre('LA NOTIFICATION EN ANNONCE UN, ET CITE LES AUTRES');
   // mots — et dit ou aller chercher les siens.
   const mixte = texteObjectif(o, 3, 'fr', true, null, ['100', '110h', '400h']);
   ok('les haies d un sprinteur tiennent en trois mots',
-     mixte.corps.endsWith('Le 100 m attend aussi, et Hurdlers a les siens.'), mixte.corps);
+     mixte.corps.endsWith('Le 100\u00a0m attend aussi, et Hurdlers a ses objectifs.'), mixte.corps);
   const mixteEn = texteObjectif(o, 3, 'en', true, null, ['100', '110h', '400h']);
   ok('...en anglais aussi',
-     mixteEn.corps.endsWith('The 100 m is waiting too, and Hurdlers has its own.'),
+     mixteEn.corps.endsWith('The 100\u00a0m is waiting too, and Hurdlers has its own objectives.'),
      mixteEn.corps);
   const seulesHaies = texteObjectif(o, 3, 'fr', true, null, ['110h']);
   ok('...meme quand il n y a qu elles',
-     seulesHaies.corps.endsWith('Hurdlers a aussi les siens.'), seulesHaies.corps);
+     seulesHaies.corps.endsWith('Hurdlers a aussi ses objectifs.'), seulesHaies.corps);
 
   const haie = { ...o, race_key: '110h', cible_ms: 15300, pb_ms: 14800 };
   const deHaies = texteObjectif(haie, 3, 'fr', true, null, ['100h', '100', '200']);
   ok('un defi de haies nomme les haies, et Sprinter par son nom',
-     deHaies.corps.endsWith('Le 100 m haies attend aussi, et Sprinter a les siens.'),
+     deHaies.corps.endsWith('Le 100\u00a0m haies attend aussi, et Sprinter a ses objectifs.'),
      deHaies.corps);
 
   // « in the 110 m haies » n'est pas de l'anglais : le libelle suit la langue.
@@ -526,9 +526,9 @@ titre('LA NOTIFICATION EN ANNONCE UN, ET CITE LES AUTRES');
   ok('aucune phrase anglaise ne dit « haies »',
      anglais.every(c => !/haies/.test(c)), anglais.find(c => /haies/.test(c)));
   ok('...et celles qui nomment l epreuve disent « 110 m hurdles »',
-     anglais.some(c => /110 m hurdles/.test(c)));
+     anglais.some(c => /110\sm hurdles/.test(c)));
   ok('...quand le francais dit « 110 m haies »',
-     francais.some(c => /110 m haies/.test(c)) && francais.every(c => !/hurdles/.test(c)));
+     francais.some(c => /110\sm haies/.test(c)) && francais.every(c => !/hurdles/.test(c)));
 }
 
 titre('LES HAIES ONT LEURS DEFIS, RENDUS A QUI LES DEMANDE');
