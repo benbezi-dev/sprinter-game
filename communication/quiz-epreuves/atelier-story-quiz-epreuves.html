@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<title>Sprinter — atelier : story quiz des épreuves (1080 × 1920)</title>
+
+<!-- ---------------------------------------------------------------------------
+     LE FOND DE STORY DU QUIZ DES ÉPREUVES — 1080 × 1920
+     ---------------------------------------------------------------------------
+     Une story qui demande au compte quelle épreuve passe en vedette. L'image
+     ne porte que les quatre noms ; le vote, lui, se pose dans Instagram, avec
+     un sticker à quatre réponses. La place du sticker est réservée ici et
+     décrite dans le panneau de droite — c'est la moitié basse du rectangle
+     utile, et elle est vide exprès.
+
+     POURQUOI UN CANVAS DANS UNE PAGE, ET PAS UN SVG RASTÉRISÉ HORS LIGNE.
+     Outfit doit être la vraie Outfit. Le navigateur la télécharge et le canvas
+     écrit avec — sans rien installer sur la machine. Un SVG converti par un
+     outil local écrirait en police de repli, et tout l'interlettrage serré de
+     la charte tomberait.
+
+     POURQUOI `poserFond` EST IMPORTÉ ET PAS RECOPIÉ.
+     `src/game/trace-affiche.js` est la source de la charte : le fond, la lueur
+     dorée, les trois traits de piste. Son en-tête interdit la copie, et la
+     raison est écrite dans `src/game/palette-affiche.js` — une copie a déjà
+     pris cinq jours de retard sans que rien ne le dise. Cette page importe
+     donc le module. Si l'import échoue, elle le dit et ne dessine rien plutôt
+     que de sortir une image avec un or périmé.
+
+     COMMENT L'OUVRIR. Les modules ES ne se chargent pas depuis `file://`. Il
+     faut un serveur, celui du dépôt suffit :
+
+         npx vite
+         http://localhost:5173/communication/quiz-epreuves/atelier-story-quiz-epreuves.html
+
+     La page retrouve `trace-affiche.js` depuis `communication/quiz-epreuves/`
+     comme depuis `suivi/` : elle essaie les deux chemins.
+--------------------------------------------------------------------------- -->
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Outfit:wght@500;600;800;900&display=swap">
+
+<style>
+  :root { --fond:#060913; --or:#F8CD4A; --encre:#EEF0F8; --bordure:#1E293B; }
+  * { box-sizing:border-box }
+  body { margin:0; background:#04060d; color:var(--encre);
+         font:500 14px/1.55 Outfit, system-ui, sans-serif; }
+  header { padding:20px 24px 14px; border-bottom:1px solid var(--bordure) }
+  h1 { margin:0; font:800 17px/1.2 Outfit, sans-serif; letter-spacing:.12em;
+       text-transform:uppercase }
+  header p { margin:6px 0 0; color:#8d93a8; font-size:13px }
+  main { display:flex; gap:28px; padding:24px; align-items:flex-start;
+         flex-wrap:wrap }
+
+  /* Le canvas de l'image et celui des repères sont superposés au pixel. Les
+     repères ne sont donc JAMAIS dans le PNG : le téléchargement ne lit que le
+     canvas du dessous. C'est le seul montage où l'on ne peut pas se tromper. */
+  .scene { position:relative; width:360px; height:640px; flex:0 0 auto }
+  .scene canvas { position:absolute; inset:0; width:360px; height:640px;
+                  border-radius:8px }
+  #reperes { pointer-events:none }
+
+  aside { flex:1 1 320px; min-width:300px; max-width:520px }
+  .bloc { border:1px solid var(--bordure); border-radius:10px; padding:16px 18px;
+          margin-bottom:16px; background:#0a0e1a }
+  h2 { margin:0 0 10px; font:800 11px/1 Outfit, sans-serif; letter-spacing:.16em;
+       text-transform:uppercase; color:var(--or) }
+  dl { margin:0; display:grid; grid-template-columns:auto 1fr; gap:4px 14px }
+  dt { color:#8d93a8 } dd { margin:0; font-variant-numeric:tabular-nums }
+  ol { margin:0; padding-left:20px } li { margin:3px 0 }
+  .cite { border-left:2px solid var(--or); padding-left:12px; color:var(--encre) }
+  button { font:600 13px Outfit, sans-serif; color:#060913; background:var(--or);
+           border:0; border-radius:8px; padding:10px 18px; cursor:pointer }
+  button:hover { filter:brightness(1.08) }
+  label.bascule { display:inline-flex; align-items:center; gap:8px; margin-left:14px;
+                  color:#8d93a8; font-size:13px; cursor:pointer }
+  .barre { display:flex; align-items:center; margin-bottom:16px }
+  .alerte { border:1px solid #7f1d1d; background:#1b0d0f; color:#fecaca;
+            border-radius:10px; padding:14px 16px; margin-bottom:16px }
+  .alerte code { color:#fff }
+  small { color:#6b7182 }
+</style>
+
+<header>
+  <h1>Atelier · fond de story, quiz des épreuves</h1>
+  <p>1080 × 1920 — la composition tient dans le rectangle central 1080 × 1420.
+     Le sticker se pose dans Instagram ; sa place est réservée et chiffrée à droite.</p>
+</header>
+
+<main>
+  <div class="scene">
+    <canvas id="image" width="1080" height="1920"></canvas>
+    <canvas id="reperes" width="1080" height="1920"></canvas>
+  </div>
+
+  <aside>
+    <div id="souci" hidden class="alerte"></div>
+
+    <div class="barre">
+      <button id="telecharger">Télécharger le PNG</button>
+      <label class="bascule">
+        <input type="checkbox" id="voirReperes" checked> repères (hors PNG)
+      </label>
+    </div>
+
+    <div class="bloc">
+      <h2>Où poser le sticker</h2>
+      <p style="margin:0 0 10px">Un sticker quiz à quatre réponses, centré dans la
+         moitié basse du rectangle utile. Le rectangle en pointillé sur l'aperçu
+         est sa place exacte.</p>
+      <dl id="chiffresSticker"></dl>
+      <p style="margin:10px 0 0"><small>À l'échelle par défaut d'Instagram, un
+         sticker à quatre réponses est un peu plus haut que 470 px : pince-le
+         légèrement pour le faire tenir dans le cadre, ou laisse-le dépasser vers
+         le haut — la moitié haute de l'image est occupée jusqu'à 960, pas au-delà.</small></p>
+    </div>
+
+    <div class="bloc">
+      <h2>Le texte du sticker</h2>
+      <p class="cite" style="margin:0 0 12px">On met quelle épreuve en avant&nbsp;?</p>
+      <ol id="reponses"></ol>
+      <p style="margin:10px 0 0"><small>Les quatre réponses reprennent les quatre
+         bandes, dans l'ordre où elles descendent.</small></p>
+    </div>
+
+    <div class="bloc">
+      <h2>Ce que l'image respecte</h2>
+      <dl id="chiffresCharte"></dl>
+    </div>
+  </aside>
+</main>
+
+<script type="module">
+/* --------------------------------------------------------------- la charte */
+
+/* Le fond commun de toutes les images du jeu — nuit, lueur dorée, trois traits
+   de piste — vient du module du jeu et de nulle part ailleurs. Deux chemins
+   parce que cette page vit soit dans `communication/quiz-epreuves/`, soit dans
+   `suivi/`, et qu'un atelier qu'on déplace ne doit pas cesser de dessiner. */
+const CHEMINS = [
+  '../../src/game/trace-affiche.js',
+  '../src/game/trace-affiche.js',
+  '/src/game/trace-affiche.js',
+];
+
+let poserFond = null;
+for (const chemin of CHEMINS) {
+  try { ({ poserFond } = await import(chemin)); if (poserFond) break; }
+  catch { /* on essaie le suivant */ }
+}
+
+const L = 1080, H = 1920;
+const OR_RVB   = '248,205,74';          // l'or de la charte, en composantes
+const ENCRE    = '238,240,248';         // #EEF0F8
+const MARGE    = Math.round(L * 0.082); // 89 px, la marge des autres formats
+const EPAISSEUR = Math.max(2, Math.round(L / 540)); // 2 px — l'épaisseur charte
+
+/* LA ZONE SÛRE. Instagram mange les 250 px du haut (barre de progression et
+   avatar) et les 250 px du bas (sticker et pouce). Toute la composition tient
+   entre 250 et 1670 : le rectangle central 1080 × 1420. Le FOND, lui, est tracé
+   sur la hauteur entière — c'est la nuit et la lueur qui remplissent le haut et
+   le bas réservés, pas du noir. */
+const SUR_HAUT = 250, SUR_BAS = H - 250, UTILE = SUR_BAS - SUR_HAUT;
+
+/* La moitié du rectangle utile. Au-dessus, les quatre bandes ; au-dessous, la
+   place du sticker. Une seule valeur pour les deux, sinon elles se chevauchent
+   le jour où l'une bouge. */
+const MI_UTILE = SUR_HAUT + Math.round(UTILE / 2);   // 960
+
+/* ------------------------------------------------------------ les épreuves */
+
+/* L'ordre est celui de la piste : la distance monte, la lumière descend.
+   Les deux tableaux de lumière sont ici, en clair, parce qu'ils sont le seul
+   réglage subjectif de l'image — la première bande à pleine lumière, la
+   dernière presque éteinte. Les aplatir (quatre fois 1) rend les quatre choix
+   également lisibles, si l'on préfère un vote que la mise en page n'incline pas. */
+const EPREUVES = [
+  { nom: '100 M',        reponse: '100 m',        lumiere: 1.00, encre: 0.96 },
+  { nom: '200 M',        reponse: '200 m',        lumiere: 0.50, encre: 0.70 },
+  { nom: '400 M',        reponse: '400 m',        lumiere: 0.22, encre: 0.46 },
+  { nom: 'RELAIS 4×100', reponse: 'Relais 4×100', lumiere: 0.08, encre: 0.28 },
+];
+
+/* LE LAVIS DE LA BANDE LA PLUS CLAIRE, ET POURQUOI IL EST SI FAIBLE.
+ *
+ * La lueur de la charte descend déjà toute seule. Relevée sur le fond nu, au
+ * centre des quatre bandes, elle donne (44,40,27) · (35,32,25) · (26,25,23) ·
+ * (16,17,21) : l'assombrissement demandé est aux trois quarts fait avant qu'on
+ * ait posé le moindre or. Le lavis ne sert donc qu'à découper quatre surfaces
+ * dans cette rampe continue, pas à la fabriquer.
+ *
+ * Un premier essai à 0,14 l'ignorait et empilait son or sur celui de la lueur :
+ * la moitié haute virait à l'olive, et l'or cessait d'être la couleur du sujet
+ * pour devenir celle du fond — exactement l'inverse de ce que fait la story du
+ * jeu, où le chrono est seul à être doré. À 0,085 la nuit revient et les quatre
+ * bandes se lisent encore. */
+const LAVIS_PLEIN = 0.085;
+
+/* Quatre bandes, trois filets entre elles, le tout dans la moitié haute. */
+const BANDE_H = Math.floor((MI_UTILE - SUR_HAUT - (EPREUVES.length - 1) * EPAISSEUR)
+                           / EPREUVES.length);                 // 176
+const hautBande = i => SUR_HAUT + i * (BANDE_H + EPAISSEUR);    // 250, 428, 606, 784
+
+/* ----------------------------------------------------------------- le pied */
+
+/* LA SIGNATURE, MESURÉE DEPUIS LE BAS DE LA ZONE SÛRE ET NON DU CADRE.
+   La charte la pose à 8,8 % du bas : sur 1920 cela ferait 1751, c'est-à-dire
+   dans les 250 px réservés, sous le pouce et sous le sticker. `trace-affiche.js`
+   a déjà tranché ce cas pour les stories — il translate le pied dans la zone
+   sûre au lieu de le déplacer. On reprend la même mesure depuis 1670 : 1501,
+   à trois pixels de ce que donne la story du jeu (1498). La proportion est
+   gardée, la signature reste visible. */
+const Y_SIGNATURE = SUR_BAS - Math.round(H * 0.088);            // 1501
+const Y_FILET_PIED = Y_SIGNATURE - Math.round(L * 0.036);       // 1462
+
+/* --------------------------------------------------------------- LE STICKER
+   Sa place, en clair, parce que c'est une livraison autant que le PNG : on la
+   dessine en repère, on l'affiche en chiffres, et les deux lisent ces
+   constantes-ci. Le bas s'arrête au-dessus du filet du pied — un sticker posé
+   sur la signature la rendrait illisible, et c'est la seule ligne de l'image
+   qui dise où retrouver le jeu. */
+const STICKER = {
+  x: MARGE,
+  y: MI_UTILE,
+  l: L - MARGE * 2,                                  // 902
+  h: Y_FILET_PIED - 32 - MI_UTILE,                   // 470
+};
+
+/* ---------------------------------------------------------------- le trace */
+
+/** Le lavis d'une bande : de l'or qui s'éteint aux deux bords.
+ *
+ *  La charte fait fondre ses traits de piste aux extrémités (transparent, plein,
+ *  transparent) pour qu'ils ne touchent jamais le cadre. Une bande de 176 px
+ *  avec ce même dégradé linéaire ferait un losange de lumière au lieu d'une
+ *  bande ; on garde donc le fondu, mais avec un plateau au milieu — mêmes bords
+ *  évanouis, vraie bande entre les deux. */
+function lavisBande(c, y, h, alpha) {
+  const g = c.createLinearGradient(0, 0, L, 0);
+  g.addColorStop(0,    `rgba(${OR_RVB},0)`);
+  g.addColorStop(0.18, `rgba(${OR_RVB},${alpha})`);
+  g.addColorStop(0.82, `rgba(${OR_RVB},${alpha})`);
+  g.addColorStop(1,    `rgba(${OR_RVB},0)`);
+  c.fillStyle = g;
+  c.fillRect(0, y, L, h);
+}
+
+/** Un filet de piste, doré, fondu aux extrémités. Exactement le trait de la
+ *  charte : même dégradé, même épaisseur, seule l'opacité change — 20 % ici,
+ *  14 % pour les trois traits du fond. Les filets ne s'éteignent PAS avec les
+ *  bandes : sur une piste, les lignes de couloir ne pâlissent pas quand la
+ *  lumière baisse, et c'est ce qui tient l'empilement debout jusqu'en bas. */
+function filetPiste(c, y, alpha) {
+  c.save();
+  c.globalAlpha = alpha;
+  const g = c.createLinearGradient(0, y, L, y);
+  g.addColorStop(0,   `rgba(${OR_RVB},0)`);
+  g.addColorStop(0.5, `rgba(${OR_RVB},1)`);
+  g.addColorStop(1,   `rgba(${OR_RVB},0)`);
+  c.fillStyle = g;
+  c.fillRect(0, y, L, EPAISSEUR);
+  c.restore();
+}
+
+/** La taille des quatre noms — une seule pour les quatre.
+ *
+ *  Quatre réponses d'un même vote ne se hiérarchisent pas par la taille : ce
+ *  qui descend est la lumière, pas la place. On cherche donc la taille qui fait
+ *  tenir le plus long (« RELAIS 4×100 ») dans la largeur utile, bornée par la
+ *  hauteur de bande — au-delà, le nom touche les filets.
+ *
+ *  La mesure se fait avec l'interlettrage posé : Chrome le compte dans
+ *  `measureText`, et mesurer sans lui donne un nom 2 % trop large. */
+function tailleNoms(c) {
+  const largeurMax = L - MARGE * 2;
+  let t = Math.round(BANDE_H * 0.62);
+  for (;;) {
+    c.font = `800 ${t}px Outfit, sans-serif`;
+    c.letterSpacing = `${-t * 0.022}px`;
+    const plusLong = Math.max(...EPREUVES.map(e => c.measureText(e.nom).width));
+    if (plusLong <= largeurMax || t <= 48) return t;
+    t -= 1;
+  }
+}
+
+function dessiner(cv) {
+  const c = cv.getContext('2d');
+  c.clearRect(0, 0, L, H);
+
+  // Le fond de la charte, sur la hauteur entière : nuit #060913, lueur dorée
+  // centrée en haut, trois traits de piste à 14 %.
+  poserFond(c, L, H);
+
+  // Les quatre bandes, du plein jour à presque rien.
+  const taille = tailleNoms(c);
+  EPREUVES.forEach((e, i) => {
+    const y = hautBande(i);
+    lavisBande(c, y, BANDE_H, LAVIS_PLEIN * e.lumiere);
+
+    c.save();
+    c.fillStyle = `rgba(${ENCRE},${e.encre})`;
+    c.font = `800 ${taille}px Outfit, sans-serif`;
+    c.letterSpacing = `${-taille * 0.022}px`;
+    c.textAlign = 'center';
+    c.textBaseline = 'middle';
+    c.fillText(e.nom, L / 2, y + BANDE_H / 2);
+    c.restore();
+
+    // Le filet va ENTRE deux bandes : pas après la dernière.
+    if (i < EPREUVES.length - 1) filetPiste(c, y + BANDE_H, 0.20);
+  });
+
+  // Le pied : un filet blanc à 10 %, et la signature dessous.
+  c.save();
+  c.strokeStyle = 'rgba(255,255,255,0.10)';
+  c.lineWidth = 1;
+  c.beginPath();
+  // Le demi-pixel : un trait de 1 px tracé sur un entier s'étale sur deux
+  // rangées à 50 % et sort gris au lieu de net.
+  c.moveTo(MARGE, Y_FILET_PIED + 0.5);
+  c.lineTo(L - MARGE, Y_FILET_PIED + 0.5);
+  c.stroke();
+
+  c.fillStyle = 'rgba(255,255,255,0.30)';
+  c.font = `600 ${Math.round(L * 0.026)}px Outfit, sans-serif`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.letterSpacing = `${Math.round(L * 0.004)}px`;
+  // Le compte et non l'adresse du site : une story se regarde DANS Instagram,
+  // où une adresse ne se clique pas — tandis qu'un @ se cherche d'un geste.
+  c.fillText('@sprintergame', L / 2, Y_SIGNATURE);
+  c.restore();
+}
+
+/* -------------------------------------------------------------- les repères
+   Sur leur propre canvas, au-dessus. Ils montrent ce qu'on ne peut pas voir
+   dans l'image finie : les deux bandes mangées par Instagram, la moitié du
+   rectangle utile, et la place du sticker. Le PNG ne les contient pas. */
+function dessinerReperes(cv) {
+  const c = cv.getContext('2d');
+  c.clearRect(0, 0, L, H);
+  const FROID = '90,200,250';
+
+  // Les deux zones réservées, voilées.
+  c.fillStyle = 'rgba(255,90,120,0.16)';
+  c.fillRect(0, 0, L, SUR_HAUT);
+  c.fillRect(0, SUR_BAS, L, H - SUR_BAS);
+
+  c.save();
+  c.setLineDash([14, 10]);
+  c.lineWidth = 2;
+  c.font = `600 30px Outfit, sans-serif`;
+  c.textBaseline = 'alphabetic';
+
+  // Les limites de la zone sûre. Les deux étiquettes se posent DANS la zone
+  // réservée — au-dessus de 250, au-dessous de 1670 — et jamais dans le
+  // rectangle utile : un repère qui couvre le dessin qu'il mesure ne sert à rien.
+  c.strokeStyle = 'rgba(255,90,120,0.75)';
+  c.fillStyle = 'rgba(255,150,170,0.95)';
+  [[SUR_HAUT, '250 — bas de la barre et de l’avatar', -18],
+   [SUR_BAS,  '1670 — haut du sticker et du pouce', 42]].forEach(([y, mot, d]) => {
+    c.beginPath(); c.moveTo(0, y); c.lineTo(L, y); c.stroke();
+    c.textAlign = 'left'; c.fillText(mot, MARGE, y + d);
+  });
+
+  // La moitié du rectangle utile : les bandes s'arrêtent là, le sticker commence.
+  // L'étiquette passe sous la ligne, dans le cadre vide du sticker.
+  c.strokeStyle = `rgba(${FROID},0.55)`;
+  c.beginPath(); c.moveTo(0, MI_UTILE); c.lineTo(L, MI_UTILE); c.stroke();
+  c.fillStyle = `rgba(${FROID},0.95)`;
+  c.textAlign = 'right';
+  c.fillText(`${MI_UTILE} — mi-hauteur du rectangle utile`, L - MARGE, MI_UTILE + 42);
+
+  // La place du sticker.
+  c.strokeStyle = `rgba(${FROID},0.9)`;
+  c.lineWidth = 3;
+  c.strokeRect(STICKER.x, STICKER.y, STICKER.l, STICKER.h);
+  c.setLineDash([]);
+  c.textAlign = 'center';
+  c.font = `800 34px Outfit, sans-serif`;
+  c.fillText('STICKER QUIZ · 4 RÉPONSES',
+             STICKER.x + STICKER.l / 2, STICKER.y + STICKER.h / 2 - 6);
+  c.font = `600 30px Outfit, sans-serif`;
+  c.fillText(`${STICKER.l} × ${STICKER.h} px`,
+             STICKER.x + STICKER.l / 2, STICKER.y + STICKER.h / 2 + 38);
+  c.restore();
+}
+
+/* ------------------------------------------------------------- le panneau */
+
+function poserPanneau() {
+  const ligne = (dl, cle, valeur) => {
+    dl.insertAdjacentHTML('beforeend',
+      `<dt>${cle}</dt><dd>${valeur}</dd>`);
+  };
+
+  const s = document.getElementById('chiffresSticker');
+  ligne(s, 'cadre', `${STICKER.l} × ${STICKER.h} px`);
+  ligne(s, 'coin haut gauche', `x ${STICKER.x} · y ${STICKER.y}`);
+  ligne(s, 'coin bas droit',
+        `x ${STICKER.x + STICKER.l} · y ${STICKER.y + STICKER.h}`);
+  ligne(s, 'centre', `x ${STICKER.x + STICKER.l / 2} · y ${STICKER.y + STICKER.h / 2}`);
+  ligne(s, 'en proportion',
+        `de ${(STICKER.y / H * 100).toFixed(1)} % à ` +
+        `${((STICKER.y + STICKER.h) / H * 100).toFixed(1)} % de la hauteur`);
+
+  document.getElementById('reponses').innerHTML =
+    EPREUVES.map(e => `<li>${e.reponse}</li>`).join('');
+
+  const g = document.getElementById('chiffresCharte');
+  ligne(g, 'format', `${L} × ${H}`);
+  ligne(g, 'rectangle utile', `${L} × ${UTILE} — de ${SUR_HAUT} à ${SUR_BAS}`);
+  ligne(g, 'bandes', `4 × ${BANDE_H} px, de ${SUR_HAUT} à ${MI_UTILE}`);
+  ligne(g, 'filets entre bandes', `${EPAISSEUR} px, or à 20 %`);
+  ligne(g, 'noms', `Outfit 800 capitales, une seule taille`);
+  ligne(g, 'lumière des bandes',
+        EPREUVES.map(e => e.lumiere.toFixed(2).replace('.', ',')).join(' · '));
+  ligne(g, 'filet du pied', `1 px, blanc à 10 %, y ${Y_FILET_PIED}`);
+  ligne(g, 'signature', `@sprintergame, blanc à 30 %, y ${Y_SIGNATURE}`);
+}
+
+/* ----------------------------------------------------------------- la page */
+
+const cvImage   = document.getElementById('image');
+const cvReperes = document.getElementById('reperes');
+
+if (!poserFond) {
+  const souci = document.getElementById('souci');
+  souci.hidden = false;
+  souci.innerHTML =
+    'Le fond de la charte vient de <code>src/game/trace-affiche.js</code>, ' +
+    'et cette page ne l’a pas trouvé. Rien n’est dessiné : une copie locale de ' +
+    'la lueur dorée finirait par dater, et c’est précisément ce que l’en-tête de ' +
+    'ce module interdit.<br><br>Ouvre la page depuis le dépôt, par un serveur — ' +
+    '<code>npx vite</code>, puis le chemin de ce fichier sous ' +
+    '<code>http://localhost:5173/</code>.';
+  document.getElementById('telecharger').disabled = true;
+} else {
+  // Les polices AVANT le tracé : un canvas dessiné pendant qu'Outfit arrive
+  // encore écrit en police de repli, et il ne se redessine pas quand elle
+  // finit par arriver. Tout l'interlettrage de la charte tomberait en silence.
+  try {
+    await Promise.all([
+      document.fonts.load('800 176px Outfit'),
+      document.fonts.load('600 28px Outfit'),
+      document.fonts.load('600 34px Outfit'),
+    ]);
+  } catch { /* on dessinera avec ce qu'on a */ }
+
+  dessiner(cvImage);
+  dessinerReperes(cvReperes);
+}
+
+poserPanneau();
+
+document.getElementById('voirReperes').addEventListener('change', e => {
+  cvReperes.style.display = e.target.checked ? '' : 'none';
+});
+
+document.getElementById('telecharger').addEventListener('click', () => {
+  // Le canvas de l'image, jamais celui des repères : le PNG sort propre.
+  cvImage.toBlob(blob => {
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'story-quiz-epreuves-1080x1920.png';
+    a.click();
+    URL.revokeObjectURL(url);
+  }, 'image/png');
+});
+</script>
