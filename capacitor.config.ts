@@ -25,12 +25,10 @@ const config: CapacitorConfig = {
   // Le build web, construit avec une base a la racine : dans l'application les
   // fichiers sont servis depuis le paquet, pas depuis un sous-repertoire.
   //
-  // Android se publie avec le jeu entier et se batit donc a part, dans
-  // `dist-app` (script `build:app`). Le repertoire est passe par
-  // l'environnement plutot qu'ecrit ici, et c'est ce qui garantit que
-  // l'ouverture des duels ne concerne qu'Android : iOS, qui n'a pas encore de
-  // build a lui, retombe sur `dist` — le jeu tel que le site le montre.
-  webDir: process.env.SPRINTER_WEBDIR || 'dist',
+  // iOS et Android embarquent `dist-app` (script `build:app`), jamais `dist`,
+  // qui est le site. Le script `capacitor:copy:before` l'allege : Capacitor le
+  // lance seul avant chaque copie (sync, copy, run).
+  webDir: 'dist-app',
 
   ios: {
     // Le jeu dessine son propre fond ; sans cette couleur, un eclair blanc
