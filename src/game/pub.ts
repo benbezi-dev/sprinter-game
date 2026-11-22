@@ -3,7 +3,7 @@
 // DECISION DU 3 NOVEMBRE 2026 : le faux depart elimine aussi en carriere, et
 // l'ecran de defaite offre trois sorties — payer des pieces, regarder une pub,
 // ou repartir de la premiere etape. La pub reprend l'etape perdue comme un
-// Continue, sans pieces, PUBS_PAR_CARRIERE fois par carriere.
+// Continue, sans pieces, sans limite par carriere.
 //
 // SEULE L'APPLI A DES PUBS. AdMob n'existe qu'en natif
 // (@capacitor-community/admob) ; sur le site le bouton ne se montre pas. Le
@@ -20,9 +20,8 @@
 
 import { EST_NATIF, EST_TEST } from './canal';
 
-// 3 depuis le 10/11/2026 (l'auteur : « 3 pubs par carriere », comme par revanche
-// et par one shot ; a ajuster apres essai). Sert aussi a la Legende.
-export const PUBS_PAR_CARRIERE = 3;
+// Illimite depuis le 22/11/2026, a la demande de l'auteur. Sert aussi a la Legende et au one shot.
+export const PUBS_PAR_CARRIERE = Infinity;
 
 const DE_TEST = EST_TEST || import.meta.env.DEV;
 const UNITE_ANDROID = DE_TEST ? 'ca-app-pub-3940256099942544/5224354917' : 'ca-app-pub-7083823357804732/2214909768';

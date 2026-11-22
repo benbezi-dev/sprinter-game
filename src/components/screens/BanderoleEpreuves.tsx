@@ -44,8 +44,8 @@ function lire(): Promise<Tableau | null> {
     .catch(() => null);
 }
 
-function useTableau() {
-  const [t, setT] = useState<Tableau | null>(null);
+function useTableau(premier: Tableau | null = null) {
+  const [t, setT] = useState<Tableau | null>(premier);
   // relu a chaque montage et chaque minute
   useEffect(() => {
     let vivant = true;
@@ -66,14 +66,14 @@ function reste(ms: number, fr: boolean): string {
 }
 const sec = (ms: number, fr: boolean) => { const x = (ms / 1000).toFixed(2); return fr ? x.replace('.', ',') : x; };
 
-// Une course partie de l'ecran le rouvre au retour a l'accueil.
-let rouvrirAuRetour = false;
+// Garder le tableau pour rouvrir sans attendre le reseau au retour d'une course.
+let rouvrirAuRetour: Tableau | null = null;
 
 export function BanderoleEpreuves() {
   const fr = SprinterApp.N.getLang() === 'fr';
-  const t = useTableau();
-  const [ouvert, setOuvert] = useState(rouvrirAuRetour);
-  useEffect(() => { rouvrirAuRetour = false; }, []);
+  const t = useTableau(rouvrirAuRetour);
+  const [ouvert, setOuvert] = useState(!!rouvrirAuRetour);
+  useEffect(() => { rouvrirAuRetour = null; }, []);
   const reduit = useAnimationsReduites();
   if (!t || !t.ouvert) return null;
   const vivant = !reduit;
@@ -110,7 +110,7 @@ export function BanderoleEpreuves() {
       </motion.button>
       {/* hors de la banderole : sa transformation enfermerait l'ecran sous la bulle du tchat */}
       {createPortal(
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {ouvert && <EcranEpreuves premier={t} onClose={() => setOuvert(false)} />}
         </AnimatePresence>, document.body)}
     </motion.div>
@@ -130,14 +130,14 @@ function EcranEpreuves({ premier, onClose }: { premier: Tableau; onClose: () => 
   const total = EPREUVES.reduce((s, e) => s + t.epreuves[e].voix, 0);
   const moi = getSavedName().trim().toLowerCase();
 
-  const courir = (e: Epreuve) => { rouvrirAuRetour = true; onClose(); SprinterApp.startOneShot([e] as any, { levelIdx: 4 }); };
+  const courir = (e: Epreuve) => { rouvrirAuRetour = t; onClose(); SprinterApp.startOneShot([e] as any, { levelIdx: 4 }); };
   const attaquer = async (e: Epreuve, cible?: string) => {
     const cle = e + (cible || '');
     if (enRoute) return;
     setEnRoute(cle); setAucun(null);
     const ok = await defier(e, cible);
     setEnRoute(null);
-    if (ok) { rouvrirAuRetour = true; onClose(); } else setAucun(cle);
+    if (ok) { rouvrirAuRetour = t; onClose(); } else setAucun(cle);
   };
 
   return (
