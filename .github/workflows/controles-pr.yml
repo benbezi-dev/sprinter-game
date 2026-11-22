@@ -1,0 +1,49 @@
+name: Controles des PR
+
+# LE VERT OU LE ROUGE AVANT DE FUSIONNER (22/11/2026, l'auteur : « je peux etre loin
+# sans mon PC »). Fusionner sur main publie : ces controles ne demandent ni le Mac ni
+# un secret. `pull_request` et jamais `pull_request_target`, le depot est public et
+# le code d'une PR ne doit rien pouvoir lire ni ecrire.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: controles-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jeu:
+    name: Types et build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          BASE_PATH: /
+
+  defis:
+    name: Harnais des defis
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm ci --prefix worker
+      - run: bash tools/controles-defis.sh

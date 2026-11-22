@@ -38,7 +38,7 @@ ok('un ordre existe deja, celui des acceptations',
 
 console.log('\n── L ORDRE DES RELAYEURS ────────────────────────────────────');
 const cles = t.membres.map(x=>x.cle);
-const r = await post('/relay/order', { id, order:[cles[3],cles[0],cles[2],cles[1]] });
+const r = await post('/relay/order', { id, name:A, order:[cles[3],cles[0],cles[2],cles[1]] });
 ok('l ordre s enregistre', r.s===200, JSON.stringify(r.d).slice(0,80));
 t = (await get('/relay/team/'+id)).d.equipe;
 ok('les quatre portent un rang', t.membres.every(x=>x.relais>=1 && x.relais<=4),
