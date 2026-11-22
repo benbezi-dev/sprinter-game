@@ -83,7 +83,7 @@ export async function rendre(cartons, dossier) {
   mkdirSync(dossier, { recursive: true });
   const b = await chromium.launch({ channel: 'chrome', headless: true });
   const page = await (await b.newContext({
-    viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 1,
+    viewport: { width: 1080, height: 1920 }, deviceScaleFactor: 4 / 3,   // sort en 2K
   })).newPage();
   const faits = [];
   for (const c of cartons) {
