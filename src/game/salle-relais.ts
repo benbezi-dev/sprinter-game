@@ -9,7 +9,7 @@
 // Le client ne decide de rien. Il annonce sa position, sa marque, sa tape, et
 // son chrono final ; tout le reste lui revient.
 
-import { getSavedName } from './leaderboard';
+import { getSavedName, getDeviceId } from './leaderboard';
 import { avecAcces, codeAcces, EST_TEST } from './canal';
 import { Liaison } from './liaison';
 
@@ -157,7 +157,7 @@ export class SalleRelais {
     // de test et une salle de production portant le meme code sont deux objets
     // distincts, et partir sans code menerait a la mauvaise piste.
     if (EST_TEST && !codeAcces()) { this.ec.onFerme?.('acces'); return; }
-    const q = new URLSearchParams({ name: getSavedName() || 'Anonyme' });
+    const q = new URLSearchParams({ name: getSavedName() || 'Anonyme', device: getDeviceId() });
     if (this.salon && this.placeVoulue) q.set('relais', String(this.placeVoulue));
     const route = this.salon ? 'salon' : 'room';
     this.lien = new Liaison(avecAcces(`${WS_BASE}/relay/${route}/${this.equipe}?${q}`), {
