@@ -12,7 +12,7 @@ import { Ecusson } from '@/components/Insignes';
 import { Swords } from 'lucide-react';
 import { codeFromUrl } from '@/game/challenge';
 import { codeDirectUrl } from '@/game/live';
-import { salonCourant } from '@/game/salon-direct';
+import { salonCourant, demandeRejoindreEnAttente, surDemandePourAccueil } from '@/game/salon-direct';
 import { tutoVu, marquerTutoVu } from './Tutorial';
 import { ouvrirLeTuto as ouvrirLeTutoSprint } from '@/game/sprint-tuto.js';
 import { tutoHaiesVu, marquerTutoHaiesVu } from './TutorialHaies';
@@ -257,7 +257,9 @@ export function TitleScreen() {
   // carriere, et il fallait savoir que la salle vivait encore un onglet plus
   // loin.
   const [tab, setTab] = useState<Tab>(() =>
-    (venuPourUnDuel || (DUELS_OUVERTS && !!salonCourant()) ? 'versus' : 'career'));
+    (venuPourUnDuel || (DUELS_OUVERTS && (!!salonCourant() || demandeRejoindreEnAttente()))
+      ? 'versus' : 'career'));
+  useEffect(() => surDemandePourAccueil(() => { if (DUELS_OUVERTS) setTab('versus'); }), []);
 
   // Premiere course : on PROPOSE le tutoriel, on ne l'impose pas. Le joueur
   // vient d'appuyer sur COMMENCER — il voulait courir. Lui ouvrir un tutoriel

@@ -181,9 +181,11 @@ export function DuelResultPopup() {
     const f = await fantomeDuDuel(duel.id);
     const trace = !!f && f.traces.some(t => Array.isArray(t) && t.length > 0);
     marquerDuelsVus([duel.id]);
-    SprinterApp.G.revanche = duel.adversaire;
+    // A plusieurs releveurs, le serveur vise le meilleur qui nous a battus :
+    // le nom et le chrono a battre doivent etre les siens.
+    SprinterApp.G.revanche = f?.name || duel.adversaire;
     SprinterApp.G.revancheId = duel.id;
-    SprinterApp.G.revancheMs = duel.son_ms;
+    SprinterApp.G.revancheMs = f?.total_ms || duel.son_ms;
     SprinterApp.startOneShot(duel.races, trace ? {
       levelIdx: f!.level_idx,
       ghosts: f!.traces,

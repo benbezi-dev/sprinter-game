@@ -17,7 +17,7 @@
 //    la physique tourne chez lui. Le serveur borne ce qu'il accepte.
 
 import { getSavedName, getDeviceId } from './leaderboard';
-import { avecAcces, codeAcces, EST_TEST } from './canal';
+import { avecAcces, codeAcces, EST_TEST, adressePublique } from './canal';
 import { brancherRapide, debrancherRapide, recevoirRapide, refusRapide } from './tchat-rapide';
 import type { Etage } from './duels';
 
@@ -793,7 +793,7 @@ export class Salle {
 
 /** Le lien a partager pour rejoindre une salle. */
 export function lienSalle(code: string): string {
-  const u = new URL(window.location.href);
+  const u = new URL(adressePublique());
   u.search = `?direct=${encodeURIComponent(code)}`;
   u.hash = '';
   return u.toString();

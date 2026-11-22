@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Swords, X } from 'lucide-react';
 import { SprinterApp, useGameStore } from '@/game/engine';
@@ -8,6 +8,7 @@ import { entrerSurLaPiste, usePiste } from '@/game/piste';
 import { getSavedName } from '@/game/leaderboard';
 import { useSondageAuRepos, estAuCalme } from '@/hooks/use-sondage';
 import { surCourrier } from '@/game/boite';
+import { abonnerDirectVisible, directEstVisible } from '@/game/sonnerie';
 
 /**
  * Une equipe defie la mienne, en direct.
@@ -25,6 +26,7 @@ export function DefiRelaisPopup() {
   const { N } = SprinterApp;
   useGameStore(s => s.state);
   const piste = usePiste();
+  const directLa = useSyncExternalStore(abonnerDirectVisible, directEstVisible);
   const [defis, setDefis] = useState<DefiRelais[]>([]);
   const [vus, setVus] = useState<Set<string>>(() => new Set());
   const annule = useRef(false);
@@ -42,7 +44,7 @@ export function DefiRelaisPopup() {
 
   const cle = (d: DefiRelais) => d.conf + ':' + d.equipe;
   const d = defis.find(x => !x.lance_par_moi && !vus.has(cle(x)));
-  if (piste || !d || !estAuCalme()) return null;
+  if (piste || directLa || !d || !estAuCalme()) return null;
 
   const fermer = () => setVus(v => new Set(v).add(cle(d)));
   const entrer = () => {

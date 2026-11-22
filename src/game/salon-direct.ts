@@ -129,9 +129,13 @@ const guetteurs = new Set<(code: string) => void>();
 export function demanderRejoindre(code: string) {
   const c = String(code || '').trim().toUpperCase();
   if (!c) return;
-  demande = c;
   // On previent qui ecoute. Si personne n'ecoute, la demande attend : c'est
-  // tout l'objet de ce mecanisme.
+  // tout l'objet de ce mecanisme. Prise tout de suite, elle n'attend plus :
+  // gardee, elle se rejouait au montage suivant du panneau.
+  demande = guetteurs.size ? null : c;
+  for (const f of guetteursAccueil) {
+    try { f(); } catch { /* idem */ }
+  }
   for (const g of guetteurs) {
     try { g(c); } catch { /* un guetteur casse n'empeche pas les autres */ }
   }
@@ -151,5 +155,10 @@ export function surDemandeRejoindre(f: (code: string) => void): () => void {
   return () => { guetteurs.delete(f); };
 }
 
-/** La demande a ete honoree : elle ne doit pas se rejouer. */
-export function oublierDemande() { demande = null; }
+// L'accueil guette sans prendre la demande : il ne fait qu'ouvrir l'onglet DEFI.
+const guetteursAccueil = new Set<() => void>();
+export function surDemandePourAccueil(f: () => void): () => void {
+  guetteursAccueil.add(f);
+  return () => { guetteursAccueil.delete(f); };
+}
+export function demandeRejoindreEnAttente(): boolean { return !!demande; }

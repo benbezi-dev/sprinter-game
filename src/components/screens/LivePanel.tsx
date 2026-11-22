@@ -30,6 +30,7 @@ import { nomPourLeDirect } from '@/game/identity';
 import { getSavedName, saveName, type RaceKey } from '@/game/leaderboard';
 import { useJeu, epreuvesDuJeu } from '@/game/jeux';
 import { Repliable, CartePage, PagePleinEcran } from './Repliable';
+import { toast } from '@/hooks/use-toast';
 import { Voix, type EtatVoix } from '@/game/voix';
 import { prechargerGlace } from '@/game/turn';
 import {
@@ -292,7 +293,7 @@ export function LivePanel() {
     const desabonner = surDemandeRejoindre(c => {
       if (salonCourant()) return;
       setSaisie(c);
-      rejoindre(c);
+      rejoindre(c, true);
     });
 
     // Le nettoyage ne ferme QUE ce branchement, et c'est le coeur de la
@@ -733,16 +734,24 @@ export function LivePanel() {
     brancher(c, null, tournoi && tournoiPossible);
   });
 
-  const rejoindre = (brut?: string) => {
+  const rejoindre = (brut?: string, invite = false) => {
+    // Venu d'une invitation, le panneau est replie et y cacherait l'erreur.
+    const echec = (cle: string) => {
+      setErreur(N.t(cle));
+      if (invite) {
+        toast({ title: N.t('live_invit_titre'),
+                description: N.t(cle === 'live_none' ? 'live_invit_disparue' : cle) });
+      }
+    };
     const c = (brut || saisie).toUpperCase().replace(/[^A-Z0-9]/g, '');
     if (c.length < 4) return;
     return avecUnNom(async () => {
       setOccupe(true); setErreur('');
       const e = await etatSalle(c);
       setOccupe(false);
-      if (!e || !e.existe) { setErreur(N.t('live_none')); return; }
-      if (e.en_cours) { setErreur(N.t('tournoi_en_cours')); return; }
-      if (e.complete) { setErreur(N.t('live_full')); return; }
+      if (!e || !e.existe) { echec('live_none'); return; }
+      if (e.en_cours) { echec('tournoi_en_cours'); return; }
+      if (e.complete) { echec('live_full'); return; }
       if (e.epreuves && e.epreuves[0]) setEpreuve(e.epreuves[0] as RaceKey);
       setCode(c); brancher(c, e.epreuves);
     });
