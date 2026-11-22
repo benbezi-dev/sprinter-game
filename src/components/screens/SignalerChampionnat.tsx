@@ -6,7 +6,7 @@ import { SprinterApp } from '@/game/engine';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { useRetour } from '@/hooks/use-retour';
 import { getSavedName } from '@/game/leaderboard';
-import { signaler, MOTIFS, type Motif } from '@/game/moderation';
+import { signaler, estBloque, MOTIFS, type Motif } from '@/game/moderation';
 
 type Contenu = { id: string; genre: string; cle: string; nom: string; texte: string };
 
@@ -38,7 +38,7 @@ export function SignalerChampionnat({ course, mot, presentes }: Props) {
       texte: [mot.texte && `« ${mot.texte} »`, mot.a_voix && N.t('mod_champ_voix')].filter(Boolean).join(' · '),
     });
   }
-  const signalables = contenus.filter(c => c.cle !== moi);
+  const signalables = contenus.filter(c => c.cle !== moi && !estBloque(c.cle));
   if (!signalables.length) return null;
 
   return (

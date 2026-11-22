@@ -7,6 +7,7 @@ import { usePresentationDirecte } from '@/game/presentation-directe';
 import { useFiches } from '@/game/fiches-champ';
 import { Drapeau } from '@/components/Insignes';
 import type { EtatVoix } from '@/game/voix';
+import { estBloque } from '@/game/moderation';
 import { FichePresentation } from './FichePresentation';
 import {
   ouvrirLaPresentation, ouvrirLeCreneau, fermerLaPresentation,
@@ -136,7 +137,7 @@ export function PresentationDirect() {
         // Sa bulle, s'il en a pose une (demi-finales et finale) : le moteur
         // la dessine au-dessus de lui le temps de son creneau, et seulement
         // lui (voir drawBulle). L'objet se construit meme sans plan.
-        SprinterApp.presenterCoureur(coureurDe(c?.id, estMoi), { ...plan, bulle: c?.bulle ?? null });
+        SprinterApp.presenterCoureur(coureurDe(c?.id, estMoi), { ...plan, bulle: c?.bulle && !estBloque(c.id) ? c.bulle : null });
         enCours.onTour(i, estMoi);
       }
     };

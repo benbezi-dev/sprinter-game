@@ -20,6 +20,8 @@ export type Motif = typeof MOTIFS[number];
 
 const CLE_SIGNALES = 'sprinter_signales';
 const CLE_BLOQUES = 'sprinter_bloques';
+/** La derniere liste rendue par le serveur : les blocages poses depuis un autre appareil. */
+const CLE_BLOQUES_SERVEUR = 'sprinter_bloques_serveur';
 
 function lire(cle: string): string[] {
   try { return JSON.parse(localStorage.getItem(cle) || '[]'); } catch { return []; }
@@ -69,16 +71,20 @@ export function bloquesLocaux(): string[] { return lire(CLE_BLOQUES); }
 export async function tousLesBloques(): Promise<string[]> {
   const ici = lire(CLE_BLOQUES);
   const nom = getSavedName();
-  if (!nom) return ici;
+  if (!nom) { ecrire(CLE_BLOQUES_SERVEUR, []); return ici; }
   try {
     const r = await fetch(`${API_BASE}/moderation/bloques?name=${encodeURIComponent(nom)}`);
     const d = r.ok ? await r.json() : null;
-    return Array.isArray(d?.bloques) ? [...new Set([...ici, ...d.bloques.map(String)])] : ici;
+    if (!Array.isArray(d?.bloques)) return ici;
+    // gardee pour `estBloque`, qui repond a l'affichage, sans attendre le reseau
+    ecrire(CLE_BLOQUES_SERVEUR, d.bloques.map(String));
+    return [...new Set([...ici, ...d.bloques.map(String)])];
   } catch { return ici; }
 }
 
 export function estBloque(nom: string): boolean {
-  return lire(CLE_BLOQUES).includes(String(nom || '').trim().toLowerCase());
+  const cle = String(nom || '').trim().toLowerCase();
+  return lire(CLE_BLOQUES).includes(cle) || lire(CLE_BLOQUES_SERVEUR).includes(cle);
 }
 
 /**
@@ -105,7 +111,7 @@ export async function bloquer(nom: string): Promise<boolean> {
 
 export async function debloquer(nom: string): Promise<boolean> {
   const cle = String(nom || '').trim().toLowerCase();
-  ecrire(CLE_BLOQUES, lire(CLE_BLOQUES).filter(n => n !== cle));
+  for (const c of [CLE_BLOQUES, CLE_BLOQUES_SERVEUR]) ecrire(c, lire(c).filter(n => n !== cle));
   try {
     const r = await fetch(`${API_BASE}/moderation/debloquer`, {
       method: 'POST',

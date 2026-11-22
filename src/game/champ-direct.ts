@@ -22,6 +22,7 @@ import {
   type MotDirect,
 } from './live';
 import { poserBulle } from './mot';
+import { tousLesBloques } from './moderation';
 import { brancherSalle, reinitialiserEnvoi } from './engine';
 import { lancerPresentation } from './presentation-directe';
 import { niveauDuLieu } from './champ-rejeu';
@@ -307,6 +308,8 @@ export function entrerEnDirect(ed: string, phase: string, course: number,
   entree = { ed, phase, course };
   essaisReconnexion = 0;
   publier({ ...VIDE, ouvert: true });
+  // `publier` : entre apres la course, le mot est a l'ecran avant cette reponse.
+  void tousLesBloques().then(() => publier({}));
   connecter();
   garderLEcranAllume();
 }

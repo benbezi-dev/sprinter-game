@@ -46,6 +46,7 @@ import { getSavedName } from './leaderboard';
 import { defiDeLaCamera, type DefiDeLaCamera } from './defi-camera';
 import { AFFICHE, CHIFFRES, ecrire, largeur, tailler } from './pinceau-film';
 import { lireLeBandeau } from './bandeau-rejeu';
+import { estBloque } from './moderation';
 // L'AUTRE VOIX, celle des jours de competition. Prise a sa source, comme la
 // premiere : deux copies d'un orange finissent par diverger, et personne ne
 // s'en apercoit avant de voir la video a cote d'une carte dans le meme fil.
@@ -427,7 +428,7 @@ export function peindreLeCarton(ctx: CanvasRenderingContext2D, l: number, h: num
   const bandeau = G.rejeu ? lireLeBandeau() : null;
   const tMot = T(0.030);
   const tMotQui = T(0.020);
-  const lignesMot = bandeau?.mot
+  const lignesMot = bandeau?.mot && !estBloque(bandeau.mot.nom)
     ? habiller(ctx, `« ${bandeau.mot.texte} »`, dispo,
                { taille: tMot, gras: 500, police: AFFICHE }, 2)
     : [];

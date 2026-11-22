@@ -29,6 +29,7 @@
 // a la place du joueur et on le fait avancer par `stepAI` (voir `G.rejeu` dans
 // engine.ts). Personne n'appuie, tout le reste fonctionne sans le savoir.
 
+import { tousLesBloques } from './moderation';
 import { programmerLeFilm, arreterLeFilm } from './film-course';
 import { entrerDansLeTour, presentationAnnoncee, pistoletAnnonce, rappelSiffle, arreterLaMusique } from './musique-championnat';
 import { chargerFiches, type SourceFiches } from './fiches-champ';
@@ -289,6 +290,8 @@ export function rejouerCourse(
   if (!app || !coureurs || coureurs.length === 0) return false;
   const G = app.G;
   annulerLeRappel();
+  // les blocages poses depuis un autre appareil, lus avant le premier athlete
+  void tousLesBloques();
 
   // LE FORFAIT N'EST PAS SUR LA PISTE. Il n'est pas venu : son couloir reste
   // vide, et il n'apparait qu'au tableau. Tout ce qui suit place `enPiste`.

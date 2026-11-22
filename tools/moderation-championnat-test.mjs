@@ -1,9 +1,11 @@
 // Les bulles et les mots de championnat face a la moderation : banni refuse,
-// signalement, retrait. Le worker tourne ici, sur une base SQLite en memoire :
-// les requetes passent par les vraies routes.
+// signalement, retrait, et blocage qui ne masque que chez celui qui l'a pose.
+// Le worker tourne ici, sur une base SQLite en memoire : les requetes passent
+// par les vraies routes.
 //
 //   node tools/moderation-championnat-test.mjs
 import { DatabaseSync } from 'node:sqlite';
+import { build } from 'esbuild';
 import worker from '../worker/src/index.js';
 import { ensureChampTables, calendrierDe, poserBulle, poserMotDeCourse } from '../worker/src/championnats.js';
 import { ensureModerationTables } from '../worker/src/moderation.js';
@@ -95,6 +97,65 @@ ok('la bulle n est plus servie', (await edition()).bulles.length === 0);
 ok('l organisation la lit encore, marquee retiree',
   (await appel(`/champ/moderation?edition=${ED}`, null, true)).bulles[0]?.retire === true);
 ok('une bulle retiree ne se signale plus', (await signaler(BULLE)).statut === 400);
+
+console.log('\n-- bloquer masque chez celui qui bloque, et chez lui seul');
+{
+  // Le module du jeu, tel quel, branche sur les routes ci-dessus.
+  const { outputFiles } = await build({
+    entryPoints: [new URL('../src/game/moderation.ts', import.meta.url).pathname],
+    bundle: true, write: false, format: 'esm', platform: 'neutral', logLevel: 'silent',
+    plugins: [{ name: 'identite', setup(b) {
+      b.onResolve({ filter: /\/leaderboard$/ }, () => ({ path: 'identite', namespace: 'faux' }));
+      b.onLoad({ filter: /.*/, namespace: 'faux' }, () => ({ contents:
+        'export const getSavedName = () => globalThis.qui; export const getDeviceId = () => globalThis.surAppareil;' }));
+    } }],
+  });
+  const jeu = await import('data:text/javascript;base64,' + Buffer.from(outputFiles[0].text).toString('base64'));
+  let memoire;
+  const telephone = (qui, sur = appareil(qui)) => {
+    memoire = new Map();
+    globalThis.qui = qui; globalThis.surAppareil = sur;
+  };
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: k => memoire.get(k) ?? null, setItem: (k, v) => { memoire.set(k, v); },
+  } });
+  let panne = false;
+  globalThis.fetch = async (u, o = {}) => {
+    if (panne) throw new Error('hors ligne');
+    const { statut, ...d } = await appel(new URL(u).pathname + new URL(u).search, o.body && JSON.parse(o.body));
+    return { ok: statut === 200, json: async () => d };
+  };
+
+  await bulle('Je reste visible pour les autres.');
+  telephone('lecteur');
+  await jeu.bloquer('Auteur');
+  ok('masque tout de suite', jeu.estBloque('auteur') && jeu.estBloque(' AUTEUR '));
+  ok('et lui seul', !jeu.estBloque('autre'));
+  ok('le serveur sert toujours le contenu', (await edition()).bulles.length === 1);
+
+  telephone('lecteur');   // reinstalle : plus rien sur l'appareil
+  ok('rien en memoire avant la relecture', !jeu.estBloque('auteur'));
+  await jeu.tousLesBloques();
+  ok('un blocage pose ailleurs masque aussi', jeu.estBloque('Auteur'));
+  panne = true;
+  await jeu.tousLesBloques();
+  ok('hors ligne, il masque encore', jeu.estBloque('auteur'));
+  panne = false;
+  await jeu.debloquer('auteur');
+  ok('debloquer remontre aussitot', !jeu.estBloque('auteur'));
+
+  await jeu.bloquer('auteur');
+  telephone('autre');
+  await jeu.tousLesBloques();
+  ok('un autre spectateur voit tout', !jeu.estBloque('auteur'));
+  telephone('lecteur');
+  await jeu.tousLesBloques();
+  globalThis.qui = '';
+  await jeu.tousLesBloques();
+  ok('sans pseudo, la liste du pseudo precedent part', !jeu.estBloque('auteur'));
+  telephone('lecteur');
+  await jeu.debloquer('auteur');
+}
 
 console.log('\n-- une version reposee est un autre contenu');
 await new Promise(r => setTimeout(r, 3));

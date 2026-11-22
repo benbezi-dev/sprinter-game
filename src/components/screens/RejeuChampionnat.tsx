@@ -9,6 +9,7 @@ import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
 import { LaisserUnMot } from './MotDuel';
 import { SignalerChampionnat } from './SignalerChampionnat';
+import { estBloque } from '@/game/moderation';
 import { poserMotDeCourse, voixDuMotDeCourse, urlDeLaVoix } from '@/game/mot';
 import { getSavedName } from '@/game/leaderboard';
 import { arriveeSerree, ecartLePlusSerre, fabriquerPhotoFinish } from '@/game/photo-finish';
@@ -133,8 +134,9 @@ function Presentation({ titre, sousTitre, grille, fiches }: {
         const plan = i >= 0 && tendu ? ouvrirLeCreneau(i, grille.length, PAR_ATHLETE_MS) : undefined;
         // Et sa bulle, s'il en avait pose une : la meme qu'en direct, au-dessus
         // de lui le temps de son creneau (voir drawBulle).
-        SprinterApp.presenterCoureur(i < 0 ? null : coureurDuCouloir(grille[i].couloir),
-          { ...plan, bulle: i < 0 ? null : grille[i].bulle ?? null });
+        const g = i < 0 ? null : grille[i];
+        SprinterApp.presenterCoureur(g && coureurDuCouloir(g.couloir),
+          { ...plan, bulle: g?.bulle && !estBloque(g.cle || '') ? g.bulle : null });
       }
     };
 
@@ -347,6 +349,9 @@ export function MotDuGagnant({ mot, course }: {
     } catch { setCharge(false); }
   };
 
+  // Le mot d'un bloque, voix comprise, n'existe pas pour qui l'a bloque.
+  if (estBloque(mot.nom)) return null;
+
   return (
     <div className="flex flex-col gap-1.5 rounded-xl border px-3 py-2.5"
          style={{ borderColor: 'rgba(248,205,74,0.35)', background: 'rgba(248,205,74,0.08)' }}>
@@ -439,7 +444,7 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, grille, compet
       epreuve: EPREUVE(epreuve),
       quand,
       lignes,
-      mot: mot && mot.texte ? { nom: mot.nom, texte: mot.texte } : null,
+      mot: mot && mot.texte && !estBloque(mot.nom) ? { nom: mot.nom, texte: mot.texte } : null,
       etiquetteMot: N.t('mot_du_vainqueur'),
     }, N.getLang() !== 'en');
 
