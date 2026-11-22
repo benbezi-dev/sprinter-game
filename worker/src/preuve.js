@@ -201,6 +201,6 @@ export async function listerSuspectes(db, limite = 100) {
   const { results } = await db.prepare(
     `SELECT * FROM courses_suspectes WHERE revu_le IS NULL
       ORDER BY cree_le DESC LIMIT ?`
-  ).bind(Math.min(limite, 500)).all();
+  ).bind(Math.max(1, Math.min(Math.floor(limite) || 100, 500))).all();
   return results || [];
 }

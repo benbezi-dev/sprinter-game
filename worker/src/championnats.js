@@ -630,19 +630,33 @@ export async function noterPays(db, nameKey, pays) {
   ).bind(k, p, continentDe(p), Date.now()).run();
 }
 
-/** Le joueur corrige son pays lui-meme. Ce choix prime sur la detection. */
+/**
+ * Le joueur choisit son pays lui-meme, UNE FOIS : ce choix prime sur la
+ * detection, et seul `imposerPays` le corrige ensuite. Le verrou vit ici, pour
+ * toutes les routes.
+ */
 export async function choisirPays(db, nameKey, pays) {
   const k = String(nameKey || '').trim().toLowerCase();
   const p = String(pays || '').trim().toUpperCase();
   if (!k || !/^[A-Z]{2}$/.test(p)) return { erreur: 'pays invalide' };
   await ensureChampTables(db);
-  await db.prepare(
+  const lire = () => db.prepare(
+    `SELECT pays, source FROM player_pays WHERE name_key = ?`).bind(k).first();
+  const verdict = (pose) => pose.pays === p
+    ? { ok: true, pays: p, continent: continentDe(p), inchange: true }
+    : { erreur: 'nationalite deja choisie', pays: pose.pays, code: 409 };
+  const deja = await lire();
+  if (deja && deja.source === 'choix') return verdict(deja);
+  // Le WHERE tient le verrou entre deux choix simultanes.
+  const r = await db.prepare(
     `INSERT INTO player_pays (name_key, pays, continent, source, vu_le)
      VALUES (?, ?, ?, 'choix', ?)
      ON CONFLICT(name_key) DO UPDATE SET
        pays = excluded.pays, continent = excluded.continent,
-       source = 'choix', vu_le = excluded.vu_le`
+       source = 'choix', vu_le = excluded.vu_le
+     WHERE player_pays.source <> 'choix'`
   ).bind(k, p, continentDe(p), Date.now()).run();
+  if (r?.meta?.changes === 0) return verdict(await lire());
   return { ok: true, pays: p, continent: continentDe(p) };
 }
 

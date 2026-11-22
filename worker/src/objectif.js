@@ -1169,14 +1169,19 @@ export async function enregistrerTentative(db, nameKey, nom, tempsMs, maintenant
   const acquis = objectif.points || 0;
   const gain = Math.max(0, compte.total - acquis);
 
-  await db.prepare(
+  // N'ecrit que si la ligne est encore celle qu'on a lue : des envois
+  // simultanes creditaient chacun le meme gain.
+  const maj = await db.prepare(
     `UPDATE objectifs
         SET tentatives = ?, meilleur_ms = ?, palier = ?,
             valide_le = COALESCE(valide_le, ?),
             points = ?, derniere_le = ?
-      WHERE name_key = ? AND jour = ? AND creneau = ? AND race_key = ?`
+      WHERE name_key = ? AND jour = ? AND creneau = ? AND race_key = ?
+        AND tentatives = ?`
   ).bind(essai, meilleur, palier, reussi ? Date.now() : null, compte.total, t,
-         nameKey, objectif.jour, objectif.creneau, objectif.race_key).run();
+         nameKey, objectif.jour, objectif.creneau, objectif.race_key,
+         objectif.tentatives).run();
+  if (maj?.meta?.changes === 0) return { refuse: 'trop_rapide', attendreMs: DELAI_MIN_MS };
 
   if (gain > 0) {
     await crediter(db, nameKey, nom, gain, objectif.jour,
@@ -1261,7 +1266,7 @@ export async function classementObjectifs(db, limite = TOP_N) {
   const { results } = await db.prepare(
     `SELECT nom, points, valides, serie FROM objectif_classement
       WHERE points > 0 ORDER BY points DESC, valides DESC LIMIT ?`
-  ).bind(Math.min(limite, TOP_N)).all();
+  ).bind(Math.max(1, Math.min(Math.floor(limite) || TOP_N, TOP_N))).all();
   return results || [];
 }
 
