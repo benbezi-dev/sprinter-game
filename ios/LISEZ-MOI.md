@@ -157,14 +157,16 @@ Le mérite en revient au code existant, pas au portage :
 
 ## Construire et lancer
 
-    npm run build
-    npx cap sync ios
+    npm run ios:sync
     xcodebuild -project ios/App/App.xcodeproj -scheme App \
       -sdk iphonesimulator -configuration Debug \
       -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
       CODE_SIGNING_ALLOWED=NO build
 
 Ou `npx cap open ios` pour passer par Xcode.
+
+`ios:sync` construit l'appli (`dist-app`, pas le site) puis la copie. À relancer
+avant chaque archive : Xcode embarque la dernière copie faite.
 
 ## Ce qui reste avant l'App Store
 
