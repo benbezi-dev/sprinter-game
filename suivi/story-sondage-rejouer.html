@@ -1,0 +1,539 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sprinter — story sondage « je rejoue / je ferme » (1080×1920)</title>
+
+<!-- Les polices sont chargées par le navigateur, et c'est la seule raison
+     d'être de cette page : un SVG rasterisé hors ligne n'a ni Outfit ni
+     Space Mono sous la main, et le chrono ressort en Helvetica. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@100..900&family=Space+Mono:wght@400;700&display=block" rel="stylesheet">
+
+<!-- ---------------------------------------------------------------------
+     SA PLACE DANS LE TABLEAU DE BORD
+
+     Le site derrière suivi-calendrier.benbezi-sprinter.workers.dev sert ses
+     pages par le binding PAGES du Worker, et sa racine mène à
+     tableau-activite.html. Pour que cet outil y ait une place, coller la
+     carte ci-dessous dans ce fichier-là, dans un conteneur <div class="outils">,
+     la feuille theme-calendrier.css étant liée :
+
+       <a class="outil" href="story-sondage-rejouer.html">
+         <p class="surtitre">Atelier · image</p>
+         <h3>Fond de story — sondage</h3>
+         <p>« −0,02 » en 1080 × 1920, l'écran d'arrivée derrière,
+            la place du sticker réservée. Sort le PNG.</p>
+       </a>
+
+     Le Worker ne sert aucun contenu lui-même : il ne fait que demander le mot
+     de passe puis passer la main à PAGES. Rien à changer de son côté.
+     --------------------------------------------------------------------- -->
+
+<style>
+  /* Les couleurs de la carte « défi ouvert », comme suivi/theme-calendrier.css.
+     RECOPIÉES et non liées : cette page doit rester autonome — c'est la
+     première ligne de sa commande, et un <link> vers une feuille voisine la
+     casserait au premier double-clic hors du serveur. Si tu retouches la
+     palette dans theme-calendrier.css, reporte-la ici. */
+  :root {
+    --accent-clair: #FBC24E; --accent-fonce: #EF7627;
+    --encre: #F4F7FF; --encre-2: #EEF1F7; --texte: #A4ADC4; --muet: #919CB1;
+    --sur-accent: #0B1020;
+    --panneau: rgba(255,255,255,0.028); --panneau-bord: rgba(255,255,255,0.075);
+    color-scheme: dark;
+  }
+  html { background: #070B16; }
+  body {
+    margin: 0; padding: 40px 24px 72px;
+    background: radial-gradient(circle at 50% 50%, #181F39 0%, #161E35 19%,
+                #121A2D 38%, #0F1525 58%, #0B111F 78%, #070B16 100%) fixed;
+    background-color: #0F1525;
+    color: var(--texte);
+    font: 400 15px/1.6 Inter, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .surtitre { font: 700 12px/1 'Space Mono', monospace; letter-spacing: .34em;
+              text-transform: uppercase; color: var(--muet); margin: 0 0 12px; }
+  h1 { font: 800 30px/1.15 Outfit, sans-serif; letter-spacing: -.02em;
+       color: var(--encre); margin: 0 0 10px; }
+  p { margin: 0 0 14px; }
+  b { color: var(--encre-2); font-weight: 600; }
+  .rangee { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap;
+            margin-top: 26px; }
+  .cadre { position: relative; width: 360px; height: 640px; flex: none; }
+  .cadre canvas { position: absolute; inset: 0; width: 360px; height: 640px;
+                  border-radius: 14px; }
+  #affiche { border: 1px solid var(--panneau-bord); }
+  #reperes { pointer-events: none; }
+  .colonne { flex: 1 1 360px; max-width: 560px; }
+  button {
+    font: 700 15px/1 Inter, sans-serif; color: var(--sur-accent);
+    background: linear-gradient(90deg, var(--accent-clair), var(--accent-fonce));
+    border: 0; border-radius: 999px; padding: 14px 28px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { filter: brightness(1.07); }
+  button:disabled { opacity: .4; cursor: default; }
+  label { display: block; margin: 18px 0; color: var(--texte); cursor: pointer; }
+  input[type=checkbox] { accent-color: var(--accent-fonce); margin-right: 5px; }
+  table { border-collapse: collapse; margin-top: 18px; width: 100%;
+          background: var(--panneau); border: 1px solid var(--panneau-bord);
+          border-radius: 14px; overflow: hidden; }
+  td { padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,.045); }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { color: var(--muet); white-space: nowrap; font-size: 13.5px; }
+  td:last-child { font: 700 13px 'Space Mono', monospace; color: var(--accent-clair);
+                  text-align: right; white-space: nowrap; }
+  .alerte { color: #FF9A9A; background: rgba(255,120,120,.07);
+            border-left: 2px solid #FF7A7A; border-radius: 0 12px 12px 0;
+            padding: 12px 16px; margin: 14px 0; }
+  @media (max-width: 720px) {
+    body { padding: 28px 16px 56px; }
+    .cadre, .cadre canvas { width: 270px; height: 480px; }
+  }
+</style>
+
+<p class="surtitre">Atelier · image</p>
+<h1>Fond de story — sondage</h1>
+<p>1080 × 1920. Le sondage se pose dans Instagram, par-dessus.</p>
+
+<div class="rangee">
+  <div class="cadre">
+    <canvas id="affiche"></canvas>
+    <canvas id="reperes"></canvas>
+  </div>
+
+  <div class="colonne">
+    <button id="telecharger" disabled>Télécharger le PNG</button>
+    <label><input type="checkbox" id="voirReperes" checked> Voir les repères
+      (zones réservées + emplacement du sondage) — ils ne partent pas dans le PNG</label>
+    <div id="alerte" class="alerte" hidden></div>
+    <table id="mesures"></table>
+  </div>
+</div>
+
+<script type="module">
+/* ---------------------------------------------------------------------------
+   LE FOND DE STORY DU SONDAGE « JE REJOUE / JE FERME »
+   ---------------------------------------------------------------------------
+   Il prolonge le reel du matin : le joueur finit deuxième à deux centièmes, et
+   la question qui suit se pose dans le sticker, pas dans l'image.
+
+   POURQUOI CE FICHIER RECOPIE LA CHARTE AU LIEU DE L'IMPORTER. `poserFond`,
+   `morceauxChrono` et `poserMorceaux` existent déjà dans src/game/trace-affiche.js,
+   et l'en-tête de ce fichier-là dit très bien pourquoi les recopier est une
+   mauvaise idée : on retouche la lueur d'un côté, on l'oublie de l'autre. Ici
+   la page est demandée autonome — elle s'ouvre par un double-clic, sans serveur,
+   et un `import` relatif depuis file:// est refusé par le navigateur. Le prix
+   est donc assumé, et il est écrit ici pour qu'on s'en souvienne :
+
+     SI TU RETOUCHES LA LUEUR, LES COULOIRS OU LA COMPOSITION D'UN CHRONO
+     DANS src/game/trace-affiche.js, REPORTE-LE DANS CE FICHIER.
+
+   Les trois fonctions concernées sont signalées une par une plus bas.
+--------------------------------------------------------------------------- */
+
+const L = 1080, H = 1920;
+
+/* --- la charte, telle quelle ------------------------------------------- */
+const NUIT    = '#060913';
+const OR      = '#F8CD4A';
+const ENCRE   = '#EEF0F8';
+const MARGE   = Math.round(L * 0.082);          // 89 px, comme dessinerMoment
+
+/* --- les zones qu'Instagram mange -------------------------------------- */
+// Le haut : barre de progression et avatar. Le bas : le pouce et la barre de
+// réponse. La composition tient donc dans le rectangle central 1080 × 1420.
+const RESERVE_HAUT = 250;
+const RESERVE_BAS  = 250;
+const HAUT = RESERVE_HAUT;                      // 250
+const BAS  = H - RESERVE_BAS;                   // 1670
+
+// L'emplacement du sondage, gardé vide dans l'image. Un sticker à deux
+// réponses mesure à peu près 900 × 280 sur un 1080 de large.
+const SONDAGE = { l: 900, h: 280, cy: 1460 };
+const SONDAGE_HAUT = SONDAGE.cy - SONDAGE.h / 2; // 1320
+const SONDAGE_BAS  = SONDAGE.cy + SONDAGE.h / 2; // 1600
+
+/* --- ce que l'image raconte --------------------------------------------- */
+// Le « − » est un vrai signe moins, U+2212, pas un trait d'union : Space Mono
+// le porte dans son sous-ensemble latin, à la même chasse qu'un chiffre, si
+// bien que le nombre garde sa colonne.
+const NOMBRE   = '−0,02';
+// Vide, comme demandé : « −0,02 » et rien d'autre. Mettre 's' ici rajoute
+// l'unité à la manière de la charte (« 8,25 s »), collée au nombre.
+const UNITE    = '';
+const SURTITRE = 'Sprinter · 100 m';
+const LIGNE_A  = 'Deux centièmes derrière le fantôme';
+const LIGNE_B  = 'Tout se joue au départ';
+
+// La signature remonte au-dessus du sondage. La charte la pose à 8,8 % du bas
+// (y = 1751), mais 1751 tombe dans les 250 px que la barre de réponse
+// d'Instagram recouvre : la seule ligne de l'image qui serve à retrouver le
+// compte y serait cachée. Repasse à Math.round(H - H * 0.088) si tu préfères
+// la lettre de la charte à son intention.
+const Y_SIGNATURE = 1280;
+const Y_FILET     = Y_SIGNATURE - 34;
+
+/* ------------------------------------------------------- outils de tracé */
+
+/** Le fond commun : la nuit du jeu, sa lueur dorée, et trois couloirs.
+ *  RECOPIÉ DE src/game/trace-affiche.js → poserFond(). */
+function poserFond(c, L, H) {
+  c.fillStyle = NUIT; c.fillRect(0, 0, L, H);
+
+  const lueur = c.createRadialGradient(L / 2, H * 0.08, 0, L / 2, H * 0.08, L * 0.85);
+  lueur.addColorStop(0, 'rgba(248,205,74,0.20)');
+  lueur.addColorStop(1, 'rgba(248,205,74,0)');
+  c.fillStyle = lueur; c.fillRect(0, 0, L, H);
+
+  c.save(); c.globalAlpha = 0.14;
+  for (let i = 0; i < 3; i++) {
+    const y = H * (0.62 + i * 0.11);
+    const g = c.createLinearGradient(0, y, L, y);
+    g.addColorStop(0, 'rgba(248,205,74,0)');
+    g.addColorStop(0.5, 'rgba(248,205,74,1)');
+    g.addColorStop(1, 'rgba(248,205,74,0)');
+    c.fillStyle = g; c.fillRect(0, y, L, Math.max(2, L / 540));
+  }
+  c.restore();
+}
+
+/** Les morceaux d'un chrono à la virgule, et la largeur de l'ensemble.
+ *  RECOPIÉ DE src/game/trace-affiche.js → morceauxChrono().
+ *  Avec sa chasse pleine, la virgule creuse un trou — « −0 , 02 » — et c'est
+ *  le nombre qui est le sujet de l'image. On ne reprend de la place qu'autour
+ *  du séparateur : les chiffres gardent leur colonne. */
+function morceauxChrono(c, str) {
+  const i = str.indexOf(',');
+  if (i < 0) return { entier: str, virgule: '', deci: '',
+                      wEntier: c.measureText(str).width, wVirg: 0, wDeci: 0,
+                      largeur: c.measureText(str).width };
+  const entier = str.slice(0, i), deci = str.slice(i + 1);
+  const wEntier = c.measureText(entier).width;
+  const wDeci = c.measureText(deci).width;
+  const wVirg = c.measureText('0').width * 0.40;
+  return { entier, virgule: ',', deci, wEntier, wVirg, wDeci,
+           largeur: wEntier + wVirg + wDeci };
+}
+
+/** RECOPIÉ DE src/game/trace-affiche.js → poserMorceaux(). */
+function poserMorceaux(c, m, gauche, y) {
+  let cur = gauche;
+  c.textAlign = 'left';
+  c.fillText(m.entier, cur, y);
+  if (!m.virgule) return;
+  cur += m.wEntier;
+  c.textAlign = 'center';
+  c.fillText(m.virgule, cur + m.wVirg / 2, y);
+  cur += m.wVirg;
+  c.textAlign = 'left';
+  c.fillText(m.deci, cur, y);
+}
+
+/** Le nombre, au corps qui remplit `mesure`.
+ *  RECOPIÉ DE src/game/trace-affiche.js → chronoPleinCadre().
+ *  `yCentre` est le milieu des CHIFFRES et non la ligne de pied : c'est ce que
+ *  l'œil centre, et les chiffres n'ont pas de jambage qui le décale. */
+function chronoPleinCadre(c, texte, unite, cx, yCentre, mesure, couleur) {
+  const REF = 100, RATIO_UNITE = 0.19, RATIO_BLANC = 0.10;
+  c.save();
+  c.fillStyle = couleur;
+  c.textBaseline = 'alphabetic';
+
+  c.font = `700 ${REF}px 'Space Mono', monospace`;
+  const kNombre = morceauxChrono(c, texte).largeur / REF;
+  const kUnite = unite ? (c.measureText(unite).width / REF) * RATIO_UNITE : 0;
+  const kBlanc = unite ? RATIO_BLANC : 0;
+  const taille = Math.floor(mesure / (kNombre + kBlanc + kUnite));
+
+  // On remesure au corps réel : le hinting déplace les choses de quelques
+  // dixièmes, et à cette taille quelques dixièmes se voient au bord.
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  const m = morceauxChrono(c, texte);
+  const hautChiffre = c.measureText('8').actualBoundingBoxAscent || taille * 0.70;
+  const tUnite = Math.round(taille * RATIO_UNITE);
+  const blanc = unite ? taille * RATIO_BLANC : 0;
+  let wUnite = 0;
+  if (unite) { c.font = `700 ${tUnite}px 'Space Mono', monospace`; wUnite = c.measureText(unite).width; }
+
+  const gauche = cx - (m.largeur + blanc + wUnite) / 2;
+  const base = yCentre + hautChiffre / 2;
+
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  poserMorceaux(c, m, gauche, base);
+  if (unite) {
+    c.font = `700 ${tUnite}px 'Space Mono', monospace`;
+    c.textAlign = 'left';
+    c.fillText(unite, gauche + m.largeur + blanc, base);
+  }
+
+  // Le bas de l'encre, et non la ligne de pied : la virgule descend sous les
+  // chiffres, et ce qui se range dessous doit partir de là. Mesuré plutôt que
+  // constant — la valeur dépend de la fonte, et c'est la fonte qui sait.
+  c.font = `700 ${taille}px 'Space Mono', monospace`;
+  const basChiffre = base + c.measureText(texte).actualBoundingBoxDescent;
+
+  c.restore();
+  return { taille, hautChiffre, base, basChiffre, largeur: m.largeur + blanc + wUnite };
+}
+
+/** Le surtitre : petites capitales très espacées, comme dans le jeu.
+ *  RECOPIÉ DE src/game/trace-affiche.js → surtitre(). */
+function surtitre(c, texte, x, y, taille, couleur = 'rgba(255,255,255,0.46)') {
+  c.save();
+  c.fillStyle = couleur;
+  c.font = `700 ${taille}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.letterSpacing = `${taille * 0.36}px`;
+  c.fillText(String(texte).toUpperCase(), x + taille * 0.18, y);
+  c.restore();
+}
+
+/** Une ligne de texte simple, centrée. Renvoie le bas de sa boîte. */
+function ligne(c, texte, x, y, taille, couleur, gras = 500) {
+  c.save();
+  c.fillStyle = couleur;
+  c.font = `${gras} ${taille}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.fillText(texte, x, y);
+  const m = c.measureText(texte);
+  c.restore();
+  return y + (m.actualBoundingBoxDescent || taille * 1.2);
+}
+
+/* ------------------------------------------------- l'écran d'arrivée, en fantôme */
+
+/**
+ * La capture de l'écran d'arrivée, posée très sombre derrière le nombre.
+ *
+ * Elle est REDESSINÉE et non collée : une vraie capture PNG ferait de cette
+ * page un fichier qui ne s'ouvre plus tout seul. À 8,5 % elle ne se lit pas,
+ * elle se reconnaît — un titre, un chrono, un tableau de huit lignes. C'est
+ * exactement ce qu'on lui demande : poser le décor sans disputer le chiffre.
+ *
+ * Les noms sont des barres et non des pseudonymes. Personne n'a donné son
+ * accord écrit pour figurer sur une story, et une barre ne le demande pas.
+ */
+function poserEcranArrivee(c, alpha) {
+  const x = MARGE, l = L - MARGE * 2;          // 89 → 991
+  const y = 330, h = 746;                      // 330 → 1076
+  const cx = L / 2;
+
+  c.save();
+  c.globalAlpha = alpha;                       // tout ce qui suit passe par là
+
+  // Le cadre de l'écran.
+  c.fillStyle = 'rgba(238,240,248,0.10)';
+  c.strokeStyle = 'rgba(238,240,248,0.85)'; c.lineWidth = 2;
+  c.beginPath(); c.roundRect(x, y, l, h, 44); c.fill(); c.stroke();
+
+  // L'étiquette, le rang, le chrono : la hiérarchie de l'écran d'arrivée.
+  surtitre(c, 'Arrivée', cx, y + 38, 20, 'rgba(238,240,248,0.85)');
+
+  c.save();
+  c.fillStyle = 'rgba(238,240,248,0.72)';
+  c.font = '900 72px Outfit, sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'top';
+  c.letterSpacing = '-1.8px';
+  c.fillText('2E SUR 8', cx, y + 74);
+  c.restore();
+
+  chronoPleinCadre(c, '8,27', 's', cx, y + 214, 250, 'rgba(248,205,74,0.80)');
+  surtitre(c, 'Réaction 0,148 s', cx, y + 288, 20, 'rgba(238,240,248,0.60)');
+
+  // Le classement : huit lignes, la deuxième est la sienne.
+  const cardX = x + 40, cardL = l - 80;
+  const cardY = y + 354, pas = 40, pad = 20;
+  const chronos = ['8,25', '8,27', '8,31', '8,36', '8,42', '8,49', '8,58', '8,71'];
+  const largeursNom = [0.52, 0.61, 0.44, 0.57, 0.49, 0.66, 0.46, 0.55];
+
+  c.fillStyle = 'rgba(238,240,248,0.10)';
+  c.strokeStyle = 'rgba(238,240,248,0.70)'; c.lineWidth = 2;
+  c.beginPath(); c.roundRect(cardX, cardY, cardL, pas * 8 + pad * 2, 28); c.fill(); c.stroke();
+
+  chronos.forEach((t, i) => {
+    const moi = i === 1;
+    const ly = cardY + pad + pas * (i + 0.5);
+
+    if (i > 0) {
+      c.strokeStyle = 'rgba(238,240,248,0.35)'; c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(cardX + 22, cardY + pad + pas * i);
+      c.lineTo(cardX + cardL - 22, cardY + pad + pas * i);
+      c.stroke();
+    }
+
+    c.save();
+    c.textBaseline = 'middle';
+    c.fillStyle = moi ? OR : 'rgba(238,240,248,0.80)';
+    c.font = '700 22px Outfit, sans-serif';
+    c.textAlign = 'left';
+    c.fillText(String(i + 1), cardX + 26, ly);
+
+    // Le nom : une barre. Voir le commentaire de l'en-tête de la fonction.
+    c.fillStyle = moi ? 'rgba(248,205,74,0.70)' : 'rgba(238,240,248,0.45)';
+    const wNom = (cardL - 260) * largeursNom[i];
+    c.beginPath(); c.roundRect(cardX + 62, ly - 8, wNom, 16, 8); c.fill();
+
+    c.fillStyle = moi ? OR : 'rgba(238,240,248,0.80)';
+    c.font = "700 24px 'Space Mono', monospace";
+    c.textAlign = 'right';
+    c.fillText(t + ' s', cardX + cardL - 26, ly);
+    c.restore();
+  });
+
+  c.restore();
+}
+
+/* ----------------------------------------------------------------- l'image */
+
+const mesures = [];
+function noter(quoi, valeur) { mesures.push([quoi, valeur]); }
+
+function dessiner(cv) {
+  cv.width = L; cv.height = H;
+  const c = cv.getContext('2d');
+  const cx = L / 2;
+
+  poserFond(c, L, H);
+
+  // L'écran d'arrivée, derrière. 8,5 % : sous les 10 % demandés, et c'est la
+  // valeur maximale atteinte — les remplissages intérieurs sont plus bas encore.
+  poserEcranArrivee(c, 0.085);
+
+  // La provenance, en haut, juste sous la zone réservée.
+  surtitre(c, SURTITRE, cx, HAUT + 42, Math.round(L * 0.0205));
+
+  // LE NOMBRE. Il remplit la largeur utile entre les marges de la charte, et
+  // son centre optique tombe dans le tiers central de la hauteur.
+  const n = chronoPleinCadre(c, NOMBRE, UNITE, cx, 900, L - MARGE * 2, OR);
+  noter('corps du nombre', n.taille + ' px');
+  noter('haut de l’encre', Math.round(n.base - n.hautChiffre) + ' px');
+  noter('bas de l’encre', Math.round(n.basChiffre) + ' px');
+
+  // Ce que le nombre veut dire, puis de quoi donner envie de retoucher au
+  // clavier. Le point d'interrogation est dans le sticker, pas ici.
+  const basA = ligne(c, LIGNE_A, cx, Math.round(n.basChiffre) + 40,
+                     Math.round(L * 0.0335), 'rgba(255,255,255,0.55)', 500);
+  const basB = ligne(c, LIGNE_B, cx, Math.round(basA) + 16,
+                     Math.round(L * 0.0288), 'rgba(248,205,74,0.85)', 600);
+  noter('bas de la 2e ligne', Math.round(basB) + ' px');
+
+  // Le filet, puis le compte. Un @ se cherche d'un geste dans Instagram ;
+  // une adresse de site ne s'y clique pas.
+  c.save();
+  c.strokeStyle = 'rgba(255,255,255,0.10)'; c.lineWidth = 1;
+  c.beginPath();
+  c.moveTo(MARGE, Y_FILET + 0.5); c.lineTo(L - MARGE, Y_FILET + 0.5);
+  c.stroke();
+  c.fillStyle = 'rgba(255,255,255,0.30)';
+  c.font = `600 ${Math.round(L * 0.026)}px Outfit, sans-serif`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.letterSpacing = `${Math.round(L * 0.004)}px`;
+  c.fillText('@sprintergame', cx, Y_SIGNATURE);
+  c.restore();
+
+  noter('filet', Y_FILET + ' px');
+  noter('signature', Y_SIGNATURE + ' px');
+  noter('sondage (à réserver)', SONDAGE_HAUT + ' → ' + SONDAGE_BAS + ' px');
+  noter('zones mangées', '0 → ' + HAUT + ' px  ·  ' + BAS + ' → ' + H + ' px');
+  return cv;
+}
+
+/** Les repères, sur un canvas séparé : ils ne doivent pas partir dans le PNG. */
+function dessinerReperes(cv) {
+  cv.width = L; cv.height = H;
+  const c = cv.getContext('2d');
+  c.clearRect(0, 0, L, H);
+
+  c.fillStyle = 'rgba(255,90,90,0.16)';
+  c.fillRect(0, 0, L, HAUT);
+  c.fillRect(0, BAS, L, H - BAS);
+
+  c.strokeStyle = 'rgba(255,90,90,0.65)'; c.lineWidth = 2;
+  c.setLineDash([14, 10]);
+  c.beginPath(); c.moveTo(0, HAUT); c.lineTo(L, HAUT);
+  c.moveTo(0, BAS); c.lineTo(L, BAS); c.stroke();
+
+  c.strokeStyle = 'rgba(120,220,255,0.85)';
+  c.beginPath();
+  c.roundRect((L - SONDAGE.l) / 2, SONDAGE_HAUT, SONDAGE.l, SONDAGE.h, 28);
+  c.stroke();
+  c.setLineDash([]);
+
+  c.fillStyle = 'rgba(120,220,255,0.95)';
+  c.font = '700 26px Outfit, sans-serif';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText('SONDAGE — 2 RÉPONSES', L / 2, SONDAGE.cy - 18);
+  c.font = '500 24px Outfit, sans-serif';
+  c.fillText('« je rejoue » / « je ferme » · centre ≈ ' + SONDAGE.cy + ' px',
+             L / 2, SONDAGE.cy + 18);
+
+  c.fillStyle = 'rgba(255,140,140,0.95)';
+  c.font = '700 24px Outfit, sans-serif';
+  c.fillText('250 px mangés — barre de progression, avatar', L / 2, HAUT - 34);
+  c.fillText('250 px mangés — pouce, barre de réponse', L / 2, BAS + 40);
+}
+
+/* ------------------------------------------------------------- l'exécution */
+
+/**
+ * `document.fonts.check` répond « oui » quand la fonte manque : il se contente
+ * de trouver une famille de repli. On compare donc une mesure à celle du repli,
+ * et on refuse de tracer si les deux sont identiques — un PNG au bon cadrage
+ * mais en Helvetica est pire qu'une page qui se plaint.
+ */
+function policeChargee(famille, poids, repli) {
+  const c = document.createElement('canvas').getContext('2d');
+  const mot = 'SPRINTER 8,25';
+  c.font = `${poids} 100px "${famille}", ${repli}`;
+  const a = c.measureText(mot).width;
+  c.font = `${poids} 100px ${repli}`;
+  return Math.abs(a - c.measureText(mot).width) > 0.5;
+}
+
+const affiche = document.getElementById('affiche');
+const reperes = document.getElementById('reperes');
+const bouton  = document.getElementById('telecharger');
+const alerte  = document.getElementById('alerte');
+
+await Promise.all([
+  document.fonts.load("700 340px 'Space Mono'"),
+  document.fonts.load('900 84px Outfit'),
+  document.fonts.load('700 22px Outfit'),
+  document.fonts.load('600 28px Outfit'),
+  document.fonts.load('500 36px Outfit'),
+]).catch(() => {});
+await document.fonts.ready;
+
+const manque = [];
+if (!policeChargee('Space Mono', 700, 'serif')) manque.push('Space Mono 700');
+if (!policeChargee('Outfit', 900, 'monospace')) manque.push('Outfit');
+if (manque.length) {
+  alerte.hidden = false;
+  alerte.textContent =
+    'Police absente : ' + manque.join(', ') + '. Le PNG sortirait dans une fonte '
+    + 'de repli — vérifie l’accès à fonts.googleapis.com, puis recharge.';
+}
+
+dessiner(affiche);
+dessinerReperes(reperes);
+
+document.getElementById('mesures').innerHTML =
+  mesures.map(([q, v]) => `<tr><td>${q}</td><td>${v}</td></tr>`).join('');
+
+document.getElementById('voirReperes').addEventListener('change', e => {
+  reperes.hidden = !e.target.checked;
+});
+
+bouton.disabled = false;
+bouton.addEventListener('click', () => {
+  affiche.toBlob(b => {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(b);
+    a.download = 'sprinter-story-sondage-1080x1920.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  }, 'image/png');
+});
+</script>

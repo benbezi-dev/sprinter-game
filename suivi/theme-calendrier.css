@@ -1,0 +1,420 @@
+/* ---------------------------------------------------------------------------
+   LE THÈME DE LA CARTE « DÉFI OUVERT », POUR LES PAGES D'ATELIER
+   ---------------------------------------------------------------------------
+   Relevé au pixel sur la carte 1080 × 1350 du défi ouvert : le fond de nuit
+   bleue en dégradé radial, l'accent ambre → orange, les capitales espacées,
+   les filets, la pilule.
+
+   Le dégradé de fond n'est pas estimé à l'œil. Il a été ajusté contre l'image
+   d'origine, puis mesuré : 2,25/255 d'écart moyen sur les bandes vides, 31 au
+   pire. C'est la valeur qui suit, et c'est pour cela qu'elle a six paliers et
+   pas trois — un dégradé à trois paliers donnait 4,3.
+
+   POURQUOI CE THÈME N'EST PAS CELUI DU JEU. src/game/trace-affiche.js pose
+   l'or #F8CD4A sur la nuit #060913 : c'est la charte des images publiées, et
+   elle ne bouge pas. Ici on est dans l'atelier, pas sur Instagram — les pages
+   de travail prennent l'ambre → orange de la carte du défi. Les deux se
+   ressemblent sans se confondre, et c'est voulu : on voit d'un coup d'œil si
+   on regarde une image qui part ou un outil interne.
+
+   Comment s'en servir : une seule ligne dans le <head> de la page.
+
+       <link rel="stylesheet" href="theme-calendrier.css">
+
+   Les sélecteurs d'élément (body, h1, table, hr…) habillent la page telle
+   qu'elle est. Les classes (.surtitre, .nombre, .pilule, .carte, .badge) sont
+   là quand on veut les morceaux de la carte.
+--------------------------------------------------------------------------- */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700;800;900&family=Space+Mono:wght@400;700&display=swap');
+
+:root {
+  /* --- le fond, du cœur vers le bord ----------------------------------- */
+  --fond-coeur: #181F39;
+  --fond-2:     #161E35;
+  --fond-3:     #121A2D;
+  --fond-4:     #0F1525;
+  --fond-5:     #0B111F;
+  --fond-bord:  #070B16;
+
+  /* Le dégradé lui-même, en une variable : les panneaux le réutilisent. */
+  --nuit: radial-gradient(circle at 50% 50%,
+            var(--fond-coeur) 0%, var(--fond-2) 19%, var(--fond-3) 38%,
+            var(--fond-4) 58%, var(--fond-5) 78%, var(--fond-bord) 100%);
+
+  /* --- l'accent : ambre à gauche, orange à droite ----------------------- */
+  --accent-clair: #FBC24E;
+  --accent-fonce: #EF7627;
+  --accent: linear-gradient(90deg, var(--accent-clair) 0%, var(--accent-fonce) 100%);
+
+  /* --- l'encre ---------------------------------------------------------- */
+  --encre:      #F4F7FF;   /* les titres qui portent */
+  --encre-2:    #EEF1F7;   /* le code du défi, les valeurs fortes */
+  --texte:      #A4ADC4;   /* le corps */
+  --muet:       #919CB1;   /* les surtitres */
+  --tres-muet:  #8C97AD;   /* les légendes sous un élément */
+  --filet:      #283048;   /* les séparateurs */
+  --sur-accent: #0B1020;   /* le texte posé sur l'accent */
+
+  /* --- les surfaces ----------------------------------------------------- */
+  --panneau:       rgba(255, 255, 255, 0.028);
+  --panneau-bord:  rgba(255, 255, 255, 0.075);
+  --survol:        rgba(255, 255, 255, 0.045);
+
+  --police-titre: 'Outfit', system-ui, sans-serif;
+  --police-corps: 'Inter', system-ui, sans-serif;
+  --police-mono:  'Space Mono', ui-monospace, monospace;
+
+  --rayon:    16px;
+  --colonne:  1120px;
+
+  color-scheme: dark;
+}
+
+/* --------------------------------------------------------------- la page */
+
+html { background: var(--fond-bord); }
+
+body {
+  margin: 0;
+  /* `fixed` : sur une page longue, un dégradé qui défile se répète et donne
+     des bandes. Fixé, la nuit reste une seule nuit du haut en bas. */
+  background: var(--nuit) fixed;
+  background-color: var(--fond-4);
+  color: var(--texte);
+  font: 400 16px/1.65 var(--police-corps);
+  -webkit-font-smoothing: antialiased;
+  padding: 56px max(20px, env(safe-area-inset-left)) 96px;
+}
+
+main, .colonne { max-width: var(--colonne); margin: 0 auto; }
+
+/* --------------------------------------------------------------- le texte */
+
+h1, h2, h3, h4 {
+  font-family: var(--police-titre);
+  color: var(--encre);
+  line-height: 1.15;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+h1 { font-weight: 900; font-size: clamp(30px, 4.4vw, 46px); letter-spacing: -0.025em; }
+h2 { font-weight: 800; font-size: clamp(23px, 3vw, 31px); letter-spacing: -0.018em; margin-top: 52px; }
+h3 { font-weight: 700; font-size: 20px; letter-spacing: -0.008em; margin-top: 34px; }
+h4 { font-weight: 700; font-size: 16px; margin-top: 24px; color: var(--encre-2);
+     letter-spacing: 0.005em; }
+
+p { margin: 0 0 14px; }
+strong, b { color: var(--encre-2); font-weight: 600; }
+em, i { color: var(--muet); }
+small { font-size: 13px; color: var(--tres-muet); }
+
+a { color: var(--accent-clair); text-decoration-color: rgba(251, 194, 78, 0.35);
+    text-underline-offset: 3px; }
+a:hover { color: #FFD57A; text-decoration-color: currentColor; }
+
+/* Le filet, et rien d'autre : la carte sépare ses blocs comme cela. */
+hr {
+  border: 0; height: 1px; background: var(--filet);
+  margin: 44px 0;
+}
+
+blockquote {
+  margin: 18px 0; padding: 14px 20px;
+  border-left: 2px solid var(--accent-clair);
+  background: var(--panneau);
+  border-radius: 0 var(--rayon) var(--rayon) 0;
+  color: var(--muet);
+}
+blockquote p:last-child { margin-bottom: 0; }
+
+code, kbd, samp {
+  font: 700 0.88em var(--police-mono);
+  color: var(--accent-clair);
+  background: rgba(251, 194, 78, 0.055);
+  border: 1px solid rgba(251, 194, 78, 0.10);
+  border-radius: 6px;
+  padding: 1px 6px;
+  /* Un chemin long se coupe en fin de ligne. Sans `clone`, le morceau du bas
+     perd son bord et sa marge, et la coupure se voit plus que le chemin. */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  overflow-wrap: anywhere;
+}
+pre { background: var(--panneau); border: 1px solid var(--panneau-bord);
+      border-radius: var(--rayon); padding: 16px 18px; overflow-x: auto; }
+pre code { background: none; border: 0; padding: 0; color: var(--texte); font-weight: 400; }
+
+ul, ol { margin: 0 0 16px; padding-left: 22px; }
+li { margin-bottom: 8px; }
+li::marker { color: var(--accent-fonce); }
+
+/* --------------------------------------------------------------- tableaux */
+
+table {
+  width: 100%; border-collapse: collapse;
+  margin: 18px 0 26px;
+  font-size: 15px;
+}
+thead th {
+  font: 700 11px/1 var(--police-mono);
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--muet);
+  text-align: left;
+  padding: 0 14px 12px;
+  border-bottom: 1px solid var(--filet);
+  white-space: nowrap;
+}
+tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+  vertical-align: top;
+}
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--survol); }
+/* L'heure et le jour se lisent en colonne : une chasse fixe les aligne. */
+tbody td:first-child { color: var(--encre-2); font-weight: 500; white-space: nowrap; }
+td.heure, td.chiffre { font: 700 14px var(--police-mono); color: var(--muet); white-space: nowrap; }
+
+/* ------------------------------------------------------------ les morceaux */
+
+/* Le surtitre de la carte : capitales très espacées, à chasse fixe. */
+.surtitre {
+  font: 700 12px/1 var(--police-mono);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--muet);
+  margin: 0 0 14px;
+}
+
+/* Le grand nombre, dans l'accent. Le dégradé est découpé par le texte. */
+.nombre, .chrono {
+  font-family: var(--police-titre);
+  font-weight: 900;
+  font-size: clamp(44px, 7vw, 76px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  background: var(--accent);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Repli : sans `background-clip: text`, le texte resterait transparent et
+   l'on perdrait le chiffre — ce qui est exactement ce qu'il ne faut pas. */
+@supports not ((-webkit-background-clip: text) or (background-clip: text)) {
+  .nombre, .chrono, .compteur .valeur { color: var(--accent-clair); background: none; }
+}
+.nombre .unite { font-size: 0.52em; margin-left: 0.1em; }
+
+/* Le code du défi : capitales espacées, en pleine encre. */
+.code-defi {
+  font-family: var(--police-titre);
+  font-weight: 800;
+  font-size: clamp(34px, 5.4vw, 58px);
+  letter-spacing: 0.14em;
+  color: var(--encre-2);
+  line-height: 1.1;
+}
+
+.carte {
+  background: var(--panneau);
+  border: 1px solid var(--panneau-bord);
+  border-radius: var(--rayon);
+  padding: 22px 24px;
+  margin: 18px 0;
+}
+.carte > :last-child { margin-bottom: 0; }
+
+/* La pilule : l'accent en fond, l'encre sombre par-dessus. */
+.pilule {
+  display: inline-block;
+  background: var(--accent);
+  color: var(--sur-accent);
+  font: 700 15px/1 var(--police-corps);
+  text-decoration: none;
+  padding: 15px 30px;
+  border-radius: 999px;
+}
+.pilule:hover { color: var(--sur-accent); filter: brightness(1.07); }
+
+/* Une carte qui EST un lien : la place d'un outil dans la page d'accueil.
+   Le bloc entier est cliquable, et pas seulement son titre — sur un tableau
+   de bord, viser trois mots au lieu d'un panneau se paie à chaque visite. */
+a.outil {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  background: var(--panneau);
+  border: 1px solid var(--panneau-bord);
+  border-radius: var(--rayon);
+  padding: 20px 22px;
+  transition: border-color .15s, background .15s;
+}
+a.outil:hover {
+  color: inherit;
+  background: var(--survol);
+  border-color: rgba(251, 194, 78, 0.38);
+}
+a.outil h3 { margin: 0 0 6px; font-size: 19px; }
+a.outil p  { margin: 0; color: var(--muet); font-size: 14.5px; }
+a.outil .surtitre { margin-bottom: 10px; }
+/* Une grille d'outils, qui retombe en colonne sur un téléphone. */
+.outils {
+  display: grid; gap: 14px; margin: 22px 0;
+  grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+}
+
+/* Les trois formats. Pas de nouvelle teinte : l'accent, l'encre, le muet. */
+.badge {
+  display: inline-block;
+  font: 700 10px/1 var(--police-mono);
+  letter-spacing: 0.14em; text-transform: uppercase;
+  padding: 5px 9px; border-radius: 999px;
+  border: 1px solid currentColor;
+  color: var(--tres-muet);
+}
+.badge.reel  { color: var(--accent-clair); background: rgba(251, 194, 78, 0.10); }
+.badge.post  { color: var(--encre-2);      background: rgba(238, 241, 247, 0.07); }
+.badge.story { color: var(--muet);         background: rgba(145, 156, 177, 0.08); }
+
+/* Un chiffre qui compte, posé en tête de page. */
+.compteurs { display: flex; flex-wrap: wrap; gap: 14px; margin: 22px 0 8px; }
+.compteur {
+  flex: 1 1 150px;
+  background: var(--panneau); border: 1px solid var(--panneau-bord);
+  border-radius: var(--rayon); padding: 16px 18px;
+}
+.compteur .valeur {
+  font: 900 32px/1 var(--police-titre); letter-spacing: -0.02em;
+  background: var(--accent); -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+}
+.compteur .quoi {
+  display: block; margin-top: 8px;
+  font: 700 10px/1.3 var(--police-mono); letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--muet);
+}
+
+/* L'avertissement : ce qu'on relit avant de publier. */
+.garde {
+  border-left: 2px solid var(--accent-fonce);
+  background: rgba(239, 118, 39, 0.05);
+  border-radius: 0 var(--rayon) var(--rayon) 0;
+  padding: 16px 20px; margin: 18px 0;
+}
+.garde > :last-child { margin-bottom: 0; }
+
+/* ------------------------------------------------- ce sur quoi on clique
+
+   Sans cette section, la promesse « un seul <link> habille la page » était
+   fausse : le texte prenait le thème, mais chaque bouton restait gris sur
+   blanc — le réglage par défaut du navigateur — et il n'y avait aucun anneau
+   de focus visible, ce qui se paie au clavier.
+
+   Le thème se lie AVANT la feuille de la page, pour que celle-ci garde le
+   dernier mot sur ce qu'elle veut habiller elle-même. */
+
+/* L'anneau de focus. Il vient en premier parce que c'est le plus important :
+   une page d'atelier se parcourt souvent au clavier, et un focus invisible
+   fait perdre le fil à chaque tabulation. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent-clair);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Le bouton ordinaire est discret. L'ambre est une couleur d'appel : si tous
+   les boutons la portent, aucun n'appelle plus rien. La pilule et
+   `button.primaire` la gardent pour l'action principale de la page. */
+button, input[type="button"], input[type="submit"], input[type="reset"] {
+  font: 600 14px/1 var(--police-corps);
+  color: var(--encre-2);
+  background: var(--panneau);
+  border: 1px solid var(--panneau-bord);
+  border-radius: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+}
+button:hover:not(:disabled), input[type="button"]:hover, input[type="submit"]:hover {
+  background: var(--survol);
+  border-color: rgba(251, 194, 78, 0.38);
+}
+button:disabled { opacity: .4; cursor: default; }
+
+button.primaire {
+  background: var(--accent);
+  color: var(--sur-accent);
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 24px;
+  font-weight: 700;
+}
+button.primaire:hover:not(:disabled) { filter: brightness(1.07); background: var(--accent); }
+
+/* Les champs. `color-scheme: dark` est déjà posé sur :root, ce qui donne les
+   bons ascenseurs et le bon calendrier natif ; le reste se dessine ici. */
+input:not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="checkbox"]):not([type="radio"]),
+select, textarea {
+  font: 400 14.5px/1.45 var(--police-corps);
+  color: var(--encre-2);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--panneau-bord);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+input::placeholder, textarea::placeholder { color: var(--tres-muet); }
+input:focus, select:focus, textarea:focus { border-color: rgba(251, 194, 78, 0.45); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent-fonce); }
+textarea { min-height: 96px; resize: vertical; }
+label { cursor: pointer; }
+
+/* Le bloc qui se déplie. Une publication du calendrier porte un brief, une
+   légende, des mots-clés, un KPI et un prompt : tout montrer d'un coup rend
+   le mois illisible, et c'est <details> qui fait ce travail. */
+details {
+  background: var(--panneau);
+  border: 1px solid var(--panneau-bord);
+  border-radius: var(--rayon);
+  padding: 4px 18px;
+  margin: 12px 0;
+}
+summary {
+  font: 600 15px/1.4 var(--police-corps);
+  color: var(--encre-2);
+  cursor: pointer;
+  padding: 12px 0;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+/* Le chevron est dessiné plutôt qu'écrit : un caractère de flèche change de
+   dessin d'une police à l'autre, et tourne mal. */
+summary::before {
+  content: ""; display: inline-block;
+  width: 7px; height: 7px; margin-right: 11px;
+  border-right: 2px solid var(--accent-fonce);
+  border-bottom: 2px solid var(--accent-fonce);
+  transform: rotate(-45deg) translate(-1px, -1px);
+  transition: transform .18s;
+}
+details[open] > summary::before { transform: rotate(45deg) translate(-2px, -2px); }
+details > :last-child { margin-bottom: 14px; }
+
+/* Le texte sélectionné. Sans cela, le bleu du navigateur tombe sur la nuit. */
+::selection { background: rgba(251, 194, 78, 0.28); color: var(--encre); }
+
+/* -------------------------------------------------------------- le petit écran */
+
+@media (max-width: 720px) {
+  body { padding: 32px 16px 64px; font-size: 15px; }
+  table { font-size: 14px; }
+  thead th, tbody td { padding-left: 8px; padding-right: 8px; }
+  .compteur { flex-basis: 120px; }
+}
+
+/* Une page d'atelier s'imprime parfois pour être annotée. */
+@media print {
+  body { background: #fff; color: #111; }
+  .nombre, .chrono, .compteur .valeur { color: #B45309; background: none; }
+}
