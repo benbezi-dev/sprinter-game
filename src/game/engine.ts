@@ -1494,6 +1494,14 @@ export function updateLogic(dt: number) {
       // que si la salle se tait — cinq minutes, plus que la manche la plus
       // longue et sa limite de retardataires.
       if (G.elapsed >= 300) SprinterApp.goHome();
+    } else if (G.liveOn && G.raceKey === '4x100' && G.player.relaisRang != null) {
+      // AU RELAIS, C'EST LA SALLE QUI TRANCHE (22/11/2026). Le garde-fou des
+      // quatre-vingt-dix secondes et l'arrivee du dernier relayeur ouvraient
+      // ici l'ecran de fin du one shot en pleine course d'equipe — un
+      // quatrieme qui attend un temoin retenu par un coequipier y passe — et
+      // son bouton ACCUEIL laissait la course du relais ouverte par-dessus
+      // l'accueil. L'arrivee, l'elimination et le retour sont ceux de
+      // CourseRelais / CourseConfrontation.
     } else if (out || slow || mordu || plante || G.elapsed >= 90
                // PASSER L'APRES-LIGNE (l'auteur, 18/11) : le bouton du HUD pose le coureur de CETTE course, rien a remettre a zero
                || (G.player.finished && G.passerFin === G.player)) {

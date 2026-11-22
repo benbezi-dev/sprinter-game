@@ -5,6 +5,7 @@ import App from './App';
 import { ErrorBoundary, rechargerUneFois } from '@/components/error-boundary';
 import { brancherAcces, brancherSignet } from '@/game/canal';
 import { prendreCleOfficielleDepuisUrl } from '@/game/tchat-officiel';
+import { brancherHauteurFigee } from '@/lib/hauteur-figee';
 
 import './index.css';
 
@@ -17,6 +18,10 @@ brancherSignet();
 // sans son code d'acces — sinon elle atterrirait dans la base de production.
 // Sans effet en production, ou la fonction se reduit a un retour immediat.
 brancherAcces();
+
+// Les variantes `court:` et `serre:` lisent des classes posees sur <html>, figees
+// pendant une saisie : le clavier ne doit pas faire basculer la mise en page.
+brancherHauteurFigee();
 
 // La cle du compte SprinterGame dans le tchat du duel, si l'adresse la porte
 // (tchat-officiel.ts) : lue et retiree de l'adresse avant tout le reste.

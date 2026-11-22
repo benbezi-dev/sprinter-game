@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { usePiste, entrerSurLaPiste } from '@/game/piste';
 import { SprinterApp } from '@/game/engine';
 import { CourseRelais } from './CourseRelais';
@@ -12,8 +12,36 @@ import { CourseConfrontation } from './CourseConfrontation';
  * avec lui tout ce qu'il contient. Une course posee dans cet onglet perdrait sa
  * salle au moment precis ou elle commence.
  */
+/**
+ * LE LIEN D'INVITATION A UN SALON, `?relais=CODE` (envoye depuis la salle
+ * d'attente, CourseRelais). Lu une fois au chargement, retire de l'adresse,
+ * et le jeu entre dans le salon a la place retenue (la premiere libre si elle
+ * est prise).
+ */
+function salonDuLien(): string {
+  try {
+    const url = new URL(window.location.href);
+    const c = (url.searchParams.get('relais') || '').toUpperCase();
+    if (!c) return '';
+    url.searchParams.delete('relais');
+    window.history.replaceState(window.history.state, '', url.toString());
+    return /^[A-Z0-9]{4,10}$/.test(c) ? c : '';
+  } catch { return ''; }
+}
+
+function placeRetenue(): number {
+  try {
+    const v = Number(localStorage.getItem('sprinter.relais.solo.rang'));
+    return v >= 1 && v <= 4 ? v : 1;
+  } catch { return 1; }
+}
+
 export function PisteRelais() {
   const quoi = usePiste();
+  useEffect(() => {
+    const code = salonDuLien();
+    if (code) entrerSurLaPiste({ genre: 'relais_salon', code, rang: placeRetenue() });
+  }, []);
   // La distance de l'accueil au moment d'entrer sur la piste : le relais la
   // remplace par « 4x100 » au pistolet, et l'accueil la reprendrait telle
   // quelle — « 4 X 100 METRES — SIX ETAPES », sans parcours a montrer.
@@ -28,8 +56,10 @@ export function PisteRelais() {
   // moteur est encore a l'accueil et il n'y a rien a ramener.
   const sortir = () => {
     const G = SprinterApp.G;
-    if (G.liveOn && G.raceKey === '4x100') {
-      SprinterApp.goHome();
+    // Le moteur a pu revenir a l'accueil sans nous (pause, invitation…) : il
+    // y est deja, mais toujours sur le 4 x 100, qu'il faut lui retirer.
+    if (G.raceKey === '4x100') {
+      if (G.state !== 'title') SprinterApp.goHome();
       const k = avant.current && avant.current !== '4x100'
         && SprinterApp.RACES[avant.current] ? avant.current : '100';
       G.raceKey = k;
