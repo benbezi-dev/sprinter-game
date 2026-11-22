@@ -15,7 +15,7 @@
 // de la socket, une course enregistree et quatre joueurs connectes se
 // ressemblent au point de ne pas avoir a etre distingues.
 
-import { getSavedName } from './leaderboard';
+import { getSavedName, getDeviceId } from './leaderboard';
 import { avecAcces, codeAcces, EST_TEST } from './canal';
 import { Liaison } from './liaison';
 import { LEG, TAILLE, ARRIVEE, type Zone, type JoueurRelais } from './salle-relais';
@@ -125,6 +125,7 @@ export class SalleConfrontation {
     if (EST_TEST && !codeAcces()) { this.ec.onFerme?.('acces'); return; }
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
+      device: getDeviceId(),
       team: this.equipe,
       max: String(Math.max(MIN_EQUIPES, Math.min(MAX_EQUIPES, max))),
     });

@@ -492,6 +492,9 @@ export class Salle {
     this.coupee = false;
     const q = new URLSearchParams({
       name: getSavedName() || 'Anonyme',
+      // La preuve du nom, comme au championnat. A envoyer avant que le serveur
+      // ne l'exige : les applis installees ne se mettent pas a jour seules.
+      device: getDeviceId(),
       races: epreuves.join(','),
       level: String(niveau),
       // Seul le premier arrive fixe la taille ; pour les autres le serveur
