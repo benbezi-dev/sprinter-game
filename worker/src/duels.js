@@ -311,6 +311,7 @@ export async function duelBoard(db, epreuve = DISCIPLINE_DEFAUT) {
     `SELECT name, mmr, lp, palier, wins, losses, draws, launched, received,
             last_delta, serie, serie_max, serie_at
        FROM duel_players WHERE epreuve = ? AND wins + losses + draws > 0
+        AND name_key <> 'anonyme'
       ORDER BY ${ordreClassement()} LIMIT 500`
   ).bind(ep).all();
   // Le mouvement n'est pas calcule ici : un rang fige cote serveur ne survit
@@ -336,6 +337,26 @@ export async function duelBoard(db, epreuve = DISCIPLINE_DEFAUT) {
       serie_fin: serie > 0 && serie_at ? serie_at + SERIE_REPOS_MS : undefined,
     };
   });
+}
+
+/** Ma ligne, meme au-dela des 500 que rend `duelBoard`. Meme ordre, meme forme. */
+export async function maLigne(db, key, epreuve) {
+  const r = await db.prepare(
+    `SELECT * FROM (
+       SELECT name_key, name, lp, palier, wins, losses, draws, launched, received,
+              last_delta, serie, serie_max, serie_at,
+              ROW_NUMBER() OVER (ORDER BY ${ordreClassement()}) AS rank
+         FROM duel_players
+        WHERE epreuve = ? AND wins + losses + draws > 0 AND name_key <> 'anonyme'
+     ) WHERE name_key = ?`
+  ).bind(epreuve, key).first();
+  if (!r) return null;
+  const { name_key, serie_at, ...ligne } = r;
+  const serie = serieVivante(r.serie, serie_at);
+  return {
+    ...ligne, serie, epreuve, ...rangDe(r.palier),
+    serie_fin: serie > 0 && serie_at ? serie_at + SERIE_REPOS_MS : undefined,
+  };
 }
 
 /**
@@ -390,10 +411,10 @@ export async function appliquerDuel(db, r) {
   const deja = await db.prepare(
     `SELECT outcome FROM duel_results WHERE challenge_id = ? AND opponent_key = ?`
   ).bind(r.id, moiKey).first();
-  if (deja) return { issue: deja.outcome, deja: true };
-
   const issue = r.opponentMs < r.challengerMs ? 'opponent'
               : r.opponentMs > r.challengerMs ? 'challenger' : 'draw';
+  // Tous les sans-nom partagent une cle : le verdict de l'un n'est pas celui de l'autre.
+  if (deja) return { issue: moiKey === 'anonyme' ? issue : deja.outcome, deja: true };
 
   await db.prepare(
     `INSERT INTO duel_results (challenge_id, opponent_key, opponent_name,
@@ -402,6 +423,9 @@ export async function appliquerDuel(db, r) {
   ).bind(r.id, moiKey, r.opponentName, luiKey,
          r.challengerMs, r.opponentMs, issue, ep, Date.now()).run();
 
+  // Un sans-nom a droit a son verdict, et le lanceur a son annonce ; mais
+  // personne ne se classe sur lui, comme en direct (estAnonyme, salle.js).
+  if (luiKey === 'anonyme' || moiKey === 'anonyme') return { issue, epreuve: ep };
   await touchDuelPlayer(db, luiKey, r.challengerName, ep);
   await touchDuelPlayer(db, moiKey, r.opponentName, ep);
 
@@ -769,6 +793,7 @@ export async function recalculerClassement(db) {
         `UPDATE duel_results SET epreuve = ?
           WHERE challenge_id = ? AND opponent_key = ?`).bind(ep, d.id, d.moi));
     }
+    if (d.lui === 'anonyme' || d.moi === 'anonyme') continue;
 
     const lanceur = etat(d.lui, ep), releveur = etat(d.moi, ep);
     const apres = appliquerDuelAuClassement({

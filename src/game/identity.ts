@@ -7,6 +7,7 @@
 
 import { getDeviceId, getSavedName, NOM_CHANGE } from './leaderboard';
 import { nettoyerInsta } from './insta';
+import { adressePublique } from './canal';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const CODE_KEY = 'sprinter_recovery_code';
@@ -263,7 +264,7 @@ export async function ouvrirTransfert(nom: string): Promise<TransfertOuvert | nu
 
 /** L'adresse a viser, celle que porte le QR code. */
 export function lienDeLiaison(jeton: string): string {
-  return `${window.location.origin}${window.location.pathname}#lier=${jeton}`;
+  return `${adressePublique()}#lier=${jeton}`;
 }
 
 /** Un jeton present dans l'adresse au chargement, s'il y en a un. */

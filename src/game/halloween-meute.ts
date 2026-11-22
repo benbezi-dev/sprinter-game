@@ -31,6 +31,7 @@ import { armerLaNuit, rangerLaNuit, nuitEnCours, nuitDe, etapeDuCimetiere } from
 import { COURSES } from './halloween-courses.js';
 import { cameraDe } from './halloween-cameras.js';
 import { prechargerLaNuit } from './chargement';
+import { adressePublique } from './canal';
 
 /** Les cinq traces de la nuit — les seuls qu'une salle de meute court. */
 const TRACES_DE_LA_NUIT = Object.keys(COURSES);
@@ -310,7 +311,7 @@ export function demandeEnAttente(): string { return demande; }
 
 /** Le lien a envoyer : le jeu, avec `?meute=CODE`. */
 export function lienDeLaMeute(code: string): string {
-  const u = new URL(window.location.href);
+  const u = new URL(adressePublique());
   u.search = `?meute=${encodeURIComponent(code)}`;
   u.hash = '';
   return u.toString();

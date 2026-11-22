@@ -670,3 +670,14 @@ export function relais2D(): boolean {
 export function poserRelais2D(oui: boolean): void {
   try { localStorage.setItem(CLE_RELAIS_2D, oui ? '2d' : '3d'); } catch { /* sans memoire : 3D */ }
 }
+
+/**
+ * L'adresse a partager. Dans l'application des magasins la page vit a
+ * `localhost` : un lien fabrique sur `window.location` y est mort chez l'ami.
+ */
+export function adressePublique(
+  ici: string = window.location.origin + window.location.pathname,
+): string {
+  if (!EST_ENVELOPPE && !EST_NATIF) return ici;
+  return 'https://sprinter-game.com/' + (EST_TEST ? 'test/' : '');
+}

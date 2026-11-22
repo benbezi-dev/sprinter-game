@@ -10,12 +10,16 @@ const A = 'appareilhote00000001', V = 'appareilinvite000001';
 assert.equal((await post('/claim', { device_id: A, name: 'Hote' })).status, 200);
 assert.equal((await post('/claim', { device_id: V, name: 'Invite' })).status, 200);
 const inv = () => post('/direct/inviter', { device_id: A, nom: 'Hote', cibles: ['Invite'], code: 'ABCD12', epreuve: '100' });
+// Une invitation n'est rendue que si quelqu'un attend dans la salle.
+const hote = new WebSocket(`${B.replace('http', 'ws')}/live/ABCD12?name=Hote&races=100&max=2`);
+await new Promise((ok, ko) => { hote.onopen = ok; hote.onerror = ko; });
 const r1 = await (await inv()).json();
 const r2 = await (await inv()).json();
 assert.deepEqual(r1.invites, ['Invite']); assert.deepEqual(r2.invites, ['Invite']);
 const l = await (await get(`/direct/invitations?device_id=${V}`)).json();
 assert.equal(l.invitations.length, 1, 'une seule carte pour la meme salle');
 console.log('✓ invitation renvoyee = une seule carte');
+hote.close();
 
 // 4. codes du canal de test
 let derniers = [];

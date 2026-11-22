@@ -1,6 +1,6 @@
 import { PANNEAUX, panneauxDuMoment, noterVue, bilanPanneau } from './panneaux.js';
 import {
-  recalculerClassement, ETAGES, DIVISIONS, LEGENDE, LP_PAR_PALIER, LP, rangDe,
+  recalculerClassement, maLigne, ETAGES, DIVISIONS, LEGENDE, LP_PAR_PALIER, LP, rangDe,
   ensureDuelTables, duelBoard, appliquerDuel, compterLance,
   mesDisciplines, disciplineValide, DISCIPLINES_SIMPLES,
 } from './duels.js';
@@ -634,39 +634,55 @@ async function ensureChallengeLance(db) {
 async function cibleDeLaRevanche(db, { duelRef, deviceId, nom, tMs }) {
   const ref = String(duelRef || '').toUpperCase();
   if (!/^[A-Z0-9]{4,10}$/.test(ref)) return null;
+  const p = await rencontrePerdue(db, ref, deviceId, cleanName(nom).trim().toLowerCase());
+  if (!p || !(tMs < p.ms) || !p.device || p.device === deviceId) return null;
+  return { device: p.device, nom: p.nom };
+}
+
+/**
+ * La rencontre que CE joueur a perdue sur ce defi, et qui l'y a battu. Un defi
+ * a plusieurs releveurs : on part de qui demande, jamais de la premiere ligne.
+ * Le lanceur battu retrouve le meilleur de ceux qui l'ont battu.
+ *
+ * Partagee par le fantome et par la revanche : ils doivent designer la meme
+ * personne et le meme chrono.
+ */
+async function rencontrePerdue(db, id, deviceId, nomKey) {
+  await ensureChallengeTables(db);
   await ensureDuelTables(db);
+  const c = await db.prepare(
+    `SELECT owner_device, owner_name, races, level_idx, splits, traces
+       FROM challenges WHERE id = ?`).bind(id).first();
+  if (!c) return null;
+  // « anonyme » ne designe personne : seul l'appareil fait foi.
+  const nom = nomKey === 'anonyme' ? '' : nomKey;
+  const cle = n => String(n || '').trim().toLowerCase();
+  const { races, level_idx } = c;
+
+  if ((!!deviceId && c.owner_device === deviceId) || (!!nom && cle(c.owner_name) === nom)) {
+    const d = await db.prepare(
+      `SELECT opponent_key, opponent_name, opponent_ms FROM duel_results
+        WHERE challenge_id = ? AND outcome = 'opponent'
+        ORDER BY opponent_ms ASC LIMIT 1`).bind(id).first();
+    if (!d) return null;
+    const { results } = await db.prepare(
+      `SELECT device_id, name, splits, traces FROM challenge_attempts
+        WHERE id = ? ORDER BY total_ms ASC`).bind(id).all();
+    const lui = (results || []).find(t => cle(t.name) === d.opponent_key);
+    return { races, level_idx, device: lui?.device_id, nom: d.opponent_name || '',
+             ms: d.opponent_ms, splits: lui?.splits, traces: lui?.traces };
+  }
+
+  const mienne = deviceId ? await db.prepare(
+    `SELECT name FROM challenge_attempts WHERE id = ? AND device_id = ?`
+  ).bind(id, deviceId).first() : null;
   const d = await db.prepare(
-    `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
-            c.owner_device, c.owner_name
-       FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
-      WHERE r.challenge_id = ?`
-  ).bind(ref).first();
-  if (!d || d.outcome === 'draw') return null;
-
-  // L'appareil de celui qui a releve : la rencontre ne garde que son nom, sa
-  // tentative garde son appareil.
-  const rep = await db.prepare(
-    `SELECT device_id, name FROM challenge_attempts
-      WHERE id = ? ORDER BY total_ms ASC LIMIT 1`
-  ).bind(ref).first();
-
-  const moiCle = cleanName(nom).trim().toLowerCase();
-  const suisLanceur = d.owner_device === deviceId ||
-    (!!moiCle && String(d.owner_name || '').trim().toLowerCase() === moiCle);
-  const suisReleveur = (!!rep && rep.device_id === deviceId) ||
-    (!!moiCle && String(d.opponent_key || '') === moiCle);
-  const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
-  const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
-  // Le chrono du vainqueur, celui qu'il fallait battre.
-  const aBattre = d.outcome === 'opponent' ? d.opponent_ms : d.challenger_ms;
-  if (!monRole || monRole !== perdant || !(tMs < aBattre)) return null;
-
-  const cible = suisLanceur ? (rep ? rep.device_id : null) : d.owner_device;
-  const cibleNom = suisLanceur
-    ? (d.opponent_name || (rep && rep.name) || '')
-    : (d.owner_name || '');
-  if (!cible || cible === deviceId) return null;
-  return { device: cible, nom: cibleNom };
+    `SELECT challenger_ms FROM duel_results
+      WHERE challenge_id = ? AND outcome = 'challenger' AND opponent_key IN (?, ?)`
+  ).bind(id, nom, cle(mienne?.name)).first();
+  if (!d) return null;
+  return { races, level_idx, device: c.owner_device, nom: c.owner_name || '',
+           ms: d.challenger_ms, splits: c.splits, traces: c.traces };
 }
 
 // Historique des courses. Indexe sur le nom autant que sur l'appareil : c'est
@@ -3042,7 +3058,22 @@ async function servir(request, env, ctx, porteur) {
       if (sous === 'invitations' && request.method === 'GET') {
         const deviceId = url.searchParams.get('device_id');
         if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
-        return json({ invitations: await mesInvitationsDirectes(env.DB, deviceId) });
+        const toutes = await mesInvitationsDirectes(env.DB, deviceId);
+        if (!env.SALLES) return json({ invitations: toutes });
+        // On ne propose qu'une salle ou quelqu'un attend. `existe` n'y suffit
+        // pas : il reste vrai apres le depart du dernier joueur. Dans le doute
+        // (salle injoignable), l'invitation reste.
+        const ouvertes = await Promise.all(toutes.map(async inv => {
+          try {
+            const id = env.SALLES.idFromName(canal.test ? 'T-' + inv.code : inv.code);
+            const cible = `https://salle/etat?code=${encodeURIComponent(inv.code)}`
+              + (canal.test ? '&canal=test' : '');
+            const e = await (await env.SALLES.get(id).fetch(new Request(cible))).json();
+            return e.joueurs.length > 0 && !e.complete && !e.en_cours
+              && (!e.depart_a || !!e.termine);
+          } catch { return true; }
+        }));
+        return json({ invitations: toutes.filter((_, i) => ouvertes[i]) });
       }
 
       if (sous === 'trancher' && request.method === 'POST') {
@@ -3494,7 +3525,11 @@ async function servir(request, env, ctx, porteur) {
         if (m) r.medaille = m;
       }
 
-      const moi = nom ? board.find(r => r.name.trim().toLowerCase() === nom) || null : null;
+      let moi = nom ? board.find(r => r.name.trim().toLowerCase() === nom) || null : null;
+      if (!moi && nom) {
+        moi = await maLigne(env.DB, nom, epreuve);
+        if (moi) moi.pays = (await paysDe(env.DB, [nom])).get(nom) || null;
+      }
       // Mes divisions sur les AUTRES distances. L'accueil n'a la place que
       // d'un ecusson et doit bien dire duquel il parle ; l'ecran du classement
       // s'en sert pour montrer, sous le selecteur, ou en est le joueur sur ce
@@ -5631,53 +5666,23 @@ async function servir(request, env, ctx, porteur) {
       if (!/^[A-Z0-9]{4,10}$/.test(id)) return json({ error: 'code invalide' }, 400);
       if (!isValidDeviceId(deviceId) && !nom) return json({ found: false });
       if (nom && !(await peutUtiliser(env.DB, nom, deviceId))) nom = '';
-      await ensureChallengeTables(env.DB);
-      await ensureDuelTables(env.DB);
-
-      const d = await env.DB.prepare(
-        `SELECT r.outcome, r.challenger_ms, r.opponent_ms, r.opponent_key, r.opponent_name,
-                c.owner_device, c.owner_name, c.races, c.level_idx, c.splits, c.traces
-           FROM duel_results r JOIN challenges c ON c.id = r.challenge_id
-          WHERE r.challenge_id = ?`
-      ).bind(id).first();
-      if (!d || d.outcome === 'draw') return json({ found: false });
-
-      // L'appareil de celui qui a releve : la rencontre ne garde que son nom,
-      // sa tentative garde son appareil et sa trace.
-      const rep = await env.DB.prepare(
-        `SELECT device_id, name, splits, traces FROM challenge_attempts
-          WHERE id = ? ORDER BY total_ms ASC LIMIT 1`
-      ).bind(id).first();
-
-      const suisLanceur = (!!deviceId && d.owner_device === deviceId) ||
-        (!!nom && String(d.owner_name || '').trim().toLowerCase() === nom);
-      const suisReleveur = (!!rep && !!deviceId && rep.device_id === deviceId) ||
-        (!!nom && String(d.opponent_key || '') === nom);
-      const monRole = suisLanceur ? 'challenger' : suisReleveur ? 'opponent' : null;
-      const perdant = d.outcome === 'opponent' ? 'challenger' : 'opponent';
-      if (!monRole || monRole !== perdant) return json({ found: false });
-
-      // Le fantome est celui du vainqueur : la course du lanceur si c'est lui
-      // qui l'emporte, la tentative du repondant sinon.
-      const lanceurGagne = d.outcome === 'challenger';
-      const brut = lanceurGagne ? d.traces : (rep ? rep.traces : null);
-      const bruts = lanceurGagne ? d.splits : (rep ? rep.splits : null);
+      const p = await rencontrePerdue(env.DB, id, deviceId, nom);
+      if (!p) return json({ found: false });
       let epreuves = [];
-      try { epreuves = JSON.parse(d.races || '[]') || []; } catch { /* illisible */ }
+      try { epreuves = JSON.parse(p.races || '[]') || []; } catch { /* illisible */ }
       let traces = [], splits = [];
-      try { traces = cleanTraces(JSON.parse(brut || '[]'), epreuves.length) || []; }
+      try { traces = cleanTraces(JSON.parse(p.traces || '[]'), epreuves.length) || []; }
       catch { traces = []; }
-      try { splits = (JSON.parse(bruts || '[]') || []).map(v => Math.max(0, Math.round(Number(v)) || 0)); }
+      try { splits = (JSON.parse(p.splits || '[]') || []).map(v => Math.max(0, Math.round(Number(v)) || 0)); }
       catch { splits = []; }
 
       return json({
         found: true,
         id,
-        name: lanceurGagne ? (d.owner_name || '')
-                           : (d.opponent_name || (rep && rep.name) || ''),
-        total_ms: lanceurGagne ? d.challenger_ms : d.opponent_ms,
+        name: p.nom,
+        total_ms: p.ms,
         races: epreuves,
-        level_idx: d.level_idx,
+        level_idx: p.level_idx,
         splits,
         traces,
       });

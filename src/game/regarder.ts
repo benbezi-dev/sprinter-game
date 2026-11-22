@@ -22,6 +22,7 @@ import {
 } from './championnats';
 import { rejouerCourse } from './champ-rejeu';
 import { SprinterApp } from './engine';
+import { adressePublique } from './canal';
 
 /** Ce que l'URL demande : une edition, et peut-etre une course precise. */
 export type Demande = { edition: string | null; course: string | null };
@@ -46,7 +47,7 @@ export function demandeDeLUrl(): Demande | null {
 
 /** Le lien a partager. `?regarder=` et non `/c/` : il repond 200, et porte l'apercu. */
 export function lienDeLEdition(id: string, course?: string | null): string {
-  const base = window.location.origin + (import.meta.env.BASE_URL || '/');
+  const base = adressePublique(window.location.origin + (import.meta.env.BASE_URL || '/'));
   return base + '?regarder=' + encodeURIComponent(id)
     + (course ? '&course=' + encodeURIComponent(course) : '');
 }

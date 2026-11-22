@@ -6,6 +6,7 @@ import type { DuelIssue } from './duels';
 import { getDeviceId, getSavedName, type RaceKey } from './leaderboard';
 import { EPREUVE } from './trace-affiche';
 import { EPREUVES_APERCU } from './epreuve-titre';
+import { adressePublique } from './canal';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 
@@ -258,19 +259,27 @@ export async function submitAttempt(input: {
   attempts: ChallengeAttempt[];
   duel: DuelIssue | null;
 }> {
-  const res = await fetch(`${API_BASE}/challenge/attempt`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+  const corps = JSON.stringify({
       id: normalizeCode(input.id),
       device_id: getDeviceId(),
       name: input.name || getSavedName() || 'Anonyme',
       total_ms: Math.round(input.totalMs),
       splits: input.splits.map(s => Math.round(s)),
       traces: input.traces || [],
-    }),
   });
-  if (!res.ok) throw new Error('attempt submit failed');
+  // La route est rejouable (le premier resultat fait foi) : on retente sur une
+  // panne de reseau ou de serveur, jamais sur un refus.
+  let res: Response | null = null;
+  for (const attente of [0, 1500, 4000]) {
+    if (attente) await new Promise(r => setTimeout(r, attente));
+    try {
+      res = await fetch(`${API_BASE}/challenge/attempt`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: corps,
+      });
+      if (res.ok || res.status < 500) break;
+    } catch { res = null; }
+  }
+  if (!res?.ok) throw new Error('attempt submit failed');
   return res.json();
 }
 
@@ -305,7 +314,7 @@ export async function submitAttempt(input: {
  * jamais faux.
  */
 export function challengeLink(id: string, races?: readonly string[]): string {
-  const base = window.location.origin + window.location.pathname;
+  const base = adressePublique();
   const seule = races && races.length === 1 ? races[0] : null;
   return seule && EPREUVES_APERCU.includes(seule)
     ? `${base}defi/${seule}/?defi=${id}`
