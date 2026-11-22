@@ -1286,8 +1286,8 @@ const TOURNURES = {
   midi: {
     fr: [
       o => `Ton record est de ${o.pb} s. Passe sous ${o.cible} s avant ce soir — ça compte pour le Classement des Objectifs.`,
-      o => `${o.cible} s. C'est ${o.ecart} s de ton record. Le temps d'une pause, pas plus.`,
-      o => `Tu es ${o.rang}e au ${o.epreuve}. Ton record dit ${o.pb} s, l'objectif dit ${o.cible} s. L'un des deux ment.`,
+      o => `${o.cible} s. C'est à ${o.ecart} s de ton record. Le temps d'une pause, pas plus.`,
+      o => `Tu es ${o.rang} au ${o.epreuve}. Ton record dit ${o.pb} s, l'objectif dit ${o.cible} s. L'un des deux ment.`,
       o => `Objectif : ${o.cible} s. Record : ${o.pb} s. Tu sais déjà que tu peux le faire — reste à le refaire.`,
       o => `${o.cible} s à passer. Tu as jusqu'à ce soir, et ça rapporte au Classement des Objectifs.`,
     ],
@@ -1302,15 +1302,15 @@ const TOURNURES = {
   soir: {
     fr: [
       o => `Dernière ligne droite : ${o.cible} s à battre, ton record est à ${o.pb} s. Ferme la journée proprement.`,
-      o => `${o.ecart} s séparent ton record de l'objectif du soir : ${o.cible} s. Cinq essais maximum, on se connaît.`,
-      o => `Record ${o.pb} s, cible ${o.cible} s. Les autres sont déjà dessus. Minuit, dernier délai.`,
+      o => `Il y a ${o.ecart} s entre ton record et l'objectif du soir : ${o.cible} s. Autant d'essais que tu veux, on se connaît.`,
+      o => `Record ${o.pb} s, cible ${o.cible} s. Tu as jusqu'à 2 h du matin, dernier délai.`,
       o => `On te demande ${o.cible} s. Tu as déjà fait ${o.pb} s. Techniquement, c'est réglé.`,
-      o => `${o.rang}e au ${o.epreuve}, record ${o.pb} s. Alors ${o.cible} s ne devrait pas te faire peur.`,
+      o => `${o.rang} au ${o.epreuve}, record ${o.pb} s. Alors ${o.cible} s ne devrait pas te faire peur.`,
     ],
     en: [
       o => `Last chance: ${o.cible} s to beat, your best is ${o.pb} s. Close the day properly.`,
-      o => `${o.ecart} s between your best and tonight's target: ${o.cible} s. Five tries tops, we know you.`,
-      o => `Best ${o.pb} s, target ${o.cible} s. The others are already on it. Midnight, last call.`,
+      o => `${o.ecart} s between your best and tonight's target: ${o.cible} s. As many tries as you want, we know you.`,
+      o => `Best ${o.pb} s, target ${o.cible} s. You have until 2 a.m., last call.`,
       o => `We are asking for ${o.cible} s. You have already run ${o.pb} s. Technically, it is settled.`,
       o => `${o.rang} in the ${o.epreuve}, best ${o.pb} s. So ${o.cible} s should not scare you.`,
     ],
@@ -1354,7 +1354,7 @@ const SUITE = {
   // Joue, mais pas valide.
   tente: {
     fr: [
-      o => `Ce midi il te manquait ${o.manque} s. Deuxième chance : ${o.cible} s.`,
+      o => `Ce midi, il te manquait ${o.manque} s. Deuxième chance : ${o.cible} s.`,
       o => `Tu y étais presque. ${o.cible} s, et cette fois tu sais où ça coince.`,
     ],
     en: [
@@ -1365,12 +1365,12 @@ const SUITE = {
   // Deja valide.
   valide: {
     fr: [
-      o => `Midi est plié. Défends ta place : ${o.cible} s pour le second.`,
-      o => `Un de fait. Le soir compte double dans une série — ${o.cible} s.`,
+      o => `Midi est plié. Ce soir au ${o.epreuve}, défends ta place : ${o.cible} s.`,
+      o => `Objectif de midi validé au ${o.epreuve}. Celui du soir t'attend : ${o.cible} s.`,
     ],
     en: [
-      o => `Midday is done. Defend your spot: ${o.cible} s for the second.`,
-      o => `One down. Evenings are what keep a streak alive — ${o.cible} s.`,
+      o => `Midday is done. Tonight in the ${o.epreuve}, defend your spot: ${o.cible} s.`,
+      o => `Midday objective cleared in the ${o.epreuve}. The evening one is waiting: ${o.cible} s.`,
     ],
   },
 };
@@ -1416,7 +1416,7 @@ const NOMS_DES_JEUX = { sprinter: 'Sprinter', hurdlers: 'Hurdlers' };
  * Classe partout, un joueur a cinq autres defis : les nommer un a un ferait de
  * la fin de la notification une liste plus longue que la notification. Ceux du
  * jeu de tete se nomment, parce qu'ils sont sur le meme accueil ; ceux de
- * l'autre jeu tiennent en trois mots — « et Hurdlers a les siens » — qui disent
+ * l'autre jeu tiennent en quelques mots — « et Hurdlers a ses objectifs » — qui disent
  * ou aller les chercher.
  *
  * Sans `tete`, rien ne dit quel est le jeu de tete : tout se nomme, comme
@@ -1446,16 +1446,34 @@ function phraseDesAutres(autres, l, tete) {
     const plusieurs = ailleurs.length > 1;
     if (phrase) {
       phrase += l === 'en'
-        ? `, and ${jeux} ${plusieurs ? 'have their' : 'has its'} own`
-        : `, et ${jeux} ${plusieurs ? 'ont les leurs' : 'a les siens'}`;
+        ? `, and ${jeux} ${plusieurs ? 'have their' : 'has its'} own objectives`
+        : `, et ${jeux} ${plusieurs ? 'ont leurs objectifs' : 'a ses objectifs'}`;
     } else {
       phrase = l === 'en'
-        ? `${jeux} ${plusieurs ? 'have their' : 'has its'} own too`
-        : `${jeux} ${plusieurs ? 'ont aussi les leurs' : 'a aussi les siens'}`;
+        ? `${jeux} ${plusieurs ? 'have their' : 'has its'} own objectives too`
+        : `${jeux} ${plusieurs ? 'ont aussi leurs objectifs' : 'a aussi ses objectifs'}`;
     }
   }
   if (!phrase) return '';
   return ' ' + phrase.charAt(0).toUpperCase() + phrase.slice(1) + '.';
+}
+
+/** « 1er », « 3e » ; « 1st », « 23rd ». */
+function ordinal(n, l) {
+  if (!n) return '';
+  if (l !== 'en') return n + (Number(n) === 1 ? 'er' : 'e');
+  const suffixe = { one: 'st', two: 'nd', few: 'rd', other: 'th' };
+  return n + suffixe[new Intl.PluralRules('en', { type: 'ordinal' }).select(n)];
+}
+
+/**
+ * La virgule decimale en francais, et des insecables : une notification va a
+ * la ligne ou elle veut, « 400 » puis « m » s'est lu sur un telephone.
+ */
+function typographie(texte, l) {
+  const t = l === 'en' ? texte
+    : texte.replace(/(\d)\.(\d)/g, '$1,$2').replace(/ :/g, '\u00a0:');
+  return t.replace(/(\d) ([smh])(?!\p{L})/gu, '$1\u00a0$2');
 }
 
 /**
@@ -1472,7 +1490,7 @@ export function texteObjectif(objectif, rang, langue,
   const creneau = objectif.creneau === 'soir' ? 'soir' : 'midi';
   const encore = phraseDesAutres(autres, l, objectif.race_key || EPREUVE);
   if (!avecChrono) {
-    return { titre: TITRES[creneau][l], corps: DISCRET[creneau][l] + encore,
+    return { titre: TITRES[creneau][l], corps: typographie(DISCRET[creneau][l] + encore, l),
              variante: null, contexte: 'discret' };
   }
 
@@ -1488,7 +1506,7 @@ export function texteObjectif(objectif, rang, langue,
     ecart: ((objectif.cible_ms - objectif.pb_ms) / 1000).toFixed(2),
     manque: midi && midi.meilleurMs
       ? ((midi.meilleurMs - midi.cibleMs) / 1000).toFixed(2) : '',
-    rang: rang || '',
+    rang: ordinal(rang, l),
   };
 
   // Le soir, quand on sait ce qu'a donne midi, on parle de CA.
@@ -1500,7 +1518,7 @@ export function texteObjectif(objectif, rang, langue,
   // sous les yeux du joueur n'est la parole de personne.
   const clef = `${objectif.name_key}:${objectif.jour}:${creneau}`;
   const variante = indice(clef, jeu.length);
-  return { titre: TITRES[creneau][l], corps: jeu[variante](vue) + encore,
+  return { titre: TITRES[creneau][l], corps: typographie(jeu[variante](vue) + encore, l),
            variante, contexte };
 }
 
@@ -1546,6 +1564,11 @@ const NOMS_PALIER = {
  */
 export function texteResultat(res, langue) {
   const l = langue === 'en' ? 'en' : 'fr';
+  const { titre, corps } = phraseResultat(res, l);
+  return { titre, corps: typographie(corps, l) };
+}
+
+function phraseResultat(res, l) {
   const t = s2(res.tempsMs), c = s2(res.cibleMs);
   const palier = res.palier ? NOMS_PALIER[res.palier][l] : null;
 
