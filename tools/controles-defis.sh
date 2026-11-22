@@ -12,7 +12,8 @@ TESTS=(direct-couloirs-test direct-huit-test direct-presentation-test
   relais-defis-test relais-salle-test relais-vestiaire-test mot-direct-test
   mot-test boite-test classement-integration-test duels-disciplines-test
   serie-test reponse-perdant-test correctifs-21-10-test haies-serveur-test
-  correctifs-serveur-22-11-test moderation-championnat-test)
+  correctifs-serveur-22-11-test
+  direct-appareil-test moderation-championnat-test)
 # shortcut: present seulement s'il existe, le rendre fixe une fois la PR 143 fusionnee.
 [ -f tools/audit-duels-21-11-test.mjs ] && TESTS+=(audit-duels-21-11-test)
 [ $# -gt 0 ] && TESTS=("$@")
@@ -27,20 +28,29 @@ arreter() { [ -n "$serveur" ] && kill "$serveur" 2>/dev/null && wait "$serveur" 
 trap 'arreter; rm -rf "$ETAT"' EXIT
 repond() { curl -s -o /dev/null -m 2 "$URL/presence"; }
 
+# Chacun son tour : deux lanceurs sur le port se donnent de faux rouges. Le verrou est
+# commun a tous les arbres et tombe seul quand le lanceur meurt (`flock` manque sur macOS).
+VERROU=/tmp/sprinter-controles-defis.verrou
+[ -e "$VERROU" ] || : >> "$VERROU"
+exec 9< "$VERROU" || exit 1
+if ! perl -MFcntl=:flock -e 'open(F, "<&=9") && flock(F, LOCK_EX|LOCK_NB) or exit 1'; then
+  echo "Un autre lanceur tourne : j'attends mon tour."
+  perl -MFcntl=:flock -e 'open(F, "<&=9") && flock(F, LOCK_EX) or exit 1' || exit 1
+fi
 if repond; then echo "Le port 8788 est deja pris : rien n'a ete lance."; exit 1; fi
 
 rates=0
 for t in "${TESTS[@]}"; do
   journal="$ETAT/$t.log"
   (cd worker && exec ./node_modules/.bin/wrangler dev --local --port 8788 --ip 127.0.0.1 \
-    --persist-to "$ETAT/$t" --var "ADMIN_CLE:$CLE") > "$journal.serveur" 2>&1 &
+    --persist-to "$ETAT/$t" --var "ADMIN_CLE:$CLE") > "$journal.serveur" 2>&1 9<&- &
   serveur=$!
   for _ in $(seq 1 120); do repond && break; sleep .5; done
 
   if curl -fsS -m 30 -o /dev/null -X POST "$URL/test/admin/creer" -H "X-Sprinter-Admin: $CLE" \
     -H 'Content-Type: application/json' -d '{"nom":"harnais","code":"ECRAN1"}' 2> "$journal"; then
     ADMIN_CLE=$CLE BASE=$URL ACCES=ECRAN1 perl -e 'alarm 220; exec @ARGV or die' \
-      node "tools/$t.mjs" > "$journal" 2>&1
+      node "tools/$t.mjs" > "$journal" 2>&1 9<&-
     code=$?
   else
     code=1
