@@ -107,6 +107,7 @@ import {
 } from './comptage.js';
 import {
   signaler as signalerMot, bloquer, debloquer, listeBloques, estBanni,
+  signalerAuChampionnat, estContenuDeChampionnat,
   nombreEnAttente, listeSignalements, trancher, cleDe, MOTIFS,
 } from './moderation.js';
 
@@ -4068,12 +4069,23 @@ async function servir(request, env, ctx, porteur) {
     if (url.pathname.startsWith('/moderation/')) {
       const sous = url.pathname.slice('/moderation/'.length);
 
-      // Signaler un mot. Reserve a celui a qui il etait adresse — la
-      // verification vit dans `signalerMot()`, avec la raison qui l'impose.
+      // Signaler un mot. Celui d'un duel est reserve a celui a qui il etait
+      // adresse (voir `signalerMot()`) ; ceux du championnat sont publics.
       if (sous === 'signaler' && request.method === 'POST') {
         let body;
         try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
         const { duel, device_id, name, motif } = body || {};
+        if (estContenuDeChampionnat(duel)) {
+          if (!championnatsOuverts(canal)) return json({ error: 'championnats reserves au canal de test' }, 403);
+          if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+          // Un nom libre n'est a personne : il ne signe pas un signalement.
+          const cle = cleanName(name).trim().toLowerCase();
+          const r = await signalerAuChampionnat(env.DB, {
+            contenu: duel, deviceId: device_id, motif,
+            cle: (await nomReserveIci(env.DB, cle, device_id)) ? cle : '',
+          });
+          return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        }
         if (!await peutUtiliser(env.DB, String(name || '').trim().toLowerCase(), String(device_id || ''))) {
           return json({ error: 'nom reserve', pris: true }, 403);
         }

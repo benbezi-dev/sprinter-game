@@ -12,7 +12,7 @@ TESTS=(direct-couloirs-test direct-huit-test direct-presentation-test
   relais-defis-test relais-salle-test relais-vestiaire-test mot-direct-test
   mot-test boite-test classement-integration-test duels-disciplines-test
   serie-test reponse-perdant-test correctifs-21-10-test haies-serveur-test
-  correctifs-serveur-22-11-test)
+  correctifs-serveur-22-11-test moderation-championnat-test)
 # shortcut: present seulement s'il existe, le rendre fixe une fois la PR 143 fusionnee.
 [ -f tools/audit-duels-21-11-test.mjs ] && TESTS+=(audit-duels-21-11-test)
 [ $# -gt 0 ] && TESTS=("$@")

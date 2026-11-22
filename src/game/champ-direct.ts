@@ -57,6 +57,8 @@ export type EtatChampDirect = {
   reconnexion: boolean;
   /** Le coureur que la camera suit, en spectateur. */
   suivi: string | null;
+  /** La presentation recue, bulles comprises : la salle l'oublie au rappel. */
+  presentes: Presentation['ordre'];
   /** Le mot du vainqueur, relaye par la salle. */
   mot: MotDirect | null;
   /** Ma bulle de presentation, telle que le serveur l'a acceptee. */
@@ -70,6 +72,7 @@ const VIDE: EtatChampDirect = {
   ouvert: false, etape: 'connexion', role: 'coureur', moi: '', salle: null,
   rappel: null, sorti: false, resultat: null, enregistre: null, erreur: null, reconnexion: false,
   suivi: null,
+  presentes: [],
   mot: null, bulle: null, bulleEtat: 'rien', bulleRefus: null,
 };
 
@@ -193,7 +196,7 @@ function ecouteurs() {
       if (presEnCours) return;
       if (etat.etape === 'echauffement') finirEchauffement();
       presEnCours = true;
-      publier({ etape: 'presentation' });
+      publier({ etape: 'presentation', presentes: p.ordre });
       presentationAnnoncee(p.dansMs, p.ordre.length);
       monterLaPiste();
       lancerPresentation({

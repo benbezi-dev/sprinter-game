@@ -29,6 +29,7 @@
 --------------------------------------------------------------------------- */
 
 import { idDeDuel } from './mot.js';
+import { ensureChampTables, moderer } from './championnats.js';
 
 /** Les motifs proposes. Une liste fermee : un champ libre serait lui-meme un
  *  contenu a moderer, et personne ne lit deux fois le meme probleme. */
@@ -155,6 +156,57 @@ export async function signaler(db, { duel, deviceId, cle, motif }) {
   return { ok: true, auteur };
 }
 
+/** Un signalement de championnat se reconnait a son prefixe, comme celui du tchat. */
+export const estContenuDeChampionnat = (duel) => /^champ-(bulle|mot):/.test(String(duel || ''));
+
+// Le jeu envoie `champ-<quoi>:<edition>:<phase>:<cible>`. La file y ajoute `au` :
+// un contenu repose est un autre contenu, qui se signale et se retire a part.
+const CONTENU_VU = /^champ-(bulle|mot):([A-Z0-9]{4,12}):([a-z]{3,20}):(.{1,40})$/;
+const CONTENU_SIGNALE = /^champ-(bulle|mot):([A-Z0-9]{4,12}):([a-z]{3,20}):(\d+):(.{1,40})$/;
+
+// shortcut: cinq signalements en attente par contenu, a revoir si la file doit compter les plaignants.
+const EN_ATTENTE_PAR_CONTENU = 5;
+
+/**
+ * Signale une bulle ou un mot de championnat.
+ *
+ * Ils sont publics : tout lecteur peut signaler, sans pseudo. `cle` n'est donc
+ * transmise que pour un nom reserve par cet appareil ; sinon on note l'appareil.
+ */
+export async function signalerAuChampionnat(db, { contenu, deviceId, cle, motif }) {
+  const vu = CONTENU_VU.exec(String(contenu || ''));
+  if (!vu) return { erreur: 'contenu invalide' };
+  await ensureModerationTables(db);
+  await ensureChampTables(db);
+  const [, quoi, edition, phase, cible] = vu;
+
+  const r = quoi === 'bulle'
+    ? await db.prepare(
+      `SELECT name_key, texte, au FROM champ_bulles
+        WHERE edition = ? AND phase = ? AND name_key = ? AND retire = 0`
+    ).bind(edition, phase, cible).first()
+    : await db.prepare(
+      `SELECT name_key, texte, voix, voix_type, au FROM champ_mots
+        WHERE edition = ? AND phase = ? AND course = ?`
+    ).bind(edition, phase, Number(cible)).first();
+  if (!r) return { erreur: 'contenu introuvable' };
+
+  const moi = cleDe(cle);
+  if (moi && moi === r.name_key) return { erreur: 'rien a signaler' };
+  const signalePar = moi || ('appareil:' + String(deviceId).slice(0, 32));
+  const id = `champ-${quoi}:${edition}:${phase}:${r.au}:${cible}`;
+
+  await db.prepare(
+    `INSERT OR IGNORE INTO signalements
+       (duel, auteur_cle, signale_par, motif, mot, voix, voix_type, cree_le)
+     SELECT ?, ?, ?, ?, ?, ?, ?, ?
+      WHERE (SELECT COUNT(*) FROM signalements WHERE duel = ? AND tranche_le IS NULL) < ?`
+  ).bind(id, r.name_key, signalePar, motifPropre(motif),
+         r.texte || null, r.voix || null, r.voix_type || null, Date.now(),
+         id, EN_ATTENTE_PAR_CONTENU).run();
+  return { ok: true };
+}
+
 /**
  * Bloquer quelqu'un, ou le debloquer.
  *
@@ -234,6 +286,7 @@ export async function listeSignalements(db, { tout } = {}) {
  * Trancher un signalement.
  *
  * `retire` efface le mot de la rencontre : le destinataire ne le reverra pas.
+ * Au championnat, il fait ce que fait `/champ/moderer`.
  * `garde` classe sans suite. `bannir` va plus loin et ferme le depot de mots a
  * l'auteur — c'est une sanction sur la personne, pas sur un message, et elle
  * se decide donc separement du verdict.
@@ -255,6 +308,12 @@ export async function trancher(db, { id, verdict, bannir, raison }) {
     // disparait du tchat, la copie reste ici
     await db.prepare(`UPDATE marques_tchat SET retire = 1 WHERE id = ?`)
       .bind(Number(String(s.duel).slice('tchat-marques:'.length))).run();
+  } else if (v === 'retire' && estContenuDeChampionnat(s.duel)) {
+    const c = CONTENU_SIGNALE.exec(s.duel);
+    if (!c) return { erreur: 'signalement illisible' };
+    const [, quoi, edition, phase, au, cible] = c;
+    // « Introuvable » n'empeche pas de trancher : le contenu est deja retire.
+    await moderer(db, { quoi, edition, phase, au: Number(au), name: cible, course: cible });
   } else if (v === 'retire') {
     await db.prepare(
       `UPDATE duel_results SET mot = NULL, voix = NULL, voix_type = NULL
