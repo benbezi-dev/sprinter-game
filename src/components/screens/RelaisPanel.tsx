@@ -219,6 +219,16 @@ function lireRangSolo(): number {
   } catch { return 1; }
 }
 
+/**
+ * AVEC L'ORDINATEUR : A DEUX, OU SEUL (22/11/2026 : « le relais doit pouvoir se
+ * jouer a deux et le reste des personnes sont des ordinateurs, les joueurs
+ * doivent pouvoir choisir leurs positions »).
+ *
+ * La place se choisit une fois, en haut, et vaut pour les deux facons de
+ * courir. A DEUX passe en premier : c'est un salon (worker/src/salle-relais.js)
+ * ouvert par un code qu'on envoie a l'ami ; chacun y prend sa place, et
+ * l'ordinateur court celles que personne ne prend — a trois ou quatre aussi.
+ */
 function CourirSeul() {
   const { N } = SprinterApp;
   const [rang, setRang] = useState(lireRangSolo);
@@ -238,11 +248,7 @@ function CourirSeul() {
     try { localStorage.setItem(CLE_RANG_SOLO, String(r)); } catch { /* sans memoire */ }
   };
   return (
-    <div className="flex flex-col gap-2 p-3 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.04]">
-      <span className="flex items-center gap-1.5 text-[9px] tracking-widest text-emerald-400">
-        <User className="w-3 h-3" /> {N.t('relais_solo_titre')}
-      </span>
-      <p className="text-[10px] text-muted-foreground leading-snug">{N.t('relais_solo_desc')}</p>
+    <div className="flex flex-col gap-2.5 p-3 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.04]">
       {/* CANAL DE TEST : le relais en 2D reste disponible a cote de la 3D, pour comparer. */}
       {EST_TEST && (
         <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl border border-amber-300/30 bg-amber-300/[0.06]">
@@ -258,6 +264,9 @@ function CourirSeul() {
           </div>
         </div>
       )}
+
+      {/* TA PLACE, pour les deux facons de courir. */}
+      <span className="text-[9px] tracking-widest text-emerald-400">{N.t('relais_ta_place')}</span>
       <div className="grid grid-cols-4 gap-1.5" role="radiogroup">
         {[1, 2, 3, 4].map(r => (
           <button key={r} role="radio" aria-checked={rang === r} onClick={() => choisir(r)}
@@ -275,25 +284,18 @@ function CourirSeul() {
           </button>
         ))}
       </div>
-      <button onClick={() => entrerSurLaPiste({
-                genre: 'relais_solo', rang, equipe: N.t('relais_solo_equipe') })}
-        className="w-full py-3 rounded-xl font-black font-display tracking-widest text-sm
-                   text-background bg-emerald-400 hover:bg-emerald-400/90">
-        {N.t('relais_solo_courir')}
-      </button>
 
-      {/* A PLUSIEURS, A LA MEME PLACE CHOISIE. Un salon s'ouvre par un code qu'on
-          envoie aux autres ; chacun y prend sa place, et celles que personne ne
-          prend sont courues par des fictifs — deux joueurs et deux fictifs,
-          trois et un. Voir worker/src/salle-relais.js, le salon. */}
+      {/* A DEUX : un salon, un code a envoyer, l'ordinateur aux places libres. */}
       <div className="flex flex-col gap-1.5 pt-2 border-t border-white/8">
-        <span className="text-[9px] tracking-widest text-emerald-400">{N.t('relais_salon_titre')}</span>
+        <span className="flex items-center gap-1.5 text-[9px] tracking-widest text-emerald-400">
+          <Users className="w-3 h-3" /> {N.t('relais_salon_titre')}
+        </span>
         <p className="text-[10px] text-muted-foreground leading-snug">{N.t('relais_salon_desc')}</p>
         <button onClick={ouvrir} disabled={occupe}
-          className="w-full py-2.5 rounded-xl font-black font-display tracking-widest text-xs
-                     text-emerald-300 border border-emerald-400/50 bg-emerald-400/10 hover:bg-emerald-400/20
+          className="w-full py-3 rounded-xl font-black font-display tracking-widest text-sm
+                     text-background bg-emerald-400 hover:bg-emerald-400/90
                      disabled:opacity-40 flex items-center justify-center gap-2">
-          {occupe && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+          {occupe && <Loader2 className="w-4 h-4 animate-spin" />}
           {N.t('relais_salon_ouvrir')}
         </button>
         <div className="flex gap-1.5">
@@ -306,11 +308,25 @@ function CourirSeul() {
           <button onClick={() => code.length >= 4 && entrerSurLaPiste({ genre: 'relais_salon', code, rang })}
             disabled={code.length < 4}
             className="shrink-0 px-3 py-2 rounded-xl font-black font-display tracking-widest text-xs
-                       text-background bg-emerald-400 disabled:opacity-40">
+                       text-emerald-300 border border-emerald-400/50 bg-emerald-400/10 disabled:opacity-40">
             {N.t('relais_salon_rejoindre')}
           </button>
         </div>
         {erreur && <p className="text-center text-xs text-destructive">{erreur}</p>}
+      </div>
+
+      {/* SEUL : les trois autres places a l'ordinateur. */}
+      <div className="flex flex-col gap-1.5 pt-2 border-t border-white/8">
+        <span className="flex items-center gap-1.5 text-[9px] tracking-widest text-emerald-400">
+          <User className="w-3 h-3" /> {N.t('relais_solo_titre')}
+        </span>
+        <p className="text-[10px] text-muted-foreground leading-snug">{N.t('relais_solo_desc')}</p>
+        <button onClick={() => entrerSurLaPiste({
+                  genre: 'relais_solo', rang, equipe: N.t('relais_solo_equipe') })}
+          className="w-full py-2.5 rounded-xl font-black font-display tracking-widest text-xs
+                     text-emerald-300 border border-emerald-400/50 bg-emerald-400/10 hover:bg-emerald-400/20">
+          {N.t('relais_solo_courir')}
+        </button>
       </div>
     </div>
   );

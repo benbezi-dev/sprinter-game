@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MONTEE } from '@/lib/mouvement';
-import { Loader2, Eye } from 'lucide-react';
+import { Loader2, Eye, Share2 } from 'lucide-react';
+import { adressePublique } from '@/game/canal';
 import { SprinterApp, brancherSalle } from '@/game/engine';
 import { SalleRelais, TAILLE, PORTEE, ELAN, type EtatRelais, type UneSalleRelais } from '@/game/salle-relais';
 import { SalleRelaisSolo, noterRecordSolo } from '@/game/salle-relais-solo';
@@ -288,6 +289,28 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
     };
   }, [equipe, solo?.rang, !!salon]);
 
+  /**
+   * LE MOTEUR EST RENTRE A L'ACCUEIL SANS NOUS : ON SORT DE LA PISTE.
+   *
+   * La pause (ACCUEIL), une invitation acceptee, un championnat qui appelle :
+   * tous ramenent le moteur a l'accueil par goHome, sans rien savoir du
+   * relais. La salle continuait alors de tourner, et son bandeau — « TON
+   * RELAIS », le temoin, « ATTENDS » — restait pose par-dessus l'accueil
+   * (capture du 22/11/2026). Apres le pistolet, un moteur a l'accueil veut
+   * dire que la course est quittee.
+   */
+  const quitterRef = useRef(onQuitter);
+  quitterRef.current = onQuitter;
+  useEffect(() => {
+    const veille = setInterval(() => {
+      if (departVu.current && SprinterApp.G.state === 'title') {
+        clearInterval(veille);
+        quitterRef.current();
+      }
+    }, 300);
+    return () => clearInterval(veille);
+  }, []);
+
   // La marque part de l'entree de la zone : c'est le placement le plus sur, et
   // c'est celui qu'on veut par defaut pour qui ne touche a rien.
   // Au salon, changer de place change de zone : la marque repart de l'entree
@@ -309,6 +332,23 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
   const [copie, setCopie] = useState(false);
   const copierCode = async () => {
     try { await navigator.clipboard.writeText(equipe); setCopie(true); setTimeout(() => setCopie(false), 1500); }
+    catch { /* le code reste affiche */ }
+  };
+  /**
+   * ENVOYER LE CODE A L'AMI, par la feuille de partage du telephone (WhatsApp,
+   * SMS, Snapchat…). Le lien `?relais=CODE` ouvre le jeu directement dans ce
+   * salon (PisteRelais). Sans feuille de partage, on copie le message.
+   */
+  const partagerCode = async () => {
+    const lien = `${adressePublique()}?relais=${equipe}`;
+    const texte = N.t('relais_salon_message', { c: equipe, l: lien });
+    try {
+      if (typeof (navigator as any).share === 'function') {
+        await (navigator as any).share({ title: 'Sprinter', text: texte });
+        return;
+      }
+    } catch { /* feuille fermee : on retombe sur la copie */ }
+    try { await navigator.clipboard.writeText(texte); setCopie(true); setTimeout(() => setCopie(false), 1500); }
     catch { /* le code reste affiche */ }
   };
 
@@ -476,6 +516,20 @@ export function CourseRelais({ equipe, solo, salon, onQuitter, onRejouer }: {
                 {N.t(copie ? 'relais_salon_copie' : 'relais_salon_copier')}
               </span>
             </button>
+            <button onClick={partagerCode}
+              className="w-full py-2.5 rounded-xl font-black font-display tracking-widest text-xs
+                         text-background bg-emerald-400 hover:bg-emerald-400/90 flex items-center justify-center gap-2">
+              <Share2 className="w-3.5 h-3.5" /> {N.t('relais_salon_partager')}
+            </button>
+            {(() => {
+              const humains = e.joueurs.filter(j => !j.fictif).length;
+              return (
+                <p className={`text-[10px] text-center leading-snug ${humains < 2 ? 'text-amber-300' : 'text-emerald-300'}`}>
+                  {humains < 2 ? N.t('relais_salon_seul')
+                    : N.t('relais_salon_ensemble', { h: String(humains), o: String(TAILLE - humains) })}
+                </p>
+              );
+            })()}
             {placeRefusee && (
               <p className="text-[10px] text-center text-amber-300 leading-snug">
                 {N.t('relais_salon_refusee', { a: N.ord(placeDemandee.current), n: N.ord(mon) })}

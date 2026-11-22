@@ -75,6 +75,23 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
   /** Une main tendue dans le vide, a montrer une seconde. */
   const [rate, setRate] = useState(0);
   const etatRef = useRef<EtatConfrontation | null>(null);
+  /**
+   * Le pistolet a-t-il retenti ? Apres lui, un moteur revenu a l'accueil sans
+   * nous (pause, invitation…) veut dire que la course est quittee : on sort de
+   * la piste au lieu de laisser son bandeau sur l'accueil. Voir CourseRelais.
+   */
+  const departVu = useRef(false);
+  const quitterRef = useRef(onQuitter);
+  quitterRef.current = onQuitter;
+  useEffect(() => {
+    const veille = setInterval(() => {
+      if (departVu.current && SprinterApp.G.state === 'title') {
+        clearInterval(veille);
+        quitterRef.current();
+      }
+    }, 300);
+    return () => clearInterval(veille);
+  }, []);
 
   /** Mon partenaire : le porteur si je recois, le suivant si je donne. */
   const majBras = () => {
@@ -107,6 +124,7 @@ export function CourseConfrontation({ code, equipe, max, fantomes, onQuitter }: 
         majBras();
       },
       onDepart: (dansMs, departA) => {
+        departVu.current = true;
         // Les adversaires entrent dans la course comme des coureurs a part
         // entiere, un par couloir : tout le rendu, la camera et le classement
         // en course continuent de fonctionner sans savoir qu'ils viennent du
