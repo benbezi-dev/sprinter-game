@@ -35,6 +35,7 @@ import { ensureDuelTables, ordreClassement, rangDe } from './duels.js';
 // meme chose. Le filtre (`texteRecevable`) vient du meme endroit, pour la meme
 // raison : la bulle, le tchat et le mot refusent tous les memes textes.
 import { motPropre, voixPropre, texteRecevable, BULLE_MAX, MAX_TEXTE } from './mot.js';
+import { estBanni } from './moderation.js';
 
 const JOUR = 24 * 3600 * 1000;
 
@@ -1861,6 +1862,7 @@ export async function vainqueurDeLaCourse(db, edition, phase, course) {
 export async function poserMotDeCourse(db, { edition, phase, course, nom, texte, voix, voix_type }) {
   const k = cleNom(nom);
   if (!k) return { error: 'nom manquant' };
+  if (await estBanni(db, k)) return { error: 'depot refuse', code: 403 };
   if (!edition || !phase || !Number.isInteger(course)) return { error: 'course manquante' };
 
   const gagnant = await vainqueurDeLaCourse(db, edition, phase, course);
@@ -1932,6 +1934,7 @@ export async function poserBulle(db, { edition, phase, nom, texte }, maintenant 
   await ensureChampTables(db);
   const k = cleNom(nom);
   if (!k || k === 'anonyme') return { error: 'nom manquant', code: 400 };
+  if (await estBanni(db, k)) return { error: 'depot refuse', code: 403 };
   const id = String(edition || '').toUpperCase();
   if (!id) return { error: 'edition manquante', code: 400 };
   if (!PHASES_A_BULLE.includes(phase)) {
@@ -1997,6 +2000,8 @@ export async function bullesDe(db, edition, phase) {
 export async function moderer(db, corps) {
   await ensureChampTables(db);
   const { quoi } = corps || {};
+  // `au`, pose par un signalement : ne retirer que la version qui a ete signalee.
+  const au = (corps || {}).au ?? null;
   const edition = String((corps || {}).edition || '').toUpperCase();
   const phase = String((corps || {}).phase || '');
   if (!edition || !phase) return { error: 'edition ou phase manquante', code: 400 };
@@ -2006,7 +2011,8 @@ export async function moderer(db, corps) {
     if (!k) return { error: 'nom manquant', code: 400 };
     const r = await db.prepare(
       `UPDATE champ_bulles SET retire = 1
-        WHERE edition = ? AND phase = ? AND name_key = ?`).bind(edition, phase, k).run();
+        WHERE edition = ? AND phase = ? AND name_key = ? AND au = COALESCE(?, au)`
+    ).bind(edition, phase, k, au).run();
     const n = (r.meta && r.meta.changes) || 0;
     return n ? { ok: true, quoi, retire: n } : { error: 'bulle introuvable', code: 404 };
   }
@@ -2015,8 +2021,9 @@ export async function moderer(db, corps) {
     const course = Number((corps || {}).course);
     if (!Number.isInteger(course)) return { error: 'course manquante', code: 400 };
     const r = await db.prepare(
-      `DELETE FROM champ_mots WHERE edition = ? AND phase = ? AND course = ?`
-    ).bind(edition, phase, course).run();
+      `DELETE FROM champ_mots
+        WHERE edition = ? AND phase = ? AND course = ? AND au = COALESCE(?, au)`
+    ).bind(edition, phase, course, au).run();
     const n = (r.meta && r.meta.changes) || 0;
     return n ? { ok: true, quoi, retire: n } : { error: 'mot introuvable', code: 404 };
   }

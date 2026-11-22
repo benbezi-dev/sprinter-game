@@ -8,6 +8,8 @@ import { suivreRejeu, lireRejeu, fermerRejeu, lancerLeDepartDuRejeu, presentatio
 import { useFilmDeLaCourse, partagerLeFilm } from '@/game/film-course';
 import { ReviewVideo } from './ReviewVideo';
 import { LaisserUnMot } from './MotDuel';
+import { SignalerChampionnat } from './SignalerChampionnat';
+import { estBloque } from '@/game/moderation';
 import { poserMotDeCourse, voixDuMotDeCourse, urlDeLaVoix } from '@/game/mot';
 import { getSavedName } from '@/game/leaderboard';
 import { arriveeSerree, ecartLePlusSerre, fabriquerPhotoFinish } from '@/game/photo-finish';
@@ -132,8 +134,9 @@ function Presentation({ titre, sousTitre, grille, fiches }: {
         const plan = i >= 0 && tendu ? ouvrirLeCreneau(i, grille.length, PAR_ATHLETE_MS) : undefined;
         // Et sa bulle, s'il en avait pose une : la meme qu'en direct, au-dessus
         // de lui le temps de son creneau (voir drawBulle).
-        SprinterApp.presenterCoureur(i < 0 ? null : coureurDuCouloir(grille[i].couloir),
-          { ...plan, bulle: i < 0 ? null : grille[i].bulle ?? null });
+        const g = i < 0 ? null : grille[i];
+        SprinterApp.presenterCoureur(g && coureurDuCouloir(g.couloir),
+          { ...plan, bulle: g?.bulle && !estBloque(g.cle || '') ? g.bulle : null });
       }
     };
 
@@ -346,6 +349,9 @@ export function MotDuGagnant({ mot, course }: {
     } catch { setCharge(false); }
   };
 
+  // Le mot d'un bloque, voix comprise, n'existe pas pour qui l'a bloque.
+  if (estBloque(mot.nom)) return null;
+
   return (
     <div className="flex flex-col gap-1.5 rounded-xl border px-3 py-2.5"
          style={{ borderColor: 'rgba(248,205,74,0.35)', background: 'rgba(248,205,74,0.08)' }}>
@@ -369,8 +375,9 @@ export function MotDuGagnant({ mot, course }: {
 
 /* -------------------------------------------------------------- l'arrivee */
 
-function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, epreuve, quand, fr }: {
+function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, grille, competition, epreuve, quand, fr }: {
   fr?: boolean;
+  grille: { cle?: string; nom: string; bulle?: string | null }[];
   titre: string; sousTitre: string;
   lignes: { place: number | null; nom: string; ms: number | null; couloir: number | null;
             motif?: string | null }[];
@@ -437,7 +444,7 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
       epreuve: EPREUVE(epreuve),
       quand,
       lignes,
-      mot: mot && mot.texte ? { nom: mot.nom, texte: mot.texte } : null,
+      mot: mot && mot.texte && !estBloque(mot.nom) ? { nom: mot.nom, texte: mot.texte } : null,
       etiquetteMot: N.t('mot_du_vainqueur'),
     }, N.getLang() !== 'en');
 
@@ -530,10 +537,11 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
   // suite, puis deroule le reste dans l'ordre ou on le lira.
   return (
     <motion.div {...MONTEE}
-      className="absolute inset-0 z-30 flex items-center justify-center
+      className="absolute inset-0 z-30 flex overflow-y-auto overscroll-contain
+                 pt-[max(env(safe-area-inset-top),1rem)] pb-[max(env(safe-area-inset-bottom),1rem)]
                  bg-gradient-to-b from-black/85 via-black/75 to-black/90 backdrop-blur-[2px]
                  px-[max(env(safe-area-inset-left),1rem)] pointer-events-auto">
-      <div className="w-full max-w-[420px] flex flex-col gap-3">
+      <div className="m-auto w-full max-w-[420px] flex flex-col gap-3">
         <div className="text-center">
           <div className="text-[9px] font-bold tracking-[0.45em] text-white/45 uppercase">
             {sousTitre}
@@ -612,6 +620,7 @@ function Arrivee({ titre, sousTitre, lignes: toutes, course, mot, competition, e
               { edition: course.edition, phase: course.phase, course: course.numero }, m)}
             onPose={() => setPose(true)} />
         ) : null}
+        {course && <SignalerChampionnat course={course} mot={mot} presentes={grille} />}
 
         {/* Dans Instagram et consorts, rien de ce qui suit ne peut sortir. */}
         <OuvrirDansLeNavigateur compact />
@@ -672,7 +681,7 @@ export function RejeuChampionnat() {
   }
   if (etat.phase === 'arrivee' && etat.arrivee) {
     return <Arrivee titre={etat.titre} sousTitre={etat.sousTitre} lignes={etat.arrivee}
-                    course={etat.course} mot={etat.mot} fr={!!etat.fr}
+                    course={etat.course} mot={etat.mot} grille={etat.grille} fr={!!etat.fr}
                     competition={SprinterApp.G.rejeuBandeau?.competition || etat.sousTitre}
                     epreuve={etat.epreuve}
                     quand={SprinterApp.G.rejeuBandeau?.quand ?? null} />;

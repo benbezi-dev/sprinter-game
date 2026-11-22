@@ -91,8 +91,8 @@ Ce qu'il faut pouvoir montrer, et qui existe :
 | Exigence Play | Où |
 |---|---|
 | Signalement dans l'app | Mot d'un duel : `LireLeMot`, `src/components/screens/MotDuel.tsx`. Tchat : toucher le nom, `TchatMarques.tsx` |
-| Blocage d'un joueur | Mêmes endroits, effet immédiat |
-| Bulles et mots de championnat | Pas de bouton : signalement par e-mail, retrait par `/champ/moderer` |
+| Blocage d'un joueur | Se pose depuis le mot d'un duel ou le tchat, effet immédiat. Masque aussi ses bulles et mots de championnat chez qui a bloqué, sauf dans l'appli jusqu'à la 1.0.18 (36) comprise |
+| Bulles et mots de championnat | « Signaler un message » sous le tableau d'arrivée : `SignalerChampionnat.tsx`. Absent de l'appli jusqu'à la 1.0.18 (36) comprise : site ou e-mail. Retrait depuis la console |
 | Conditions publiques | https://sprinter-game.com/conditions.html |
 | Lien depuis l'app | Pied de l'écran-titre — `TitleScreen.tsx` |
 | Traitement des signalements | Console de modération, `suivi/moderation.html` |
@@ -159,6 +159,14 @@ boutons sont dans la fenêtre de lecture — pour y arriver : accueil ▸
 DÉFIER, lancer un défi, et ouvrir le message annoncé au retour. Deux appareils
 sont nécessaires pour recevoir un mot, l'expéditeur et le destinataire étant
 forcément deux joueurs distincts.
+```
+
+À ajouter à cette note au premier build qui suit la 1.0.18 (36), pas avant :
+
+```
+Au championnat, « Signaler un message » est sous le tableau d'arrivée d'une
+course, dès qu'elle porte une bulle ou un mot d'un autre joueur. Bloquer un
+joueur, depuis un mot de duel ou le tchat, masque aussi les siens.
 ```
 
 ---

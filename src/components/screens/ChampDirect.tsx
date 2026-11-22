@@ -12,6 +12,7 @@ import {
 import type { Arrivee } from '@/game/live';
 import { poserMotDeCourse, BULLES_PRETES, BULLE_MAX, type MotPose } from '@/game/mot';
 import { LaisserUnMot } from './MotDuel';
+import { SignalerChampionnat } from './SignalerChampionnat';
 import { MotDuGagnant } from './RejeuChampionnat';
 
 /**
@@ -673,6 +674,11 @@ function TableauDArrivee({ e }: { e: EtatChampDirect }) {
             confirme={N.t('champ_mot_direct_envoye')}
             poser={poser} />
         ) : null}
+        {c && (
+          <SignalerChampionnat
+            course={{ edition: c.edition, phase: c.phase, numero: c.course }} mot={e.mot}
+            presentes={e.presentes.map(p => ({ cle: p.id, nom: p.nom, bulle: p.bulle }))} />
+        )}
         <button onClick={() => quitterDirect()}
           className="self-center px-4 py-2 rounded-full border border-primary/40 bg-primary/10
                      text-primary text-[10px] font-bold tracking-widest active:scale-95 transition">
