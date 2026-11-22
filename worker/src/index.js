@@ -2407,7 +2407,7 @@ async function servir(request, env, ctx, porteur) {
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
         const r = await choisirPays(env.DB, key, pays);
-        return r.erreur ? json({ error: r.erreur }, 400) : json(r);
+        return r.erreur ? json({ error: r.erreur, pays: r.pays }, r.code || 400) : json(r);
       }
 
       // Poser ou corriger la nationalite d'un joueur. Le seul geste qui passe
@@ -4138,11 +4138,6 @@ async function servir(request, env, ctx, porteur) {
       const key = propre.trim().toLowerCase();
       if (!key || propre === 'Anonyme') return json({ error: 'nom invalide' }, 400);
       await ensurePlayerTables(env.DB);
-      // Plus bas, le rattachement des appareils lit la table des scores. Sur
-      // une base neuve — celle du canal de test, ou n'importe quel deploiement
-      // avant le premier chrono — cette table n'existe pas encore, et toute
-      // reservation de nom echouait sur un D1_ERROR muet.
-      await ensureScoreGhost(env.DB);
 
       const existe = await env.DB.prepare(
         `SELECT name, code FROM players WHERE name_key = ?`).bind(key).first();
@@ -4165,27 +4160,33 @@ async function servir(request, env, ctx, porteur) {
         }
       }
 
-      if (existe) {
+      const dejaReserve = async (p) => {
         const lie = await env.DB.prepare(
           `SELECT 1 AS ok FROM player_devices WHERE name_key = ? AND device_id = ?`
         ).bind(key, device_id).first();
-        if (lie) return json({ ok: true, name: existe.name, code: existe.code, deja: true });
+        if (lie) return json({ ok: true, name: p.name, code: p.code, deja: true });
         return json({ ok: false, pris: true });     // il faudra fournir le code
-      }
+      };
+      if (existe) return dejaReserve(existe);
 
       const code = makeCode();
-      await env.DB.prepare(
-        `INSERT INTO players (name_key, name, code, created_at) VALUES (?, ?, ?, ?)`
-      ).bind(key, propre, code, Date.now()).run();
-      // Les appareils qui jouaient deja sous ce nom sont rattaches : sans
-      // cela, reserver son propre nom couperait le joueur de son historique.
-      await env.DB.prepare(
-        `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at)
-         SELECT DISTINCT ?, device_id, ? FROM scores WHERE lower(trim(name)) = ?`
-      ).bind(key, Date.now(), key).run();
-      await env.DB.prepare(
-        `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at) VALUES (?, ?, ?)`
-      ).bind(key, device_id, Date.now()).run();
+      const t = Date.now();
+      // Seul l'appareil qui reserve est relie, les autres passent par le code :
+      // avoir couru sous un nom libre ne prouve pas qu'il est a soi. Un seul
+      // lot : de deux reservations simultanees, la perdante ne relie rien.
+      const [cree] = await env.DB.batch([
+        env.DB.prepare(
+          `INSERT OR IGNORE INTO players (name_key, name, code, created_at) VALUES (?, ?, ?, ?)`
+        ).bind(key, propre, code, t),
+        env.DB.prepare(
+          `INSERT OR IGNORE INTO player_devices (name_key, device_id, added_at)
+           SELECT name_key, ?, ? FROM players WHERE name_key = ? AND code = ?`
+        ).bind(device_id, t, key, code),
+      ]);
+      if (cree?.meta?.changes === 0) {
+        return dejaReserve(await env.DB.prepare(
+          `SELECT name, code FROM players WHERE name_key = ?`).bind(key).first());
+      }
       return json({ ok: true, name: propre, code });
     }
 
@@ -4393,7 +4394,7 @@ async function servir(request, env, ctx, porteur) {
           return json({ error: 'nationalite deja choisie', pays: deja.pays }, 409);
         }
         const r = await choisirPays(env.DB, key, pays);
-        if (r.erreur) return json({ error: r.erreur }, 400);
+        if (r.erreur) return json({ error: r.erreur, pays: r.pays }, r.code || 400);
         paysPose = r.pays;
       }
 
