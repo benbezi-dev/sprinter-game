@@ -46,7 +46,7 @@ export type PresentationEnCours = {
    * palmares, son niveau en duel et son bilan (voir FichePresentation).
    * Absent du direct ordinaire, dont les identifiants sont ceux d'une salle.
    */
-  fiches?: SourceFiches & { epreuve: string };
+  fiches?: SourceFiches & { epreuve: string; titreChampion?: string };
 };
 
 let courante: PresentationEnCours | null = null;

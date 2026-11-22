@@ -26,6 +26,7 @@ import { brancherSalle, reinitialiserEnvoi } from './engine';
 import { lancerPresentation } from './presentation-directe';
 import { niveauDuLieu } from './champ-rejeu';
 import { chargerFiches } from './fiches-champ';
+import { championEnTitre } from './championnats';
 import { EPREUVES_EN_SALLE } from './jeux';
 import {
   entrerDansLeTour, presentationAnnoncee, pistoletAnnonce, rappelSiffle,
@@ -208,7 +209,7 @@ function ecouteurs() {
         etatVoix: () => ({ micro: false, refuse: false, ouvert: false, connecte: false } as any),
         // Chaque athlete presente avec son palmares, son niveau en duel et
         // son bilan — sur la distance de l'edition.
-        fiches: edition ? { edition, epreuve } : undefined,
+        fiches: edition ? { edition, epreuve, titreChampion: championEnTitre(contexte.echelon, contexte.zone) } : undefined,
       });
     },
     onDepart: (dansMs: number, departA: number) => {
@@ -276,6 +277,8 @@ function ecouteurs() {
  * @param echelon, zone ce que l'edition est : la musique enregistree
  *   (game/musique-championnat.ts) est celle du Championnat de France
  */
+/** L'echelon et la zone de l'edition en direct : le titre du champion sortant s'en deduit (championEnTitre). */
+let contexte: { echelon?: string; zone?: string } = {};
 export function entrerEnDirect(ed: string, phase: string, course: number,
                                opts: { epreuve: string; lieu?: string | null;
                                        echelon?: string; zone?: string }) {
@@ -302,6 +305,7 @@ export function entrerEnDirect(ed: string, phase: string, course: number,
   SprinterApp.G.champNoir = opts.echelon === 'national' && opts.zone === 'FR' && EPREUVES_EN_SALLE.includes(epreuve as any)
     ? (phase === 'series' ? 'serie' : 'noir') : null;
   entree = { ed, phase, course };
+  contexte = { echelon: opts.echelon, zone: opts.zone };
   essaisReconnexion = 0;
   publier({ ...VIDE, ouvert: true });
   connecter();

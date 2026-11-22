@@ -5,10 +5,11 @@ import { OCCULTANTS } from '../amsalem-3d';
 import { creuserTapis, zSol, auBordDeLaPiste, SURVOL_SALLE, OEIL_COURSIVE } from '../salle-3d';
 import { Q, DOS, RECUL, COTE, HAUT, P_DEBUT, P_FIN, P_ARRIERE, P_LOIN, LANE_W, P_HAUT, SURVOL, R_CORDE } from './reglages';
 import { camera, _a, _b, renderer, champBase, soleil } from './scene';
-import { ouCourt, capIci, virageApres, ici, sx, salleActive } from './repere';
-import { presente, finCam, presenteOu, finVise } from './salle-noire';
-import { profilBas, finaleVue, toitsStade, cameraSalle, blocsSalle, amsalemActif } from './stade';
+import { ouCourt, capIci, virageApres, ici, sx, salleActive, milieu } from './repere';
+import { orA, orCouloir, finCam, finVise, planExtinction, extinctionE, EXT_COUP, presente, presenteOu } from './salle-noire';
+import { profilBas, finaleVue, toitsStade, cameraSalle, blocsSalle, amsalemActif, ecranSalle } from './stade';
 import { nCouloirs } from '../course-3d';
+import { presentationCourante } from '../presentation-directe';
 import { suiviDuRelais } from './relais';
 
 // LES PLANS DE CAMERA (« plusieurs plans de camera sur les courses, choisis au hasard » ;
@@ -47,6 +48,12 @@ let profilDecal = 0, profilEcart = 0, profilPret = false, profilB = 0;
 const _c3 = new THREE.Vector3(), _d3 = new THREE.Vector3();
 
 let finActive = false, champNom = 0;
+// la presentation : le point que la camera vise, qui glisse d'un athlete a l'autre (voir LA PRESENTATION SE REGARDE COMME EN 2D)
+const presC = new THREE.Vector3();
+let presPret = false;
+// un cran plus serre que la course 2D : a l'echelle exacte, au 200 m, les athletes n'etaient que des silhouettes au bord
+// de l'anneau (tournage du 16/11)
+const PRES_SERRE = 1.35;   // (1,8 au premier essai : le nom au sol sortait du plan, « pas assez de recul »)
 let creuxVu = false;   // (le tapis du 60 m, creuserTapis)
 /** La camera de l'image : ou elle se tient, ce qu'elle vise, le soleil qui la suit. Rend le coureur suivi. */
 export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
@@ -298,27 +305,76 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
         vise.set(c[0], -c[1], 1.0);
       }
     }
-    // LA FINALE : pendant la presentation, la camera cadre le nom qui s'ecrit dans le couloir, de haut et
-    // de cote (la tribune), comme les plans de Doha — mais au ras de la salle
-    if (finaleVue && presente >= 0 && (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro'))) {
-      const h = capIci(T.heading(7, presente)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
-      // LE NOM ENTIER DANS LE CADRE : la distance se deduit du champ horizontal de la camera, pour que ses 9 m et une
-      // marge tiennent en largeur, quel que soit l'ecran. (Les reculs fixes d'avant coupaient la fin du nom en paysage,
-      // « FONTAIN », sa derniere lettre passant sous la camera, posee 5 m en arriere du centre.) La camera regarde le
-      // centre du nom, de cote (la tribune), en arriere et en plongee — la direction d'avant (5, 9, 6,5), qui passe
-      // au-dessus des agres de la perche ; jamais plus pres que ses 12,2 m, jamais plus haut que 9,5 m (les fermes du
-      // toit descendent a 10,4 m), jamais plus loin que 19 m (au-dela, la coursive et son public passent devant) : en portrait, ou il le
-      // faudrait, c'est le champ qui s'elargit (champNom, pose d'un coup : c'est un plan coupe).
-      const LARGE = 9 / 2 + 1.6;
-      let demiChampH = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), loin = LARGE / Math.tan(demiChampH);
-      champNom = camera.fov;
-      if (loin > 19) { loin = 19; demiChampH = Math.atan(LARGE / 19); champNom = 2 * Math.atan(Math.tan(demiChampH) / camera.aspect) * 180 / Math.PI; }
-      loin = Math.max(12.2, loin);
-      const nrm = Math.hypot(5, 9, 6.5), recul = loin * 5 / nrm, cote = loin * 9 / nrm, haut = Math.min(9.5, loin * 6.5 / nrm);
-      finCam.set(presenteOu.x - ax * recul + ex * cote, -(presenteOu.y - ay * recul + ey * cote), haut);
-      finVise.set(presenteOu.x, -presenteOu.y, 0);
-      finActive = true;
+    // LA PRESENTATION SE REGARDE COMME EN 2D (l'auteur, 16/11 : « une presentation comme la 2D ; sur la 3D les
+    // personnages n'etaient pas dans le plan de la camera »). Le plan du nom ecrit dans la piste, puis le gros plan de
+    // face, laissaient l'athlete hors cadre ou seul : la camera prend desormais l'axonometrie du jeu 2D (voir plan2D),
+    // centree sur celui qu'on presente, glisse de l'un a l'autre a la vitesse du 2D (stepPresentation, 3,4/s) et avance
+    // vers lui avec le plan qui se resserre (G.zoomPres, pousserLePlan) — lui au centre, ses voisins de part et d'autre.
+    const luiPresente = (G.state === 'count' || (G.state === 'cut' && G.cut && G.cut.kind === 'intro')) && !entreeVue && !nuitDuMolosse ? G.presente : null;
+    if (luiPresente) {
+      // (en championnat, la fiche de chaque athlete s'affiche sous son nom : voir PresentationDirect)
+      const fichesEnBas = !!presentationCourante()?.fiches;
+      const c = ouCourt(T, luiPresente).slice();
+      // (dans la salle, son nom s'ecrit devant lui : la camera vise entre les deux, pour les tenir ensemble)
+      if (salleActive && presente >= 0) { c[0] = (c[0] + presenteOu.x) / 2; c[1] = (c[1] + presenteOu.y) / 2; }
+      if (!presPret) { presC.set(c[0], c[1], 0); presPret = true; }
+      else presC.lerp(_c3.set(c[0], c[1], 0), 1 - Math.exp(-3.4 * (dt || 0.016)));
+      const Cj = (globalThis as any).SprinterApp?.C;
+      const deg = Cj ? Math.atan2(Cj.ISO_SIN, Cj.ISO_COS) : Math.atan(0.5);
+      const elev = Math.atan(Math.SQRT2 * Math.sin(deg));
+      const VW = renderer!.domElement.clientWidth || 375, VH = renderer!.domElement.clientHeight || 812;
+      const ui = Math.max(0.62, Math.min(1.7, Math.min(VW / 430, VH / 660)));
+      const haut = VH / (ui * (G.race && G.race.arc > 0 ? 44 : 30) * (G.zoomMode || 1) * Math.max(1, G.zoomPres || 1) * PRES_SERRE);
+      const D = haut / (2 * Math.tan(CHAMP_2D * Math.PI / 360));
+      const rot = T.curved ? -14 * Math.PI / 180 : 0, wc = Math.cos(rot), ws = Math.sin(rot);
+      const dx = sx * (-wc - ws) / Math.SQRT2, dy = sx * (ws - wc) / Math.SQRT2;
+      const z0 = salleActive ? zSol(presC.x, presC.y) : 0;
+      if (T.curved && salleActive) {
+        // SUR L'ANNEAU, DERRIERE ET AU-DESSUS : la diagonale du 2D y regardait depuis la pelouse — les officiels et les poteaux
+        // passaient devant, le bord du virage releve coupait les jambes (tournage du 16/11). On prend la direction du
+        // plan des noms, (5, 9, 6,5), qui n'a rien entre elle et la piste, a 9,5 m de l'athlete, l'oeil sur son corps.
+        const h = capIci(T.heading(Math.max(0, luiPresente.d || 0), luiPresente.lane | 0)), ex = Math.sin(h), ey = -Math.cos(h), ax = Math.cos(h), ay = Math.sin(h);
+        // (cote tribune, les murs ramenaient la camera a 5 m : le nom et l'athlete ne tenaient pas ensemble. Elle se tient
+        // donc surtout DERRIERE lui, dans l'axe de la piste ou rien ne la gene, en hauteur, un peu vers la tribune.)
+        const nrm = Math.hypot(8, 3.5, 6.5), loin = 11.5 / (1 + 0.35 * Math.max(0, (G.zoomPres || 1) - 1)), recul = loin * 8 / nrm, cote = loin * 3.5 / nrm;
+        // (lui au tiers haut, au-dessus de sa fiche : la visee recule vers la camera)
+        const bas = fichesEnBas ? 3.2 : 0, bx = -ax * recul + ex * cote, by = -ay * recul + ey * cote, bn = Math.hypot(bx, by) || 1;
+        finCam.set(presC.x + bx + bx / bn * bas, -(presC.y + by + by / bn * bas), z0 + Math.min(9.2, loin * 6.5 / nrm));
+        finVise.set(presC.x + bx / bn * bas, -(presC.y + by / bn * bas), z0 + 0.6);
+        champNom = camera.fov; finActive = true;
+      } else {
+      // LUI AU TIERS HAUT DE L'IMAGE : la moitie basse porte son nom et sa fiche (palmares, niveau, bilan —
+      // FichePresentation), qui le cachaient. La camera vise un point plus pres d'elle, sur le sol : il remonte.
+      const bas = fichesEnBas ? haut * 0.34 : 0;
+      finCam.set(presC.x + dx * (D * Math.cos(elev) + bas), -(presC.y + dy * (D * Math.cos(elev) + bas)), z0 + D * Math.sin(elev));
+      finVise.set(presC.x + dx * bas, -(presC.y + dy * bas), z0 + 0.9);
+      champNom = CHAMP_2D; finActive = true;
+      }
+    } else if (finaleVue && orCouloir >= 0 && orA > 0 && G.champNoir && ecranSalle) {
+      // L'ARRIVEE EN OR SUR L'ECRAN GEANT (l'auteur, 16/11) : la camera regarde l'ecran, au bout de la ligne droite, depuis
+      // le couloir du vainqueur — l'or du couloir file vers lui, le chrono s'y affiche ; assez loin pour le tenir entier
+      ecranSalle.getWorldPosition(_c3);
+      const q = ici(T.posDemi(Math.max(4, T.total - 3), orCouloir, milieu(T, orCouloir)));
+      let vx = q[0] - _c3.x, vy = -q[1] - _c3.y; const vn = Math.hypot(vx, vy) || 1; vx /= vn; vy /= vn;
+      const demiH = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), D = Math.min(30, (10.8 / 2 + 1.2) / Math.tan(demiH));
+      finCam.set(_c3.x + vx * D, _c3.y + vy * D, Math.max(3.2, _c3.z - 2.2));
+      finVise.set(_c3.x, _c3.y, _c3.z - 0.6);
+      champNom = camera.fov; finActive = true;
+    } else if (finaleVue && planExtinction && G.state === 'count') {
+      // L'EXTINCTION A SON PLAN (16/11) : haut derriere la ligne de depart, au milieu des couloirs, l'oeil sur la piste
+      // qui file — on voit les lignes s'allumer une par une, de gauche a droite, puis tout le reste d'un coup
+      const k = Math.floor((T.lanes || nCouloirs) / 2), q = ici(T.posDemi(0, k, milieu(T, k))), h = capIci(T.heading(0, k));
+      const v = ici(T.posDemi(Math.min(T.total * 0.5, 26), k, milieu(T, k)));
+      // (refaite le 16/11 : « il faut de la tension ») elle AVANCE lentement vers la piste pendant toute la montee, et
+      // au coup elle recule et monte d'un trait : la salle entiere, allumee d'un bloc
+      const u = Math.min(1, extinctionE / EXT_COUP), av = u * u * (3 - 2 * u);
+      const w = Math.min(1, Math.max(0, (extinctionE - EXT_COUP) / 1.4)), re = 1 - Math.pow(1 - w, 3);
+      const recul = 10 - 6.5 * av + 9 * re, hautE = 8.6 - 3.2 * av + 4 * re;
+      finCam.set(q[0] - Math.cos(h) * recul, -(q[1] - Math.sin(h) * recul), Math.min(9.6, hautE));
+      finVise.set(v[0], -v[1], 0);
+      champNom = camera.fov; finActive = true;
     } else finActive = false;
+    if (!luiPresente) presPret = false;
     // (le tapis du 60 m s'enfonce sous ceux qui le frappent)
     const auTapis = G.ghost && (G.runners || []).indexOf(G.ghost.runner) < 0 ? (G.runners || []).concat([G.ghost.runner]) : G.runners || [];
     if (salleActive && auTapis.some((r: any) => r.creuxTapis != null)) {
@@ -340,7 +396,7 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     if (G.state !== 'count' && G.state !== 'race' && G.state !== 'falseout') entreeVue = false;
     const intro = G.state === 'cut' && G.cut && G.cut.kind === 'intro';
     // pas de survol pour la nuit du molosse (« pas de vue aerienne de presentation », l'auteur, 23/10)
-    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue && !(finaleVue && presente >= 0);
+    const avant = (intro || G.state === 'count') && !nuitDuMolosse && !entreeVue && !luiPresente;
     if (!avant && G.state !== 'race' && G.state !== 'falseout') { volLance = false; volPlonge = -1; }
     if (avant && !volLance) { volLance = true; volT = 0; volPlonge = -1; }
     let survol = false;
@@ -428,7 +484,8 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // 1. s'il s'approche du bord (le rail de la salle, en sortie de virage), la camera tourne vers lui, en douceur ;
     // 2. un mat, un arbre ou une cage d'Amsalem entre la camera et lui est masque le temps de passer.
     // (en course seulement : pendant le decompte, la presentation d'une vedette vise un autre coureur, voir viseCamera.cri)
-    if (fo === 0 && G.state === 'race') {
+    // (sauf sous un plan pose — l'arrivee en or : la camera tournait vers le joueur parti au-dela de la ligne)
+    if (fo === 0 && G.state === 'race' && !finActive) {
       _joueur.set(p[0], -p[1], 1);
       camera.updateMatrixWorld();
       let voulu = 0;

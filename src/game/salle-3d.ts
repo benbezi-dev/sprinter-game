@@ -429,19 +429,25 @@ export function construireSalle(ctx: ContexteSalle) {
   // DE VRAIS NEONS (l'auteur, 8/11) : chaque ligne devient un tube — un coeur blanc brulant, sa couleur au bord du
   // tube, puis une lueur qui s'eteint sur la piste. Une bande additive de NEON_L de large, peinte en travers (v en metres).
   // La piste qu'on ne court pas porte le drapeau : ses neons bleu, blanc, rouge, du premier couloir au dernier.
-  const NEON_L = 0.36;
+  // UN LEGER HALO (l'auteur, 16/11) : la bande s'elargit a 0,9 m pour qu'une lueur douce deborde sur la piste, au-dela
+  // de la lueur serree d'avant (memes rayons, en metres) ; le tube, lui, garde la largeur de la ligne.
+  const NEON_L = 0.9;
   const neons = new Map<string, THREE.MeshBasicMaterial>();
   const neon = (coeur: number[], lueur: number[]) => {
     const cle = coeur.join() + lueur.join();
     let m = neons.get(cle);
     if (m) return m;
-    const t = toile(4, 128, (c, w, h) => {
-      const tube = (LIGNE / 2) / (NEON_L / 2);
+    const t = toile(4, 320, (c, w, h) => {
+      const tube = LIGNE / 2;
       for (let y = 0; y < h; y++) {
-        const d = Math.abs(y + 0.5 - h / 2) / (h / 2);
+        const d = Math.abs(y + 0.5 - h / 2) / (h / 2) * (NEON_L / 2);   // (en metres depuis l'axe du tube)
         let col: number[];
         if (d < tube) { const k = (d / tube) ** 2 * 0.65; col = coeur.map((v, i) => v + (lueur[i] - v) * k); }
-        else { const e = d - tube, a = 0.6 * Math.exp(-((e / 0.2) ** 2)) + 0.14 * Math.exp(-((e / 0.55) ** 2)); col = lueur.map(v => v * a); }
+        else {
+          const e = d - tube, bord = 1 - Math.max(0, (d - NEON_L * 0.4) / (NEON_L * 0.1));   // (nul au bord de la bande)
+          const a = 0.6 * Math.exp(-((e / 0.036) ** 2)) + 0.14 * Math.exp(-((e / 0.1) ** 2)) + 0.075 * Math.exp(-((e / 0.24) ** 2)) * bord;
+          col = lueur.map(v => v * a);
+        }
         c.fillStyle = `rgb(${col.map(v => Math.round(Math.min(255, v))).join(',')})`; c.fillRect(0, y, w, 1);
       }
     });
@@ -1127,11 +1133,13 @@ export function construireSalle(ctx: ContexteSalle) {
   // un cadre noir. course-3d.ts y passe le film, puis la campagne en cours ou le logo (salle.ecranGeant).
   const H_ECRAN = 5.4, L_ECRAN = 10.8, Z_ECRAN = 5.4;
   const ecranGeant = new THREE.MeshBasicMaterial({ color: 0xffffff, toneMapped: false });
+  let ecranMaillage: THREE.Mesh | null = null;
   {
     const cadre = paroi(X1 - 0.3, -RS, Z_ECRAN - 0.25, Z_ECRAN + H_ECRAN + 0.25, L_ECRAN + 0.5, 'x-', new THREE.MeshBasicMaterial({ color: 0x08090c }));
     delete cadre.userData.lumiere;
     const e = paroi(X1 - 0.35, -RS, Z_ECRAN, Z_ECRAN + H_ECRAN, L_ECRAN, 'x-', ecranGeant);
     e.scale.x = -1; delete e.userData.lumiere;   // (le monde est en miroir : l'image se lit droit)
+    ecranMaillage = e;
   }
   // LE LOGO BENBEZI EN NEON (l'auteur, 8/11 : « le logo deja present dans le jeu, en neon ») : le contour de ses lettres
   // en tubes (logoEnNeon), au-dessus de l'ecran geant et en grand sur le pignon d'en face. En competition seulement ; il
@@ -1298,7 +1306,7 @@ export function construireSalle(ctx: ContexteSalle) {
       if (m.userData.neon) materiaux.neons.add(m);
     }
   });
-  let neonsAllumes = 1, alerteVue = 0, lignesVues = '';
+  let neonsAllumes = 1, alerteVue = 0, lignesVues = '', eclatVu = 0;
   /** La couleur d'un tube : sa teinte de repos (blanc sans elle), viree au rouge du faux depart. */
   // (le bleu du drapeau donne en sRGB : en valeurs lineaires, la sortie ecran les palissait en bleu ciel)
   const _rouge = new THREE.Color(1, 0.03, 0.03), _blancVif = new THREE.Color(1.35, 1.35, 1.35), _blanc = new THREE.Color(1, 1, 1);
@@ -1312,6 +1320,8 @@ export function construireSalle(ctx: ContexteSalle) {
     interieur: g,
     /** L'ecran geant : sa matiere, dont course-3d.ts change l'image (le film, la campagne, le logo). */
     ecranGeant,
+    /** Son maillage : ou il est (camera.ts y cadre le chrono du vainqueur). */
+    ecranMaillage,
     // (les chevrons avancent dans le sens de la course : deux fleches par seconde, 3,2 m/s)
     animer: (t: number) => {
       if (flecheLED) flecheLED.offset.x = -t * VITESSE_F / PAS_F;
@@ -1358,12 +1368,19 @@ export function construireSalle(ctx: ContexteSalle) {
      * encore la charpente et les gradins, 7 % de la lumiere cuite), `neons` de 0 a 1 (les tubes des couloirs, les
      * fleches, les logos, le tapis et les traits blancs qui brillent). course-3d.ts regle le ciel et les lumieres.
      */
-    eteindre: (lumiere: number, neons: number) => {
+    eteindre: (lumiere: number, neons: number, lignesA?: (i: number, n: number) => number, eclat = 0) => {
       plafonniers(lumiere);
       const lm = 0.07 + 0.93 * lumiere;
       for (const m of materiaux.cuites) (m as any).lightMapIntensity = m.userData.cuite * lm;
       for (const m of materiaux.emissifs) (m as THREE.MeshStandardMaterial).emissiveIntensity = m.userData.emissif * neons;
       for (const m of materiaux.neons) m.opacity = neons;
+      // L'ALLUMAGE UN PAR UN (l'auteur, 16/11) : les lignes de la piste courue, chacune a son heure (lExtinction) ;
+      // `eclat` : le flash du dernier coup, les tubes plus vifs que vifs (leur halo s'elargit), puis il retombe
+      if (lignesA) lignesCourues.forEach((m, i) => { m.opacity = lignesA(i, lignesCourues.length); });
+      if (eclat > 0 || eclatVu > 0) {
+        for (const m of materiaux.neons) { peindre(m as THREE.MeshBasicMaterial); (m as THREE.MeshBasicMaterial).color.multiplyScalar(1 + eclat); }
+        eclatVu = eclat;
+      }
       neonsAllumes = neons;
       flechesCouloir.forEach((l, k) => { for (const m of l) m.opacity = (voileCouloir[k] ?? 1) * neons; });
     },

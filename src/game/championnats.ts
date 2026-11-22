@@ -529,3 +529,25 @@ export function telephoneRelie(nom: string): Promise<boolean | null> {
   }
   return p;
 }
+
+
+/**
+ * LE TITRE DU CHAMPION SORTANT, avec son titre (l'auteur, 16/11 : « champion de France en titre », plus fort que
+ * « champion en titre » et que « tenant du titre » — on sait de quel titre on parle). Le Championnat de France, les
+ * continents et le monde ont leur forme ; une autre zone nationale garde « champion en titre » : « de Sénégal » ou
+ * « de Etats-Unis » serait faux, et l'article de chaque pays ne se devine pas.
+ */
+export function championEnTitre(echelon?: string | null, zone?: string | null, zoneNom?: string | null, zoneNomEn?: string | null): string {
+  const N = (globalThis as any).SprinterApp?.N;
+  const en = N?.getLang?.() === 'en';
+  const defaut = String(N?.t?.('champ_boss') || (en ? 'THE DEFENDING CHAMPION' : 'CHAMPION EN TITRE'));
+  if (echelon === 'mondial') return en ? 'REIGNING WORLD CHAMPION' : 'CHAMPION DU MONDE EN TITRE';
+  if (echelon === 'national' && zone === 'FR') return en ? 'REIGNING FRENCH CHAMPION' : 'CHAMPION DE FRANCE EN TITRE';
+  if (echelon === 'continental') {
+    const nom = String(zoneNom || '').trim(), nomEn = String(zoneNomEn || nom).trim();
+    const ADJ: Record<string, string> = { europe: 'EUROPEAN', africa: 'AFRICAN', asia: 'ASIAN', oceania: 'OCEANIAN', americas: 'AMERICAS', america: 'AMERICAN' };
+    if (en) { const a = ADJ[nomEn.toLowerCase()]; return a ? `REIGNING ${a} CHAMPION` : defaut; }
+    if (/^[aeiouyàâéèêëîïôöûü]/i.test(nom)) return `CHAMPION D’${nom.toUpperCase()} EN TITRE`;
+  }
+  return defaut;
+}

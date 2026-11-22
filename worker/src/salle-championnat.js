@@ -57,6 +57,16 @@ const AVANT_PRESENTATION_MS = 1500;
 const AVANT_DEPART_MS = 4000;
 const APPEL_AVANT_MS = 8 * PRESENTATION_PAR_JOUEUR_MS + AVANT_DEPART_MS + AVANT_PRESENTATION_MS;
 /**
+ * LE NOIR QUI TOMBE (l'auteur, 16/11) : en serie du Championnat de France en salle, la salle s'eteint entre l'appel
+ * et le premier nom (course-3d/salle-noire.ts, lExtinction, 7 s) — la presentation l'attend.
+ */
+const AVANT_PRESENTATION_NOIR_MS = 11500;
+const EPREUVES_EN_SALLE = ['60', '200s', '400s'];
+export function avantPresentation(ctx) {
+  return ctx && ctx.echelon === 'national' && ctx.zone === 'FR' && ctx.phase === 'series' && EPREUVES_EN_SALLE.includes(ctx.epreuve)
+    ? AVANT_PRESENTATION_NOIR_MS : AVANT_PRESENTATION_MS;
+}
+/**
  * Une salle qui s'eveille en retard — personne n'y etait a l'appel, et le
  * premier arrive se presente apres l'heure — ne declare pas tout le monde
  * forfait pour quelques secondes : elle repousse le pistolet d'autant. Au-dela
@@ -256,7 +266,7 @@ export class SalleChampionnat {
     if (this.phase !== 'ouverte' || !this.at || this.appelEnCours) return;
     const maintenant = Date.now();
     if (maintenant > this.at + RETARD_TOLERE_MS) return;       // course manquee
-    let appel = this.at - APPEL_AVANT_MS;
+    let appel = this.at - APPEL_AVANT_MS - (avantPresentation(this.ctx) - AVANT_PRESENTATION_MS);
     if (maintenant >= appel) {
       // En retard sur l'appel : il faut quelqu'un pour l'ouvrir, et on laisse
       // aux autres le temps d'arriver. Le pistolet reculera d'autant qu'il le
@@ -325,7 +335,7 @@ export class SalleChampionnat {
     const attente = avantDepart(this.test, AVANT_DEPART_MS);
     // Le pistolet reste a l'heure si on a le temps de tout montrer ; sinon il
     // recule d'autant, jamais il n'avance.
-    const auPlusTot = maintenant + (seul ? 0 : AVANT_PRESENTATION_MS) + presentation + attente;
+    const auPlusTot = maintenant + (seul ? 0 : avantPresentation(this.ctx)) + presentation + attente;
     this.at = Math.max(this.at || 0, auPlusTot);
     this.presentationA = seul ? null : this.at - attente - presentation;
     this.poserDepart(this.at);
