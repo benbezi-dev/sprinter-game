@@ -95,6 +95,24 @@ async function poserEcouteurs(FM: Awaited<ReturnType<typeof greffon>>['FM']) {
     if (e && e.token) enregistrerJeton(e.token).catch(() => { /* au prochain lancement */ });
   }).catch(() => { /* greffon indisponible */ });
 
+  // Le canal des invitations en direct (CANAL_URGENT dans worker/src/push.js).
+  // Importance haute : bandeau en haut de l'ecran, son et vibration, meme jeu
+  // ferme. Le canal par defaut de Firebase ne montre qu'une icone. Android ne
+  // laisse plus changer l'importance d'un canal une fois cree : changer
+  // l'identifiant si un jour il faut la modifier.
+  if (plateforme() === 'android') {
+    FM.createChannel({
+      id: 'invitations',
+      name: langue() === 'en' ? 'Live invitations' : 'Invitations en direct',
+      description: langue() === 'en'
+        ? 'A duel or a relay waiting for you right now.'
+        : 'Un duel ou un relais qui t\u2019attend maintenant.',
+      importance: 4, // Importance.High
+      vibration: true,
+      visibility: 1, // Visibility.Public
+    }).catch(() => { /* ancien greffon : canal par defaut */ });
+  }
+
   const relayer = (n: any) => {
     const t = n && n.data && (n.data as any).t;
     if (t) signalerCourrier(String(t) as Courrier);

@@ -59,6 +59,10 @@ self.addEventListener('push', event => {
       badge: '/icon-192.png',
       tag,
       renotify: true,
+      // Une invitation en direct expire en quelques minutes : elle reste a
+      // l'ecran jusqu'a ce qu'on la touche, et vibre plus fort.
+      requireInteraction: data.t === 'direct' || data.t === 'relais_defi',
+      vibrate: [300, 120, 300, 120, 300],
       // `t` est le genre de la nouvelle. Il ne sert pas a l'affichage : il
       // sert au clic, pour ouvrir le bon ecran plutot que l'accueil.
       data: { url: self.registration.scope, t: data.t || '' },

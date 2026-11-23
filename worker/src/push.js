@@ -103,6 +103,17 @@ const MESSAGES = {
   },
 };
 
+/**
+ * Les nouvelles qui n'attendent pas : une invitation en direct expire en
+ * quelques minutes. Sur Android elles passent par le canal `invitations`
+ * (cree par le jeu, importance haute : bandeau en haut de l'ecran, son,
+ * vibration) au lieu du canal par defaut de Firebase, qui ne montre qu'une
+ * icone dans la barre d'etat. Une appli trop ancienne pour avoir ce canal
+ * retombe sur le canal par defaut : rien ne se perd.
+ */
+export const URGENTS = new Set(['direct', 'relais_defi']);
+export const CANAL_URGENT = 'invitations';
+
 const DEFAUT = { fr: ['Sprinter', 'Il y a du nouveau.'], en: ['Sprinter', 'Something new.'] };
 
 /** Le titre et le texte d'une nouvelle, dans la langue d'un abonnement. */
@@ -480,7 +491,15 @@ async function envoyerFcm(acces, projet, jeton, titre, corps, type) {
           data: { t: String(type) },
           android: {
             priority: 'HIGH',
-            notification: { sound: 'default', default_vibrate_timings: true },
+            notification: {
+              sound: 'default', default_vibrate_timings: true,
+              // Le texte ne porte ni nom ni chrono (voir l'en-tete) : il peut
+              // s'afficher en entier sur l'ecran verrouille.
+              visibility: 'PUBLIC',
+              ...(URGENTS.has(type)
+                ? { channel_id: CANAL_URGENT, notification_priority: 'PRIORITY_MAX' }
+                : {}),
+            },
           },
           apns: {
             headers: { 'apns-priority': '10' },
