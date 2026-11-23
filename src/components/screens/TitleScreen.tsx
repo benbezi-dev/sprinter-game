@@ -42,8 +42,9 @@ const BanderoleVedette = /* @__PURE__ */ lazy(() => import('./DefiVedette')
 // Le duel des marques (Team adidas contre Team Nike) : charge a la demande,
 // pour la meme raison — DUEL_MARQUES_OUVERT est ferme au public (canal.ts).
 // Noel 2026 : boules de neige et etoile du sapin (Noel.tsx), paresseux comme le duel.
-const BanderoleNoel = /* @__PURE__ */ lazy(() => import('./Noel')
-  .then(m => ({ default: m.BanderoleNoel })));
+// Noel 2026 : la version par equipes (23/11) remplace la bataille chacun pour soi (Noel.tsx).
+const BanderoleNoel = /* @__PURE__ */ lazy(() => import('./NoelEquipes')
+  .then(m => ({ default: m.BanderoleNoelEquipes })));
 const BanderoleMarques = /* @__PURE__ */ lazy(() => import('./DuelMarques')
   .then(m => ({ default: m.BanderoleMarques })));
 // Le tchat du duel lui survit (16/10) : apres la fermeture, il vit sur l'accueil.

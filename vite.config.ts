@@ -274,7 +274,7 @@ const DUREE_DUEL_MARQUES_MS = 6 * 24 * 3600 * 1000;
 const LANCEMENT_NOEL = (() => {
   const v = process.env.LANCEMENT_NOEL;
   if (v) { const n = Number(v); return Number.isFinite(n) ? n : Date.parse(v); }
-  return Date.parse('2026-12-01T00:00:00+01:00'); // 1er decembre, minuit a Paris
+  return null; // 23/11 : ferme au public, canal de test seulement (voir worker/src/noel.js)
 })();
 // 25 jours : jusqu'au 25 decembre a minuit (inclus).
 const DUREE_NOEL_MS = 25 * 24 * 3600 * 1000;

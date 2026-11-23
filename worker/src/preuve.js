@@ -71,8 +71,13 @@ export function verifierTrace(trace, tempsMs, epreuve) {
   const ligneDm = metres * DM_PAR_M;
   const pasMaxDm = VITESSE_MAX_MS * PAS_S * DM_PAR_M;
 
+  // On ne juge que la course, jusqu'a la ligne : apres, le 60 m en salle
+  // renvoie le coureur du tapis (choc, retour au trot) et la trace recule
+  // pour de bon — tout joueur l'a, ce n'est pas une triche (constat du 23/11).
+  const ligne = trace.findIndex(d => Number(d) >= ligneDm);
+  const fin = ligne < 0 ? trace.length : ligne + 1;
   let recule = 0, tropVite = 0;
-  for (let i = 1; i < trace.length; i++) {
+  for (let i = 1; i < fin; i++) {
     const a = Number(trace[i - 1]), b = Number(trace[i]);
     if (!Number.isFinite(a) || !Number.isFinite(b)) return ['trace illisible'];
     const d = b - a;

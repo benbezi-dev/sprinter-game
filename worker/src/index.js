@@ -39,6 +39,7 @@ import {
 import { tableauDesNations, figerLaSemaine, EPREUVE_NATIONS } from './nations.js';
 import { fenetre as fenetreNoel, tableau as tableauNoel, fantome as fantomeNoel,
          noterCourse as noterCourseNoel, lancer as lancerNoel } from './noel.js';
+import * as noelEq from './noel-equipes.js';
 import { fenetre as fenetreMarques, tableau as tableauMarques, choisirCamp,
          noterCourse as noterCourseMarques, changerEpreuve as changerEpreuveMarques,
          fantome as fantomeMarques, EPREUVES as EPREUVES_MARQUES } from './marques.js';
@@ -3253,8 +3254,9 @@ async function servir(request, env, ctx, porteur) {
        publiees appellent ce chemin-ci : on ne le renomme pas, on y ajoute la
        liste. Elle ne depend pas de la base, et nommer les pays n'engage rien. */
     /* ---------------------------------------------- Noel 2026
-       Boules de neige et etoile du sapin : voir noel.js. Quatre routes. */
-    if (url.pathname.startsWith('/noel')) {
+       Boules de neige et etoile du sapin : voir noel.js. Quatre routes.
+       (`/noel` ou `/noel/…` seulement : `/noel-equipes` a son bloc plus bas.) */
+    if (url.pathname === '/noel' || url.pathname.startsWith('/noel/')) {
       const f = fenetreNoel(canal.test);
       if (!f.ouvert) return json({ error: 'noel ferme' }, 404);
       if (url.pathname === '/noel' && request.method === 'GET') {
@@ -3300,6 +3302,63 @@ async function servir(request, env, ctx, porteur) {
             for (const appareil of await appareilsDe(env.DB, [s.pour])) await sonnerEtPush(env, appareil, s.genre, canal.test);
           })().catch(() => {}));
         }
+        return json(r.corps, r.status);
+      }
+      return json({ error: 'route inconnue' }, 404);
+    }
+
+    /* ---------------------------------------------- Noel 2026, les quatre equipes
+       Voir noel-equipes.js. Muet (404) tant que l'evenement n'est pas ouvert
+       sur ce canal ; chaque requete regle d'abord les etapes echues. */
+    if (url.pathname.startsWith('/noel-equipes')) {
+      if (!noelEq.ouvert(canal.test)) return json({ error: 'noel ferme' }, 404);
+      const db = env.DB;
+      await noelEq.ensureTables(db);
+      if (url.pathname === '/noel-equipes/horloge' && request.method === 'POST') {
+        if (!canal.test || !estAdmin(request, env)) return json({ error: 'refuse' }, 403);
+        let body; try { body = await request.json(); } catch { body = {}; }
+        const r = await noelEq.poserHorloge(db, String((body || {}).date || ''));
+        return json(r.corps, r.status);
+      }
+      const t = await noelEq.horloge(db, canal.test);
+      await noelEq.regler(db, { test: canal.test, t, top60: async () => { await ensureScoreGhost(db); return getLeaderboard(db, '60'); } });
+      if (url.pathname === '/noel-equipes' && request.method === 'GET') {
+        const nom = (url.searchParams.get('name') || '').trim().toLowerCase();
+        const dev = url.searchParams.get('device_id') || '';
+        return json(await noelEq.tableau(db, { test: canal.test, t,
+          nameKey: nom && nom !== 'anonyme' ? nom : null, deviceId: isValidDeviceId(dev) ? dev : null }));
+      }
+      if (url.pathname === '/noel-equipes/fantome' && request.method === 'GET') {
+        const cible = (url.searchParams.get('cible') || '').trim().toLowerCase();
+        if (!cible) return json({ error: 'cible manquante' }, 400);
+        const r = await noelEq.fantome(db, { test: canal.test, cibleKey: cible, epreuve: url.searchParams.get('epreuve') || '60' });
+        return json(r.corps, r.status);
+      }
+      if (['/noel-equipes/voter', '/noel-equipes/entrer', '/noel-equipes/course'].includes(url.pathname) && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'json invalide' }, 400); }
+        const { device_id } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const cible = typeof body.cible === 'string' ? body.cible.trim().toLowerCase().slice(0, 40) || null : null;
+        if (url.pathname === '/noel-equipes/voter') {
+          const r = await noelEq.voter(db, { test: canal.test, t, deviceId: device_id, cibleKey: cible });
+          return json(r.corps, r.status);
+        }
+        const name = cleanName(body.name);
+        const key = name.trim().toLowerCase();
+        if (key === 'anonyme') return json({ error: 'choisis d abord ton nom' }, 409);
+        if (!(await peutUtiliser(env.DB, key, device_id))) {
+          ctx.waitUntil(noterRefus(env.DB, { route: url.pathname, nameKey: key, deviceId: device_id }));
+          return json({ error: 'ce nom ne t appartient pas' }, 403);
+        }
+        if (url.pathname === '/noel-equipes/entrer') {
+          const r = await noelEq.entrer(db, { test: canal.test, t, nameKey: key, name });
+          return json(r.corps, r.status);
+        }
+        const timeMs = Math.round(Number(body.time_ms));
+        if (!Number.isFinite(timeMs) || timeMs < MIN_TIME_MS || timeMs > MAX_TIME_MS) return json({ error: 'chrono invalide' }, 400);
+        const r = await noelEq.noterCourse(db, { test: canal.test, t, nameKey: key, name,
+          epreuve: String(body.race_key || ''), timeMs, trace: body.trace, cibleKey: cible });
         return json(r.corps, r.status);
       }
       return json({ error: 'route inconnue' }, 404);

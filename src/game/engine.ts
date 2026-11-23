@@ -171,6 +171,14 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
     const cible = noel.cible && SprinterApp.G.ghostSet ? String(noel.cible) : null;
     import('./noel').then(m => m.envoyerCourse(t, trace, cible)).catch(() => { /* hors ligne */ });
   }
+  // NOEL 2026, les quatre equipes (game/noel-equipes.ts) : une epreuve en salle
+  // de manche, ou le 200 m du departage des chefs.
+  const noelEq = (SprinterApp.G.shotOpts || {}).noelEquipes;
+  if (NOEL_OUVERT && noelEq && ['60', '200s', '400s', '60h'].includes(race) && t != null && !SprinterApp.G.rejeu) {
+    const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
+    const cible = noelEq.cible && SprinterApp.G.ghostSet ? String(noelEq.cible) : null;
+    import('./noel-equipes').then(m => m.envoyerCourse(race, t, trace, cible)).catch(() => { /* hors ligne */ });
+  }
 };
 
 // Meme crochet, pour une CARRIERE gagnee de bout en bout : le compte qui

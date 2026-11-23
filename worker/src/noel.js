@@ -66,7 +66,9 @@ const FIL_N = 30;
 
 /** Ouverture publique, en ms UTC ; null = ferme en production. A fixer par
  *  l'auteur, en meme temps que LANCEMENT_NOEL dans vite.config.ts. */
-export const DEBUT_PROD = Date.parse('2026-12-01T00:00:00+01:00'); // 1er dec, minuit a Paris
+// 23/11 : ferme en production (consigne de l'auteur : « mets-le en test d'abord ») ;
+// la version par equipes ouvrira le 10/12 une fois validee sur le canal de test.
+export const DEBUT_PROD = null;
 export const DUREE_MS = 25 * 24 * 3600 * 1000; // jusqu'au 25 dec a minuit (inclus)
 
 /** L'evenement est-il ouvert sur ce canal, maintenant ? */
