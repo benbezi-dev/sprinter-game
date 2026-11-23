@@ -323,7 +323,12 @@ import { sponsorDeLaCourse } from './panneaux';
       accent: [0, 229, 255], dust: [80, 40, 120],
       neon: [255, 43, 214], neonExt: [255, 43, 214],
       projecteurs: true, pubsLed: true,
-      cyber: true
+      cyber: true,
+      // LA MUSIQUE DE SPRINTERGAME (23/11), celle des annonces iOS/Android :
+      // « on la met sur test pour le moment pour le stade neon » (l'auteur),
+      // sur /test/ et /test3d/. Elle ne se charge que sur le canal de test
+      // (game/musique-dediee.ts) ; absente, `raceTrack` rend les paliers.
+      musique: 'sprintergame'
     },
     // LA PLAGE PARADIS : `plage` est lu par la course 3D (plage-3d.ts) — sable, lagon,
     // palmiers, yachts BENBEZI, pas de gradins. Le 2D n'en reprend que les couleurs.
@@ -1898,11 +1903,6 @@ import { sponsorDeLaCourse } from './panneaux';
       }
       const th = lvl && THEMES[lvl.theme];
       if (th && th.musique && this.buf[th.musique]) return th.musique;
-      // LA MUSIQUE DE SPRINTERGAME (23/11) : celle des annonces iOS/Android,
-      // que l'auteur a voulue pour le jeu. Elle prend la place des quatre
-      // paliers synthetises des qu'elle est chargee (game/musique-dediee.ts) ;
-      // jusque-la, et si elle ne vient jamais, les paliers comme avant.
-      if (this.buf.sprintergame) return 'sprintergame';
       return 'race' + (level <= 2 ? 0 : Math.min(3, level - 2));
     },
     /**
