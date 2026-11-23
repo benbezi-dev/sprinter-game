@@ -1898,6 +1898,11 @@ import { sponsorDeLaCourse } from './panneaux';
       }
       const th = lvl && THEMES[lvl.theme];
       if (th && th.musique && this.buf[th.musique]) return th.musique;
+      // LA MUSIQUE DE SPRINTERGAME (23/11) : celle des annonces iOS/Android,
+      // que l'auteur a voulue pour le jeu. Elle prend la place des quatre
+      // paliers synthetises des qu'elle est chargee (game/musique-dediee.ts) ;
+      // jusque-la, et si elle ne vient jamais, les paliers comme avant.
+      if (this.buf.sprintergame) return 'sprintergame';
       return 'race' + (level <= 2 ? 0 : Math.min(3, level - 2));
     },
     /**
