@@ -1,0 +1,64 @@
+name: Rotation ADMIN_CLE
+
+# Pose une nouvelle ADMIN_CLE sur le worker sans qu'elle apparaisse nulle part
+# en clair : elle est tiree au hasard ici, posee chez Cloudflare, puis seule
+# sa version chiffree (cle publique ci-dessous) sort dans le journal. Le depot
+# etant public, rien d'autre ne doit fuiter. A supprimer apres usage.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/rotation-admin.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker-deploy
+  cancel-in-progress: false
+
+jobs:
+  rotation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Attendre qu'aucune course de championnat ne soit en cours
+        timeout-minutes: 200
+        run: node tools/fenetre-deploiement.mjs --attendre
+      - name: Installer les dependances du worker
+        working-directory: worker
+        run: npm ci
+      - name: Poser la nouvelle cle
+        working-directory: worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          CLE=$(openssl rand -hex 24)
+          echo "::add-mask::$CLE"
+          cat > /tmp/public.pem <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAsrK9Stg8GXzjc0M2S0FC
+          YrXQJkvGnkZJftUMU25mYfRPGzt+Hncy/NGQ/j+NF79wbJeuVrkLmVno4u2EfDiv
+          +NZzLqk/mufMLDMlaaYQB187qJ/YjNHlj//w0KeXvVXZoRki9R8b2oKcfpRnYiX+
+          P4/7RQr8EefdQXx9vquS1Lk83PDL2hDcmoNAI5FM7h0Qc7RVpp/nF3ES3dMcq3FR
+          DX63EaR3fyJtKroY/4zAKxXl66tdY0dWb3uGRD59Qd4J+E1VwOmOOPagYzFpsgy2
+          Xf2xkuNCjx0Kw14degD3CuMZTlXpURao7b3ng5MDLdpRBK1B7nz7Ew5RrwuTlWWo
+          Cn3Y3LhI/sgB77pdBI4f8euBToZYYypjJrp7wXn1OHZGICHUfSZnFepcGwXsW4vs
+          xngO78wdAwgxc99oVKlyK8mVTxJsTAaUNewhC/1KPtvWhNBuqUOf5CxQw5VGW+HQ
+          JHfF9K8OkrpZJzEc0kPwPKdsmmkVdJpgKwu50/LOPHvtAgMBAAE=
+          -----END PUBLIC KEY-----
+          PEM
+          printf '%s' "$CLE" | npx wrangler secret put ADMIN_CLE > /dev/null
+          sleep 20
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' -H "X-Sprinter-Admin: $CLE" https://sprinter-leaderboard.benbezi-sprinter.workers.dev/stats/admin)
+          echo "Verification /stats/admin avec la nouvelle cle : HTTP $CODE"
+          echo "CHIFFRE_DEBUT"
+          printf '%s' "$CLE" | openssl pkeyutl -encrypt -pubin -inkey /tmp/public.pem -pkeyopt rsa_padding_mode:oaep | base64 -w0
+          echo
+          echo "CHIFFRE_FIN"
+          [ "$CODE" = "200" ]
