@@ -2,12 +2,10 @@
 // musique de course du jeu (23/11/2026).
 //
 // L'auteur l'a composee pour les quatre videos de lancement des applis (reel
-// du 19.12, 100 m, 110 m haies, 400 m), puis : « j'aime trop ! garde cette
-// musique pour le jeu », et « branche cette musique dans le jeu ». Elle
-// remplace donc les quatre paliers synthetises (`race0` a `race3`) partout ou
-// un stade n'a pas deja la sienne : Halloween, les defis, la Legende, la
-// Riviera du canal de test et le championnat en direct gardent leur morceau
-// (voir raceTrack, sprinter-app.js).
+// du 19.12, 100 m, 110 m haies, 400 m), puis : « garde cette musique pour le
+// jeu », et pour commencer « on la met sur test pour le moment pour le stade
+// neon » (versions /test/ et /test3d/). C'est donc la musique du theme `cyber`
+// (sprinter-app.js), et elle ne se charge que sur le canal de test.
 //
 // C'EST UN FICHIER, comme les morceaux des defis : il doit sonner comme les
 // videos. Sources et fabrication hors du depot : projet Logic Pro et scripts
@@ -24,10 +22,15 @@
 // decodage refuse), `raceTrack` rend les paliers synthetises comme avant. S'il
 // arrive en pleine course, il attend la fin de celle-ci (`installer`).
 //
+// La production ne la telecharge jamais (EST_TEST se replie a faux au build),
+// et le deploiement retire le fichier du site public (deploy.yml).
+//
 // Ce module n'importe pas le moteur : c'est le moteur qui l'appelle (engine.ts,
 // des que le son est debloque), et un import dans l'autre sens ferait une boucle.
 
-/** Le nom sous lequel le moteur range le morceau. Voir raceTrack. */
+import { EST_TEST } from './canal';
+
+/** Le nom sous lequel le moteur range le morceau. Voir le theme `cyber`. */
 export const NOM = 'sprintergame';
 
 /** Le tempo de la musique des annonces. */
@@ -50,6 +53,8 @@ export function etatDeLaMusiqueDediee(): Etat { return etat; }
 export async function chargerLaMusiqueDediee(A: any, G: any): Promise<boolean> {
   if (etat === 'pret') return true;
   if (etat === 'en-cours' || etat === 'refuse') return false;
+  // Canal de test seulement, pour le moment (Stade Neon).
+  if (!EST_TEST) return false;
   // Pas de contexte audio avant le premier geste : ce n'est pas un refus,
   // l'appel suivant le trouvera ouvert.
   if (!A || !A.ok || !A.ctx) return false;
