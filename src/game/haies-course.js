@@ -157,6 +157,13 @@ export function pasHaies(joueur) {
   // tombe pour la meme raison, et plus franchement encore.
   if (juge && (juge.note === 'hache' || juge.note === 'percute')) {
     touchees.set(juge.haie - 1, SprinterApp.G.elapsed || 0);
+    // L'etincelle de la haie accrochee (2D seulement, game/effets-pixel.ts).
+    const fx = globalThis.EffetsPixel, T = SprinterApp.G.track;
+    const d = course && course.positions[juge.haie - 1];
+    if (fx && T && d != null) {
+      const p = T.posDemi(d, joueur.lane, 0);
+      fx.lancer('etincelle', p[0], p[1], { z: 0.75 });
+    }
   }
 }
 
