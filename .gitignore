@@ -30,6 +30,8 @@ docs/instagram_charte.md
 !.claude/agents/
 # Les skills du projet (find-skills de vercel-labs/skills, ajoute le 10/11/2026) :
 # du texte d'instructions, sans chemin absolu. Leur source est dans skills-lock.json.
+# Le 24/11/2026 : 12 skills de gamedev-skills/awesome-gamedev-agent-skills (router,
+# three.js, et les disciplines utiles a Sprinter) — pas les 79, pour ne pas noyer la liste.
 !.claude/skills/
 
 # Secrets de developpement wrangler.
