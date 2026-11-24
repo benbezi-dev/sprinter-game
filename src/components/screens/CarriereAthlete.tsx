@@ -478,6 +478,9 @@ function Actions({ a, lieu, ev, changer, ids }: { a: Athlete; lieu: string; ev: 
   // ce qui ne concerne pas l'age (le college a 25 ans) n'apparait pas ; `ids` : celles d'un meuble (interieur.ts)
   const liste = ACTIONS.filter(x => (ids ? ids.includes(x.id) : x.lieu === lieu) && actionPossible(a, x.id) !== 'etape');
   if (!liste.length) return null;
+  // l'action que le guide conseille : en tete, cerclee d'or (24/11, « on ne sait pas quoi faire »)
+  const vise = conseil(a, false).action;
+  liste.sort((x, y) => (y.id === vise ? 1 : 0) - (x.id === vise ? 1 : 0));
   return (
     <Carte titre={dans(['FAIRE', 'DO'])}>
       {liste.map(x => {
@@ -486,7 +489,7 @@ function Actions({ a, lieu, ev, changer, ids }: { a: Athlete; lieu: string; ev: 
         const deja = r === 'fait' || (!r && (a.faitAujourdhui || []).includes(x.id));
         const duree = x.duree === 'nuit' ? dans(['la nuit', 'overnight']) : x.duree === 'cours' ? (x.id === 'travail' ? dans([`jusqu’à 17 h · +${SALAIRE} €`, `till 5 pm · +€${SALAIRE}`]) : dans(['jusqu’à 16 h 30', 'till 4:30 pm'])) : `${x.duree} min`;
         return (
-          <motion.div layout key={x.id} className={`flex items-center gap-2 ${deja ? 'opacity-55' : ''}`} transition={RESSORT.rang}>
+          <motion.div layout key={x.id} className={`flex items-center gap-2 ${deja ? 'opacity-55' : ''} ${x.id === vise && !deja ? 'rounded-xl -mx-1.5 px-1.5 py-1 ring-2 ring-[#F5C542] bg-[#F5C542]/10' : ''}`} transition={RESSORT.rang}>
             <span className="flex-1 min-w-0 flex flex-col">
               <span className="text-xs font-black flex items-center gap-1">
                 <AnimatePresence initial={false}>{deja && (
@@ -1012,7 +1015,9 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
       depart: a.position || null,
       nom: l => nomLieu(l, a),
       adulte: etape(a) === 'adulte',
-      surLieu: l => (AMENAGEMENT[l] ? setDedans(l) : setLieu(l)),
+      // (24/11, l'auteur : « on ne sait pas quoi faire ni comment ») en entrant, ce qu'on fait ici s'ouvre tout de suite,
+      // comme sur le tableau de la semaine : plus besoin de trouver le bon meuble
+      surLieu: l => { if (AMENAGEMENT[l]) setDedans(l); setLieu(l); },
       surPosition: p => { a.position = p; },
       surPret: () => setPret(true),
       surErreur: () => setErreurVille(true),
@@ -1065,6 +1070,9 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
 
   const comp = COMPETITIONS[a.niveau];
   const { jour: leJour, date: direct, cetteSemaine } = jourDeLAthlete(a);
+  // le lieu du guide : son enseigne en or et la fleche au bord de l'ecran (ville.ts, guider)
+  const leConseil = conseil(a, leJour);
+  useEffect(() => { ville.current?.guider((leConseil.lieu as Lieu) || null); }, [leConseil.lieu, pret]);
   // LA TENUE DU MOMENT : en ville, a l'entrainement, le jour J, la nuit (garde-robe.ts)
   const { moment, t: tenueVue } = tenueDuMoment(a, leJour);
   useEffect(() => { ville.current?.habiller(lookDe(apparenceDe(a), true, tenueVue)); }, [moment, tenueVue?.id, pret]);
@@ -1212,6 +1220,15 @@ function VieEnVille({ a, onFermer, onEffacer }: { a: Athlete; onFermer: () => vo
       {/* le lieu ou l'on vient d'entrer */}
       {lieu && (
         <Feuille titre={nomLieu(lieu, a).toUpperCase()} sous={LIEUX[lieu].vrai} onFermer={() => { sauver(a); setLieu(null); }}>
+          {leConseil.lieu === lieu && (
+            <div className="rounded-xl px-3 py-2 flex items-center gap-2 text-black" style={{ background: '#F5C542' }}>
+              <Navigation size={14} className="shrink-0" />
+              <span className="flex flex-col min-w-0">
+                <span className="text-[9px] font-black tracking-[0.2em]">{dans(['À FAIRE ICI', 'TO DO HERE'])}</span>
+                <span className="text-sm font-black leading-tight">{dans(leConseil.titre)}</span>
+              </span>
+            </div>
+          )}
           <Ici a={a} lieu={lieu} parler={p => { setLieu(null); setPersonne(p); }} />
           <DansLeLieu lieu={lieu} a={a} ev={!!ev} leJour={leJour} changer={changer} aller={aller}
                       surSeance={j => setSeance(j)} onEffacer={onEffacer}

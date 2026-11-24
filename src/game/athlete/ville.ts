@@ -709,6 +709,12 @@ export class Ville {
   private enseignes: THREE.Object3D[] = [];
   private cible = new THREE.Vector3();
   private lieuVise: Lieu | null = null;
+  /**
+   * LE LIEU DU GUIDE (24/11, l'auteur : « en ville on se perd, on ne sait pas quoi faire, où ni comment ») : son
+   * enseigne passe en or, et une fleche au bord de l'ecran montre ou il est quand il sort du cadre.
+   */
+  private guideLieu: Lieu | null = null;
+  private fleche: HTMLDivElement | null = null;
   private azimut = Math.PI / 4;
   private azimutVise = Math.PI / 4;
   private zoom = 1;
@@ -780,7 +786,8 @@ export class Ville {
       if (this.arrete) return;
       this.construire(d);
       this.construite = true;
-      this.o.surPret?.();
+      this.guider(this.guideLieu);
+    this.o.surPret?.();
       if (!this.enPause) this.id = requestAnimationFrame(this.boucle);
     }, () => { if (!this.arrete) this.o.surErreur?.(); });
   }
@@ -895,6 +902,10 @@ export class Ville {
   /** Marcher jusqu'a un lieu (le chemin par les rues). */
   allerA(l: Lieu) {
     if (!this.moi) return;
+    // deja devant la porte : on entre, sans marcher sur place
+    if (this.portes[l] && Math.hypot(this.portes[l][0] - this.moi.pos.x, this.portes[l][1] - this.moi.pos.z) < 4) {
+      this.moi.route = []; this.lieuVise = null; this.marque.visible = false; this.o.surLieu(l); return;
+    }
     const r = this.pietons.chemin(this.pietons.proche(this.moi.pos.x, this.moi.pos.z), this.pietons.proche(...this.portes[l]));
     this.moi.route = [...r, this.portes[l]];
     this.lieuVise = l;
@@ -937,6 +948,18 @@ export class Ville {
   /** Les metres courus depuis la derniere lecture (ils coutent de l'energie, CarriereAthlete). */
   metresCourus() { const m = this.metres; this.metres = 0; return m; }
   porte(l: Lieu): P2 | null { return this.portes[l] || null; }
+  /** Le lieu que le guide conseille (ou aucun) : enseigne en or, fleche au bord de l'ecran s'il est hors du cadre. */
+  guider(l: Lieu | null) {
+    // pas de sortie anticipee : appele avant la construction, il doit repeindre les enseignes une fois pretes
+    this.guideLieu = l;
+    for (const e of this.etiquettes) {
+      const vise = e.l === l;
+      e.el.style.background = vise ? '#F5C542' : 'rgba(8,18,14,0.82)';
+      e.el.style.color = vise ? '#111' : '#fff';
+      e.el.style.zIndex = vise ? '2' : '1';
+      e.el.style.fontSize = vise ? '13px' : '11px';
+    }
+  }
 
   /** La distance a pied jusqu'a un lieu, a vol d'oiseau, en metres. */
   distance(l: Lieu): number {
@@ -1486,6 +1509,36 @@ export class Ville {
     };
     for (const [, g] of this.habitants) placer(g.el, g.p.pos, 2.5, 60);
     for (const { el, p } of this.etiquettes) placer(el, p, 0, 80);
+    this.laFleche(l, h);
+  }
+
+  /** La fleche du guide : au bord de l'ecran, tournee vers le lieu conseille, avec la distance. */
+  private laFleche(l: number, h: number) {
+    const lieu = this.guideLieu, porte = lieu && this.portes[lieu];
+    if (!this.fleche) {
+      const f = this.fleche = document.createElement('div');
+      f.style.cssText = 'position:absolute;left:0;top:0;pointer-events:none;z-index:3;display:none;'
+        + 'width:58px;height:58px;margin:-29px 0 0 -29px;border-radius:999px;background:#F5C542;color:#111;'
+        + 'box-shadow:0 4px 14px rgba(0,0,0,.4);font:900 10px system-ui,sans-serif;'
+        + 'display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1';
+      f.innerHTML = '<span style="font-size:22px;display:block">➜</span><span></span>';
+      this.hote.appendChild(f);
+    }
+    const f = this.fleche;
+    if (!porte || !this.moi) { if (f.style.display !== 'none') f.style.display = 'none'; return; }
+    _E.set(porte[0], 3, porte[1]).project(this.cam);
+    let x = (_E.x + 1) / 2 * l, y = (1 - _E.y) / 2 * h;
+    if (_E.z > 1) { x = l - x; y = h - y; }   // derriere la camera : la projection est inversee
+    const dans = _E.z <= 1 && x > 30 && x < l - 30 && y > 30 && y < h - 30;
+    if (dans) { if (f.style.display !== 'none') f.style.display = 'none'; return; }
+    // le bord de l'ecran, sur la droite qui va du centre au lieu (hors des bandeaux du haut et du bas)
+    const cx = l / 2, cy = h / 2, dx = x - cx, dy = y - cy;
+    const k = Math.min((l / 2 - 40) / Math.max(1e-3, Math.abs(dx)), (h / 2 - 140) / Math.max(1e-3, Math.abs(dy)));
+    if (f.style.display !== 'flex') f.style.display = 'flex';
+    f.style.transform = `translate(${(cx + dx * k).toFixed(0)}px, ${(cy + dy * k).toFixed(0)}px)`;
+    (f.firstChild as HTMLElement).style.transform = `rotate(${Math.atan2(dy, dx).toFixed(2)}rad)`;
+    const m = Math.round(Math.hypot(porte[0] - this.moi.pos.x, porte[1] - this.moi.pos.z) / 10) * 10;
+    (f.lastChild as HTMLElement).textContent = m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`;
 
   }
 }
