@@ -868,11 +868,19 @@ function Gammes({ fini, couleur, scene }: JeuProps) {
     if (!debut.current) debut.current = performance.now() / 1000 - tt;
     setT(tt);
     // le geste : il monte vite, redescend en 0,3 s ; entre deux, l'athlete avance au pas
-    const g = geste.current, a = Math.max(0, 1 - (tt - g.t) / 0.32), h = Math.sin(Math.min(1, a) * Math.PI / 2);
-    e.corps.posture = h > 0.02
+    // (24/11, l'auteur : « le personnage ne bouge pas sur les gammes ») il ne bougeait que sur une note reussie : a 0 %,
+    // il restait fige. Il fait maintenant l'educatif sur CHAQUE note, en rythme ; reussie, le geste est entier, ratee, a moitie.
+    let auto: (typeof notes.current)[number] | null = null;
+    for (const n of notes.current) { if (n.t <= tt) auto = n; else break; }
+    const reussi = geste.current.t >= (auto ? auto.t - 0.13 : -9);
+    const g = reussi || !auto ? geste.current : { t: auto.t, cote: auto.c === 'g' ? 1 : -1, pose: EDUCATIFS[auto.ed].pose };
+    const a = Math.max(0, 1 - (tt - g.t) / 0.32), h = Math.sin(Math.min(1, a) * Math.PI / 2) * (reussi ? 1 : 0.55);
+    const c = e.corps;
+    c.posture = h > 0.02
       ? (g.pose === 'talons' || g.pose === 'griffes' ? POSTURES.talons(g.cote, h * (g.pose === 'griffes' ? 0.6 : 1)) : POSTURES.genoux(g.cote, h * (g.pose === 'chasses' ? 0.45 : 1)))
       : { w: 0 };
-    e.corps.debout = h > 0.02 ? 0 : 1;
+    c.debout = h > 0.02 ? 0 : 1;
+    c.marche = h > 0.02 ? 0 : 1; c.marcheT = (c.marcheT || 0) + dt * 5; c.v = 0;
     e.defile += dt * 1.1;
     if (tt >= fin) { fini(borne(touches.current / notes.current.length - fautes.current * 0.02)); return true; }
   });

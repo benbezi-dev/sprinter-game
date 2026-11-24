@@ -80,6 +80,19 @@ export function creerSeance3D(lieu: Lieu3D, look: any, P: Pinceaux): { s: Seance
   return { s: null, erreur };
 }
 
+/** Le repere (x = direction, y = axe orthogonalise, z = x^y) en matrice de rotation. */
+function base(dir: THREE.Vector3, axe: THREE.Vector3) {
+  const x = dir.clone().normalize(), y = axe.clone().addScaledVector(x, -axe.dot(x)).normalize(), z = x.clone().cross(y);
+  return new THREE.Matrix4().makeBasis(x, y, z);
+}
+
+/** L'angle de torsion d'un os autour de l'axe de son parent (la direction de l'os, `o.position`), de 0 a PI. */
+function torsion(o: THREE.Object3D) {
+  const ax = o.position.clone().normalize(), q = o.quaternion;
+  const d = q.x * ax.x + q.y * ax.y + q.z * ax.z;
+  return 2 * Math.atan2(Math.abs(d), Math.abs(q.w));
+}
+
 export class Seance3D {
   readonly toile: HTMLCanvasElement;
   private R: THREE.WebGLRenderer;
@@ -140,6 +153,9 @@ export class Seance3D {
     if (lieu === 'tapis') { this.cam.position.set(-0.1, 1.0, 3.7); this.vise.set(-0.35, 0.45, 0); }
     // la salle de trois quarts face, comme le coach : la barre et ses disques se voient de cote, pas en bout
     else if (lieu === 'salle') { this.cam.position.set(2.6, 1.4, 3.2); this.vise.set(0.0, 0.95, 0); }
+    // la cote (24/11, l'auteur : « le personnage n'est pas proportionnel au décor ») : en grand angle a 3,8 m, l'athlete
+    // ecrasait des pins de 8 m restes a 14 m. Camera reculee a 7,5 m, objectif serre : meme taille a l'ecran, le decor grandit
+    else if (lieu === 'cote') { this.cam.position.set(0.7, 1.3, 7.5); this.cam.fov = 24; this.cam.updateProjectionMatrix(); this.vise.set(0.5, 1.05, 0); }
     else { this.cam.position.set(0.7, 1.1, 3.8); this.vise.set(0.5, 1.05, 0); }
   }
 
@@ -283,8 +299,8 @@ export class Seance3D {
     // les pins : troncs et cimes en deux maillages instancies
     const pos: [number, number, number][] = [];
     for (let i = 0; i < 420; i++) {
-      const z = -6 - fixe(i * 1.9) * 85, x = -80 + fixe(i * 3.3 + 1) * 360;
-      if (z > -10) continue;   // rien entre la camera et le chemin de l'athlete
+      // les premiers pins a 4,5 m derriere le chemin, rien entre la camera et lui
+      const z = -4.5 - Math.pow(fixe(i * 1.9), 1.4) * 85, x = -80 + fixe(i * 3.3 + 1) * 360;
       pos.push([x, z, 0.7 + fixe(i + 7) * 0.7]);
     }
     const cimes = mergeGeometries([0, 1, 2].map(k => new THREE.ConeGeometry(1.6 - k * 0.38, 3.2, 7).translate(0, 2.6 + k * 1.7, 0)))!;
@@ -496,8 +512,13 @@ export class Seance3D {
       if (e.barre !== null || this.lieu === 'tapis') {
         racine.updateMatrixWorld(true);
         let bas = Infinity;
-        for (const o of this.os) bas = Math.min(bas, o.getWorldPosition(this._v).y);
-        if (isFinite(bas)) { racine.matrix.elements[13] += (this.lieu === 'tapis' ? 0.06 : 0.05) - bas; racine.matrixWorldNeedsUpdate = true; }
+        // (24/11, l'auteur : les pieds entoures) l'os du pied est la CHEVILLE : pose a 5 cm, la chaussure entrait de 7 cm
+        // dans l'estrade et le pied disparaissait. Debout sous la barre, on pose la vraie semelle (les sommets des chaussures).
+        const semelle = this.lieu === 'salle' ? this.basDesChaussures() : Infinity;
+        if (isFinite(semelle)) bas = semelle;
+        else for (const o of this.os) bas = Math.min(bas, o.getWorldPosition(this._v).y);
+        const sol = this.lieu === 'tapis' ? 0.06 : isFinite(semelle) ? 0.047 : 0.05;
+        if (isFinite(bas)) { racine.matrix.elements[13] += sol - bas; racine.matrixWorldNeedsUpdate = true; }
       } else if (this.lieu === 'cote' && e.pente) {
         // la pente : le sol est a y = x.tan(p) ; le corps est pose pour du plat, si bien que le
         // pied avant entrait dans la cote. On deplace le corps pour que le pied le plus bas garde
@@ -538,7 +559,7 @@ export class Seance3D {
   /**
    * LES MAINS SUR LA BARRE (16/11, l'auteur : « les bras ça va pas », « les mains ça va toujours pas »). La pose du
    * moteur est celle de la 2D, vue de profil : en 3D les mains se croisaient devant la poitrine. Chaque bras est replie
-   * par deux os (bras, avant-bras) vers la prise, a 42 cm du milieu de la barre, coude vers le bas. Puis la main :
+   * par deux os (bras, avant-bras) vers la prise, a 55 cm du milieu de la barre (42 pliait le coude en pointe, 24/11), coude vers le bas. Puis la main :
    * le poing que `poser` ferme deja (COURBE.poing) est tourne pour que son creux suive l'axe de la barre, doigts
    * par-dessus, et le bras est recale pour que la barre passe DANS le poing, pas a cote.
    */
@@ -548,7 +569,7 @@ export class Seance3D {
     this.barre.updateMatrixWorld(true);
     const axe = new THREE.Vector3(0, 0, 1).applyQuaternion(this.barre.quaternion).normalize();
     const yaw = this.barre.rotation.y, arriere = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
-    const prises = [-0.42, 0.42].map(z => this.barre!.localToWorld(new THREE.Vector3(0, 0, z)));
+    const prises = [-0.55, 0.55].map(z => this.barre!.localToWorld(new THREE.Vector3(0, 0, z)));
     const P = (o: THREE.Object3D) => o.getWorldPosition(new THREE.Vector3());
     for (const c of ['l', 'r']) {
       const bras = os.get('upperarm_' + c), avant = os.get('lowerarm_' + c), main = os.get('hand_' + c);
@@ -557,31 +578,41 @@ export class Seance3D {
       const S = P(bras);
       const prise = prises[0].distanceTo(S) < prises[1].distanceTo(S) ? prises[0] : prises[1];
       const a = S.distanceTo(P(avant)), b = P(avant).distanceTo(P(main));
-      // le poignet sous la barre et un peu devant ; deux passes : la seconde corrige de l'ecart poing-barre
-      const T = prise.clone().add(new THREE.Vector3(0, -0.06, 0)).addScaledVector(arriere, -0.02);
-      // la jointure du majeur se pose DEVANT la barre, contre elle : la paume la porte, les doigts l'entourent
-      const jointure = prise.clone().addScaledVector(arriere, -RAYON_PRISE);
-      for (let passe = 0; passe < 3; passe++) {
-        this.plierBras(bras, avant, main, T, a, b, arriere);
-        if (!d1 || !d3) break;
-        this.orienterPoing(main, d1, d3, axe, arriere);
-        const ecart = jointure.clone().sub(P(d1));
-        ecart.addScaledVector(axe, -ecart.dot(axe));   // le long de la barre, la main peut glisser
-        T.add(ecart);
-      }
+      // (24/11, l'auteur : « la main est à l'envers et ne tient pas la barre ») la vraie prise de squat : la paume DERRIERE
+      // la barre, tournee vers l'avant ; vue de face on voit le dos des doigts enroules par-dessus. Le poignet sous la barre,
+      // un peu en arriere ; deux passes : la seconde corrige de l'ecart poing-barre
+      const T0 = prise.clone().add(new THREE.Vector3(0, -0.06, 0)).addScaledVector(arriere, 0.03);
+      // la jointure du majeur se pose DERRIERE la barre, contre elle : la paume la porte, les doigts l'entourent par-dessus
+      const jointure = prise.clone().addScaledVector(arriere, RAYON_PRISE);
+      const placer = () => {
+        const T = T0.clone();
+        for (let passe = 0; passe < 3; passe++) {
+          this.plierBras(bras, avant, main, T, a, b, arriere, c);
+          if (!d1 || !d3) break;
+          this.orienterPoing(main, d1, d3, axe, arriere);
+          const ecart = jointure.clone().sub(P(d1));
+          ecart.addScaledVector(axe, -ecart.dot(axe));   // le long de la barre, la main peut glisser
+          T.add(ecart);
+        }
+      };
+      placer();
+      this.detordrePoignet(avant, main);
       // (16/11, l'auteur : « les doigts… ») les doigts ENTOURENT la barre : chaque phalange tourne autour de son axe
       // en gardant la meme distance, par-dessus puis derriere, au lieu de pendre en griffe
-      const haut = new THREE.Vector3(0, 1, 0), devant = arriere.clone().negate();
-      const sens = devant.clone().applyAxisAngle(axe, Math.PI / 2).dot(haut) > 0 ? 1 : -1;
-      for (const f of ['index', 'middle', 'ring', 'pinky']) {
-        for (const n of ['01', '02', '03']) {
+      const haut = new THREE.Vector3(0, 1, 0);
+      // de l'arriere vers le haut puis vers l'avant
+      const sens = arriere.clone().applyAxisAngle(axe, Math.PI / 2).dot(haut) > 0 ? 1 : -1;
+      // le pouce aussi (24/11 : « le doigt se lève toujours », c'etait lui, laisse droit) : prise sans pouce, par-dessus
+      for (const f of ['index', 'middle', 'ring', 'pinky', 'thumb']) {
+        for (const n of f === 'thumb' ? ['02', '03'] : ['01', '02', '03']) {
           const o = os.get(`${f}_${n}_${c}`);
           const enfant = o?.children.find((x: any) => x.isBone);
           if (!o || !enfant) continue;
           o.updateMatrixWorld(true);
           const p = P(o), q = P(enfant), L = p.distanceTo(q);
           const r = p.clone().sub(prise); r.addScaledVector(axe, -r.dot(axe));
-          const rho = Math.max(r.length(), RAYON_PRISE * 0.8);
+          // (24/11, « le doigt se lève toujours ») un doigt loin de la barre restait droit : on le ramene contre elle
+          const rho = Math.min(Math.max(r.length(), RAYON_PRISE * 0.8), RAYON_PRISE * 1.3);
           const theta = 2 * Math.asin(Math.min(1, L / (2 * rho)));
           const vers = p.clone().sub(r).add(r.clone().setLength(rho).applyAxisAngle(axe, sens * theta));
           this.viser(o, q, vers);
@@ -589,8 +620,14 @@ export class Seance3D {
       }
     }
   }
-  /** Bras et avant-bras replies pour que le poignet atteigne T (deux os, coude vers le bas et un peu en arriere). */
-  private plierBras(bras: THREE.Object3D, avant: THREE.Object3D, main: THREE.Object3D, T: THREE.Vector3, a: number, b: number, arriere: THREE.Vector3) {
+  /**
+   * Bras et avant-bras replies pour que le poignet atteigne T, coude vers le bas et un peu en arriere.
+   * (24/11, l'auteur : « on ne dirait pas un bras », la pointe au coude) viser chaque os au plus court laissait au coude
+   * une torsion de 90 a 100° : il pliait de travers. Le coude est maintenant une CHARNIERE : l'avant-bras tourne autour de
+   * l'axe du coude du modele (vertical en pose de repos, bras en croix, paumes en bas), et le bras s'oriente pour que
+   * ce plan de pliage passe par l'epaule, le coude et le poignet.
+   */
+  private plierBras(bras: THREE.Object3D, avant: THREE.Object3D, main: THREE.Object3D, T: THREE.Vector3, a: number, b: number, arriere: THREE.Vector3, cote: string) {
     bras.updateMatrixWorld(true);
     const S = bras.getWorldPosition(new THREE.Vector3());
     const u = T.clone().sub(S); const D = Math.min(Math.max(u.length(), Math.abs(a - b) + 1e-3), a + b - 1e-3); u.normalize();
@@ -598,15 +635,59 @@ export class Seance3D {
     pole.addScaledVector(u, -pole.dot(u)).normalize();
     const cosA = (a * a + D * D - b * b) / (2 * a * D), sinA = Math.sqrt(Math.max(0, 1 - cosA * cosA));
     const coude = S.clone().addScaledVector(u, a * cosA).addScaledVector(pole, a * sinA);
-    this.viser(bras, avant.getWorldPosition(new THREE.Vector3()), coude);
+    const W = S.clone().addScaledVector(u, D);
+    const ch = this.charniere(bras, avant, main, cote);
+    if (!ch) {
+      this.viser(bras, avant.getWorldPosition(new THREE.Vector3()), coude);
+      avant.updateMatrixWorld(true);
+      this.viser(avant, main.getWorldPosition(new THREE.Vector3()), W);
+      return;
+    }
+    // le bras : son axe vers le coude, l'axe de la charniere perpendiculaire au plan epaule-coude-poignet
+    const ub = coude.clone().sub(S).normalize();
+    const wp = W.clone().sub(coude); const theta = ub.angleTo(wp);
+    wp.addScaledVector(ub, -wp.dot(ub));
+    if (wp.lengthSq() < 1e-10) wp.copy(pole);
+    wp.normalize();
+    const n = ub.clone().cross(wp).normalize().multiplyScalar(ch.signe);
+    const qMonde = base(ub, n).multiply(base(ch.dirBras, ch.axeDansBras).invert());
+    const qParent = bras.parent!.getWorldQuaternion(new THREE.Quaternion()).invert();
+    bras.quaternion.copy(qParent.multiply(new THREE.Quaternion().setFromRotationMatrix(qMonde)));
+    bras.updateMatrixWorld(true);
+    // l'avant-bras : repos + rotation autour de la charniere
+    avant.quaternion.copy(ch.repos).multiply(new THREE.Quaternion().setFromAxisAngle(ch.axe, ch.signe * theta));
     avant.updateMatrixWorld(true);
-    this.viser(avant, main.getWorldPosition(new THREE.Vector3()), S.clone().addScaledVector(u, D));
   }
+  /** L'axe du coude dans le repere de l'avant-bras, lu dans la pose de liaison du modele (une fois par cote). */
+  private charniere(bras: THREE.Object3D, avant: THREE.Object3D, main: THREE.Object3D, cote: string) {
+    if (cote in this.charnieres) return this.charnieres[cote];
+    let sk: THREE.Skeleton | null = null;
+    this.m3!.m.racine.traverse((o: any) => { if (!sk && o.isSkinnedMesh && o.skeleton.bones.includes(avant) && o.skeleton.bones.includes(bras)) sk = o.skeleton; });
+    let r: typeof this.charnieres[string] = null;
+    if (sk) {
+      const K = sk as THREE.Skeleton;
+      const lie = (o: THREE.Object3D) => new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().copy(K.boneInverses[K.bones.indexOf(o as THREE.Bone)]).invert());
+      const qB = lie(bras), qA = lie(avant);
+      const repos = qB.clone().invert().multiply(qA);
+      // le coude plie l'avant-bras vers l'avant du modele (+z) : son axe est perpendiculaire a l'os et a l'avant
+      // (le modele est lie bras le long du corps ; la formule vaut aussi bras en croix)
+      const dirA = main.position.clone().normalize();
+      const axeMonde = dirA.clone().applyQuaternion(qA).cross(new THREE.Vector3(0, 0, 1));
+      if (axeMonde.lengthSq() < 1e-6) axeMonde.set(1, 0, 0);
+      const axe = axeMonde.normalize().applyQuaternion(qA.clone().invert()).normalize();
+      const essai = dirA.clone().applyAxisAngle(axe, 0.3).applyQuaternion(qA);
+      const signe = essai.z > dirA.clone().applyQuaternion(qA).z ? 1 : -1;
+      r = { repos, axe, signe, dirBras: avant.position.clone().normalize(), axeDansBras: axe.clone().applyQuaternion(repos).normalize() };
+    }
+    this.charnieres[cote] = r;
+    return r;
+  }
+  private charnieres: Record<string, { repos: THREE.Quaternion; axe: THREE.Vector3; signe: number; dirBras: THREE.Vector3; axeDansBras: THREE.Vector3 } | null> = {};
   /** La main pointe vers le haut et un peu en arriere, et tourne sur elle-meme pour que l'axe du poing suive la barre. */
   private orienterPoing(main: THREE.Object3D, d1: THREE.Object3D, d3: THREE.Object3D, axe: THREE.Vector3, arriere: THREE.Vector3) {
     main.updateMatrixWorld(true);
     const w = main.getWorldPosition(new THREE.Vector3());
-    this.viser(main, d1.getWorldPosition(new THREE.Vector3()), w.clone().add(new THREE.Vector3(0, 1, 0).addScaledVector(arriere, 0.35)));
+    this.viser(main, d1.getWorldPosition(new THREE.Vector3()), w.clone().add(new THREE.Vector3(0, 1, 0).addScaledVector(arriere, 0.1)));
     // l'axe du poing : l'axe local x des phalanges (celui autour duquel `poser` les replie)
     const dir = d1.getWorldPosition(new THREE.Vector3()).sub(w).normalize();
     const pli = new THREE.Vector3(1, 0, 0).applyQuaternion(d1.getWorldQuaternion(new THREE.Quaternion()));
@@ -617,14 +698,44 @@ export class Seance3D {
     const monde = main.getWorldQuaternion(new THREE.Quaternion()).premultiply(q);
     main.quaternion.copy(main.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(monde));
     main.updateMatrixWorld(true);
-    // la prise de squat (16/11, l'auteur : « les mains sont à l'envers ») : la paume devant la barre, les doigts
-    // passent par-dessus VERS L'ARRIERE. S'ils s'enroulent vers l'avant, la main fait un demi-tour sur elle-meme.
-    if (d3.getWorldPosition(new THREE.Vector3()).sub(d1.getWorldPosition(new THREE.Vector3())).dot(arriere) < 0) {
+    // la prise de squat (24/11) : la paume derriere la barre, les doigts passent par-dessus VERS L'AVANT.
+    // S'ils s'enroulent vers l'arriere, la main fait un demi-tour sur elle-meme.
+    if (d3.getWorldPosition(new THREE.Vector3()).sub(d1.getWorldPosition(new THREE.Vector3())).dot(arriere) > 0) {
       const demi = new THREE.Quaternion().setFromAxisAngle(dir, Math.PI);
       const m2 = main.getWorldQuaternion(new THREE.Quaternion()).premultiply(demi);
       main.quaternion.copy(main.parent!.getWorldQuaternion(new THREE.Quaternion()).invert().multiply(m2));
       main.updateMatrixWorld(true);
     }
+  }
+  /** Le point le plus bas des chaussures (maillages Tige_foot_*), deformees par le squelette ; Infinity sans chaussures. */
+  private basDesChaussures() {
+    if (!this.chaussures) {
+      this.chaussures = [];
+      this.m3!.m.racine.traverse((o: any) => { if (o.isSkinnedMesh && /foot/i.test(o.name)) this.chaussures!.push(o); });
+    }
+    let bas = Infinity;
+    for (const o of this.chaussures) {
+      const n = o.geometry.attributes.position.count;
+      for (let i = 0; i < n; i += 2) { o.getVertexPosition(i, this._v); o.localToWorld(this._v); if (this._v.y < bas) bas = this._v.y; }
+    }
+    return bas;
+  }
+  private chaussures: THREE.SkinnedMesh[] | null = null;
+
+  /**
+   * La main tournee sur elle-meme vrillait le poignet (la peau en papillote) : la moitie de cette torsion, prise autour
+   * de l'axe de l'avant-bras, passe dans l'avant-bras (pronation), comme le fait le radius. La main ne bouge pas dans le monde.
+   */
+  private detordrePoignet(avant: THREE.Object3D, main: THREE.Object3D) {
+    const ax = main.position.clone().normalize(), q = main.quaternion;
+    const d = q.x * ax.x + q.y * ax.y + q.z * ax.z;
+    const torsion = new THREE.Quaternion(ax.x * d, ax.y * d, ax.z * d, q.w);
+    if (torsion.lengthSq() < 1e-9) return;
+    torsion.normalize();
+    const moitie = new THREE.Quaternion().slerp(torsion, 0.5);
+    avant.quaternion.multiply(moitie);
+    main.quaternion.premultiply(moitie.invert());
+    avant.updateMatrixWorld(true);
   }
   /** Tourner l'os pour que son enfant, aujourd'hui en `de`, passe par `vers` (rotation en repere monde). */
   private viser(o: THREE.Object3D, de: THREE.Vector3, vers: THREE.Vector3) {
