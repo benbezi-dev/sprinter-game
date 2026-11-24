@@ -71,6 +71,8 @@ export type Athlete = {
   coach: string | null;
   objectif: Objectif | null;
   materiel: string[];
+  /** L'usure de chaque piece, de 0 (neuve) a 100 (usee : plus de bonus tant qu'on ne la rachete pas). */
+  usureMat?: Record<string, number>;
   /** Le niveau de la prochaine competition (index de COMPETITIONS). */
   niveau: number;
   /** La semaine ou elle a lieu. */
@@ -257,21 +259,60 @@ export type Piece = {
   recup?: number;
   /** Remplace une autre piece (les pointes montent en gamme). */
   remplace?: string;
+  /** Toutes les seances +x (0,05 = 5 %). */
+  toutes?: number;
+  /** Il faut un club (maillot, survetement du club). */
+  club?: boolean;
+  /**
+   * L'USURE (24/11, l'auteur : « ajoute de l'usure sur les objets ») : le nombre d'utilisations avant d'etre use —
+   * une course pour ce qui sert en course, la seance du jour pour un outil, toute seance pour les chaussures,
+   * une semaine pour la recuperation. Usee, la piece ne donne plus rien ; on la rachete au meme prix.
+   */
+  duree: number;
 };
 
 export const MATERIEL: Piece[] = [
-  { id: 'pointes1', prix: 60, course: { vitesse: 3 } },
-  { id: 'pointes2', prix: 180, course: { vitesse: 6, technique: 2 }, remplace: 'pointes1' },
-  { id: 'pointes3', prix: 450, course: { vitesse: 9, technique: 4 }, remplace: 'pointes2' },
-  { id: 'tenue', prix: 70, course: { endurance: 2 } },
-  { id: 'elastiques', prix: 25, seance: 'mercredi' },
-  { id: 'plots', prix: 20, seance: 'vendredi' },
-  { id: 'montre', prix: 90, seance: 'samedi' },
-  { id: 'starting', prix: 140, seance: 'lundi', course: { force: 2 } },
-  { id: 'recup', prix: 120, recup: 15 },
+  { id: 'pointes1', prix: 60, course: { vitesse: 3 }, duree: 12 },
+  { id: 'pointes2', prix: 180, course: { vitesse: 6, technique: 2 }, remplace: 'pointes1', duree: 10 },
+  { id: 'pointes3', prix: 450, course: { vitesse: 9, technique: 4 }, remplace: 'pointes2', duree: 8 },
+  { id: 'tenue', prix: 70, course: { endurance: 2 }, duree: 20 },
+  { id: 'maillot_club', prix: 35, course: { technique: 1 }, club: true, duree: 25 },
+  { id: 'survet_club', prix: 60, recup: 5, club: true, duree: 30 },
+  { id: 'baskets', prix: 55, toutes: 0.05, duree: 40 },
+  { id: 'elastiques', prix: 25, seance: 'mercredi', duree: 20 },
+  { id: 'traineau', prix: 110, seance: 'mercredi', duree: 60 },
+  { id: 'plots', prix: 20, seance: 'vendredi', duree: 30 },
+  { id: 'haies_basses', prix: 40, seance: 'vendredi', duree: 40 },
+  { id: 'montre', prix: 90, seance: 'samedi', duree: 80 },
+  { id: 'starting', prix: 140, seance: 'lundi', course: { force: 2 }, duree: 50 },
+  { id: 'gilet', prix: 65, seance: 'lundi', duree: 40 },
+  { id: 'rouleau', prix: 15, recup: 6, duree: 20 },
+  { id: 'recup', prix: 120, recup: 15, duree: 40 },
 ];
 
 export const piece = (id: string) => MATERIEL.find(p => p.id === id) || null;
+/** L'usure d'une piece possedee, de 0 a 100. */
+export const usureDuMateriel = (a: Athlete, id: string) => a.usureMat?.[id] ?? 0;
+/** La piece sert-elle encore ? Usee a 100 %, elle ne donne plus rien. */
+export const enEtat = (a: Athlete, id: string) => a.materiel.includes(id) && usureDuMateriel(a, id) < 100;
+/** Une utilisation de plus pour chaque piece possedee qui repond a `sert`. */
+export function user(a: Athlete, sert: (p: Piece) => boolean) {
+  for (const id of a.materiel) {
+    const p = piece(id);
+    if (!p || !sert(p) || !enEtat(a, id)) continue;
+    const u = usureDuMateriel(a, id) + 100 / p.duree;
+    (a.usureMat ||= {})[id] = u > 99.9 ? 100 : u;   // 12 fois 100/12 ne tombe pas pile sur 100 en flottants
+  }
+}
+/** Le gain des seances apporte par le materiel en etat, le jour `j` : +15 % par outil du jour, chaussures comprises, 30 % au plus. */
+export function outilDuJour(a: Athlete, j: Jour) {
+  let b = 0;
+  for (const id of a.materiel) {
+    const p = piece(id);
+    if (p && enEtat(a, id)) b += (p.seance === j ? 0.15 : 0) + (p.toutes || 0);
+  }
+  return 1 + Math.min(0.3, b);
+}
 
 /* ------------------------------------------------------- les petits boulots */
 
@@ -544,7 +585,7 @@ export function gainDeSeance(a: Athlete, j: Jour, score: number, bonus = 0): Par
   const c = club(a.club);
   const encadrement = a.coach && c ? c.bonus : 1;
   const forme = 1 - Math.max(0, a.fatigue - 50) / 100;
-  const outil = a.materiel.some(id => piece(id)?.seance === j) ? 1.15 : 1;
+  const outil = outilDuJour(a, j);
   const moral = 0.85 + 0.3 * (a.moral / 100);
   // 2,5 (7 jusqu'au 15/11 : champion du monde en moins d'une saison) : avec le plafond par age
   // (niveauMaxDe), une carriere de 14 ans au sommet dure environ six saisons
@@ -574,6 +615,7 @@ export function faireLaSeance(a: Athlete, j: Jour, score: number, alea: () => nu
   const corps = tirerLeCorps(a, exerciceDuJour(a, j));
   if (corps.blessure) return { gains: {}, blessure: true, type: corps.blessure };
   const gains = gainDeSeance(a, j, score, bonus);
+  user(a, p => p.seance === j || !!p.toutes);
   // Au plafond du niveau, la seance entretient sans faire monter : c'est la competition qui ouvre la suite.
   const plafond = COMPETITIONS[a.niveau].plafond;
   for (const k of Object.keys(gains) as Stat[]) {
@@ -604,11 +646,13 @@ export function prendreUnBoulot(a: Athlete, id: string): boolean {
 }
 
 /** Peut-on acheter cette piece ? Rend la raison sinon. */
-export function achatPossible(a: Athlete, id: string): null | 'possede' | 'argent' | 'avant' | 'inconnu' {
+export function achatPossible(a: Athlete, id: string): null | 'possede' | 'argent' | 'avant' | 'club' | 'inconnu' {
   const p = piece(id);
   if (!p) return 'inconnu';
-  if (a.materiel.includes(id) || MATERIEL.some(q => q.remplace === id && a.materiel.includes(q.id))) return 'possede';
-  if (p.remplace && !a.materiel.includes(p.remplace)) return 'avant';
+  if (p.club && !a.club) return 'club';
+  // usee, une piece se rachete ; remplacee par mieux, elle ne se rachete plus
+  if (enEtat(a, id) || MATERIEL.some(q => q.remplace === id && a.materiel.includes(q.id))) return 'possede';
+  if (p.remplace && !a.materiel.includes(p.remplace) && !a.materiel.includes(id)) return 'avant';
   if (a.argent < prixDuMateriel(a, p.prix)) return 'argent';
   return null;
 }
@@ -618,7 +662,8 @@ export function acheter(a: Athlete, id: string): boolean {
   const p = piece(id)!;
   payer(a, -prixDuMateriel(a, p.prix), 'Matériel', 'Kit');
   if (p.remplace) a.materiel = a.materiel.filter(x => x !== p.remplace);
-  a.materiel.push(id);
+  if (!a.materiel.includes(id)) a.materiel.push(id);
+  if (a.usureMat) delete a.usureMat[id];
   return true;
 }
 
@@ -627,7 +672,7 @@ export function bonusMateriel(a: Athlete): Record<Stat, number> {
   const b: Record<Stat, number> = { vitesse: 0, force: 0, technique: 0, endurance: 0 };
   for (const id of a.materiel) {
     const p = piece(id);
-    if (p && p.course) for (const k of Object.keys(p.course) as Stat[]) b[k] += p.course[k] || 0;
+    if (p && p.course && enEtat(a, id)) for (const k of Object.keys(p.course) as Stat[]) b[k] += p.course[k] || 0;
   }
   return b;
 }
@@ -652,6 +697,63 @@ export const STATUTS: Record<Statut, { nom: [string, string]; phrase: [string, s
   3: { nom: ['aidé·e', 'helped'], phrase: ['Club et sponsor paient une partie : 35 % de ta saison sort de ta poche, il te faut un travail à côté.', 'Club and sponsor cover part: 35% of your season comes out of your pocket, you need a job on the side.'] },
   4: { nom: ['laissé·e pour compte', 'left behind'], phrase: ['Ton travail paie ta vie ET 100 % de ton sport : matériel, déplacements, soins.', 'Your job pays for your life AND 100% of your sport: kit, travel, care.'] },
 };
+/* ------------------------------------------------------------ les sponsors */
+
+/**
+ * LES SPONSORS (24/11, l'auteur : « plusieurs sponsors, être réaliste : un athlète en 12 secondes ne peut pas avoir de
+ * sponsor, sauf s'il gère très très bien ses réseaux ou s'il est très jeune »). Plusieurs a la fois, un de chaque sorte,
+ * quatre au plus. Aucun ne vient au-dessus de 10"80 au 100 m (11"90 pour une femme), sauf avec 20 000 abonnes, ou a
+ * 15 ans et moins avec un chrono rare pour son age. Les noms sont INVENTES, comme les clubs.
+ */
+export type Sponsor = {
+  id: string;
+  nom: [string, string];
+  /** Ce qu'il verse chaque semaine. */
+  paie: number;
+  /** Ce qu'il demande en plus du niveau de base. */
+  exige: (a: Athlete) => boolean;
+  /** Les pointes qu'il fournit. */
+  pointes?: 'pointes2' | 'pointes3';
+  abonnes: number;
+};
+export const SPONSORS_MAX = 4;
+/** Le record au 100 m, ou rien. */
+const rec100 = (a: Athlete) => a.records?.['100'] ?? null;
+const femme = (a: Athlete) => a.apparence?.corps === 'f';
+/** Le chrono qu'un sponsor attend : homme, femme. */
+const sous = (a: Athlete, h: number, f: number) => { const r = rec100(a); return r !== null && r <= (femme(a) ? f : h); };
+/** Le seuil de base : un vrai niveau, des reseaux tres suivis, ou un tres jeune talent. */
+export function sponsorisable(a: Athlete) {
+  return sous(a, 10.8, 11.9) || a.abonnes >= 20000 || ((a.age ?? 99) <= 15 && sous(a, 11.6, 12.6));
+}
+export const SPONSORS: Sponsor[] = [
+  { id: 'magasin', nom: ['Le magasin de sport du coin', 'The local sports shop'], paie: 40, abonnes: 100, exige: a => a.reputation >= 15 },
+  { id: 'equipementier', nom: ['Un équipementier régional', 'A regional kit brand'], paie: 60, abonnes: 300, pointes: 'pointes2', exige: a => a.reputation >= 30 },
+  { id: 'nutrition', nom: ['Une marque de boisson pour sportifs', 'A sports drink brand'], paie: 50, abonnes: 500, exige: a => a.abonnes >= 5000 },
+  { id: 'banque', nom: ['Une banque régionale', 'A regional bank'], paie: 80, abonnes: 400, exige: a => a.niveau >= NATIONAL && a.reputation >= 60 },
+  { id: 'marque', nom: ['Une grande marque de sport', 'A major sports brand'], paie: 120, abonnes: 2000, pointes: 'pointes3', exige: a => a.reputation >= 90 && sous(a, 10.3, 11.3) },
+];
+export const sponsor = (id: string) => SPONSORS.find(s => s.id === id) || null;
+/** Ce sponsor peut-il faire une offre ? */
+export const sponsorPossible = (a: Athlete, s: Sponsor) =>
+  !a.sponsors.includes(s.id) && a.sponsors.length < SPONSORS_MAX && sponsorisable(a) && s.exige(a);
+/** Signer : la paie chaque semaine, les abonnes, les pointes promises (sans reprendre une meilleure paire). */
+export function signer(a: Athlete, id: string) {
+  const s = sponsor(id);
+  if (!s || a.sponsors.includes(id)) return;
+  a.sponsors.push(id);
+  a.abonnes += s.abonnes;
+  const rang = (x: string) => ['pointes1', 'pointes2', 'pointes3'].indexOf(x);
+  if (s.pointes && !a.materiel.some(x => rang(x) >= rang(s.pointes!))) {
+    a.materiel = a.materiel.filter(x => !x.startsWith('pointes'));
+    a.materiel.push(s.pointes);
+  }
+  // les pointes fournies sont neuves
+  if (s.pointes && a.usureMat) for (const k of Object.keys(a.usureMat)) if (k.startsWith('pointes')) delete a.usureMat[k];
+}
+/** Ce que versent les sponsors chaque semaine. */
+export const paieDesSponsors = (a: Athlete) => a.sponsors.reduce((t, id) => t + (sponsor(id)?.paie ?? 60), 0);
+
 export function statutDe(a: Athlete): Statut {
   const s = a.sponsors.length;
   if (s >= 2 && a.niveau >= 4) return 1;            // deux contrats et l'Europe : on vit du sport
@@ -667,7 +769,7 @@ export const deTaPoche = (a: Athlete, prix: number, parents = true) =>
 /** Ce que le sport rapporte chaque semaine : un salaire en categorie 1, sponsors et aides ensuite. */
 export function revenuDuSport(a: Athlete): number {
   const st = statutDe(a);
-  return st === 1 ? 300 : st === 2 ? 150 : a.sponsors.length * 60;
+  return Math.max(st === 1 ? 300 : st === 2 ? 150 : 0, paieDesSponsors(a));
 }
 /** En categorie 1, le sport est le metier : plus d'obligation d'aller au travail. */
 export const vitDuSport = (a: Athlete) => statutDe(a) === 1;
@@ -783,6 +885,7 @@ export function conclureLaCompetition(a: Athlete, epreuve: Epreuve, place: numbe
   const prime = podium ? Math.round(c.prime * (place === 1 ? 1 : place === 2 ? 0.6 : 0.4)) : 0;
   const rep = podium ? Math.round(c.reputation * (place === 1 ? 1 : 0.6)) : Math.round(c.reputation * 0.15);
   payer(a, prime, 'Prime de course', 'Prize money');
+  user(a, p => !!p.course);
   a.reputation += rep;
   a.abonnes += rep * (a.niveau >= NATIONAL ? 40 : 10);
   a.moral = borne(a.moral + (place === 1 ? 15 : podium ? 8 : -10), 0, 100);
@@ -914,7 +1017,8 @@ export const ARGENT_DE_POCHE = 30;
  */
 export function finirLaSemaine(a: Athlete) {
   a.nuits = 0;
-  const recup = a.materiel.reduce((s, id) => s + (piece(id)?.recup || 0), 0);
+  const recup = a.materiel.reduce((s, id) => s + (enEtat(a, id) ? piece(id)?.recup || 0 : 0), 0);
+  user(a, p => !!p.recup);
   a.fatigue = borne(a.fatigue - 45 - recup, 0, 100);
   if (a.origine === 'aisee' && etape(a) !== 'adulte') payer(a, ARGENT_DE_POCHE, 'Argent de poche', 'Pocket money');
   if (etape(a) === 'adulte') payer(a, -LOYER, 'Loyer', 'Rent');

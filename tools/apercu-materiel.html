@@ -1,0 +1,23 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sprinter — materiel et sponsors de la carriere</title>
+<link rel="stylesheet" href="/src/index.css">
+<style>html,body{margin:0;background:#000;color:#fff}#r{padding:12px}</style>
+<div id="r"></div>
+<script type="module">
+  // banc : un athlete avec un club, du materiel use et deux sponsors, puis le panneau de la carriere
+  import React from 'react';
+  import { createRoot } from 'react-dom/client';
+  import { nouvelAthlete, signer, acheter } from '/src/game/athlete/regles.ts';
+  import { sauver } from '/src/game/athlete/carriere.ts';
+  const a = nouvelAthlete('NOVA', 'aisee', 'polyvalent', null, { corps: 'm', peau: 'cacao', coiffure: 'fade', cheveux: 'noir', taille: 1.8, couleur: 1 }, 20);
+  a.evenement = null; a.club = 'quartier'; a.coach = 'dede'; a.argent = 900; a.reputation = 70; a.records = { '100': 10.6 }; a.niveau = 3;
+  acheter(a, 'elastiques'); acheter(a, 'baskets');
+  a.usureMat = { pointes1: 100, tenue: 60, baskets: 85 };
+  signer(a, 'magasin'); signer(a, 'equipementier');
+  a.usureMat.pointes2 = 100;
+  sauver(a);
+  const { PanneauAthlete } = await import('/src/components/screens/CarriereAthlete.tsx');
+  createRoot(document.getElementById('r')).render(React.createElement(PanneauAthlete));
+</script>

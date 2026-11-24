@@ -623,5 +623,34 @@ titre('les quatre categories d athletes (video de l auteur, 15/11)');
   ok('pas de categorie chez les Minimes', R.classement(m, '100').lignes.every(l => l.statut === undefined));
 }
 
+titre('Materiel use, sponsors realistes (24/11)');
+{
+  const a = R.nouvelAthlete('U', 'aisee', 'polyvalent', null, undefined, 20); a.evenement = null; a.argent = 5000;
+  ok('les pointes de depart donnent de la vitesse', R.bonusMateriel(a).vitesse === 3);
+  for (let i = 0; i < 12; i++) R.conclureLaCompetition(a, '100', 8, 12.4);
+  ok('12 courses usent les pointes d entree de gamme : plus de bonus', R.usureDuMateriel(a, 'pointes1') === 100 && R.bonusMateriel(a).vitesse === 0);
+  ok('usees, elles se rachetent et repartent neuves', R.achatPossible(a, 'pointes1') === null && R.acheter(a, 'pointes1') && R.usureDuMateriel(a, 'pointes1') === 0 && R.bonusMateriel(a).vitesse === 3);
+  R.acheter(a, 'pointes2'); a.usureMat.pointes2 = 100;
+  ok('des pointes de competition usees se rachetent (sans repasser par l entree de gamme)', R.achatPossible(a, 'pointes2') === null);
+  ok('le maillot du club demande un club', R.achatPossible(a, 'maillot_club') === 'club');
+  R.acheter(a, 'elastiques'); R.acheter(a, 'traineau'); R.acheter(a, 'baskets');
+  ok('les outils du jour s additionnent, 30 % au plus', Math.abs(R.outilDuJour(a, 'mercredi') - 1.3) < 1e-9 && Math.abs(R.outilDuJour(a, 'lundi') - 1.05) < 1e-9);
+  // les sponsors
+  const s = R.nouvelAthlete('S', 'modeste', 'polyvalent', null, undefined, 20); s.evenement = null; s.reputation = 200; s.abonnes = 6000; s.niveau = 3;
+  s.records = { '100': 12.0 };
+  ok('12"00 au 100 m, 6 000 abonnes : aucun sponsor', R.SPONSORS.every(x => !R.sponsorPossible(s, x)));
+  s.abonnes = 25000;
+  ok('12"00 mais 25 000 abonnes : les sponsors viennent (pas la grande marque)', R.sponsorPossible(s, R.sponsor('nutrition')) && !R.sponsorPossible(s, R.sponsor('marque')));
+  const j = R.nouvelAthlete('J', 'modeste', 'polyvalent', null, undefined, 14); j.reputation = 40; j.records = { '100': 11.5 };
+  ok('a 14 ans en 11"50 : le magasin et l equipementier proposent', R.sponsorPossible(j, R.sponsor('magasin')) && R.sponsorPossible(j, R.sponsor('equipementier')));
+  s.abonnes = 0; s.records = { '100': 10.2 };
+  for (const x of R.SPONSORS) if (R.sponsorPossible(s, x)) R.signer(s, x.id);
+  ok('quatre sponsors au plus, chacun sa paie', s.sponsors.length === 4 && R.paieDesSponsors(s) === s.sponsors.reduce((t, id) => t + R.sponsor(id).paie, 0));
+  ok('la grande marque fournit les pointes carbone', !s.sponsors.includes('marque') || s.materiel.includes('pointes3'));
+  const f = R.nouvelAthlete('F', 'modeste', 'polyvalent', null, { corps: 'f', peau: 'cacao', coiffure: 'braids', cheveux: 'noir', taille: 1.7, couleur: 1 }, 22);
+  f.reputation = 40; f.records = { '100': 11.85 };
+  ok('une femme en 11"85 est sponsorisable, un homme non', R.sponsorisable(f) && !R.sponsorisable({ ...f, apparence: { ...f.apparence, corps: 'm' } }));
+}
+
 console.log(e ? `\n${e} echec(s)\n` : '\nTout passe.\n');
 process.exit(e ? 1 : 0);

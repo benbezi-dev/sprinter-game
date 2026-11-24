@@ -20,12 +20,12 @@ import {
   MONDE, JEUX, SELECTION_JEUX, SEMAINE_DES_JEUX, semaineDesProchainsJeux, anneeDesJeux, semaineDeSaison, changerDeDiscipline, garderSaDiscipline,
   moyenneDes, exigePourMonter, EPREUVES_SALLE, saisonEnSalle, niveauMaxDe, ageQuiOuvre, semainesAvantLaSalle, libelleEpreuve, type Course, STATS, JOURS, EPREUVES, BOULOTS, MATERIEL, COMPETITIONS, SEANCES, NIVEAU_OBJECTIF, ecart,
   nouvelAthlete, seancePossible, faireLaSeance, prendreUnBoulot, achatPossible, acheter,
-  bonusMateriel, coutDuDeplacement, picDeForme,
+  bonusMateriel, coutDuDeplacement, picDeForme, usureDuMateriel,
   type Resultat, type Apparence, APPARENCE, CORPS, PEAUX, COULEURS,
   exerciceDuJour, lieuDeLExercice, chezLeKine, prixDuKine, footingAuParc,
   type Besoin, BESOINS, ACTIONS, actionPossible, seanceMaintenant, besoinsDe, jourDe, heureDe, avancer, DIMANCHE,
   soulager, REVEIL, boulotFait, BOULOTS_PAR_SEMAINE, paieDu, etape, categorie, LOYER, SALAIRE, payer, BLESSURES, usureDe, SEUIL_BLESSURE, NOMS_ZONES, ZONES, SEUIL_GENE, type Zone, chargeDe,
-  meetingPossible, meetingDe, coutDuMeeting, prixDuMateriel, statutDe, STATUTS, PART_DE_TA_POCHE, revenuDuSport, KINE, type Statut,
+  meetingPossible, meetingDe, coutDuMeeting, prixDuMateriel, statutDe, STATUTS, PART_DE_TA_POCHE, revenuDuSport, sponsor, sponsorisable, KINE, type Statut,
 } from '@/game/athlete/regles';
 import { evenement, repondre } from '@/game/athlete/recit';
 import {
@@ -197,6 +197,17 @@ function CarteStatut({ a }: { a: Athlete }) {
         <div className="rounded-xl bg-white/5 py-2"><div className="text-[11px] text-white/55">{dans(['De ta poche', 'Out of pocket'])}</div><div className="font-black tabular-nums">{poche} %</div></div>
         <div className="rounded-xl bg-white/5 py-2"><div className="text-[11px] text-white/55">{dans(['Le sport te rapporte', 'Sport pays you'])}</div><div className="font-black tabular-nums">{gagne} €/{dans(['sem.', 'wk'])}</div></div>
       </div>
+      {a.sponsors.length > 0 ? (
+        <ul className="flex flex-col gap-1">
+          {a.sponsors.map(id => { const sp = sponsor(id); return (
+            <li key={id} className="flex justify-between text-xs"><span>{sp ? dans(sp.nom) : id}</span><span className="font-black tabular-nums">{sp?.paie ?? 60} €/{dans(['sem.', 'wk'])}</span></li>
+          ); })}
+        </ul>
+      ) : (
+        <p className="text-[11px] text-white/55 leading-snug">{dans(sponsorisable(a)
+          ? ['Les sponsors te regardent : continue à monter.', 'Sponsors are watching: keep climbing.']
+          : ['Aucun sponsor sans un vrai chrono (10"80 au 100 m, 11"90 pour une femme), sauf avec 20 000 abonnés ou très jeune.', 'No sponsor without a real time (10.80 in the 100 m, 11.90 for women), unless you have 20,000 followers or are very young.'])}</p>
+      )}
       <p className="text-[11px] text-white/55 leading-snug">{dans(['Matériel, déplacements, soins, kiné : ta part suit ta catégorie. Les quatre catégories courent les mêmes compétitions.', 'Kit, travel, care, physio: your share follows your category. All four categories race the same meets.'])}{suite ? ` ${dans(suite)}` : ''}</p>
     </Carte>
   );
@@ -912,26 +923,7 @@ function Semaine({ a, onFermer, onEffacer, onVille }: { a: Athlete; onFermer: ()
       </Carte>
 
       <Carte titre={mot('boutique')} icone={ShoppingBag}>
-        {!boutique ? <Bouton onClick={() => setBoutique(true)}>{mot('boutique')} ›</Bouton> : MATERIEL.map(p => {
-          const r = achatPossible(a, p.id);
-          if (r === 'avant') return null;
-          const effets = [
-            p.course && Object.entries(p.course).map(([k, v]) => `${mot(k)} +${v}`).join(', ') + ` ${mot('en_course')}`,
-            p.seance && mot('seance_plus', { j: mot(p.seance).split(' ')[0].toLowerCase() }),
-            p.recup && mot('recup_d', { n: p.recup }),
-          ].filter(Boolean).join(' · ');
-          return (
-            <div key={p.id} className="flex items-center gap-2">
-              <span className="flex-1 min-w-0 flex flex-col">
-                <span className="text-xs font-black">{mot(p.id)}</span>
-                <span className="text-[10px] text-white/55">{effets}</span>
-              </span>
-              {r === 'possede'
-                ? <span className="text-[10px] font-black tracking-widest" style={{ color: VERT }}>{mot('possede')}</span>
-                : <Bouton disabled={!!r} onClick={() => changer(() => { acheter(a, p.id); })}>{prixDuMateriel(a, p.prix)} €</Bouton>}
-            </div>
-          );
-        })}
+        {!boutique ? <Bouton onClick={() => setBoutique(true)}>{mot('boutique')} ›</Bouton> : <ListeMateriel a={a} changer={changer} />}
       </Carte>
 
       <Carte titre={mot('club')} icone={Users}>
@@ -1633,26 +1625,7 @@ function DansLeLieu({ lieu, a, ev, leJour, changer, aller, surSeance, onEffacer,
             ? <span className="text-[10px] font-black tracking-widest" style={{ color: VERT }}>{mot('possede')}</span>
             : <Bouton disabled={a.argent < PRIX_VELO} onClick={() => changer(() => { payer(a, -PRIX_VELO, 'Vélo', 'Bike'); a.velo = true; })}>{PRIX_VELO} €</Bouton>}
         </div>
-        {MATERIEL.map(p => {
-          const r = achatPossible(a, p.id);
-          if (r === 'avant') return null;
-          const effets = [
-            p.course && Object.entries(p.course).map(([k, v]) => `${mot(k)} +${v}`).join(', ') + ` ${mot('en_course')}`,
-            p.seance && mot('seance_plus', { j: mot(p.seance).split(' ')[0].toLowerCase() }),
-            p.recup && mot('recup_d', { n: p.recup }),
-          ].filter(Boolean).join(' · ');
-          return (
-            <div key={p.id} className="flex items-center gap-2">
-              <span className="flex-1 min-w-0 flex flex-col">
-                <span className="text-xs font-black">{mot(p.id)}</span>
-                <span className="text-[10px] text-white/55">{effets}</span>
-              </span>
-              {r === 'possede'
-                ? <span className="text-[10px] font-black tracking-widest" style={{ color: VERT }}>{mot('possede')}</span>
-                : <Bouton disabled={!!r} onClick={() => changer(() => { acheter(a, p.id); })}>{prixDuMateriel(a, p.prix)} €</Bouton>}
-            </div>
-          );
-        })}
+        <ListeMateriel a={a} changer={changer} />
       </Carte>
     );
 
@@ -1864,4 +1837,36 @@ export function FinDeCourseAthlete() {
       </motion.div>
     </TenirDansLEcran>
   );
+}
+
+/** Le materiel a vendre et l'etat de chaque piece (24/11 : usure, objets du club, chaussures, outils). */
+function ListeMateriel({ a, changer }: { a: Athlete; changer: (f: () => void) => void }) {
+  return <>{MATERIEL.map(p => {
+    const r = achatPossible(a, p.id);
+    if (r === 'avant' || r === 'club') return null;
+    const effets = [
+      p.course && Object.entries(p.course).map(([k, v]) => `${mot(k)} +${v}`).join(', ') + ` ${mot('en_course')}`,
+      p.seance && mot('seance_plus', { j: mot(p.seance).split(' ')[0].toLowerCase() }),
+      p.toutes && mot('toutes_plus', { n: Math.round(p.toutes * 100) }),
+      p.recup && mot('recup_d', { n: p.recup }),
+    ].filter(Boolean).join(' · ');
+    const u = a.materiel.includes(p.id) ? usureDuMateriel(a, p.id) : null;
+    return (
+      <div key={p.id} className="flex items-center gap-2">
+        <span className="flex-1 min-w-0 flex flex-col">
+          <span className="text-xs font-black">{mot(p.id)}</span>
+          <span className="text-[10px] text-white/55">{effets}</span>
+          {u !== null && (u >= 100
+            ? <span className="text-[10px] font-black text-red-400">{mot('use')}</span>
+            : <span className="flex items-center gap-1.5 text-[10px] text-white/55">
+                <span className="h-1 w-16 rounded-full bg-white/15 overflow-hidden"><span className="block h-full" style={{ width: `${100 - u}%`, background: u > 75 ? '#F59E0B' : VERT }} /></span>
+                {mot('usure', { n: Math.round(u) })}
+              </span>)}
+        </span>
+        {r === 'possede'
+          ? <span className="text-[10px] font-black tracking-widest" style={{ color: VERT }}>{mot('possede')}</span>
+          : <Bouton disabled={!!r} onClick={() => changer(() => { acheter(a, p.id); })}>{u !== null ? `${mot('racheter')} ` : ''}{prixDuMateriel(a, p.prix)} €</Bouton>}
+      </div>
+    );
+  })}</>;
 }

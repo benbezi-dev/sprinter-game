@@ -18,7 +18,7 @@
 // des partenaires reels (docs/carriere-athlete.md). Ce fichier n'importe que
 // les regles, et rien qui dessine.
 
-import { type Athlete, type Epreuve, type Objectif, club, noter, NATIONAL, payer, etape } from './regles';
+import { type Athlete, type Epreuve, type Objectif, type Sponsor, club, noter, NATIONAL, payer, etape, SPONSORS, sponsorPossible, signer } from './regles';
 
 type Texte = [string, string];
 
@@ -47,6 +47,22 @@ const borne = (v: number, a: number, b: number) => (v < a ? a : v > b ? b : v);
 const moral = (a: Athlete, d: number) => { a.moral = borne(a.moral + d, 0, 100); };
 const fatigue = (a: Athlete, d: number) => { a.fatigue = borne(a.fatigue + d, 0, 100); };
 const rel = (a: Athlete, k: keyof Athlete['relations'], d: number) => { a.relations[k] = borne(a.relations[k] + d, -100, 100); };
+
+/** L'offre d'un sponsor : arrive des que l'athlete la merite (sponsorPossible), une fois. */
+function sponsorise(s: Sponsor): Evenement {
+  const pointes: Texte = s.pointes === 'pointes3' ? [' Matériel de pointe fourni.', ' Top-end kit supplied.'] : s.pointes ? [' Tes pointes de la saison fournies.', ' Your spikes for the season supplied.'] : ['', ''];
+  return {
+    id: 'sponsor_' + s.id,
+    force: a => sponsorPossible(a, s),
+    qui: s.nom,
+    texte: a => [`« On suit tes résultats${a.abonnes >= 20000 ? ' et tes réseaux' : ''}. ${s.paie} € par semaine contre notre logo et deux posts par mois.${pointes[0]} »`,
+                 `“We follow your results${a.abonnes >= 20000 ? ' and your socials' : ''}. €${s.paie} a week for our logo and two posts a month.${pointes[1]}”`],
+    choix: [
+      { t: ['Signer', 'Sign'], d: [`+${s.paie} €/semaine, abonnés +${s.abonnes.toLocaleString('fr-FR')}`, `+€${s.paie}/week, followers +${s.abonnes.toLocaleString('en')}`], faire: a => signer(a, s.id) },
+      { t: ['Refuser', 'Decline'], d: ['Moral +3', 'Morale +3'], faire: a => moral(a, 3) },
+    ],
+  };
+}
 
 function rejoindre(a: Athlete, id: string) {
   const c = club(id);
@@ -141,32 +157,7 @@ export const EVENEMENTS: Evenement[] = [
       { t: ['Rester polyvalent', 'Stay an all-rounder'], d: ['Le coach soupire. Relation coach −10', 'The coach sighs. Coach relation −10'],
         faire: a => rel(a, 'coach', -10) }],
   },
-  {
-    id: 'sponsor1',
-    force: a => a.reputation >= 30,
-    qui: ['Un équipementier régional', 'A regional kit brand'],
-    texte: () => ['« On a vu tes résultats. On te fournit les pointes de la saison et 60 € par semaine, contre ton logo sur le maillot et deux posts par mois. »',
-                  '“We’ve seen your results. We’ll supply your spikes for the season and €60 a week, in exchange for our logo on your vest and two posts a month.”'],
-    choix: [
-      { t: ['Signer', 'Sign'], d: ['+60 €/semaine, une bonne part des déplacements et des soins payée', '+€60/week, a good share of travel and care paid'],
-        faire: a => { a.sponsors.push('equipementier'); a.abonnes += 300;
-          // les pointes promises : au moins la paire du milieu, sans reprendre une meilleure
-          if (!a.materiel.some(x => x === 'pointes2' || x === 'pointes3')) { a.materiel = a.materiel.filter(x => x !== 'pointes1'); a.materiel.push('pointes2'); } } },
-      { t: ['Attendre mieux', 'Wait for better'], d: ['Moral +5', 'Morale +5'], faire: a => moral(a, 5) },
-    ],
-  },
-  {
-    id: 'sponsor2',
-    force: a => a.reputation >= 90 && a.sponsors.length < 2,
-    qui: ['Une grande marque de sport', 'A major sports brand'],
-    texte: () => ['« Contrat national : matériel de pointe, une séance photo, une vraie visibilité. On veut un athlète qui sait parler à sa communauté. »',
-                  '“National deal: top kit, a photo shoot, real visibility. We want an athlete who knows how to talk to their community.”'],
-    choix: [
-      { t: ['Signer', 'Sign'], d: ['+60 €/semaine, abonnés +2 000', '+€60/week, followers +2,000'],
-        faire: a => { a.sponsors.push('marque'); a.abonnes += 2000; if (!a.materiel.includes('pointes3')) { a.materiel = a.materiel.filter(x => !x.startsWith('pointes')); a.materiel.push('pointes3'); } } },
-      { t: ['Refuser', 'Decline'], faire: a => moral(a, 3) },
-    ],
-  },
+  ...SPONSORS.map(sponsorise),
   {
     id: 'reseaux',
     force: a => a.niveau >= NATIONAL && a.abonnes >= 500,
