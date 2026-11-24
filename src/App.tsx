@@ -17,7 +17,7 @@ import { useGesteRetour } from '@/hooks/use-geste-retour';
 import { GameCanvas } from '@/components/GameCanvas';
 import { TouchControls } from '@/components/TouchControls';
 import { CoachPremiereCourse } from '@/components/screens/CoachPremiereCourse';
-import { EST_TEST, RELAIS_OUVERT, TCHAT_RAPIDE_OUVERT } from '@/game/canal';
+import { EST_TEST, EST_ENVELOPPE, RELAIS_OUVERT, TCHAT_RAPIDE_OUVERT } from '@/game/canal';
 import { preparerLaPub } from '@/game/pub';
 import { envoyerLeFauxDepartEnAttente } from '@/game/dsq-attente';
 import { verifierAchats } from '@/game/achats';
@@ -107,6 +107,14 @@ import { HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OU
 
    Ce qu'on verifie : tools/molosse-canal-test.mjs bâtit le vrai paquet de
    production et exige qu'aucun fichier Halloween n'en sorte. */
+/* LA MISE A JOUR AU LANCEMENT, DANS L'APPLICATION INSTALLEE SEULEMENT.
+   Le site se met a jour tout seul : il n'a ni store ni version a comparer.
+   EST_ENVELOPPE est fixe a la compilation (game/canal.ts) : dans le build du
+   site la constante vaut null et le module — plugin compris — n'y part pas.
+   En developpement (`npm run dev`) on la garde pour pouvoir la simuler avec
+   VITE_MAJ=optionnelle|obligatoire (game/mise-a-jour/config.ts). */
+const MiseAJour = (EST_ENVELOPPE || import.meta.env.DEV)
+  ? /* @__PURE__ */ lazy(() => import('@/components/screens/MiseAJour')) : null;
 const PanneauMolosse = /* @__PURE__ */ lazy(() => import('@/components/screens/Halloween')
   .then(m => ({ default: m.PanneauMolosse })));
 const FinDeLaNuit = /* @__PURE__ */ lazy(() => import('@/components/screens/Halloween')
@@ -526,6 +534,10 @@ function MainGame() {
       {/* Un pseudo interdit ferme le jeu jusqu'a ce qu'il change : l'ecran
           passe au-dessus de tout, y compris de la liaison. */}
       <PseudoAChanger />
+      {/* Une version trop ancienne de l'application : proposee, ou exigee si
+          elle est sous la minimale. Au-dessus de tout, pseudo compris —
+          sans la mise a jour, le reste du jeu ne sert a rien. */}
+      {MiseAJour && <Suspense fallback={null}><MiseAJour /></Suspense>}
       {/* Les confettis d'un record personnel et les feux d'artifice d'un
           record du monde. Montes ici, au-dessus de tous les ecrans de fin :
           une course de carriere comme une epreuve one shot ont droit a la

@@ -104,6 +104,7 @@ import {
   listerRecuperations, trancherRecuperation, estUnCode, COMPTE_JEU,
 } from './identite.js';
 import { alerterRecuperation } from './courriel.js';
+import { versionsDesStores } from './app-version.js';
 import { empreinteIp, sousLimite, quotaAtteint, noterCodeRate, purgerLimites } from './limites.js';
 import {
   MESSAGE_PLANCHER, sousLePlancher, sousLePlancherTotal, traceIncoherente,
@@ -2097,6 +2098,14 @@ async function servir(request, env, ctx, porteur) {
        ne repond pas. */
     if (url.pathname === '/now' && request.method === 'GET') {
       return json({ ms: Date.now() });
+    }
+
+    // Les versions des stores, que l'application compare a la sienne au
+    // lancement (voir app-version.js). Meme reponse pour tous, en cache court.
+    if (url.pathname === '/app/version' && request.method === 'GET') {
+      const r = json(versionsDesStores(env));
+      r.headers.set('Cache-Control', 'public, max-age=300');
+      return r;
     }
 
     // La salle noire : fermee tant que la premiere serie du Championnat de France en salle n'est pas partie.

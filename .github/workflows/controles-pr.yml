@@ -32,6 +32,9 @@ jobs:
       - run: npm run build
         env:
           BASE_PATH: /
+      # La mise a jour au lancement : regles, routage par plateforme, delai.
+      - run: node tools/mise-a-jour-test.mjs
+      - run: node worker/test/app-version.test.mjs
 
   defis:
     name: Harnais des defis
