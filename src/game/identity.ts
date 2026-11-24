@@ -8,6 +8,7 @@
 import { getDeviceId, getSavedName, NOM_CHANGE } from './leaderboard';
 import { nettoyerInsta } from './insta';
 import { adressePublique } from './canal';
+import { pseudoValide, signalerPseudoAChanger, PSEUDO_INTERDIT } from './pseudo';
 
 const API_BASE = 'https://sprinter-leaderboard.benbezi-sprinter.workers.dev';
 const CODE_KEY = 'sprinter_recovery_code';
@@ -84,6 +85,8 @@ export type ClaimResult =
   // main, et le seul champ visible est celui du nom. Le serveur nous rend le
   // nom auquel ce code appartient, pour qu'on propose la liaison.
   | { etat: 'est_un_code'; nom: string }
+  // Le filtre des pseudos l'a refuse (insulte, sexuel) : voir game/pseudo.ts.
+  | { etat: 'interdit' }
   | { etat: 'reseau' };
 
 /**
@@ -97,6 +100,10 @@ export async function claimName(name: string): Promise<ClaimResult> {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ device_id: getDeviceId(), name }),
     });
+    if (res.status === 400) {
+      const e = await res.json().catch(() => ({} as any));
+      if (e?.code === PSEUDO_INTERDIT) return { etat: 'interdit' };
+    }
     if (!res.ok) return { etat: 'reseau' };
     const d = await res.json();
     if (d.ok) { keepCode(d.code, d.name || name); return { etat: 'reserve', name: d.name, code: d.code, deja: !!d.deja }; }
@@ -131,7 +138,10 @@ export type LinkResult = 'lie' | 'mauvais_code' | 'inconnu' | 'reseau';
 export async function nomPourLeDirect(): Promise<'ok' | 'a_valider'> {
   const n = (getSavedName() || '').trim();
   if (n.length < 2 || n.toLowerCase() === 'anonyme') return 'a_valider';
+  // Un pseudo interdit n'ouvre pas de salle : l'ecran bloquant prend le relais.
+  if (!pseudoValide(n)) { signalerPseudoAChanger(n); return 'a_valider'; }
   const r = await claimName(n);
+  if (r.etat === 'interdit') { signalerPseudoAChanger(n); return 'a_valider'; }
   if (r.etat === 'reserve') {
     // Un nom tout juste reserve : la presence se represente, pour que le
     // point vert et l'invitation en direct suivent sans attendre.

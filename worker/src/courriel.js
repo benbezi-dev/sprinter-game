@@ -135,3 +135,39 @@ export async function alerterRecuperation(env, d) {
     return false;
   }
 }
+
+/**
+ * Un courriel texte a une adresse d'administration, sans gabarit autour.
+ * Memes regles que plus haut : sans cle, ou sur un refus, rien n'echoue — on
+ * le dit dans les traces et l'appelant continue. Rend `true` si c'est parti.
+ */
+export async function envoyerCourrielAdmin(env, { a, sujet, texte }) {
+  const cle = env && env.RESEND_CLE;
+  if (!cle) {
+    console.log('courriel : aucune RESEND_CLE posee, pas de courriel envoye');
+    return false;
+  }
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${cle}` },
+      body: JSON.stringify({
+        from: (env.MAIL_EXPEDITEUR || EXPEDITEUR_DEFAUT),
+        to: [a || env.MAIL_DEST || DEST_DEFAUT],
+        subject: sujet,
+        text: texte,
+      }),
+    });
+    if (!r.ok) {
+      console.log(`courriel : Resend a refuse (${r.status}) ` +
+        (await r.text().catch(() => '')).slice(0, 300));
+      return false;
+    }
+    return true;
+  } catch (e) {
+    console.log('courriel : envoi impossible — ' + (e && e.message));
+    return false;
+  }
+}
+
+export { quand as quandEnLettres, DEST_DEFAUT as COURRIEL_DEST_DEFAUT };

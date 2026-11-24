@@ -227,7 +227,7 @@ const CONTACTS = [
 
 /** Casse, largeurs et ligatures (NFKC), sosies, accents, caracteres de
  *  format : la forme ou l'on cherche les liens et les contacts. */
-function forme(texte) {
+export function forme(texte) {
   return texte.normalize('NFKC').toLowerCase()
     .replace(/[Ͱ-ϿЀ-ӿ]/g, c => SOSIES[c] || c)
     .normalize('NFD').replace(/\p{M}/gu, '')
@@ -235,7 +235,7 @@ function forme(texte) {
 }
 
 /** Les lettres repetees trois fois ou plus n'en font plus qu'une. */
-const reduire = (s) => s.replace(/([a-z])\1{2,}/g, '$1');
+export const reduire = (s) => s.replace(/([a-z])\1{2,}/g, '$1');
 
 /**
  * Ce texte peut-il etre montre a d'autres ?

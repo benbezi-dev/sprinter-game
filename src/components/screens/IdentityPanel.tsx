@@ -3,8 +3,10 @@ import { SprinterApp } from '@/game/engine';
 import { KeyRound, Copy, Check, Loader2, ShieldCheck, LifeBuoy } from 'lucide-react';
 import { getSavedName, saveName } from '@/game/leaderboard';
 import { claimName, linkDevice, savedCode } from '@/game/identity';
+import { pseudoValide } from '@/game/pseudo';
 import { LiaisonQR } from './LiaisonQR';
 import { Recuperation } from './Recuperation';
+import { ChangerPseudo } from './ChangerPseudo';
 import { lireRythme, poserRythme, type Rythme } from '@/game/objectif';
 
 /**
@@ -17,7 +19,7 @@ export function IdentityPanel() {
   const [nom, setNom] = useState(getSavedName());
   const [code, setCode] = useState(savedCode());
   const [voirCode, setVoirCode] = useState(false);
-  const [etat, setEtat] = useState<'repos' | 'envoi' | 'pris' | 'est_un_code' | 'erreur'>('repos');
+  const [etat, setEtat] = useState<'repos' | 'envoi' | 'pris' | 'est_un_code' | 'interdit' | 'erreur'>('repos');
   const [copie, setCopie] = useState(false);
   // Le nom auquel appartient le code que le joueur vient de coller dans le
   // champ du nom. On le garde pour pouvoir lui proposer la liaison d'un geste.
@@ -41,11 +43,14 @@ export function IdentityPanel() {
   const reserver = async () => {
     const n = nom.trim();
     if (!n) return;
+    // Refus immediat, sans aller-retour : le serveur jugera de toute facon.
+    if (!pseudoValide(n)) { setEtat('interdit'); return; }
     setEtat('envoi');
     const r = await claimName(n);
     if (r.etat === 'reserve') {
       saveName(r.name); setNom(r.name); setCode(r.code); setVoirCode(true); setEtat('repos');
     } else if (r.etat === 'pris') setEtat('pris');
+    else if (r.etat === 'interdit') setEtat('interdit');
     else if (r.etat === 'est_un_code') {
       // Le code devient ce qu'il aurait toujours du etre : la preuve, pas le
       // pseudo. On le deplace dans le champ prevu pour lui, et on remet le
@@ -164,6 +169,11 @@ export function IdentityPanel() {
         </button>
       )}
 
+      {/* Pseudo refuse par le filtre : un message neutre, sans le mot trouve. */}
+      {etat === 'interdit' && (
+        <p className="text-[11px] leading-snug text-red-300">{N.t('pseudo_interdit')}</p>
+      )}
+
       {/* Nom deja pris : on ne bloque pas, on explique et on propose le code. */}
       {(etat === 'pris' || etat === 'est_un_code' || lien) && (
         <div className="rounded-xl border border-white/10 bg-black/25 p-3 flex flex-col gap-2">
@@ -223,6 +233,9 @@ export function IdentityPanel() {
       {code && nom.trim() && etat !== 'pris' && etat !== 'est_un_code' && (
         <LiaisonQR nom={nom.trim()} />
       )}
+
+      {/* Changer de pseudo sans perdre sa progression : un nom reserve seulement. */}
+      {code && nom.trim() && etat !== 'pris' && etat !== 'est_un_code' && <ChangerPseudo />}
 
       {/* La porte de secours : plus de code, plus d'appareil relie. */}
       {perdu ? (
