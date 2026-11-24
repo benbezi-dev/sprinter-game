@@ -71,6 +71,13 @@ import {
   ensureObjectifTables, heureLocale, midiDuJour,
 } from './objectif.js';
 import { directionDe, CLES } from './epreuves.js';
+import {
+  ensurePseudoTables, creerDemande, alerterDemande, demandeDuJeton, trancherDemande,
+  forcerChangement, etatPseudo, nomReserveParDemande, pageRecap, pageMessage, PREFIXE_PROVISOIRE,
+} from './pseudo-demandes.js';
+import {
+  pseudoRecevable, pseudoInterdit, nomAffichable, PSEUDO_INTERDIT, PSEUDO_A_CHANGER,
+} from './pseudo.js';
 
 import {
   verifierAcces, creerAcces, revoquerAcces, rendreAcces, listerAcces, estAdmin,
@@ -278,6 +285,109 @@ function json(data, status = 200) {
 function cleanName(raw) {
   const s = String(raw || '').trim().slice(0, MAX_NAME_LEN);
   return s.replace(/[<>]/g, '') || 'Anonyme';
+}
+
+/* ------------------------------------------------- les pseudos interdits
+   Le filtre lui-meme vit dans pseudo.js. Ici, ce que le worker en fait :
+   refuser la reservation, fermer la course a qui porte deja un pseudo
+   interdit, et le masquer dans les classements publics.
+
+   Le canal de test n'est pas concerne (decision du 24/11/2026) : tout passe
+   par `filtrePseudosActif`, une seule ligne a changer pour l'y etendre. */
+export function filtrePseudosActif(canal) {
+  return !canal.test;
+}
+
+/** Le pays d'un joueur pour le filtre : celui qu'il a choisi ou qu'on a vu,
+ *  sinon celui d'ou vient la requete. */
+async function paysPourPseudo(db, key, paysRequete) {
+  try {
+    const r = await db.prepare(`SELECT pays FROM player_pays WHERE name_key = ?`)
+      .bind(key).first();
+    if (r && r.pays) return r.pays;
+  } catch { /* table pas encore creee : pas de pays connu */ }
+  return paysRequete || null;
+}
+
+/** Ce nom, porte par ce joueur, est-il interdit ? Le test sans pays (toutes
+ *  les langues) est un tamis : un nom qu'il laisse passer n'a pas besoin de
+ *  la base. */
+export async function nomPorteInterdit(db, nom, paysRequete) {
+  const propre = String(nom || '').trim();
+  if (!propre || propre.toLowerCase() === 'anonyme') return false;
+  if (!pseudoInterdit(propre, null, { toutes: true })) return false;
+  const pays = await paysPourPseudo(db, propre.toLowerCase(), paysRequete);
+  return pseudoInterdit(propre, pays);
+}
+
+/** Les routes qui lancent, rejoignent ou enregistrent une partie. */
+const ROUTES_JEU = new Set([
+  '/submit', '/race', '/challenge', '/challenge/lance', '/challenge/attempt',
+  '/challenge/camera', '/objectif/tentative', '/duel-epreuves/course',
+  '/live/nouveau', '/etape', '/reprise', '/pieces/etape', '/pieces/doubler',
+  '/pieces/continue', '/direct/inviter', '/duel/reponse', '/duel/mot',
+]);
+const PREFIXES_JEU = ['/marques/', '/noel', '/relay/', '/champ/'];
+const PREFIXES_SALLES = ['/live/', '/relay/', '/champ/salle/'];
+
+/** Les classements publics, ou un pseudo interdit est masque. */
+const ROUTES_MASQUEES = new Set([
+  '/leaderboard', '/duels', '/presence', '/record', '/rank',
+  '/objectif/classement', '/duel-epreuves', '/marques', '/noel',
+  '/noel-equipes', '/ghost',
+]);
+
+function estRouteDeJeu(request, url) {
+  const p = url.pathname;
+  if (request.method === 'POST') {
+    return ROUTES_JEU.has(p) || PREFIXES_JEU.some(x => p.startsWith(x));
+  }
+  return request.method === 'GET'
+    && request.headers.get('Upgrade') === 'websocket'
+    && PREFIXES_SALLES.some(x => p.startsWith(x));
+}
+
+/**
+ * La garde : rend la reponse de refus si la requete lance une partie sous un
+ * pseudo interdit, `null` sinon. Le nom vient de l'adresse (`name`, `nom`)
+ * ou du corps JSON — lu sur une copie, la route relira l'original.
+ */
+async function gardePseudo(request, url, db) {
+  if (!estRouteDeJeu(request, url)) return null;
+  let nom = url.searchParams.get('name') || url.searchParams.get('nom') || '';
+  if (!nom && request.method === 'POST') {
+    try {
+      const b = await request.clone().json();
+      nom = (b && (typeof b.name === 'string' ? b.name : b.nom)) || '';
+    } catch { nom = ''; }
+  }
+  if (!nom) return null;
+  const paysRequete = request.cf && request.cf.country;
+  if (!(await nomPorteInterdit(db, cleanName(nom), paysRequete))) return null;
+  return json({ error: 'pseudo a changer', code: PSEUDO_A_CHANGER }, 403);
+}
+
+/** Remplace, dans une reponse JSON, chaque nom interdit par le nom masque. */
+export function masquerNoms(v) {
+  if (Array.isArray(v)) return v.map(masquerNoms);
+  if (!v || typeof v !== 'object') return v;
+  const o = {};
+  for (const [k, x] of Object.entries(v)) {
+    o[k] = (k === 'name' || k === 'nom' || k === 'owner_name') && typeof x === 'string'
+      ? nomAffichable(x) : masquerNoms(x);
+  }
+  return o;
+}
+
+async function masquerReponse(reponse) {
+  if (!reponse || reponse.status !== 200) return reponse;
+  if (!(reponse.headers.get('Content-Type') || '').includes('application/json')) return reponse;
+  try {
+    const corps = await reponse.clone().json();
+    return new Response(JSON.stringify(masquerNoms(corps)), reponse);
+  } catch {
+    return reponse;
+  }
 }
 
 function isValidDeviceId(id) {
@@ -1329,6 +1439,9 @@ async function envelopper(request, env, ctx) {
     throw e;
   }
 
+  // Les classements publics ne montrent pas un pseudo interdit.
+  if (porteur.masquer) reponse = await masquerReponse(reponse);
+
   // Une reponse 101 porte une WebSocket : ses en-tetes ne se modifient plus,
   // et la salle en direct ne lit aucun signet de toute facon.
   if (!porteur.session || !reponse || reponse.status === 101) return reponse;
@@ -1493,6 +1606,15 @@ async function servir(request, env, ctx, porteur) {
       if (!(await sousLimite(env.DB, empreinte, url.pathname))) {
         return json({ error: 'trop de tentatives, reessayez dans une minute' }, 429);
       }
+    }
+
+    // ---------------------------------------------- les pseudos interdits
+    // Apres l'anti-abus, avant toute route : un pseudo interdit ne lance plus
+    // de partie, ou qu'il essaie (voir `gardePseudo`).
+    if (filtrePseudosActif(canal)) {
+      const refus = await gardePseudo(request, url, env.DB);
+      if (refus) return refus;
+      if (request.method === 'GET' && ROUTES_MASQUEES.has(url.pathname)) porteur.masquer = true;
     }
 
     // ------------------------------------------------------ acces au test
@@ -2988,6 +3110,10 @@ async function servir(request, env, ctx, porteur) {
               WHERE p.name_key = ? AND d.device_id = ?`
           ).bind(cleanName(demande).trim().toLowerCase(), appareil).first();
           if (p && p.name) nom = String(p.name);
+          // Un pseudo interdit est compte, pas nomme : il ne s'affiche pas
+          // dans la liste « en ligne ».
+          if (nom && filtrePseudosActif(canal)
+              && await nomPorteInterdit(env.DB, nom, request.cf && request.cf.country)) nom = '';
         } catch (e) { nom = ''; }
       }
       const entetes = new Headers(request.headers);
@@ -4204,6 +4330,83 @@ async function servir(request, env, ctx, porteur) {
       return json({ error: 'route inconnue' }, 404);
     }
 
+
+    // ------------------------------------------- changer de pseudo
+    // Les regles vivent dans pseudo-demandes.js ; ici, l'aiguillage.
+    if (url.pathname.startsWith('/pseudo/')) {
+      const sous = url.pathname.slice('/pseudo/'.length);
+      const paysReq = request.cf && request.cf.country;
+      await ensurePseudoTables(env.DB);
+
+      // Ce que le jeu lit a l'ouverture : doit-il changer, sa demande en cours.
+      if (sous === 'etat' && request.method === 'GET') {
+        const nom = cleanName(url.searchParams.get('name') || '');
+        const deviceId = url.searchParams.get('device_id') || '';
+        if (!isValidDeviceId(deviceId)) return json({ error: 'device_id invalide' }, 400);
+        const pays = await paysPourPseudo(env.DB, nom.trim().toLowerCase(), paysReq);
+        const e = await etatPseudo(env.DB, { nom: nom === 'Anonyme' ? '' : nom, deviceId, pays });
+        // Hors production le filtre ne s'applique pas : un pseudo interdit n'y
+        // oblige a rien (le pseudo repris, lui, oblige partout).
+        if (e.raison === 'interdit' && !filtrePseudosActif(canal)) { e.a_changer = false; e.raison = null; }
+        const r = json(e);
+        r.headers.set('Cache-Control', 'no-store');
+        return r;
+      }
+
+      if ((sous === 'demande' || sous === 'forcer') && request.method === 'POST') {
+        let body;
+        try { body = await request.json(); } catch { return json({ error: 'JSON invalide' }, 400); }
+        const { device_id, name } = body || {};
+        if (!isValidDeviceId(device_id)) return json({ error: 'device_id invalide' }, 400);
+        const nom = cleanName(name);
+        const voulu = String((sous === 'demande' ? body.demande : body.nouveau) || '').trim().slice(0, 40);
+        const pays = await paysPourPseudo(env.DB, nom.trim().toLowerCase(), paysReq);
+        await ensurePlayerTables(env.DB);
+        if (sous === 'demande') {
+          const r = await creerDemande(env.DB, env, { nom, deviceId: device_id, demande: voulu, pays });
+          if (r.erreur) return json({ error: r.erreur, code: r.code }, r.statut || 400);
+          ctx.waitUntil(alerterDemande(env, r.demande, url.origin, r.jeton)
+            .catch(e => console.log('pseudo : courriel KO', String(e && e.message || e))));
+          return json({ ok: true, statut: 'PENDING', demande: r.demande.demande,
+            expire_le: r.demande.expire_le, reprise: !!r.demande.cible });
+        }
+        const r = await forcerChangement(env.DB, env, { nom, deviceId: device_id, nouveau: voulu, pays });
+        if (r.erreur) return json({ error: r.erreur, code: r.code }, r.statut || 400);
+        return json({ ok: true, name: r.name, code: r.code });
+      }
+
+      // Les liens du courriel. Le GET montre, seul le POST agit : un antivirus
+      // de messagerie qui suit les liens ne tranche rien.
+      if (sous === 'admin') {
+        const html = (corps, status = 200) => new Response(corps, { status, headers: {
+          'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store',
+          'Referrer-Policy': 'no-referrer', 'X-Robots-Tag': 'noindex',
+        } });
+        if (request.method === 'GET') {
+          const jeton = url.searchParams.get('t') || '';
+          const d = await demandeDuJeton(env.DB, jeton);
+          if (!d) return html(pageMessage('Lien inutilisable',
+            'Ce lien est invalide, expiré, ou la demande a déjà été tranchée.'), 410);
+          return html(pageRecap(d, jeton, url.searchParams.get('action')));
+        }
+        if (request.method === 'POST') {
+          let f;
+          try { f = await request.formData(); } catch { return html(pageMessage('Erreur', 'Formulaire illisible.'), 400); }
+          const action = String(f.get('action') || '');
+          const r = await trancherDemande(env.DB, env, String(f.get('t') || ''), action);
+          if (r.erreur) return html(pageMessage('Rien n\'a été changé', r.erreur), 409);
+          const d = r.demande;
+          ctx.waitUntil(notifierAppareil(env.DB, d.appareil,
+            r.statut === 'APPROVED' ? 'pseudo_accepte' : 'pseudo_refuse', env));
+          return html(r.statut === 'APPROVED'
+            ? pageMessage('Changement confirmé', `${d.pseudo_actuel} s'appelle désormais « ${d.demande_nom} ».`
+                + (r.provisoire ? ` L'ancien porteur est devenu ${r.provisoire} et devra choisir un pseudo.` : ''))
+            : pageMessage('Demande refusée', `${d.pseudo_actuel} garde son pseudo. La réservation de « ${d.demande_nom} » est levée.`));
+        }
+      }
+      return json({ error: 'not found' }, 404);
+    }
+
     // ------------------------------------------------------------- identite
     // Reserver un nom. Si personne ne l'a pris, il est a nous et on recoit un
     // code ; s'il est deja a nous, on le recupere ; sinon il faut le code.
@@ -4215,6 +4418,16 @@ async function servir(request, env, ctx, porteur) {
       const propre = cleanName(name);
       const key = propre.trim().toLowerCase();
       if (!key || propre === 'Anonyme') return json({ error: 'nom invalide' }, 400);
+      // Le filtre passe avant tout : un nom interdit ne se reserve pas, et un
+      // nom interdit DEJA reserve ne se reconfirme pas non plus — c'est par
+      // ici que le jeu valide le nom avant chaque course en direct.
+      if (filtrePseudosActif(canal)) {
+        await ensureChampTables(env.DB);
+        const pays = await paysPourPseudo(env.DB, key, request.cf && request.cf.country);
+        if (!pseudoRecevable(propre, pays).ok) {
+          return json({ error: 'pseudo interdit', code: PSEUDO_INTERDIT }, 400);
+        }
+      }
       await ensurePlayerTables(env.DB);
 
       const existe = await env.DB.prepare(
@@ -4230,6 +4443,12 @@ async function servir(request, env, ctx, porteur) {
       // que l'ecran puisse proposer la liaison au lieu d'un refus sec.
       // Le nom du jeu dans le tchat (tchat-marques.js) : personne ne le prend.
       if (!existe && imiteOfficiel(propre)) return json({ ok: false, pris: true });
+      // Un pseudo reserve par une demande de changement en cours, ou la forme
+      // des pseudos provisoires (pseudo-demandes.js) : personne ne le prend.
+      if (!existe && (propre.toLowerCase().startsWith(PREFIXE_PROVISOIRE.toLowerCase())
+                      || await nomReserveParDemande(env.DB, propre))) {
+        return json({ ok: false, pris: true });
+      }
 
       if (!existe) {
         const proprietaire = await estUnCode(env.DB, propre);

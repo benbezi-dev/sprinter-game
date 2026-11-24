@@ -65,6 +65,7 @@ import { InviteNotifs } from '@/components/screens/InviteNotifs';
 import { TchatRapide } from '@/components/screens/TchatRapide';
 import { Bienvenue } from '@/components/screens/Bienvenue';
 import { LiaisonEntrante } from '@/components/screens/LiaisonEntrante';
+import { PseudoAChanger } from '@/components/screens/PseudoAChanger';
 import { Dashboard } from '@/components/screens/Dashboard';
 import { FileRecuperations } from '@/components/screens/FileRecuperations';
 import { FeteRecords } from '@/components/screens/FeteRecords';
@@ -522,6 +523,9 @@ function MainGame() {
           et se pose au-dessus de tout le reste — c'est la seule chose que ce
           joueur-la ait demandee en ouvrant le jeu. */}
       <LiaisonEntrante />
+      {/* Un pseudo interdit ferme le jeu jusqu'a ce qu'il change : l'ecran
+          passe au-dessus de tout, y compris de la liaison. */}
+      <PseudoAChanger />
       {/* Les confettis d'un record personnel et les feux d'artifice d'un
           record du monde. Montes ici, au-dessus de tous les ecrans de fin :
           une course de carriere comme une epreuve one shot ont droit a la

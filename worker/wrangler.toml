@@ -134,6 +134,17 @@ OBJECTIF = "actif"
 MAIL_DEST = "contact.pro@sprinter-game.com"
 MAIL_EXPEDITEUR = "Sprinter <recuperations@sprinter-game.com>"
 
+# CHANGER DE PSEUDO (src/pseudo-demandes.js). Le code a les memes valeurs par
+# defaut : ces lignes ne servent qu'a les rendre visibles et reglables.
+# Un pseudo se reprend si son porteur n'a rien fait depuis PSEUDO_INACTIF_JOURS
+# (ou depuis PSEUDO_JAMAIS_JOUE_JOURS s'il n'a jamais couru) ; une demande
+# expire apres PSEUDO_DEMANDE_HEURES ; les liens de validation partent a
+# ADMIN_APPROVAL_EMAIL.
+PSEUDO_INACTIF_JOURS = "180"
+PSEUDO_JAMAIS_JOUE_JOURS = "30"
+PSEUDO_DEMANDE_HEURES = "72"
+ADMIN_APPROVAL_EMAIL = "contact.pro@sprinter-game.com"
+
 # POURQUOI CINQ MINUTES ET NON QUINZE. Chaque joueur recoit a quelques minutes
 # pres de son heure, toujours les memes : trois cents telephones qui vibrent a
 # la meme seconde, ca se voit, et un rendez-vous a 12:45:00 tous les jours a

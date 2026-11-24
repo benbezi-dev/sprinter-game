@@ -101,6 +101,15 @@ const MESSAGES = {
     fr: ['Ta demande est acceptée', 'Ouvre Sprinter : ton nom t\u2019attend.'],
     en: ['Your request was accepted', 'Open Sprinter: your name is waiting for you.'],
   },
+  // Une demande de changement de pseudo tranchee (pseudo-demandes.js).
+  pseudo_accepte: {
+    fr: ['Nouveau pseudo validé', 'Ouvre Sprinter : ton nouveau pseudo est actif.'],
+    en: ['New name approved', 'Open Sprinter: your new name is live.'],
+  },
+  pseudo_refuse: {
+    fr: ['Pseudo refusé', 'Ta demande de changement de pseudo n\u2019a pas été acceptée.'],
+    en: ['Name change declined', 'Your name change request was not accepted.'],
+  },
 };
 
 /**
