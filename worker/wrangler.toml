@@ -111,6 +111,19 @@ class_name = "Presence"
 [vars]
 OBJECTIF = "actif"
 
+# LES VERSIONS DES STORES (src/app-version.js, route GET /app/version).
+# L'application installee les compare a la sienne au lancement :
+#   *_LATEST  derniere version EN LIGNE  -> modale « Mettre a jour / Plus tard »
+#   *_MIN     version minimale jouable   -> modale bloquante
+# LATEST ne monte qu'une fois la version validee et publiee sur CE store.
+# MIN ne depasse jamais la version en relecture chez Apple (le relecteur
+# tomberait sur la modale bloquante). Une valeur mal formee retombe sur le
+# defaut du code. Effet au prochain `wrangler deploy`.
+APP_IOS_LATEST = "1.0.18"
+APP_IOS_MIN = "1.0.0"
+APP_ANDROID_LATEST = "1.0.19"
+APP_ANDROID_MIN = "1.0.0"
+
 # OU PARTENT LES ALERTES DE RECUPERATION DE COMPTE.
 #
 # Aucune des deux n'etait posee, et le code retombait donc sur ses valeurs par

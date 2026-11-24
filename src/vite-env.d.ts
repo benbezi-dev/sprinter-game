@@ -6,6 +6,9 @@ interface ImportMetaEnv {
   readonly VITE_CANAL?: 'test';
   // « native » dans le build de l'application installee, absent sur le site.
   readonly VITE_ENVELOPPE?: 'native';
+  // Mise a jour au lancement, pour le developpement : couper ou simuler
+  // (src/game/mise-a-jour/config.ts).
+  readonly VITE_MAJ?: 'off' | 'optionnelle' | 'obligatoire';
 }
 
 interface ImportMeta {
