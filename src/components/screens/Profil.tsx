@@ -11,6 +11,7 @@ import { RecordTuile } from './RecordPerso';
 import { LiaisonQR } from './LiaisonQR';
 import { OUVRIR_PARAMETRES } from './Parametres';
 import { Succes, compteSucces } from './Succes';
+import { FaceAFace } from './FaceAFace';
 
 function coursesTerminees(): number {
   try {
@@ -85,6 +86,9 @@ export function Profil({ nom, onFermer, onModifier }: { nom: string; onFermer: (
             {epreuvesDuJeu(jeu).map(r => <RecordTuile key={r} race={r} />)}
           </div>
         </div>
+
+        {/* Face-a-face : bete noire et victime favorite, par epreuve */}
+        <FaceAFace nom={nom} />
 
         {/* Sauvegarde sur le serveur */}
         <div className="flex items-center gap-3 rounded-xl bg-secondary/50 px-3 py-2.5">

@@ -665,7 +665,7 @@ function etatNeuf(cle, nom, epreuve) {
  *     a rien a deduire. Le 100 m, faute de mieux, et il vaut mieux le dire ici
  *     que de laisser croire a une mesure.
  */
-function epreuveDeLigne(d) {
+export function epreuveDeLigne(d) {
   if (d.epreuve) return disciplineValide(d.epreuve);
   if (d.races) {
     try { return cleDiscipline(JSON.parse(d.races)); } catch { /* illisible */ }
