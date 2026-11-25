@@ -407,7 +407,7 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
     if (!mouvementImpact(type, reste)) return;
     for (const couche of COUCHES_IMPACT) {
       const pose = mouvementImpact(type, reste, couche);
-      if (!pose) continue;
+      if (!pose || pose.alpha <= 0) continue;
       ctx.save();
       ctx.globalAlpha *= pose.alpha * Math.min(reste, 1);
       ctx.translate(cx + pose.x, y + HAUTEUR_IMPACT / 2 + pose.y);

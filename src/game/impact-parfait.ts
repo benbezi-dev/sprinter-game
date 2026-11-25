@@ -1,73 +1,102 @@
 import { AFFICHE, OR, ROUGE } from './pinceau-film';
 
 export type Impact = 'depart' | 'transition';
-export const COUCHES_IMPACT = ['elan', 'premierMot', 'titre'] as const;
+export const COUCHES_IMPACT = ['choc', 'elan', 'premierMot', 'titre'] as const;
 export type CoucheImpact = typeof COUCHES_IMPACT[number];
 export const LIBELLE_IMPACT = { depart: 'MONSTER KICK !', transition: 'BEAST MODE' };
 export const LARGEUR_IMPACT = 260;
 export const HAUTEUR_IMPACT = 70;
 
-const dureeFlash = { depart: 2.2, transition: 2.4 };
+export const dureeFlash = { depart: 2.2, transition: 2.4 };
 const mouvementReduit = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)');
 const borne = (n: number) => Math.min(1, Math.max(0, n));
 
 // Poses en secondes de course. Le deuxième mot a son propre point d'impact.
-type Cle = [temps: number, x: number, y: number, largeur: number, hauteur: number, angle: number];
-const fin = 1.22;
+type Cle = [temps: number, x: number, y: number, largeur: number, hauteur: number, angle: number, alpha: number];
+export const FIN_IMPACT = 1.22;
 const poses: Record<Impact, Record<CoucheImpact, Cle[]>> = {
   depart: {
     premierMot: [
-      [0, -53, 12, 0.72, 0.74, -13], [0.13, 2, -1, 1.12, 1.08, 1],
-      [0.23, 0, 3, 1.02, 0.86, -1], [0.32, -5, -5, 1.04, 1.08, -4],
-      [0.47, -2, -1, 1, 1, 0], [0.99, 4, -2, 1.04, 1.04, -2],
-      [fin, -45, -13, 0.8, 0.8, -10],
+      [0, -78, 13, 0.68, 0.86, -14, 0], [0.08, 1, -2, 1.14, 1.1, 0, 1],
+      [0.16, 1, 3, 1.08, 0.85, 1, 1], [0.24, -7, -5, 1.1, 1.11, -5, 1],
+      [0.41, -3, -2, 1.04, 1.04, -2, 1], [0.94, 6, -3, 1.12, 1.08, -3, 1],
+      [1.04, 9, -2, 1.08, 1.06, -1, 1], [1.21, -65, -13, 0.79, 0.8, -12, 0],
     ],
     titre: [
-      [0.12, 35, -16, 1.5, 1.65, 8], [0.23, 0, 4, 1.31, 0.74, -2],
-      [0.33, -3, -3, 0.97, 1.22, -4], [0.46, 0, 0, 1.05, 1, 0],
-      [0.99, 6, 1, 1.13, 1.07, -2], [fin, 63, 4, 1.35, 0.72, -6],
+      [0.1, 32, -17, 1.7, 1.65, 9, 0], [0.16, 0, 4, 1.35, 0.72, 1, 1],
+      [0.25, -4, -4, 1.02, 1.25, -5, 1], [0.41, -1, 0, 1.1, 1.02, -2, 1],
+      [0.94, 8, 1, 1.22, 1.15, -3, 1], [1.04, 4, 2, 1.15, 1.08, -1, 1],
+      [1.21, 90, 5, 1.48, 0.68, -7, 0],
     ],
-    elan: [[0.21, 0, 5, 0.35, 0.3, 0], [0.31, 0, 4, 0.88, 0.85, -3], [0.61, 0, 3, 1.25, 1.1, -6]],
+    choc: [[0.12, 0, 3, 0.15, 0.2, 4, 0], [0.17, 0, 4, 0.96, 0.88, 2, 1],
+      [0.25, -2, 1, 1.11, 1.08, -2, 1], [0.48, -2, 0, 1.17, 1.12, -4, 0]],
+    elan: [[0.14, 0, 4, 0.38, 0.26, 2, 0], [0.20, 0, 4, 0.84, 0.75, -2, 1],
+      [0.34, 0, 2, 1.22, 1.08, -5, 1], [0.53, 0, 2, 1.39, 1.2, -8, 0]],
   },
   transition: {
     premierMot: [
-      [0, -81, 7, 1.36, 0.75, -9], [0.15, -2, 0, 1, 1.05, -2],
-      [0.29, 3, 0, 0.96, 1, 0], [0.54, -9, 2, 0.95, 1.07, 1],
-      [0.65, 1, 0, 1.1, 0.95, -2], [0.98, 8, -1, 1, 1, -2], [fin, 108, -10, 1.45, 0.69, -5],
+      [0, -110, 8, 1.4, 0.7, -9, 0], [0.12, -4, 1, 1.03, 1.1, -2, 1],
+      [0.22, 3, 0, 1, 1, -1, 1], [0.43, -11, 2, 0.91, 1.08, 2, 1],
+      [0.57, 8, -2, 1.14, 0.94, -4, 1], [0.91, 13, -2, 1.05, 1.04, -3, 1],
+      [1.04, 17, -2, 1.05, 1, -2, 1], [1.21, 131, -11, 1.47, 0.73, -7, 0],
     ],
     titre: [
-      [0.13, -56, 13, 0.54, 0.62, -12], [0.27, 9, -2, 1.19, 1.12, -3],
-      [0.39, 4, 0, 1, 1, 0], [0.54, -5, 1, 0.96, 1.07, 1],
-      [0.65, 16, -1, 1.14, 0.96, -2], [0.98, 12, -1, 1, 1, -2], [1.17, 105, -11, 1.38, 0.7, -5],
+      [0.10, -58, 11, 0.48, 0.64, -13, 0], [0.21, 11, -1, 1.21, 1.12, -4, 1],
+      [0.30, 4, 0, 1, 1, 0, 1], [0.43, -9, 2, 0.94, 1.08, 2, 1],
+      [0.57, 23, -2, 1.22, 0.94, -4, 1], [0.91, 16, -2, 1.04, 1.04, -3, 1],
+      [1.00, 21, -3, 1.08, 1, -3, 1], [1.16, 116, -12, 1.5, 0.7, -8, 0],
     ],
-    elan: [[0.49, -35, 3, 0.32, 0.72, 0], [0.65, -6, 0, 1.05, 1, -2], [1.1, 48, -4, 1.2, 0.6, -4]],
+    choc: [[0.32, -127, 4, 0.32, 0.7, -3, 0], [0.43, -66, 2, 1, 1, -3, 1],
+      [0.62, 90, -3, 1.25, 1.04, -4, 1], [0.76, 148, -6, 1.42, 0.7, -5, 0]],
+    elan: [[0.04, -57, 3, 0.26, 0.75, 0, 0], [0.17, -17, 0, 0.95, 1, -2, 1],
+      [0.43, -29, 1, 0.77, 0.94, -1, 0.7], [0.57, 10, -1, 1.12, 1, -4, 1], [0.89, 55, -5, 1.35, 0.68, -5, 0]],
   },
 };
 
+const fondu: Cle[] = [[0, 0, 0, 1, 1, 0, 0], [0.06, 0, 0, 1, 1, 0, 1],
+  [FIN_IMPACT - 0.15, 0, 0, 1, 1, 0, 1], [FIN_IMPACT, 0, 0, 1, 1, 0, 0]];
+
+export function clesImpact(type: Impact, couche: CoucheImpact, reduit: boolean) {
+  if (!reduit) return poses[type][couche];
+  return couche === 'titre' || couche === 'premierMot' ? fondu : [];
+}
+
 export function mouvementImpact(type: Impact, reste: number, couche: CoucheImpact = 'titre') {
   const t = Math.max(0, dureeFlash[type] - reste);
-  if (t >= fin) return null;
-  if (mouvementReduit && mouvementReduit.matches) {
-    return couche === 'elan' ? null : { alpha: borne(t / 0.06) * borne((fin - t) / 0.15), x: 0, y: 0, largeur: 1, hauteur: 1, angle: 0 };
-  }
-  const cles = poses[type][couche];
-  const debut = cles[0][0];
-  const derniere = cles[cles.length - 1][0];
-  if (couche === 'elan' && (t < debut || t >= derniere)) return null;
+  const cles = clesImpact(type, couche, !!mouvementReduit && mouvementReduit.matches);
+  if (t >= FIN_IMPACT || !cles.length) return null;
   let i = 1;
   while (i < cles.length - 1 && t > cles[i][0]) i++;
   const a = cles[i - 1], b = cles[i];
   const progression = borne((t - a[0]) / (b[0] - a[0]));
   const interpoler = (v: number, w: number) => v + (w - v) * progression;
-  const alpha = borne((t - debut) / 0.045) * borne((derniere - t) / (couche === 'elan' ? 0.23 : 0.15));
-  return { alpha, x: interpoler(a[1], b[1]), y: interpoler(a[2], b[2]),
+  return { alpha: interpoler(a[6], b[6]), x: interpoler(a[1], b[1]), y: interpoler(a[2], b[2]),
     largeur: interpoler(a[3], b[3]), hauteur: interpoler(a[4], b[4]), angle: interpoler(a[5], b[5]) };
 }
 
 export function peindreImpact(c: CanvasRenderingContext2D, type: Impact, couche: CoucheImpact = 'titre') {
   c.save();
   c.translate(LARGEUR_IMPACT / 2, HAUTEUR_IMPACT / 2);
-  if (couche === 'elan') {
+  if (couche === 'choc') {
+    if (type === 'depart') {
+      // Encre de l'impact, en dents de scie derrière le lettrage.
+      const pointes = [[-91, 8], [-113, -8], [-72, -5], [-94, -27], [-53, -16], [-51, -29],
+        [-19, -18], [9, -31], [18, -20], [82, -29], [65, -13], [113, -16], [83, 1],
+        [103, 12], [68, 12], [74, 25], [40, 18], [-6, 31], [-14, 22], [-81, 30], [-65, 16]];
+      c.beginPath();
+      pointes.forEach(([x,y], i) => i ? c.lineTo(x,y) : c.moveTo(x,y));
+      c.closePath(); c.fillStyle = '#151722'; c.fill();
+      c.strokeStyle = OR; c.lineWidth = 2.5; c.stroke();
+    } else {
+      for (let i = 0; i < 3; i++) {
+        const x = (i - 1) * 21;
+        c.beginPath(); c.moveTo(x - 14, -20); c.lineTo(x, -20); c.lineTo(x + 16, -1);
+        c.lineTo(x - 2, 20); c.lineTo(x - 18, 20); c.lineTo(x + 1, -1); c.closePath();
+        c.fillStyle = i === 2 ? OR : ROUGE; c.fill();
+        c.strokeStyle = '#101322'; c.lineWidth = 2; c.stroke();
+      }
+    }
+  } else if (couche === 'elan') {
     // Au départ les éclats s'écartent du point de frappe. En transition les traits suivent la foulée.
     const rayons = type === 'depart'
       ? [[-112,-19,-76,-9],[-99,-32,-63,-16],[-122,16,-81,10],[-79,32,-53,21],[76,-19,107,-32],[81,-7,126,-15],[77,10,122,23],[53,20,72,32]]
