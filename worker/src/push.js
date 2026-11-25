@@ -25,6 +25,9 @@
    s'est passe, et c'est le serveur qu'on interroge apres — mais aussi pour une
    autre : une notification s'affiche sur un ecran verrouille, que n'importe
    qui peut lire par-dessus l'epaule.
+   UNE EXCEPTION, voulue (25/11/2026) : le record battu nomme celui qui passe
+   et la place ou l'on tombe (depassement.js). Un pseudo s'affiche deja au
+   Top 500 ; jamais un pseudo interdit, jamais un chrono.
 --------------------------------------------------------------------------- */
 
 const VAPID_SUBJECT = 'mailto:contact@sprinter-game.com';

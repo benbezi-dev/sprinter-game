@@ -9,7 +9,7 @@ import worker, { SalleDirecte } from '../worker/src/index.js';
 import { texteObjectif, texteResultat } from '../worker/src/objectif.js';
 import { ensureDuelTables } from '../worker/src/duels.js';
 import { ensureModerationTables, bloquer } from '../worker/src/moderation.js';
-import { recordsBattus, doublesAuxDuels, texteRecordBattu } from '../worker/src/depassement.js';
+import { recordsBattus, doublesAuxDuels, texteRecordBattu, choisirMessage, MESSAGES_RECORD } from '../worker/src/depassement.js';
 
 let echecs = 0;
 const ok = (nom, vrai, detail) => {
@@ -92,10 +92,15 @@ await course('max', 9050);
 ok('les trois plus proches, pas le quatrieme', String(recus('record_battu')) === 'bea,cyd,dan', envois);
 ok('ni celui qui reste devant, ni celui deja derriere', !envois.some(e => ['ana', 'flo', 'max'].includes(e.a)), envois);
 const deBea = envois.find(e => e.a === 'bea');
-ok('en francais, epreuve et Top 500', deBea?.titre === 'Ton record est battu'
-  && deBea.corps === 'Un joueur de ton niveau vient de battre ton record du 100 m et te passe devant au Top 500.', deBea);
-ok('en anglais pour qui joue en anglais', /^A runner close to your level/.test(envois.find(e => e.a === 'cyd')?.corps || ''));
-ok('ni nom ni chrono sur l ecran verrouille', envois.every(e => !/max|9[.,]05/i.test(e.titre + e.corps)), envois);
+// Le message est l'un des vingt (depassement.js, 25/11/2026), rempli avec le
+// nom de celui qui passe, l'epreuve et la NOUVELLE place de celui qu'on previent.
+const unDesVingt = (e, langue, place) => !!e && MESSAGES_RECORD[langue].some((_, i) => {
+  const [titre, corps] = texteRecordBattu('100', { index: i, nom: 'max', place }, langue);
+  return titre === e.titre && corps === e.corps;
+});
+ok('en francais, nom, epreuve et nouvelle place', unDesVingt(deBea, 'fr', 3), deBea);
+ok('en anglais pour qui joue en anglais', unDesVingt(envois.find(e => e.a === 'cyd'), 'en', 4), envois);
+ok('jamais de chrono sur l ecran verrouille', envois.every(e => !/9[.,]05/.test(e.titre + e.corps)), envois);
 
 envois = [];
 await submit('max', 9050);
@@ -144,8 +149,11 @@ semer.run(app('ana'), 'ana', 7000);
 semer.run(app('bea'), 'bea', 7100);
 semer.run(app('max'), 'max', 6990);
 const bord = await recordsBattus(db, { epreuve: '60', deviceId: app('max'), ancien: null, ms: 6990 });
-ok('le 500e etait au Top, le 501e non', JSON.stringify(bord.battus) === '[{"cle":"ana","auTop":true},{"cle":"bea","auTop":false}]', bord);
-ok('hors Top, le texte n en parle pas', !texteRecordBattu('60', false, 'fr')[1].includes('Top'));
+// La place annoncee est la nouvelle : le 500e, double, tombe 501e.
+ok('le 500e tombe 501e, le 501e tombe 502e', JSON.stringify(bord.battus) === '[{"cle":"ana","place":501},{"cle":"bea","place":502}]', bord);
+ok('hors Top, le texte n en parle pas', Array.from({ length: 300 }, () =>
+  texteRecordBattu('60', { index: choisirMessage({ nom: 'max', place: 501 }), nom: 'max', place: 501 }, 'fr').join(' ')
+).every(t => !t.includes('Top')));
 
 console.log('\n-- le classement des duels');
 await ensureDuelTables(db);
