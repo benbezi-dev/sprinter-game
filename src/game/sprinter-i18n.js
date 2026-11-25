@@ -1784,7 +1784,12 @@
     // identite : nom reserve et code de recuperation
     id_title:        ['TON NOM', 'YOUR NAME'],
     // Face-a-face (components/screens/FaceAFace.tsx)
-    h2h_titre: ['FACE-À-FACE', 'HEAD-TO-HEAD'],
+    h2h_titre: ['Mes duels', 'My duels'],
+    h2h_charge: ['Chargement des duels…', 'Loading duels…'],
+    h2h_erreur: ['Impossible de charger tes duels.', 'Could not load your duels.'],
+    h2h_reessayer: ['Réessayer', 'Try again'],
+    h2h_un_nul: ['1 nul', '1 draw'],
+    h2h_nuls: ['{n} nuls', '{n} draws'],
     h2h_vide: ['Aucun duel terminé pour l\'instant. Lance un défi pour voir qui te résiste.',
                'No finished duels yet. Challenge someone to see who stands up to you.'],
     h2h_toutes: ['Toutes', 'All'],
@@ -1792,7 +1797,7 @@
     h2h_victime: ['Victime favorite', 'Favourite victim'],
     h2h_pas_bete_noire: ['Personne ne t\'a encore battu ici.', 'Nobody has beaten you here yet.'],
     h2h_pas_victime: ['Pas encore de victoire ici.', 'No wins here yet.'],
-    h2h_tous: ['Tous les face-à-face ({n})', 'All head-to-heads ({n})'],
+    h2h_tous: ['Tous mes face-à-face ({n})', 'All my matchups ({n})'],
     // Filtre des pseudos (game/pseudo.ts). Neutre : on ne repete pas le mot.
     pseudo_interdit: ['Ce pseudo n\'est pas autorisé. Choisis-en un autre, sans insulte ni contenu sexuel.',
                       'This name isn\'t allowed. Pick another one, with no insults or sexual content.'],
