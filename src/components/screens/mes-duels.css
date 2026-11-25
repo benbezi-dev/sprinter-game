@@ -1,0 +1,63 @@
+.duel-invitation {
+  position: relative;
+  isolation: isolate;
+  min-height: 7.75rem;
+  overflow: hidden;
+  padding: 1.25rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--primary) 42%, var(--secondary));
+  border-left: 5px solid var(--primary);
+  border-radius: 6px;
+  color: var(--foreground);
+  background:
+    repeating-linear-gradient(116deg, transparent 0 25px, color-mix(in srgb, var(--foreground) 7%, transparent) 26px, transparent 28px),
+    linear-gradient(116deg, var(--background) 40%, var(--secondary) 52%, var(--primary) 52.4%, var(--primaire-fonce) 82%, var(--secondary));
+}
+.duel-invitation img {
+  position: absolute;
+  right: 1%;
+  bottom: -18%;
+  height: 116%;
+  filter: drop-shadow(-3px 2px 0 var(--card));
+}
+.duel-invitation:hover { border-color: var(--primary); }
+.duel-affiche-titre {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 900;
+  font-style: italic;
+}
+.duel-affiche-titre {
+  display: block;
+  font-size: 1.75rem;
+  line-height: 1;
+  letter-spacing: -.035em;
+  text-transform: uppercase;
+  text-shadow: 2px 3px 0 var(--background);
+}
+.duel-invitation .duel-affiche-titre { color: var(--primary); max-width: 64%; }
+.duel-affrontement {
+  border: 1px solid var(--secondary);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  background: var(--card);
+}
+.duel-affrontement:has(button) {
+  overflow: hidden;
+  padding: 0;
+}
+.duel-affrontement:has(button) h3 {
+  margin: 0;
+  padding: .55rem .8rem;
+}
+.duel-affrontement:has(button) > span {
+  padding: .75rem .8rem;
+  background:
+    repeating-linear-gradient(115deg, transparent 0 25px, color-mix(in srgb, var(--foreground) 5%, transparent) 26px, transparent 28px),
+    linear-gradient(110deg, var(--secondary), var(--background));
+}
+.duel-affrontement strong {
+  padding: .15rem .65rem .3rem;
+  color: var(--primary);
+  background: var(--background);
+  transform: skew(-7deg);
+  line-height: 1;
+}

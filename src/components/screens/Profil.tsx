@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
-import { Pencil, Cloud, KeyRound, Settings, Copy, Check, Loader2, Eye, EyeOff, Award, Swords, ChevronRight } from 'lucide-react';
+import { Pencil, Cloud, KeyRound, Settings, Copy, Check, Loader2, Eye, EyeOff, Award, ChevronRight } from 'lucide-react';
 import { SprinterApp } from '@/game/engine';
 import { VOILE, PANNEAU } from '@/lib/mouvement';
 import { savedCode, paysDe } from '@/game/identity';
@@ -89,9 +89,14 @@ export function Profil({ nom, onFermer, onModifier }: { nom: string; onFermer: (
         </div>
 
         <button type="button" onClick={() => setVoirDuels(true)} aria-haspopup="dialog"
-                className="flex items-center gap-3 rounded-xl bg-secondary/60 hover:bg-secondary px-3 py-3 text-sm font-bold">
-          <Swords className="size-5 text-primary" />{N.t('h2h_titre')}
-          <ChevronRight className="size-4 ml-auto text-muted-foreground" />
+                aria-labelledby="carte-duels-titre" aria-describedby="carte-duels-rivaux"
+                className="duel-invitation text-left focus-visible:outline-primary">
+          <img aria-hidden="true" alt="" src={import.meta.env.BASE_URL + 'logo/duo-mascottes-buste.webp'} />
+          <span className="relative z-10 block">
+            <span id="carte-duels-titre" className="duel-affiche-titre">{N.t('h2h_titre')}</span>
+            <span id="carte-duels-rivaux" className="mt-2 block max-w-[60%] text-xs font-bold text-foreground">{N.t('h2h_carte_rivaux')}</span>
+          </span>
+          <ChevronRight aria-hidden="true" className="absolute bottom-2 right-2 z-10 size-5 rounded-sm bg-primary text-primary-foreground" />
         </button>
 
         {/* Sauvegarde sur le serveur */}
