@@ -7,6 +7,7 @@ import './coureur-vedettes.js';
 import './coureur-premium.js';
 import './sprinter-core.js';
 import { echauffer, finirLEchauffement } from './echauffement';
+import { chargerLaMusiqueDediee } from './musique-dediee';
 // LA PISTE COUVERTE DE VAL-DE-REUIL (piste-salle.js) : le 60 m, le 200 et le 400 m en salle
 // rejoignent les epreuves du moteur ; seule la carriere d'athlete les court pour l'instant.
 import { COURSES_EN_SALLE } from './piste-salle.js';
@@ -1134,6 +1135,10 @@ export function updateLogic(dt: number) {
   // `G.silenceMenu` : un film plein ecran joue sa propre bande son par-dessus
   // l'accueil (l'intro de la nuit du molosse, Halloween.tsx). La boucle du
   // menu, relancee ici a chaque image, s'y superposait : on se tait.
+  // La musique de SprinterGame (Stade Neon, canal de test seulement) se charge
+  // des que le son est debloque, quel que soit l'ecran (game/musique-dediee.ts).
+  // L'appel ne coute rien une fois le chargement lance, ni hors du canal de test.
+  if (Audio_.ok) chargerLaMusiqueDediee(Audio_, G);
   if (G.musiqueChamp || G.silenceMenu) Audio_.stop();
   else if (G.state === 'title' || G.state === 'open') Audio_.music('menu');
   else if (G.state === 'cut') {
