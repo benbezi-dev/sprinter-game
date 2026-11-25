@@ -71,6 +71,7 @@ import {
   ensureObjectifTables, heureLocale, midiDuJour,
 } from './objectif.js';
 import { directionDe, CLES } from './epreuves.js';
+import { faceAFace } from './face-a-face.js';
 import {
   ensurePseudoTables, creerDemande, alerterDemande, demandeDuJeton, trancherDemande,
   forcerChangement, etatPseudo, nomReserveParDemande, pageRecap, pageMessage, PREFIXE_PROVISOIRE,
@@ -3696,6 +3697,15 @@ async function servir(request, env, ctx, porteur) {
 
       const tableau = await tableauDesNations(env.DB, { epreuve: race, pays: sien || null });
       return json({ ...tableau, nations: listeNations() });
+    }
+
+    // Les face-a-face d'un joueur (face-a-face.js) : bete noire, victime
+    // favorite et bilans, par epreuve et toutes epreuves confondues.
+    if (url.pathname === '/duels/face-a-face' && request.method === 'GET') {
+      await ensureDuelTables(env.DB);
+      const r = json(await faceAFace(env.DB, url.searchParams.get('name') || ''));
+      r.headers.set('Cache-Control', 'no-store');
+      return r;
     }
 
     if (url.pathname === '/duels' && request.method === 'GET') {
