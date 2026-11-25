@@ -1,4 +1,6 @@
 import React from 'react';
+import { departCanon, transitionParfaite } from '@/game/poussee-gestes';
+import { ImpactParfait } from './ImpactParfait';
 import { SprinterApp, useGameStore } from '@/game/engine';
 import { motion, AnimatePresence } from 'motion/react';
 import { SURGISSEMENT } from '@/lib/mouvement';
@@ -51,6 +53,7 @@ export function RaceHUD() {
   const photo = useGameStore(s => s.photo);
 
   const { N, C } = SprinterApp;
+  const departParfait = player && departCanon(player, C.REACT_BONUS);
 
   /**
    * LE REPERE DU RECORD, pendant la course.
@@ -579,12 +582,13 @@ export function RaceHUD() {
 
         {reactFlash > 0 && player && player.reaction !== null && !player.jumped && (
           <div className="flex flex-col items-center" style={{ opacity: Math.min(reactFlash, 1) }}>
-            <div className={`text-base sm:text-lg md:text-xl font-black tracking-widest uppercase ${player.reactBonus > C.REACT_BONUS * 0.82 ? 'text-primary' : 'text-foreground'}`}>
-              {player.reactBonus > C.REACT_BONUS * 0.82 ? N.t('react_top') : N.t('reaction')}
+            <div className={`text-base sm:text-lg md:text-xl font-black tracking-widest uppercase ${departParfait ? 'text-primary' : 'text-foreground'}`}>
+              {departParfait ? N.t('react_top') : N.t('reaction')}
             </div>
             <div className="text-xs sm:text-sm md:text-base font-bold text-cyan-400 font-mono tracking-wide bg-black/50 px-2 py-0.5 sm:px-3 sm:py-1 rounded-full mt-1">
               {player.reaction.toFixed(3)} s &nbsp;+{player.reactBonus.toFixed(2)} m/s
             </div>
+            {departParfait && <ImpactParfait type="depart" reste={reactFlash} />}
           </div>
         )}
         
@@ -598,6 +602,7 @@ export function RaceHUD() {
                 +{C.TRANS_BOOST[player.transGrade].toFixed(2)} m/s &nbsp;&mdash;&nbsp; {Math.round((1 - C.TRANS_DRAG[player.transGrade]) * 100)}% drag
               </div>
             )}
+            {transitionParfaite(player) && <ImpactParfait type="transition" reste={transFlash} />}
           </div>
         )}
         
