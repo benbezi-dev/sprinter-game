@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useRef } from 'react';
-import { HAUTEUR_IMPACT, LARGEUR_IMPACT, LIBELLE_IMPACT, mouvementImpact, peindreImpact, type Impact, type CoucheImpact } from '@/game/impact-parfait';
+import { COUCHES_IMPACT, HAUTEUR_IMPACT, LARGEUR_IMPACT, LIBELLE_IMPACT, mouvementImpact, peindreImpact, type Impact, type CoucheImpact } from '@/game/impact-parfait';
 
 function Calque({ type, reste, couche }: { type: Impact; reste: number; couche: CoucheImpact }) {
   const toile = useRef<HTMLCanvasElement>(null);
@@ -24,16 +24,15 @@ function Calque({ type, reste, couche }: { type: Impact; reste: number; couche: 
   }, [type, couche, visible]);
 
   if (!pose) return null;
-  return <canvas ref={toile} role={couche === 'titre' ? 'img' : undefined} aria-label={couche === 'titre' ? LIBELLE_IMPACT[type] : undefined} aria-hidden={couche === 'elan' || undefined}
+  return <canvas ref={toile} role={couche === 'titre' ? 'img' : undefined} aria-label={couche === 'titre' ? LIBELLE_IMPACT[type] : undefined} aria-hidden={couche !== 'titre' || undefined}
     className="pointer-events-none absolute inset-0 block max-w-full"
     style={{ width: LARGEUR_IMPACT, aspectRatio: LARGEUR_IMPACT / HAUTEUR_IMPACT, opacity: pose.alpha,
-      transform: `translate(${pose.x}px, ${pose.y}px) scale(${pose.taille})` }} />;
+      transform: `translate(${pose.x}px, ${pose.y}px) rotate(${pose.angle}deg) scale(${pose.largeur}, ${pose.hauteur})` }} />;
 }
 
 export function ImpactParfait({ type, reste }: { type: Impact; reste: number }) {
   if (!mouvementImpact(type, reste)) return null;
   return <div className="pointer-events-none relative max-w-full" style={{ width: LARGEUR_IMPACT, aspectRatio: LARGEUR_IMPACT / HAUTEUR_IMPACT }}>
-    <Calque type={type} reste={reste} couche="elan" />
-    <Calque type={type} reste={reste} couche="titre" />
+    {COUCHES_IMPACT.map(couche => <Calque key={couche} type={type} reste={reste} couche={couche} />)}
   </div>;
 }

@@ -32,7 +32,7 @@
 // donne les memes proportions et non un HUD decale.
 
 import { departCanon, transitionParfaite } from './poussee-gestes';
-import { LARGEUR_IMPACT, HAUTEUR_IMPACT, mouvementImpact, peindreImpact, type Impact } from './impact-parfait';
+import { COUCHES_IMPACT, LARGEUR_IMPACT, HAUTEUR_IMPACT, mouvementImpact, peindreImpact, type Impact } from './impact-parfait';
 import { SprinterApp } from './engine';
 import { lireLeBandeau, quandDeLaCourse } from './bandeau-rejeu';
 import { recordConnu, s2 } from './record';
@@ -405,13 +405,14 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
 
   const impact = (type: Impact, reste: number) => {
     if (!mouvementImpact(type, reste)) return;
-    for (const couche of ['elan', 'titre'] as const) {
+    for (const couche of COUCHES_IMPACT) {
       const pose = mouvementImpact(type, reste, couche);
       if (!pose) continue;
       ctx.save();
       ctx.globalAlpha *= pose.alpha * Math.min(reste, 1);
       ctx.translate(cx + pose.x, y + HAUTEUR_IMPACT / 2 + pose.y);
-      ctx.scale(pose.taille, pose.taille);
+      ctx.rotate(pose.angle * Math.PI / 180);
+      ctx.scale(pose.largeur, pose.hauteur);
       ctx.translate(-LARGEUR_IMPACT / 2, -HAUTEUR_IMPACT / 2);
       peindreImpact(ctx, type, couche);
       ctx.restore();
