@@ -1,47 +1,73 @@
 import { AFFICHE, OR, ROUGE } from './pinceau-film';
 
 export type Impact = 'depart' | 'transition';
-export const LIBELLE_IMPACT = { depart: 'MONSTER KICK 💥!', transition: 'BEAST MODE 🔥' };
-export const LARGEUR_IMPACT = 250;
-export const HAUTEUR_IMPACT = 44;
+export type CoucheImpact = 'elan' | 'titre';
+export const LIBELLE_IMPACT = { depart: 'MONSTER KICK !', transition: 'BEAST MODE' };
+export const LARGEUR_IMPACT = 260;
+export const HAUTEUR_IMPACT = 70;
 
-// Horloge des messages existants (engine.ts). La course filmée et le HUD suivent le même geste.
 const dureeFlash = { depart: 2.2, transition: 2.4 };
 const mouvementReduit = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)');
+const borne = (n: number) => Math.min(1, Math.max(0, n));
 
-export function mouvementImpact(type: Impact, reste: number) {
+// Le HUD et le film utilisent le temps de la course, y compris quand le jeu est en pause.
+export function mouvementImpact(type: Impact, reste: number, couche: CoucheImpact = 'titre') {
   const t = Math.max(0, dureeFlash[type] - reste);
   if (t >= 1.35) return null;
-  const entree = Math.max(0, 1 - t / 0.22);
-  const sortie = Math.max(0, (t - 1.08) / 0.27);
-  const alpha = Math.min(1, t / 0.065, 1 - sortie);
-  if (mouvementReduit && mouvementReduit.matches) return { alpha, x: 0, y: 0, taille: 1 };
-  if (type === 'transition') return { alpha, x: -48 * entree ** 3 + 16 * sortie ** 2, y: 0, taille: 1 };
-  return { alpha, x: 0, y: -4 * entree ** 2, taille: 1 + 0.28 * entree ** 2 - 0.055 * Math.sin(Math.PI * entree) };
+  const entree = borne(t / 0.18);
+  const sortie = borne((t - 1.08) / 0.27);
+  const alpha = borne(t / 0.055) * (1 - sortie);
+  if (mouvementReduit && mouvementReduit.matches) {
+    return couche === 'elan' ? null : { alpha, x: 0, y: 0, taille: 1 };
+  }
+  if (couche === 'elan') {
+    const vol = borne((t - 0.045) / 0.53);
+    if (vol === 0 || vol === 1) return null;
+    const opacite = borne(vol * 9) * (1 - vol ** 2);
+    return type === 'depart'
+      ? { alpha: opacite, x: 0, y: 0, taille: 0.55 + 0.52 * (1 - (1 - vol) ** 3) }
+      : { alpha: opacite, x: -40 + 54 * vol, y: 0, taille: 0.82 + 0.23 * vol };
+  }
+  if (type === 'transition') {
+    return { alpha, x: -84 * (1 - entree) ** 3 + 28 * sortie ** 2, y: 5 * (1 - entree), taille: 1 };
+  }
+  const rebond = Math.sin(Math.PI * borne((t - 0.12) / 0.21));
+  return { alpha, x: 0, y: -10 * (1 - entree) ** 2, taille: 1 + 0.44 * (1 - entree) ** 2 - 0.075 * rebond };
 }
 
-// Coordonnées en points CSS. Le bitmap du HUD ne change pas pendant le mouvement.
-export function peindreImpact(c: CanvasRenderingContext2D, type: Impact) {
+export function peindreImpact(c: CanvasRenderingContext2D, type: Impact, couche: CoucheImpact = 'titre') {
   c.save();
-  const bande = (couleur: string, x: number, y: number, largeur: number, hauteur: number, biais: number) => {
-    c.fillStyle = couleur;
-    c.beginPath();
-    c.moveTo(x + biais, y); c.lineTo(x + largeur + biais, y);
-    c.lineTo(x + largeur, y + hauteur); c.lineTo(x, y + hauteur); c.closePath(); c.fill();
-  };
-  bande('#060913', 10, 5, 224, 34, 10);
-  bande(OR, 13, 36, 69, 3, 3);
-  bande(ROUGE, 5, 12, 4, 21, 7);
-  bande(OR, 237, 9, 3, 21, 7);
-  c.translate(LARGEUR_IMPACT / 2, 23);
-  c.transform(1, 0, -0.115, 1, 0, 0);
-  c.font = '900 23px ' + AFFICHE;
-  c.textAlign = 'center';
-  c.textBaseline = 'middle';
-  const texte = LIBELLE_IMPACT[type];
-  c.fillStyle = '#7c2029';
-  c.fillText(texte, 0, 2, 210);
-  c.fillStyle = ROUGE;
-  c.fillText(texte, 0, 0, 210);
+  c.translate(LARGEUR_IMPACT / 2, HAUTEUR_IMPACT / 2);
+  if (couche === 'elan') {
+    // Au départ les éclats s'écartent du point de frappe. En transition les traits suivent la foulée.
+    const rayons = type === 'depart'
+      ? [[-112,-19,-76,-9],[-99,-32,-63,-16],[-122,16,-81,10],[-79,32,-53,21],[76,-19,107,-32],[81,-7,126,-15],[77,10,122,23],[53,20,72,32]]
+      : [[-125,-17,-48,-17],[-121,-6,-74,-6],[-127,6,-64,6],[-113,18,-38,18],[68,-22,113,-22],[84,12,121,12]];
+    rayons.forEach(([x,y,finX,finY], i) => {
+      c.fillStyle = i % 2 ? ROUGE : OR;
+      c.beginPath(); c.moveTo(x,y); c.lineTo(finX,finY); c.lineTo(finX-5,finY+3); c.closePath(); c.fill();
+    });
+  } else {
+    c.rotate(type === 'depart' ? -0.055 : -0.035);
+    c.transform(1, 0, -0.14, 1, 0, 0);
+    c.textBaseline = 'middle'; c.textAlign = 'center'; c.lineJoin = 'round';
+    const mot = (texte: string, y: number, taille: number, largeur: number) => {
+      c.font = '900 ' + taille + 'px ' + AFFICHE;
+      c.strokeStyle = '#060913'; c.lineWidth = 7;
+      c.strokeText(texte, 0, y+2, largeur);
+      c.fillStyle = '#8f222b'; c.fillText(texte, 0, y+3, largeur);
+      const encre = c.createLinearGradient(0, y-taille/2, 0, y+taille/2);
+      encre.addColorStop(0, '#ffb260'); encre.addColorStop(0.43, '#ff5948'); encre.addColorStop(1, ROUGE);
+      c.fillStyle = encre; c.fillText(texte, 0, y, largeur);
+    };
+    if (type === 'depart') {
+      mot('MONSTER', -12, 23, 132);
+      mot('KICK !', 12, 35, 135);
+    } else {
+      mot(LIBELLE_IMPACT.transition, -1, 33, 213);
+      c.fillStyle = OR;
+      c.beginPath(); c.moveTo(-73,18); c.lineTo(75,15); c.lineTo(62,18); c.lineTo(-75,20); c.fill();
+    }
+  }
   c.restore();
 }

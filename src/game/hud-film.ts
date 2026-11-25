@@ -404,15 +404,18 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
   };
 
   const impact = (type: Impact, reste: number) => {
-    const pose = mouvementImpact(type, reste);
-    if (!pose) return;
-    ctx.save();
-    ctx.globalAlpha *= pose.alpha * Math.min(reste, 1);
-    ctx.translate(cx + pose.x, y + HAUTEUR_IMPACT / 2 + pose.y);
-    ctx.scale(pose.taille, pose.taille);
-    ctx.translate(-LARGEUR_IMPACT / 2, -HAUTEUR_IMPACT / 2);
-    peindreImpact(ctx, type);
-    ctx.restore();
+    if (!mouvementImpact(type, reste)) return;
+    for (const couche of ['elan', 'titre'] as const) {
+      const pose = mouvementImpact(type, reste, couche);
+      if (!pose) continue;
+      ctx.save();
+      ctx.globalAlpha *= pose.alpha * Math.min(reste, 1);
+      ctx.translate(cx + pose.x, y + HAUTEUR_IMPACT / 2 + pose.y);
+      ctx.scale(pose.taille, pose.taille);
+      ctx.translate(-LARGEUR_IMPACT / 2, -HAUTEUR_IMPACT / 2);
+      peindreImpact(ctx, type, couche);
+      ctx.restore();
+    }
     y += HAUTEUR_IMPACT;
   };
 
