@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "tableau": "node suivi/servir.mjs",
     "build:app": "VITE_ENVELOPPE=native vite build --outDir dist-app",
-    "capacitor:copy:before": "cd dist-app && rm -rf halloween decors/halloween-* decors-ultra/halloween-* modeles/stades-ultra/halloween modeles/boss-plein modeles/molosse-chien.glb modeles/mascotte",
+    "capacitor:copy:before": "cd dist-app && rm -rf halloween decors/halloween-* decors-ultra/halloween-* modeles/stades-ultra/halloween modeles/boss-plein modeles/molosse-chien.glb modeles/mascotte musique",
     "ios:sync": "npm run build:app && npx cap sync ios",
     "android:sync": "npm run build:app && npx cap sync android",
     "android:ouvrir": "npm run android:sync && npx cap open android",

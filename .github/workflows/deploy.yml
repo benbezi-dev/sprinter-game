@@ -55,6 +55,12 @@ jobs:
       - name: Retirer les mascottes de la production
         run: rm -rf dist/modeles/mascotte
 
+      # LA MUSIQUE DE SPRINTERGAME N'EST QUE SUR LE CANAL DE TEST (23/11/2026, l'auteur : « on la met
+      # sur test pour le moment pour le stade neon ») : game/musique-dediee.ts ne la charge que la ;
+      # son fichier (1,3 Mo) ne part pas en production.
+      - name: Retirer la musique du canal de test de la production
+        run: rm -rf dist/musique
+
       # LES VERSIONS DE TEST NE SONT PLUS CONSTRUITES ICI (10/11/2026, l'auteur : « deplace
       # la partie test pour alleger le jeu »). Le depot benbezi-dev/sprinter les construit
       # depuis ce depot-ci (main pour /test/, test-ferme/course-3d pour /test3d/) et les
