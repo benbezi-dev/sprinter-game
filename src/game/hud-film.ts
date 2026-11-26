@@ -31,6 +31,8 @@
 // pour qu'un ecran plus large — ou le palier `sm:` de Tailwind s'applique —
 // donne les memes proportions et non un HUD decale.
 
+import { departCanon, transitionParfaite } from './poussee-gestes';
+import { COUCHES_IMPACT, LARGEUR_IMPACT, HAUTEUR_IMPACT, mouvementImpact, peindreImpact, impactsOuverts, type Impact } from './impact-parfait';
 import { SprinterApp } from './engine';
 import { lireLeBandeau, quandDeLaCourse } from './bandeau-rejeu';
 import { recordConnu, s2 } from './record';
@@ -401,6 +403,23 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
     }
   };
 
+  const impact = (type: Impact, reste: number) => {
+    if (!impactsOuverts() || !mouvementImpact(type, reste)) return;
+    for (const couche of COUCHES_IMPACT) {
+      const pose = mouvementImpact(type, reste, couche);
+      if (!pose || pose.alpha <= 0) continue;
+      ctx.save();
+      ctx.globalAlpha *= pose.alpha * Math.min(reste, 1);
+      ctx.translate(cx + pose.x, y + HAUTEUR_IMPACT / 2 + pose.y);
+      ctx.rotate(pose.angle * Math.PI / 180);
+      ctx.scale(pose.largeur, pose.hauteur);
+      ctx.translate(-LARGEUR_IMPACT / 2, -HAUTEUR_IMPACT / 2);
+      peindreImpact(ctx, type, couche);
+      ctx.restore();
+    }
+    y += HAUTEUR_IMPACT;
+  };
+
   // Le faux depart n'est plus peint ici : il vit dans la pile du bas, au-dessus
   // des touches, comme dans RaceHUD.
 
@@ -409,11 +428,12 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
          Math.min(G.stumbleFlash, 1));
 
   if (G.reactFlash > 0 && p.reaction !== null && !p.jumped) {
-    const top = p.reactBonus > C.REACT_BONUS * 0.82;
+    const top = departCanon(p, C.REACT_BONUS);
     bloc(String(N.t(top ? 'react_top' : 'reaction')).toUpperCase(), top ? OR : TEXTE,
          sm ? 18 : 16,
          `${p.reaction.toFixed(3)} s  +${p.reactBonus.toFixed(2)} m/s`, CYAN,
          Math.min(G.reactFlash, 1));
+    if (top) impact('depart', G.reactFlash);
   }
 
   if (G.transFlash > 0 && p.transGrade !== null) {
@@ -423,6 +443,7 @@ function retours(ctx: CanvasRenderingContext2D, l: number, o: any) {
          g === 2 ? OR : g === 1 ? VERT : SOURDINE, sm ? 20 : 18,
          g > 0 ? `+${C.TRANS_BOOST[g].toFixed(2)} m/s  —  ${Math.round((1 - C.TRANS_DRAG[g]) * 100)}% drag` : null,
          CYAN, Math.min(G.transFlash, 1));
+    if (transitionParfaite(p)) impact('transition', G.transFlash);
   }
 
   // le dernier geste du joueur : le casse, un coup de coude, le couloir 2 (annoncerGeste, sprinter-app.js)
