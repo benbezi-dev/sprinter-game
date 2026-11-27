@@ -15,7 +15,7 @@ import {
   tempsDuJoueur, VITESSE_JUSTE,
 } from '@/game/hauteur-jeu.js';
 import {
-  armerConcoursHauteur, appelerSauteur, mettreAuRepos, montrerBarre, rangerConcoursHauteur,
+  armerConcoursHauteur, appelerSauteur, mettreAuRepos, montrerBarre, rangerConcoursHauteur, faireSauterAdversaire,
   ecouterHauteur, etatHauteur,
 } from '@/game/hauteur-course.js';
 
@@ -75,6 +75,19 @@ export function Hauteur({ etape, carriere, onQuitter, onSuivant, onRejouer, onCa
 
 type Temps = 'carte' | 'autres' | 'decision' | 'toi' | 'partage' | 'fin';
 type Fait = { index: number; nom: string; h: number; essai: string; barrage?: boolean };
+
+/**
+ * LE SAUT QU'ON MONTRE parmi ceux des autres, a chaque passage (27/11) : le
+ * plus haut, et a hauteur egale celui qui passe. Un seul par passage.
+ */
+function sautAMontrer(faits: Fait[]): number {
+  let k = -1;
+  faits.forEach((f, i) => {
+    if (f.essai !== 'o' && f.essai !== 'x') return;
+    if (k < 0 || f.h > faits[k].h || (f.h === faits[k].h && f.essai === 'o' && faits[k].essai !== 'o')) k = i;
+  });
+  return k;
+}
 type Annonce = { sorte: string; texte: string; sous?: string; couleur: string; drapeau?: boolean };
 
 function Concours({ etape, carriere, accent, memoire, onMemoire, onSuivant, onRejouer, onCarriere, onQuitter }: {
@@ -95,6 +108,10 @@ function Concours({ etape, carriere, accent, memoire, onMemoire, onSuivant, onRe
   }
   const [file, setFile] = useState<Fait[]>([]);
   const [vus, setVus] = useState(0);
+  // le saut d'un adversaire montre en entier (hauteur-course.js, faireSauterAdversaire)
+  const [vedette, setVedette] = useState(-1);
+  const [enSaut, setEnSaut] = useState(false);
+  const vedetteVue = useRef(false);
   const [, rafraichir] = useState(0);
   const [annonce, setAnnonce] = useState<Annonce | null>(null);
   const [live, setLive] = useState<{ phase: string; v: number; horloge: number } | null>(null);
@@ -124,6 +141,8 @@ function Concours({ etape, carriere, accent, memoire, onMemoire, onSuivant, onRe
       mettreAuRepos(faits[0].h);
       setFile(faits);
       setVus(0);
+      setVedette(sautAMontrer(faits));
+      vedetteVue.current = false;
       setTemps('autres');
       return;
     }
@@ -165,15 +184,42 @@ function Concours({ etape, carriere, accent, memoire, onMemoire, onSuivant, onRe
       return () => clearTimeout(id);
     }
     // La barre du stade suit celle de l'essai qu'on regarde.
+    if (enSaut) return;
     if (file[vus]) montrerBarre(file[vus].h);
+    // SON SAUT, EN ENTIER : on attend qu'il se releve du tapis (la fin, dans l'ecoute plus bas)
+    if (vus === vedette && !vedetteVue.current) {
+      vedetteVue.current = true;
+      if (faireSauterAdversaire(file[vus])) { setEnSaut(true); return; }
+    }
     const id = setTimeout(() => setVus(v => v + 1), file[vus] && file[vus].essai === '-' ? 420 : 850);
     return () => clearTimeout(id);
-  }, [temps, vus, file, avancer]);
+  }, [temps, vus, file, avancer, enSaut, vedette]);
+
+  /** Fin du saut montre (ou passe d'un toucher) : il retourne attendre, la liste reprend. */
+  const finVedette = useCallback((passer = false) => {
+    setEnSaut(false);
+    setAnnonce(null);
+    mettreAuRepos(file[vus] ? file[vus].h : c.current.h);
+    setVus(v => (passer ? file.length : v + 1));
+  }, [file, vus]);
+  const finVedetteRef = useRef(finVedette);
+  finVedetteRef.current = finVedette;
 
   /* --- ce qui se passe au sautoir --- */
   useEffect(() => ecouterHauteur((evt: any) => {
     if (evt.type === 'range') {
       if (!quitte.current) { quitte.current = true; onQuitter(); }
+      return;
+    }
+    // LE SAUT D'UN ADVERSAIRE : le drapeau, puis la liste reprend. Rien ne s'inscrit,
+    // son essai l'est deja (avancerJusquAuJoueur).
+    if (evt.adversaire) {
+      if (evt.type === 'marque') {
+        const r = evt.resultat;
+        setAnnonce({ sorte: 'marque', drapeau: true, texte: r.franchi ? `${hauteur(r.hauteur ?? c.current.h)} · ${N.t('haut_franchi')}` : N.t('haut_tombee'),
+          sous: SprinterApp.G.player?.name || '', couleur: r.franchi ? accent : '#f87171' });
+      }
+      if (evt.type === 'fin') setTimeout(() => finVedetteRef.current(), 400);
       return;
     }
     if (evt.type === 'appel') {
@@ -302,7 +348,17 @@ function Concours({ etape, carriere, accent, memoire, onMemoire, onSuivant, onRe
 
       {/* CE QUE FONT LES AUTRES, un par un. */}
       <AnimatePresence>
-        {temps === 'autres' && file.length > 0 && (
+        {temps === 'autres' && enSaut && (
+          <motion.div key="vedette" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="absolute inset-0 flex flex-col items-center justify-start pt-[14%] pointer-events-auto"
+            onPointerDown={() => finVedette(true)}>
+            <span className="text-[11px] font-bold tracking-widest text-white/80 bg-black/45 rounded-full px-3 py-1">
+              {file[vus] ? N.t('haut_saute', { n: file[vus].nom, h: hauteur(file[vus].h) }) : ''}
+            </span>
+            <span className="mt-auto mb-6 text-[8px] tracking-widest uppercase text-white/40">{N.t('saut_passer')}</span>
+          </motion.div>
+        )}
+        {temps === 'autres' && !enSaut && file.length > 0 && (
           <motion.div key="autres" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             className="absolute inset-x-0 top-[38%] flex justify-center pointer-events-auto"
             onPointerDown={() => setVus(file.length)}>

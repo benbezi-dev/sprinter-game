@@ -31,3 +31,22 @@ export function athletesEnAttente(Runner, noms, { total, laneW, x0, y, dir = 0, 
     return r;
   });
 }
+
+/**
+ * UN ADVERSAIRE VA SAUTER : le sauteur du moteur `j` prend son nom (qui choisit
+ * son corps, course-3d/corps.ts), sa tenue et son dossard, et le joueur attend
+ * a sa place au bord de la piste. Rend la liste des coureurs a poser dans
+ * G.runners. `moi` garde le joueur debout d'un saut a l'autre ({ r }).
+ */
+export function prendreSaPlace({ Runner, PLAYER_LOOK, attente, moi, j, nom, total, laneW }) {
+  const place = attente.findIndex((r) => r.name === nom);
+  const lui = place >= 0 ? attente[place] : new Runner(nom, 0, { total });
+  j.name = nom; j.look = lui.look; j.dossard = lui.dossard || 9;
+  if (place < 0) return [j, ...attente];
+  if (!moi.r) {
+    [moi.r] = athletesEnAttente(Runner, ['TOI'], { total, laneW, x0: 0, y: 0, cap: lui.cap });
+    moi.r.look = PLAYER_LOOK; moi.r.dossard = 1;
+  }
+  moi.r.d = lui.d; moi.r.demi = lui.demi;
+  return [j, ...attente.map((r, k) => (k === place ? moi.r : r))];
+}

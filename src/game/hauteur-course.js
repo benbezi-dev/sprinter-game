@@ -39,7 +39,7 @@ import {
 } from './hauteur-jeu.js';
 import { postureDe, dessinerSol, piecesDebout, dessinerPiece } from './hauteur-rendu.js';
 import { creerVue, PROFIL } from './sauts-vue.js';
-import { athletesEnAttente } from './sauts-attente.js';
+import { athletesEnAttente, prendreSaPlace } from './sauts-attente.js';
 import { RENDU_3D } from './canal';
 
 const D2R = Math.PI / 180;
@@ -156,6 +156,8 @@ let sauvegarde = null;
 const ecouteurs = new Set();
 
 function annoncer(evt) {
+  // le saut d'un adversaire (faireSauterAdversaire) : l'ecran ne le prend pas pour celui du joueur
+  if (e && e.pilote) evt.adversaire = true;
   for (const f of ecouteurs) { try { f(evt); } catch (err) { /* un ecran ne fait pas tomber le saut */ } }
 }
 
@@ -203,8 +205,9 @@ export function armerConcoursHauteur(etape, adversaires = []) {
   const local = (fn) => vue.avec(G.player, fn);
   G.sautEnCours = true;
   G.pasSauteur = (j, dt, el) => local(() => pas(j, dt, el));
-  G.appuiSaut = (cote) => local(() => appui(cote));
-  G.relacheSaut = (cote) => local(() => relache(cote));
+  // (pendant le saut d'un adversaire, les paves du joueur sont muets : 'rien', le moteur n'en fait pas une foulee)
+  G.appuiSaut = (cote) => (e && e.pilote ? 'rien' : local(() => appui(cote)));
+  G.relacheSaut = (cote) => (e && e.pilote ? false : local(() => relache(cote)));
   G.viseCamera = () => { const p = local(viseCamera); return vue.monde(p[0], p[1]); };
   G.jaugeSaut = () => local(jauge);
   G.consigneSaut = () => local(consigne);
@@ -280,6 +283,7 @@ function essaiNeuf() {
     t: 0, s: 0, vHist: [], appel: null, vol: null, reception: null,
     barre: { chute: null, tremble: null }, impact: null,
     resultat: null, drapeau: null, finAnnoncee: false, arret: null, vMoteur: null, avantAppel: LONGUEUR_J,
+    pilote: null,
   };
 }
 
@@ -467,6 +471,69 @@ function decoller() {
   annoncer({ type: 'envol', angle: a.angle, vise: a.vise.angle, vElan: a.vElan });
 }
 
+/* ------------------------------------------------ le saut d'un adversaire */
+
+/**
+ * UN ADVERSAIRE SAUTE, A L'ECRAN (27/11). Son essai est deja tire
+ * (hauteur-jeu.js, avancerJusquAuJoueur) : 'o' il passe, 'x' il fait tomber
+ * la barre. On le rejoue avec la mecanique du joueur, pilotee (piloter) : le
+ * J, l'appel a la bonne distance, l'angle, la cambrure puis les jambes aux
+ * instants justes. Le verdict est force au contact de la barre (toucher) :
+ * ce qu'on voit dit ce que le concours a ecrit. Il porte sa tenue ; le joueur
+ * attend a sa place. Les evenements portent `adversaire`.
+ *
+ * `fait` : { nom, h, essai } (avancerJusquAuJoueur). Rend faux si rien n'est arme.
+ */
+export function faireSauterAdversaire(fait) {
+  if (!e) return false;
+  const G = SprinterApp.G;
+  Object.assign(e, essaiNeuf(), { phase: 'attente', horloge: 60, hauteur: fait.h || e.hauteur });
+  nouveauSauteur();
+  rendreLeTempo();
+  G.runners = prendreSaPlace({
+    Runner: SprinterCore.Runner, PLAYER_LOOK: SprinterCore.PLAYER_LOOK, attente: e.attente, moi: e.moi || (e.moi = {}),
+    j: G.player, nom: fait.nom, total: G.track.total, laneW: SprinterCore.C.LANE_W,
+  });
+  const passe = fait.essai === 'o';
+  e.pilote = {
+    passe, v: VITESSE_JUSTE * (0.97 + 0.06 * Math.random()),
+    // l'appel a sa distance juste, a vingt centimetres pres
+    ecart: 1.2 + 0.3 * Math.random(),
+    // un echec tient un peu trop : l'envol est trop raide
+    retard: passe ? (Math.random() - 0.5) * 0.04 : 0.08 + 0.06 * Math.random(),
+  };
+  G.state = 'race';
+  placerCamera(true);
+  return true;
+}
+
+/** Les gestes de l'adversaire, aux instants justes. */
+function piloter() {
+  const P = e.pilote;
+  switch (e.phase) {
+    case 'attente':
+      e.phase = 'elan'; e.t = 0;
+      return;
+    case 'elan':
+      if (pointe().ecart <= P.ecart) appui(PIED_APPEL);
+      return;
+    case 'appel': {
+      const a = e.appel;
+      if (tenu() >= Math.max(0.05, (a.vise.angle - ANGLE_MIN) / ANGLE_PAR_S) + P.retard) decoller();
+      return;
+    }
+    case 'vol': {
+      const v = e.vol;
+      if (v.tCambre == null && v.justes.cambre != null && v.t >= v.justes.cambre) {
+        v.tCambre = v.t; v.coteCambre = 'right';
+      }
+      if (v.tCambre != null && v.tJambes == null && v.justes.jambes != null && v.t >= v.justes.jambes) v.tJambes = v.t;
+      return;
+    }
+    default:
+  }
+}
+
 /* ------------------------------------------------------------- le pas */
 
 function pas(j, dt, elapsed) {
@@ -478,6 +545,7 @@ function pas(j, dt, elapsed) {
   if (e.barre.chute) avancerChute(dt);
   if (e.impact) e.impact.t += dt;
   zoomer(dt);
+  if (e.pilote) piloter();
 
   switch (e.phase) {
     case 'repos':
@@ -502,8 +570,15 @@ function pas(j, dt, elapsed) {
       const s0 = e.s;
       j.d = s0;
       // (un appui sur le pave change j.v entre deux images : c'est alors lui qui compte)
-      if (e.vMoteur != null && j.v === e.vJeu) j.v = e.vMoteur;
-      j.stepPlayer(dt, elapsed);
+      if (e.pilote) {
+        // l'adversaire part arrete et prend sa vitesse (faireSauterAdversaire)
+        j.v = e.pilote.v * (1 - Math.exp(-e.t / 1.1));
+        j.d = s0 + j.v * dt;
+        j.stride += j.v * dt * (Math.PI / j.strideLength());
+      } else {
+        if (e.vMoteur != null && j.v === e.vJeu) j.v = e.vMoteur;
+        j.stepPlayer(dt, elapsed);
+      }
       j.drivePitch *= 0.4;
       e.vMoteur = j.v;
       const f = 1 - FREIN * lisse(1 - (LONGUEUR_J - s0) / APPROCHE);
@@ -677,6 +752,8 @@ function franchissements(v) {
 
 /** Un repere du corps passe la barre avec cette marge. */
 function toucher(cle, marge) {
+  // l'adversaire : le concours a deja dit s'il passe (faireSauterAdversaire) ; s'il echoue, le bassin emporte la barre
+  if (e.pilote) { if (e.pilote.passe) return; if (cle === 'bassin') marge = Math.min(marge, -0.05); }
   if (e.barre.chute || marge >= EFFLEURE) return;
   const s = sortDeLaBarre(marge);
   const j = SprinterApp.G.player;
@@ -824,7 +901,7 @@ function placerCamera(net) {
  * puis, le pouce tenu, vers le lancer des jambes : on relache.
  */
 function jauge() {
-  if (!e) return null;
+  if (!e || e.pilote) return null;   // (un adversaire saute : rien a lire pour le joueur)
   const j = SprinterApp.G.player;
   if (e.phase === 'elan') {
     const p = pointe();
@@ -861,7 +938,7 @@ function jauge() {
 
 /** La consigne sous les paves, en clef de traduction. */
 function consigne() {
-  if (!e) return null;
+  if (!e || e.pilote) return null;   // (un adversaire saute : rien a lire pour le joueur)
   switch (e.phase) {
     case 'attente': return e.refus ? 'haut_c_repartir' : 'haut_c_partir';
     case 'elan': return pointe().ecart < 7 ? 'haut_c_appel' : 'haut_c_elan';
@@ -877,6 +954,7 @@ function consigne() {
 /** Les paves se montrent-ils ? Seulement quand on a quelque chose a y faire. */
 export function pavesHauteur() {
   if (!e) return true;
+  if (e.pilote) return false;
   return e.phase === 'attente' || e.phase === 'elan' || e.phase === 'appel'
     || (e.phase === 'vol' && e.vol.tJambes == null);
 }
