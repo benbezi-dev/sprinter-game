@@ -63,7 +63,9 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // telephone tenu droit ne le tire plus (?plan=rail l'impose encore)
     const large = camera.aspect >= 1 || Math.min(innerWidth, innerHeight) >= 600;
     const droite60 = salleActive && !T.curved;
-    const autres = PLANS.filter(k => k !== planCam && !(k === 'rail' && (nuitDuMolosse || !large)) && (droite60 || !PLANS_SALLE.includes(k)));
+    // Le plan au ras du bord masque l'arrivée : il ne participe qu'à un tirage sur cinq.
+    const bordEligible = droite60 && Math.random() < 0.2;
+    const autres = PLANS.filter(k => (k !== 'bord' || bordEligible) && k !== planCam && !(k === 'rail' && (nuitDuMolosse || !large)) && (droite60 || !PLANS_SALLE.includes(k)));
     planCam = PLANS.includes(force) && (droite60 || !PLANS_SALLE.includes(force)) ? force : autres[Math.floor(Math.random() * autres.length)];
   }
   const plan2D = !DOS && planCam === '2d', rail = !DOS && planCam === 'rail' && !nuitDuMolosse;
