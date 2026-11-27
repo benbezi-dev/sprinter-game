@@ -29,6 +29,8 @@
 --------------------------------------------------------------------------- */
 
 import { G, FOSSE, ESSAIS, marque } from './longueur.js';
+import { PROFILS_LONGUEUR, STYLES_LONGUEUR } from './sauts-profils.js';
+import { journaliser } from './sauts-telemetrie.js';
 
 /* ------------------------------------------------------------- l'appel */
 
@@ -121,7 +123,10 @@ export const TENUE_MAXI = (ANGLE_MAX - ANGLE_MIN) / ANGLE_PAR_S;
  * L'angle pese donc autant que la planche, et c'est voulu : cinq degres de
  * trop coutent ce que coutent quarante centimetres d'appel manque.
  */
-export function perteImpulsion(angle) {
+export function perteImpulsion(angle, profil = null) {
+  // un profil d'athlete (sauts-profils.js) a sa propre courbe ; sans lui, celle du jeu
+  const P = profil && profil.perte;
+  if (P) return P.a + P.b * Math.pow(Math.max(0, angle - P.e), 1.5);
   return 0.04 + 0.0035 * Math.pow(Math.max(0, angle - 10), 1.5);
 }
 
@@ -148,19 +153,20 @@ export const DISTANCE_ENVOL = 0.25;
  * De la balistique, sans air : a 9 m/s sur huit metres, la trainee d'un corps
  * humain retire de l'ordre du centimetre, sous la precision de la mesure.
  */
-export function vol(vElan, angle) {
+export function vol(vElan, angle, profil = null) {
   // La perte porte sur l'HORIZONTALE : c'est elle que la planche freine. La
   // verticale est ce que l'impulsion en tire, a l'angle choisi.
-  const vx = Math.max(0, vElan) * (1 - perteImpulsion(angle));
+  const vx = Math.max(0, vElan) * (1 - perteImpulsion(angle, profil));
   const vy = vx * Math.tan(angle * Math.PI / 180);
-  const dh = HAUTEUR_ENVOL - HAUTEUR_RECEPTION;
+  const h0 = profil && profil.h0 != null ? profil.h0 : HAUTEUR_ENVOL;
+  const dh = h0 - (profil && profil.hL != null ? profil.hL : HAUTEUR_RECEPTION);
   const duree = (vy + Math.sqrt(vy * vy + 2 * G * dh)) / G;
-  return { vx, vy, duree, longueur: vx * duree, sommet: HAUTEUR_ENVOL + vy * vy / (2 * G) };
+  return { vx, vy, h0, duree, longueur: vx * duree, sommet: h0 + vy * vy / (2 * G), perte: Math.max(0, vElan) - vx };
 }
 
 /** La hauteur du centre de masse `t` secondes apres l'envol. */
 export function hauteurA(v, t) {
-  return HAUTEUR_ENVOL + v.vy * t - 0.5 * G * t * t;
+  return (v.h0 != null ? v.h0 : HAUTEUR_ENVOL) + v.vy * t - 0.5 * G * t * t;
 }
 
 /* ------------------------------------------------------------ le ramene */
@@ -245,9 +251,9 @@ export function tirerVent(alea) {
  * Rend toujours le meme objet, mordu ou non : un essai mordu reste un essai,
  * il compte dans les six, et l'ecran doit pouvoir le montrer.
  */
-export function sauter({ vElan, ecart, angle, avance = null, ciseau = false, vent = 0 }) {
+export function sauter({ vElan, ecart, angle, avance = null, ciseau = false, vent = 0, profil = null }) {
   const planche = jugerPlanche(ecart);
-  const v = vol(vElan, angle);
+  const v = vol(vElan, angle, profil);
   const r = jugerRamene(avance, ciseau);
   const brut = DISTANCE_ENVOL + v.longueur + r.gain;
   const porte = VENT_PAR_MS * vent * (brut / 8.5);
@@ -303,17 +309,47 @@ export const MORDUS = [0.18, 0.20, 0.22, 0.25, 0.25, 0.20];
  */
 export const CONCURRENTS = [8, 8, 8, 12, 12, 8];
 
-/** Un essai d'adversaire. */
-export function essaiAdversaire(niveau, etape, alea) {
+/** Un essai d'adversaire. Avec un style (sauts-profils.js), c'est son geste qui decide. */
+export function essaiAdversaire(niveau, etape, alea, style = null) {
   const vent = tirerVent(alea);
-  if (alea() < MORDUS[Math.max(0, Math.min(5, etape))]) {
-    return { mordu: true, metres: 0, marque: null, vent };
+  const P = style && PROFILS_LONGUEUR[style];
+  // la precision a la planche (P.planche, en m) fait la part de mordus : 10 cm, c'est celle de l'etape
+  const pMordu = MORDUS[Math.max(0, Math.min(5, etape))] * (P ? P.planche / 0.10 : 1);
+  if (alea() < pMordu) {
+    return { mordu: true, metres: 0, marque: null, vent, style };
+  }
+  if (P) {
+    // LE GESTE DU STYLE : un angle un peu a cote de son optimum (la regularite, en degres
+    // d'ecart type), une pointe un peu avant la planche, un ramene plus ou moins juste. Le
+    // saut est rapporte a son meilleur geste, puis a son niveau : le style fait la FORME
+    // de ses essais (regulier, explosif, precis), le plateau fait leur longueur.
+    const o = optimumDe(style);
+    const gauss = () => Math.sqrt(-2 * Math.log(1 - alea())) * Math.cos(2 * Math.PI * alea());
+    const angle = o.angle + gauss() * 1.5 * P.regularite;
+    const ecart = Math.abs(gauss()) * P.planche * 0.5;
+    const avance = RAMENE_VISE + gauss() * 0.05 * P.regularite;
+    const s = sauter({ vElan: P.vApproche, ecart, angle, avance, ciseau: true, profil: P });
+    const metres = niveau * s.metres / o.metres + VENT_PAR_MS * vent * (niveau / 8.5) * 0.5;
+    return { mordu: false, metres, marque: marque(metres), vent, style, telemetrie: s };
   }
   // Le plus souvent pres de son niveau, parfois nettement en dessous : un
   // saut rate en longueur l'est d'un demi-metre, pas d'un centimetre.
   const perte = 0.075 * Math.pow(alea(), 1.6);
   const metres = niveau * (1 - perte) + VENT_PAR_MS * vent * (niveau / 8.5) * 0.5;
   return { mordu: false, metres, marque: marque(metres), vent };
+}
+
+/** Le meilleur geste d'un style : son angle optimal et sa marque, planche et ramene parfaits. */
+const optimums = {};
+export function optimumDe(style) {
+  if (optimums[style]) return optimums[style];
+  const P = PROFILS_LONGUEUR[style];
+  let best = { angle: 21, metres: 0 };
+  for (let a = 12; a <= 32; a += 0.1) {
+    const m = sauter({ vElan: P.vApproche, ecart: 0, angle: a, avance: RAMENE_VISE, ciseau: true, profil: P }).metres;
+    if (m > best.metres) best = { angle: a, metres: m };
+  }
+  return (optimums[style] = best);
 }
 
 /**
@@ -323,7 +359,7 @@ export function essaiAdversaire(niveau, etape, alea) {
  * tirage, seme ou non. L'ordre de passage est tire au sort, comme sur une
  * vraie feuille de concours.
  */
-export function nouveauConcours({ etape, noms, alea = Math.random, joueur = 'TOI', plateau = PLATEAU }) {
+export function nouveauConcours({ etape, noms, alea = Math.random, joueur = 'TOI', plateau = PLATEAU, styles = STYLES_LONGUEUR }) {
   const e = Math.max(0, Math.min(5, etape | 0));
   // Le plateau de l'epreuve : celui de la longueur par defaut, celui du
   // triple saut (triple-jeu.js) quand c'est lui qu'on saute. Le reste du
@@ -332,7 +368,8 @@ export function nouveauConcours({ etape, noms, alea = Math.random, joueur = 'TOI
   const n = Math.min(CONCURRENTS[e], noms.length + 1);
   const athletes = [{ nom: joueur, joueur: true, niveau: 0, essais: [] }];
   for (let i = 0; i < n - 1; i++) {
-    athletes.push({ nom: noms[i], joueur: false, niveau: lo + alea() * (hi - lo), essais: [] });
+    // un style par adversaire, distribue a tour de role (sauts-profils.js) ; le triple passe les siens
+    athletes.push({ nom: noms[i], joueur: false, niveau: lo + alea() * (hi - lo), essais: [], style: styles.length ? styles[i % styles.length] : null });
   }
   const ordre = athletes.map((_, i) => i);
   for (let i = ordre.length - 1; i > 0; i--) {
@@ -452,7 +489,9 @@ export function avancerJusquAuJoueur(c, alea) {
     if (i === null) break;
     const a = c.athletes[i];
     if (a.joueur) break;
-    const e = essaiAdversaire(a.niveau, c.etape, alea);
+    // le triple passe son propre essai (triple-jeu.js, essaiTripleAdversaire) : c.essai
+    const e = (c.essai || essaiAdversaire)(a.niveau, c.etape, alea, a.style);
+    journaliser(a, e);
     faits.push({ index: i, nom: a.nom, tour: c.tour, essai: e });
     inscrire(c, e);
   }

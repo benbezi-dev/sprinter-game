@@ -31,6 +31,7 @@ import {
   vol as volSaut, perteImpulsion, jugerRamene, DISTANCE_ENVOL, VENT_PAR_MS,
 } from './longueur-jeu.js';
 import { marque } from './longueur.js';
+import { TRIPLE_CALIBRE } from './sauts-profils.js';
 
 /* ------------------------------------------------------------- les bonds */
 
@@ -63,8 +64,8 @@ export const ANGLES_VISES = [15, 16, 20.5];
 export const PERTE_POSE = 0.012;
 
 /** La perte a l'impulsion d'un des deux premiers bonds. */
-export function perteBond(i, angle) {
-  const p = BONDS_JEU[i];
+export function perteBond(i, angle, profil = null) {
+  const p = (profil && profil.bondsJeu && profil.bondsJeu[i]) || BONDS_JEU[i];
   return p.a + p.b * Math.pow(Math.max(0, angle - p.e), 1.5);
 }
 
@@ -75,9 +76,9 @@ export function perteBond(i, angle) {
  * vitesse au decollage, la duree et la longueur du vol du centre de masse, la
  * vitesse qu'il reste apres la pose — avant que l'appui ne soit juge.
  */
-export function bond(i, vEntree, angle) {
-  const p = BONDS_JEU[i];
-  const vx = Math.max(0, vEntree) * (1 - perteBond(i, angle));
+export function bond(i, vEntree, angle, profil = null) {
+  const p = (profil && profil.bondsJeu && profil.bondsJeu[i]) || BONDS_JEU[i];
+  const vx = Math.max(0, vEntree) * (1 - perteBond(i, angle, profil));
   const vy = vx * Math.tan(angle * Math.PI / 180);
   const dh = p.h0 - p.hL;
   const vyPose = Math.sqrt(vy * vy + 2 * G * dh);
@@ -87,7 +88,7 @@ export function bond(i, vEntree, angle) {
     // de pointe a pointe : le centre de masse devant la pointe a l'envol, le
     // vol, le pied devant le centre de masse a la pose
     longueur: p.envol + vx * duree + p.pose,
-    vApres: vx * (1 - PERTE_POSE * vyPose),
+    vApres: vx * (1 - (p.pertePose != null ? p.pertePose : PERTE_POSE) * vyPose),
     h0: p.h0, hL: p.hL,
   };
 }
@@ -144,12 +145,12 @@ export function jugerPose(retard) {
  * Rend les trois bonds, la marque, et ce qui a rendu l'essai nul s'il l'est.
  */
 export function sauterTriple({ vElan, ecart, angles, poses = [0, 0], pieds = [true, true],
-                               avance = null, ciseau = false, vent = 0 }) {
+                               avance = null, ciseau = false, vent = 0, profil = null }) {
   const bonds = [];
   let v = vElan, raison = null;
   const notes = [];
   for (let i = 0; i < 2; i++) {
-    const b = bond(i, v, angles[i]);
+    const b = bond(i, v, angles[i], profil);
     const p = jugerPose(poses[i]);
     notes.push(p.note);
     bonds.push(b);
@@ -159,7 +160,7 @@ export function sauterTriple({ vElan, ecart, angles, poses = [0, 0], pieds = [tr
   }
   let saut = null, r = null;
   if (bonds.length === 2 && raison !== 'rompu') {
-    saut = volSaut(v, angles[2]);
+    saut = volSaut(v, angles[2], profil && profil.saut);
     r = jugerRamene(avance, ciseau);
   }
   const longueurs = bonds.map(b => b.longueur);
@@ -216,4 +217,38 @@ export const PLATEAU_TRIPLE = [
 export const VITESSE_TRIPLE = [10.9, 10.9, 10.9, 10.9, 10.9, 11.6];
 export function vitesseTriple(etape) {
   return VITESSE_TRIPLE[Math.max(0, Math.min(5, etape | 0))];
+}
+
+/* ----------------------------------------------- les adversaires a style */
+
+/**
+ * UN ESSAI D'ADVERSAIRE AU TRIPLE, avec un style (sauts-profils.js). Comme en
+ * longueur (essaiAdversaire) : son geste a lui — trois angles un peu a cote des
+ * siens, deux poses plus ou moins actives, la planche —, rapporte a son
+ * meilleur saut puis a son niveau. Un appui rate peut rompre l'essai.
+ */
+const optimumsTriple = {};
+function optimumTriple(style) {
+  if (optimumsTriple[style]) return optimumsTriple[style];
+  const P = TRIPLE_CALIBRE[style];
+  const r = sauterTriple({ vElan: P.vApproche, ecart: 0, angles: P.angles, poses: [0, 0], avance: 0.30, ciseau: true, profil: P });
+  return (optimumsTriple[style] = r);
+}
+export function essaiTripleAdversaire(niveau, etape, alea, style = null) {
+  const P = style && TRIPLE_CALIBRE[style];
+  const vent = Math.max(-2, Math.min(2.5, (alea() + alea() - 1) * 2));
+  if (!P) {
+    if (alea() < 0.22) return { mordu: true, metres: 0, marque: null, vent };
+    const metres = niveau * (1 - 0.06 * Math.pow(alea(), 1.6));
+    return { mordu: false, metres, marque: marque(metres), vent };
+  }
+  const gauss = () => Math.sqrt(-2 * Math.log(1 - alea())) * Math.cos(2 * Math.PI * alea());
+  const ecart = gauss() * P.planche * 0.7 + P.planche * 0.6;     // parfois derriere la ligne : mordu
+  const angles = P.angles.map(a => a + gauss() * 1.2 * P.regularite);
+  const poses = [gauss() * 0.04 * P.regularite, gauss() * 0.04 * P.regularite];
+  const r = sauterTriple({ vElan: P.vApproche, ecart, angles, poses, avance: 0.30 + gauss() * 0.05 * P.regularite, ciseau: true, vent, profil: P });
+  if (r.mordu) return { mordu: true, metres: 0, marque: null, vent, style, telemetrie: r };
+  // son niveau est son plafond, comme en longueur : le vent seul le fait passer au-dessus
+  const metres = Math.min(niveau, niveau * (r.metres - (r.depuisPointe - r.bonds.reduce((x, y) => x + y, 0))) / optimumTriple(style).metres) + VENT_PAR_MS * vent * (niveau / 8.5) * 0.3;
+  return { mordu: false, metres, marque: marque(metres), vent, style, telemetrie: r };
 }

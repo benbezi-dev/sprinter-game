@@ -36,6 +36,7 @@ import './sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { poserLeTempo, rendreLeTempo } from './tempo';
 import { stadeDuSaut } from './sauts-stades.js';
 import { RENDU_3D } from './canal';
+import { journaliserJoueur } from './sauts-telemetrie.js';
 import { ELAN, FOSSE, TEMPS_ESSAI } from './longueur.js';
 import {
   AVANCE_PIED, APPEL_MAXI, angleDe, TENUE_MAXI, ANGLE_MIN, ANGLE_PAR_S, RALENTI,
@@ -772,6 +773,7 @@ function contact() {
     r.mordu = true; r.raison = 'hors'; r.metres = 0; r.marque = null;
   }
   e.resultat = r;
+  journaliserJoueur(r);
   const variante = VARIANTE[r.ramene] || 'avant';
   const y = PISTE_Y + (Math.sin(trace * 7.3) * 0.08);
   const talonX = trace + TALONS[variante];

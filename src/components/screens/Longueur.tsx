@@ -7,6 +7,8 @@ import '@/game/sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { EST_TEST } from '@/game/canal';
 import { RECORDS, ESSAIS, lireVent, homologable } from '@/game/longueur.js';
 import { RECORDS as RECORDS_TRIPLE } from '@/game/triple.js';
+import { STYLES_LONGUEUR, STYLES_TRIPLE } from '@/game/sauts-profils.js';
+import { essaiTripleAdversaire } from '@/game/triple-jeu.js';
 import { PLATEAU_TRIPLE } from '@/game/triple-jeu.js';
 import { recitDe } from '@/game/sauts-recits.js';
 import {
@@ -112,7 +114,10 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
   // Le concours vient d'un module JavaScript : on le tient pour ce qu'il est.
   const c = useRef<any>(nouveauConcours({
     etape, noms: nomsDe(etape), joueur: N.t('you'), plateau: cfg.plateau as any,
+    // les styles des adversaires (sauts-profils.js) : ceux de l'epreuve
+    styles: epreuve === 'triple' ? STYLES_TRIPLE : STYLES_LONGUEUR,
   }));
+  if (epreuve === 'triple') c.current.essai = essaiTripleAdversaire;
   // LA CARTE D'ABORD : l'etape se presente, le favori s'annonce, puis le
   // concours commence.
   const [temps, setTemps] = useState<Temps>('carte');
