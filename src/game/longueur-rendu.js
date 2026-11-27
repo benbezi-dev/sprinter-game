@@ -31,6 +31,10 @@ import MANIFESTE from './longueur-manifeste.json';
 // cheville au-dessus de la semelle, et le pivot des cuisses debout.
 const CUISSE = 0.392, JAMBE = 0.380, CHEVILLE = 0.07, PIVOT = 0.85;
 const DEBOUT_Z = 0.87;
+/** Le centre de masse a l'avant-dernier appui, en metres sous la course (WA 2017 : 3 a 5 cm). */
+const ABAISSE_AVANT_DERNIER = 0.045;
+/** Le creux du bassin pendant chaque appel : la planche (3 cm, WA 2017), puis le pas et le saut du triple. */
+const CREUX_TRIPLE = [0.03, 0.12, 0.09];
 
 const lisse = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
 const mix = (a, b, t) => a + (b - a) * t;
@@ -93,7 +97,16 @@ export function postureDe(e, r, ech) {
     case 'elan': {
       // Il vient de partir : la posture s'efface en deux dixiemes.
       P.w = Math.max(0, 1 - e.t / 0.22);
-      return P.w > 0 ? P : null;
+      if (P.w > 0) return P;
+      // L'AVANT-DERNIER APPUI (rapport WA Londres 2017 : la foulee s'allonge de 6 %, puis la derniere se
+      // raccourcit de 9 %). Le sauteur s'ASSIED un peu sur l'avant-dernier appui — le centre de masse
+      // descend de quelques centimetres, a 2-3 m de la planche —, puis la derniere foulee, courte et vive,
+      // le remonte sur la planche. Seul le bassin bouge : la foulee reste celle du moteur.
+      const D = e.ligne - (r.d + AVANCE_PIED);
+      const k = Math.max(0, 1 - Math.abs(D - 2.4) / 1.6);
+      const E = e.postureElan || (e.postureElan = { w: 1, leve: 0, buste: null, hanche: 0 });
+      E.leve = -ABAISSE_AVANT_DERNIER * ech * k * k * (3 - 2 * k);
+      return E.leve < 0 ? E : null;
     }
     case 'traverse':
       return null;
@@ -109,7 +122,11 @@ export function postureDe(e, r, ech) {
         ? { orteil: e.pose.orteil, u: 0.12 * Math.min(1, e.pose.t / 0.3), charge: Math.min(1, e.pose.t / 0.3) * 0.6 }
         : e.appel;
       const u = a.u, charge = a.charge;
-      const hz = mix(0.82, 0.96, lisse(u)) - 0.10 * charge;
+      // LE CONTACT : la jambe d'appel AMORTIT puis pousse. Le genou plie de 173 a 139 degres a mi-contact
+      // (WA 2017) et le centre de masse descend de 3 cm en longueur ; au triple, l'appui du pas et celui
+      // du saut encaissent la chute du bond d'avant : 18 et 13 cm chez Rojas (WA 2017, triple femmes).
+      const creux = (e.phase === 'pose' ? CREUX_TRIPLE[Math.min(2, (e.bond | 0) + 1)] : CREUX_TRIPLE[Math.min(2, e.bond | 0)]) * ech;
+      const hz = mix(0.82, 0.96, lisse(u)) - 0.10 * charge - creux * Math.sin(Math.PI * Math.min(1, u));
       const pointe = (a.orteil - r.d) * ech;
       const cheville = pointe - 0.16;
       const pied = mix(0.12, -0.95, lisse(u));
