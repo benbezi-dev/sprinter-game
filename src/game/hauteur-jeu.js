@@ -9,7 +9,7 @@
 
    C'est la premiere chose qu'il apprend au joueur de Sprinter, et c'est ce qui
    le separe de la longueur : l'elan se CONTROLE. Un sauteur en hauteur arrive
-   sur son appel a la vitesse qu'il sait convertir en hauteur — huit metres par
+   sur son appel a la vitesse qu'il sait convertir en hauteur — sept metres et demi par
    seconde chez les meilleurs —, pas a la sienne. Plus vite, la jambe d'appel
    ne tient plus et l'energie part dans le tapis de course ; moins vite, il n'y
    a rien a convertir. Le joueur module donc sa cadence, comme on regle un
@@ -53,14 +53,15 @@ const clamp01 = (x) => Math.max(0, Math.min(1, x));
  *
  * Au-dela, chaque dixieme de trop se perd — et au-dela de la moitie en plus,
  * car la jambe d'appel plie au lieu de pousser. C'est la regle qui fait que le
- * joueur ne mitraille pas : a la cadence du 100 m, il arrive a 8,8 m/s et saute
- * comme s'il en courait 7,2.
+ * joueur ne mitraille pas : a la cadence du 100 m, il arrive a 8,6 m/s et saute
+ * comme s'il en courait 6,6.
  */
-export const VITESSE_JUSTE = 8.0;
+// 7,6 m/s : Londres 2017, hommes 7,0-8,0 au contact d'appel, 7,61 en moyenne (Nicholson 2022), le 27/11.
+export const VITESSE_JUSTE = 7.6;
 export const SURVITESSE = 1.0;
 
 /** Le plafond d'elan du moteur : assez pour se tromper par exces. */
-export const VITESSE_ELAN_MAX = 9.2;
+export const VITESSE_ELAN_MAX = 8.6;
 
 /** La vitesse utile, celle que l'appel transforme. */
 export function vitesseUtile(vElan) {
@@ -81,6 +82,9 @@ export function jugerElan(vElan) {
 /** De combien la pointe du pied d'appel se pose devant le centre de masse. */
 export const AVANCE_PIED = 0.35;
 
+/** Les deux derniers appuis, en metres avant l'appel de reference : frein et bassin qui descend. */
+export const APPROCHE = 4.5;
+
 /**
  * LA FENETRE DE L'APPEL, en metres de la pointe au plan de la barre.
  *
@@ -100,11 +104,12 @@ export const APPEL_MINI = 0.30;
  * L'ANGLE ENTRE LA COURSE ET LA BARRE, a l'appel.
  *
  * C'est ce que fait le J : l'athlete n'arrive pas face a la barre mais de
- * biais, a trente-cinq degres. Toute sa vitesse horizontale ne le porte donc
+ * biais, a trente et un degres. Toute sa vitesse horizontale ne le porte donc
  * pas vers le tapis ; une partie le fait glisser le long de la barre, et c'est
  * pourquoi il s'envole pres d'un montant et retombe au milieu du tapis.
  */
-export const BIAIS = 35;
+// 31° : moyenne mesuree au dernier appui, Londres 2017 hommes (23 a 43°), le 27/11.
+export const BIAIS = 31;
 
 /* ------------------------------------------------------------ l'angle */
 
@@ -116,7 +121,9 @@ export const BIAIS = 35;
 export const ANGLE_MIN = 30;
 export const ANGLE_MAX = 70;
 export const ANGLE_PAR_S = 60;
-export const RALENTI = 0.4;
+// 0,55 : l'angle juste se tient 0,3 s au doigt, soit un appel de 0,165 s en temps de jeu
+// (Londres 2017 : 0,14 a 0,19 s), le 27/11.
+export const RALENTI = 0.55;
 
 export function angleDe(tenu) {
   return Math.min(ANGLE_MAX, ANGLE_MIN + ANGLE_PAR_S * Math.max(0, tenu));
@@ -138,7 +145,8 @@ export const TENUE_MAXI = (ANGLE_MAX - ANGLE_MIN) / ANGLE_PAR_S;
  */
 export const ANGLE_JUSTE = 48;
 const LARGEUR_ANGLE = 33;
-const FORCE = 1.6, PORTEE_ELAN = 0.39;
+// FORCE remontee de 0,39 x 0,4 quand VITESSE_JUSTE est passee de 8,0 a 7,6 : le meilleur saut ne change pas.
+const FORCE = 1.756, PORTEE_ELAN = 0.39;
 
 export function impulsion(vElan, angle) {
   const f = Math.max(0.2, 1 - ((angle - ANGLE_JUSTE) / LARGEUR_ANGLE) ** 2);

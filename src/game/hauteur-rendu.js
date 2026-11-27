@@ -21,7 +21,10 @@
 --------------------------------------------------------------------------- */
 
 import { TAPIS, MONTANTS, BARRE, lireHauteur } from './hauteur.js';
-import { CORPS, gestesA, AVANCE_PIED } from './hauteur-jeu.js';
+import { CORPS, gestesA, AVANCE_PIED, APPROCHE } from './hauteur-jeu.js';
+
+/** De combien le bassin descend sur les deux derniers appuis, en metres. */
+const ABAISSE_FIN = 0.08;
 
 /* ------------------------------------------------------------ le rig */
 
@@ -95,9 +98,16 @@ export function postureDe(e, r, ech) {
       P.w = 1;
       return P;
     }
-    case 'elan':
+    case 'elan': {
       P.w = Math.max(0, 1 - e.t / 0.22);
-      return P.w > 0 ? P : null;
+      if (P.w > 0) return P;
+      // LES DEUX DERNIERS APPUIS : le bassin descend de 8 cm (Londres 2017 : 2 a 8 % de la taille),
+      // et l'appel le remonte. Seul le bassin bouge : la foulee reste celle du moteur.
+      const k = lisse(1 - (e.avantAppel == null ? Infinity : e.avantAppel) / APPROCHE);
+      const E = e.postureElan || (e.postureElan = { w: 1, leve: 0, buste: null, hanche: 0 });
+      E.leve = -ABAISSE_FIN * ech * k;
+      return E.leve < 0 ? E : null;
+    }
     case 'dessous':
     case 'temps':
       if (e.phase === 'dessous' && !e.arret) return null;
@@ -247,8 +257,8 @@ export function dessinerSol(ctx, api, e, th) {
   const accent = th && th.accent ? th.accent : [240, 158, 46];
   for (const q of [S.marque, S.courbe]) dalle(ctx, api, q[0] - 0.05, q[1] - 0.22, q[0] + 0.05, q[1] + 0.22, rgb(accent));
   ctx.fillStyle = 'rgba(255,255,255,0.20)';
-  for (let a = 0.08; a < S.alpha; a += 0.09) {
-    const p = api.solid(S.centre[0] + S.rayon * Math.sin(a), S.centre[1] + S.rayon * Math.cos(a), 0);
+  for (const q of S.trace) {
+    const p = api.solid(q[0], q[1], 0);
     ctx.beginPath(); ctx.arc(p[0], p[1], Math.max(1, 0.035 * m), 0, Math.PI * 2); ctx.fill();
   }
 

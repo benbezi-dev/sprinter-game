@@ -14,6 +14,7 @@ import {
   placeDuJoueur, deciderPartage, inscrireJoueur, choisirBarre, arreter, devant, tempsDuJoueur,
   ANGLE_MIN, ANGLE_MAX, APPEL_MAXI, APPEL_MINI, ecartJuste,
 } from '../src/game/hauteur-jeu.js';
+const VJ = VITESSE_JUSTE;
 
 let e = 0;
 const ok = (n, c, d) => { console.log(`   ${c ? '✓' : '✗'} ${n}${c || !d ? '' : ' — ' + d}`); if (!c) e++; };
@@ -49,22 +50,22 @@ for (let i = 0; i < PLATEAU.length; i++) {
 
 titre('L ELAN SE CONTROLE');
 ok('a la vitesse juste, tout sert', vitesseUtile(VITESSE_JUSTE) === VITESSE_JUSTE);
-ok('trop vite, on perd', vitesseUtile(9.0) < vitesseUtile(8.0) && vitesseUtile(9.0) < vitesseUtile(7.5));
+ok('trop vite, on perd', vitesseUtile(VJ + 1) < vitesseUtile(VJ) && vitesseUtile(VJ + 1) < vitesseUtile(VJ - 0.5));
 {
-  const p8 = sautParfait(8.0), p75 = sautParfait(7.5), p7 = sautParfait(7.0), p88 = sautParfait(8.8);
-  console.log(`      parfait : 7,0 m/s ${f2(p7.h)} · 7,5 ${f2(p75.h)} · 8,0 ${f2(p8.h)} · 8,8 ${f2(p88.h)}`);
+  const p8 = sautParfait(VJ), p75 = sautParfait(VJ - 0.5), p7 = sautParfait(VJ - 1), p88 = sautParfait(VJ + 0.8);
+  console.log(`      parfait : juste -1,0 m/s ${f2(p7.h)} · -0,5 ${f2(p75.h)} · juste ${f2(p8.h)} · +0,8 ${f2(p88.h)}`);
   ok('record du monde a la portee du saut parfait, a peine', p8.h >= 2.455 && p8.h <= 2.52, f2(p8.h));
   ok('un demi-metre par seconde de moins coute 5 a 15 cm', p8.h - p75.h > 0.05 && p8.h - p75.h < 0.15, f2(p8.h - p75.h));
-  ok('courir a 8,8 m/s coute plus qu arriver a 7,5', p88.h < p75.h + 0.01, `${f2(p88.h)} / ${f2(p75.h)}`);
+  ok('courir 0,8 m/s trop vite coute plus qu arriver 0,5 trop lent', p88.h < p75.h + 0.01, `${f2(p88.h)} / ${f2(p75.h)}`);
   ok(`l appel juste est a ${f2(p8.ecart)} m du plan de la barre`, p8.ecart >= 0.9 && p8.ecart <= 1.8);
   ok(`l angle juste est de ${p8.angle}°`, p8.angle >= 42 && p8.angle <= 54);
-  const imp = impulsion(8.0, p8.angle);
+  const imp = impulsion(VJ, p8.angle);
   ok(`vitesses d envol humaines : ${f2(imp.vy)} m/s vers le haut, ${f2(imp.vh)} a l horizontale`,
      imp.vy > 4.2 && imp.vy < 5.0 && imp.vh > 3.0 && imp.vh < 5.0);
 }
 
 titre('LA JAUGE DE L APPEL');
-for (const g of [9.81, 7.5]) for (const v of [6.5, 7.5, 8.0, 8.8]) {
+for (const g of [9.81, 7.5]) for (const v of [VJ - 1.5, VJ - 0.5, VJ, VJ + 0.8]) {
   const juste = ecartJuste(v, g);
   const a = meilleurAngle(v, juste, g).h, p = (() => { let b = -9; for (let x = 0.5; x <= 2.4; x += 0.05) b = Math.max(b, meilleurAngle(v, x, g).h); return b; })();
   ok(`g ${g}, ${v} m/s : l appel montre (${f2(juste)} m) coute moins de 2 cm (${f2(p - a)})`, p - a < 0.02);
@@ -72,10 +73,10 @@ for (const g of [9.81, 7.5]) for (const v of [6.5, 7.5, 8.0, 8.8]) {
 
 titre('L ANGLE DEPEND DE L APPEL');
 {
-  const loin = meilleurAngle(8.0, 1.9, 9.81), pres = meilleurAngle(8.0, 0.8, 9.81);
+  const loin = meilleurAngle(VJ, 1.9, 9.81), pres = meilleurAngle(VJ, 0.8, 9.81);
   ok(`appel loin : plus rasant (${loin.angle}°), appel pres : plus redresse (${pres.angle}°)`, loin.angle < pres.angle);
-  const m = meilleurAngle(8.0, 1.3, 9.81);
-  const moins = plafondParfait(8.0, m.angle - 6, 1.3, 9.81), plus = plafondParfait(8.0, m.angle + 6, 1.3, 9.81);
+  const m = meilleurAngle(VJ, 1.3, 9.81);
+  const moins = plafondParfait(VJ, m.angle - 6, 1.3, 9.81), plus = plafondParfait(VJ, m.angle + 6, 1.3, 9.81);
   ok(`six degres de trop ou de moins coutent : ${f2(m.h - moins)} / ${f2(m.h - plus)} m`,
      m.h - moins > 0.02 && m.h - plus > 0.02);
   ok('l eventail va de 30 a 70°', ANGLE_MIN === 30 && ANGLE_MAX === 70);
@@ -84,8 +85,8 @@ titre('L ANGLE DEPEND DE L APPEL');
 
 titre('LE FRANCHISSEMENT');
 {
-  const p = sautParfait(8.0);
-  const V = vol(8.0, p.angle, p.ecart);
+  const p = sautParfait(VJ);
+  const V = vol(VJ, p.angle, p.ecart);
   const j = instantsJustes(V);
   const P = plafond(V, j.cambre, j.jambes);
   console.log(`      cambrure a ${f2(j.cambre)} s, jambes a ${f2(j.jambes)} s, sommet a ${f2(V.sommetT)} s`);
@@ -109,12 +110,12 @@ titre('LE FRANCHISSEMENT');
   ok(`deux centiemes a cote ne coutent pas plus de 2 cm (${f2(P.h - presque.h)})`, P.h - presque.h <= 0.02);
   ok('au bon instant, c est parfait', jugerGeste(j.cambre, j.cambre, j.fenetres.cambre) === 'parfait');
   ok('pas de geste : « sans »', jugerGeste(null, j.cambre, j.fenetres.cambre) === 'sans');
-  const trop = plafond(vol(8.0, p.angle, 0.45), ...(() => { const J = instantsJustes(vol(8.0, p.angle, 0.45)); return [J.cambre, J.jambes]; })());
-  const tropV = vol(8.0, p.angle, 0.45);
+  const trop = plafond(vol(VJ, p.angle, 0.45), ...(() => { const J = instantsJustes(vol(VJ, p.angle, 0.45)); return [J.cambre, J.jambes]; })());
+  const tropV = vol(VJ, p.angle, 0.45);
   const tropT = trop.passages.find(x => x.cle === trop.par).t;
   ok(`appel trop pres : la barre se touche en montant (${trop.par}, a ${f2(tropT)} s, sommet a ${f2(tropV.sommetT)} s)`,
      tropT < tropV.sommetT && trop.h < P.h - 0.1);
-  const V2 = vol(8.0, p.angle, 2.3), J2 = instantsJustes(V2), loin = plafond(V2, J2.cambre, J2.jambes);
+  const V2 = vol(VJ, p.angle, 2.3), J2 = instantsJustes(V2), loin = plafond(V2, J2.cambre, J2.jambes);
   ok(`appel trop loin : le sommet tombe avant la barre (${loin.par}, ${f2(P.h - loin.h)})`, loin.h < P.h - 0.1);
 }
 
@@ -129,22 +130,22 @@ ok('franchement dessous : elle tombe', sortDeLaBarre(-0.03).tombe);
   ok(`touchee d'un millimetre, elle tombe a chaque fois (${400 - tient}/400)`, tient === 0);
 }
 {
-  const p = sautParfait(8.0);
-  const V = vol(8.0, p.angle, p.ecart), j = instantsJustes(V);
-  const r = sauter({ vElan: 8.0, ecart: p.ecart, angle: p.angle, tCambre: j.cambre, tJambes: j.jambes, hauteur: 2.45 });
+  const p = sautParfait(VJ);
+  const V = vol(VJ, p.angle, p.ecart), j = instantsJustes(V);
+  const r = sauter({ vElan: VJ, ecart: p.ecart, angle: p.angle, tCambre: j.cambre, tJambes: j.jambes, hauteur: 2.45 });
   ok(`2,45 franchi au saut parfait (marge ${f2(r.marge)})`, r.franchi && r.cambre === 'parfait' && r.jambes === 'parfait');
-  const r2 = sauter({ vElan: 8.0, ecart: p.ecart, angle: p.angle, hauteur: 2.30 });
+  const r2 = sauter({ vElan: VJ, ecart: p.ecart, angle: p.angle, hauteur: 2.30 });
   ok(`2,30 sans geste en l air : barre tombee, par ${r2.par}`, !r2.franchi && r2.tContact > 0);
 }
 
 titre('LA STATION INTERGALACTIQUE');
 {
   const g = pesanteurDe(5);
-  const p = sautParfait(8.0, g);
+  const p = sautParfait(VJ, g);
   ok(`pesanteur de la station : ${g} m/s²`, g < 9.81 && g > 6);
   ok(`le saut parfait y passe ${f2(p.h)} m, au-dessus du plateau (${PLATEAU[5].niveaux[1]})`, p.h >= PLATEAU[5].niveaux[1] + 0.03);
-  const V = vol(8.0, p.angle, p.ecart, g);
-  ok('et le vol dure plus longtemps', V.sommetT > vol(8.0, p.angle, p.ecart).sommetT);
+  const V = vol(VJ, p.angle, p.ecart, g);
+  ok('et le vol dure plus longtemps', V.sommetT > vol(VJ, p.angle, p.ecart).sommetT);
 }
 
 titre('LE CONCOURS : LA MONTEE, LES ESSAIS, LES PASSES');
@@ -287,8 +288,8 @@ titre('LES PLATEAUX');
   // les gestes a 3 centiemes. Il doit gagner a l'ecole, pas au monde.
   const niveau = (etape, bruit) => {
     const g = pesanteurDe(etape);
-    const p = sautParfait(8.0 - bruit.v, g);
-    const V = vol(8.0 - bruit.v, p.angle + bruit.a, p.ecart + bruit.d, g);
+    const p = sautParfait(VJ - bruit.v, g);
+    const V = vol(VJ - bruit.v, p.angle + bruit.a, p.ecart + bruit.d, g);
     const j = instantsJustes(V);
     return plafond(V, j.cambre + bruit.t, j.jambes - bruit.t).h;
   };

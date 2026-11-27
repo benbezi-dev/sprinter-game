@@ -33,7 +33,7 @@ import { poserLeTempo, rendreLeTempo } from './tempo';
 import { stadeDuSaut } from './sauts-stades.js';
 import { TAPIS, MONTANTS, BARRE } from './hauteur.js';
 import {
-  AVANCE_PIED, APPEL_MAXI, APPEL_MINI, BIAIS, angleDe, TENUE_MAXI, ANGLE_MIN, ANGLE_PAR_S, RALENTI,
+  AVANCE_PIED, APPROCHE, APPEL_MAXI, APPEL_MINI, BIAIS, angleDe, TENUE_MAXI, ANGLE_MIN, ANGLE_PAR_S, RALENTI,
   vol as volDe, instantsJustes, meilleurAngle, repere, CORPS, sortDeLaBarre, EFFLEURE,
   VITESSE_ELAN_MAX, VITESSE_JUSTE, jugerElan, sauter, ecartJuste, DISTANCE_ENVOL, pesanteurDe,
 } from './hauteur-jeu.js';
@@ -64,25 +64,37 @@ let vue = null;
 /** Le pied d'appel : le gauche, exterieur a une courbe prise vers la droite. */
 export const PIED_APPEL = 'left';
 
-/** La direction de la course a l'appel : trente-cinq degres de biais. */
+/** La direction de la course a l'appel : trente et un degres de biais. */
 export const CAP_FINAL = -(90 - BIAIS) * D2R;
 const DIR = [Math.cos(CAP_FINAL), Math.sin(CAP_FINAL)];
-/** Le rayon de la courbe, et les deux lignes droites qui l'encadrent. */
+/**
+ * LE J TOURNE JUSQU'AU PIED D'APPEL, sans ligne droite finale, et se RESSERRE
+ * (Londres 2017 : la course fait 65°, puis 53°, puis 31° avec la barre sur les
+ * trois derniers appuis ; Tan & Yeadon 2005 : le rayon diminue vers la fin).
+ * Une ligne droite, un arc de 11 m jusqu'a 53° de la barre, puis un arc de 6 m
+ * sur le dernier pas, jusqu'a 31°. Le rayon en metres n'est pas publie : 11 est
+ * celui du jeu, 6 celui qui fait tourner le dernier pas (2,3 m) de 22°.
+ */
 const RAYON_J = 11;
-const DROIT_DEBUT = 8.5;
-const DROIT_FIN = 3.0;
+const RAYON_FIN = 6;
+const CAP_SERRE = (90 - 53) * D2R;
+const DROIT_DEBUT = 12.6;
 /** L'appel de reference : 1,35 m du plan, 1,5 m du milieu de la barre. */
 const APPEL_REF = [BARRE_X - 1.35, BARRE_Y + 1.5];
 
-// Le J se construit a rebours, depuis l'appel de reference.
+// Le J se construit a rebours, depuis l'appel de reference. Sur un arc de centre C,
+// le point d'angle a est C + R (sin a, cos a), et le cap -a.
 const CM_REF = [APPEL_REF[0] - AVANCE_PIED * DIR[0], APPEL_REF[1] - AVANCE_PIED * DIR[1]];
-const FIN_COURBE = [CM_REF[0] - DROIT_FIN * DIR[0], CM_REF[1] - DROIT_FIN * DIR[1]];
 const ALPHA = -CAP_FINAL;
-const CENTRE = [FIN_COURBE[0] - RAYON_J * Math.sin(ALPHA), FIN_COURBE[1] - RAYON_J * Math.cos(ALPHA)];
+const CENTRE_FIN = [CM_REF[0] - RAYON_FIN * Math.sin(ALPHA), CM_REF[1] - RAYON_FIN * Math.cos(ALPHA)];
+const FIN_COURBE = [CENTRE_FIN[0] + RAYON_FIN * Math.sin(CAP_SERRE), CENTRE_FIN[1] + RAYON_FIN * Math.cos(CAP_SERRE)];
+const CENTRE = [FIN_COURBE[0] - RAYON_J * Math.sin(CAP_SERRE), FIN_COURBE[1] - RAYON_J * Math.cos(CAP_SERRE)];
 const DEBUT_COURBE = [CENTRE[0], CENTRE[1] + RAYON_J];
 /** La marque de depart de l'athlete. */
 export const MARQUE = [DEBUT_COURBE[0] - DROIT_DEBUT, DEBUT_COURBE[1]];
-const L1 = DROIT_DEBUT, L2 = RAYON_J * ALPHA;
+const L1 = DROIT_DEBUT, L2 = RAYON_J * CAP_SERRE, L3 = RAYON_FIN * (ALPHA - CAP_SERRE);
+/** De la marque au centre de masse de l'appel de reference, le long du J. */
+export const LONGUEUR_J = L1 + L2 + L3;
 
 /** Le J : ou est l'athlete, et vers ou il court, a `s` metres de sa marque. */
 export function chemin(s) {
@@ -91,11 +103,26 @@ export function chemin(s) {
     const a = (s - L1) / RAYON_J;
     return { x: CENTRE[0] + RAYON_J * Math.sin(a), y: CENTRE[1] + RAYON_J * Math.cos(a), cap: -a, courbe: 1 / RAYON_J };
   }
-  const u = s - L1 - L2;
-  return { x: FIN_COURBE[0] + u * DIR[0], y: FIN_COURBE[1] + u * DIR[1], cap: CAP_FINAL, courbe: 0 };
+  if (s <= LONGUEUR_J) {
+    const a = CAP_SERRE + (s - L1 - L2) / RAYON_FIN;
+    return { x: CENTRE_FIN[0] + RAYON_FIN * Math.sin(a), y: CENTRE_FIN[1] + RAYON_FIN * Math.cos(a), cap: -a, courbe: 1 / RAYON_FIN };
+  }
+  // au-dela de l'appel de reference (appel tardif ou elan avorte), il file droit
+  const u = s - LONGUEUR_J;
+  return { x: CM_REF[0] + u * DIR[0], y: CM_REF[1] + u * DIR[1], cap: CAP_FINAL, courbe: 0 };
 }
+/** Le J en pointilles, pour le dessin 2D. */
+const TRACE_J = Array.from({ length: Math.ceil((L2 + L3) / 0.9) }, (_, i) => chemin(L1 + 0.45 + 0.9 * i)).map((p) => [p.x, p.y]);
 /** Les reperes de l'athlete sur le tartan : la marque et le debut de la courbe. */
-export const REPERES = { marque: MARQUE, courbe: DEBUT_COURBE, centre: CENTRE, rayon: RAYON_J, L1, L2 };
+export const REPERES = { marque: MARQUE, courbe: DEBUT_COURBE, centre: CENTRE, rayon: RAYON_J, L1, L2, L3 };
+
+/**
+ * LES DEUX DERNIERS APPUIS (Londres 2017) : le centre de masse descend de 2 a
+ * 8 % de la taille, et la vitesse baisse de 0 a 0,5 m/s. Sur les 4,5 derniers
+ * metres avant l'appel de reference, le jeu retire jusqu'a 4 % de la vitesse
+ * (0,3 m/s a 7,6) ; le rendu abaisse le bassin de 8 cm (hauteur-rendu.js).
+ */
+const FREIN = 0.04;
 
 /**
  * L'epreuve telle que le moteur la lit : la ligne droite du stade, et le
@@ -160,7 +187,7 @@ export function armerConcoursHauteur(etape) {
     // Ce que le rendu doit savoir du sautoir, sans revenir chercher ce module.
     sautoir: {
       x: BARRE_X, y: BARRE_Y, dir: DIR, cap: CAP_FINAL, marque: MARQUE, courbe: DEBUT_COURBE,
-      centre: CENTRE, rayon: RAYON_J, alpha: ALPHA, finCourbe: FIN_COURBE,
+      finCourbe: FIN_COURBE, trace: TRACE_J,
       laneW: SprinterCore.C.LANE_W,
     },
   };
@@ -247,7 +274,7 @@ function essaiNeuf() {
   return {
     t: 0, s: 0, vHist: [], appel: null, vol: null, reception: null,
     barre: { chute: null, tremble: null }, impact: null,
-    resultat: null, drapeau: null, finAnnoncee: false, arret: null,
+    resultat: null, drapeau: null, finAnnoncee: false, arret: null, vMoteur: null, avantAppel: LONGUEUR_J,
   };
 }
 
@@ -365,7 +392,7 @@ function appui(cote) {
       e.appel = {
         cote, pointe: [p.x, p.y], ecart: p.ecart, vElan, t0: performance.now(),
         cm0: [chemin(e.s).x, chemin(e.s).y], u: 0, charge: 0, angle: ANGLE_MIN, vise,
-        roulis0: e.roulis,
+        roulis0: e.roulis, cap0: p.cap,
       };
       e.phase = 'appel'; e.t = 0;
       poserLeTempo(RALENTI);
@@ -466,10 +493,19 @@ function pas(j, dt, elapsed) {
     case 'elan': {
       // Le moteur fait courir l'athlete sur une distance : c'est son abscisse
       // le long du J. On la lui rend, puis on le pose sur le J.
-      j.d = e.s;
+      // Le moteur garde SA vitesse (e.vMoteur) ; le jeu en retire le frein des deux derniers appuis.
+      const s0 = e.s;
+      j.d = s0;
+      // (un appui sur le pave change j.v entre deux images : c'est alors lui qui compte)
+      if (e.vMoteur != null && j.v === e.vJeu) j.v = e.vMoteur;
       j.stepPlayer(dt, elapsed);
       j.drivePitch *= 0.4;
-      e.s = j.d;
+      e.vMoteur = j.v;
+      const f = 1 - FREIN * lisse(1 - (LONGUEUR_J - s0) / APPROCHE);
+      j.v *= f;
+      e.vJeu = j.v;
+      e.s = s0 + (j.d - s0) * f;
+      e.avantAppel = LONGUEUR_J - e.s;
       const p = placer(j);
       // Penche dans la courbe, comme au 200 m : la tangente de l'angle est le
       // rapport de l'acceleration centripete a la pesanteur.
@@ -498,7 +534,8 @@ function pas(j, dt, elapsed) {
       // Le bassin passe au-dessus du pied, du talon a la pointe.
       const dest = [a.pointe[0] + DISTANCE_ENVOL * DIR[0], a.pointe[1] + DISTANCE_ENVOL * DIR[1]];
       const k = lisse(a.u);
-      poserA(j, a.cm0[0] + (dest[0] - a.cm0[0]) * k, a.cm0[1] + (dest[1] - a.cm0[1]) * k, CAP_FINAL);
+      // appel pris avant la fin du J : le corps finit de tourner pendant l'appel, sans a-coup
+      poserA(j, a.cm0[0] + (dest[0] - a.cm0[0]) * k, a.cm0[1] + (dest[1] - a.cm0[1]) * k, a.cap0 + (CAP_FINAL - a.cap0) * k);
       j.v = a.vElan * (1 - 0.6 * a.u);
       // Il se redresse : l'inclinaison de la courbe se defait dans l'appel.
       e.roulis = a.roulis0 * (1 - k);
