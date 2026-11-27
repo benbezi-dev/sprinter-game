@@ -50,7 +50,9 @@ const DEBOUT = { a: [0.05, 0.02, 0.0], b: [-0.05, -0.08, -0.05], ba: [0.06, 0.26
 /** L'enfoncement du tapis sous le dos, en metres : il cede, puis rend un peu. */
 export function enfoncement(t) {
   if (t == null) return 0;
-  return 0.20 * lisse(t / 0.10) - 0.07 * lisse((t - 0.25) / 0.6);
+  // (« il s'enfonce trop », l'auteur, 27/11 : vingt centimetres dont treize gardes, dans un tapis 3D
+  // qui ne se creuse pas ; il cede de huit et rend presque tout)
+  return 0.08 * lisse(t / 0.10) - 0.06 * lisse((t - 0.25) / 0.6);
 }
 
 /**
@@ -161,13 +163,14 @@ export function postureDe(e, r, ech) {
       // (0 - 0,3 s), il se couche (0,3 - 0,9 s), il s'assoit (1,1 - 1,7 s) et
       // regarde la barre.
       const choc = lisse(tau / 0.28), couche = lisse((tau - 0.3) / 0.6), assis = lisse((tau - 1.1) / 0.6);
-      let phi = mix(c.phi0, 1.95, choc);
+      // (le dos se pose a plat : au-dela d'un quart de tour, la tete plongeait sous le tapis)
+      let phi = mix(Math.min(c.phi0, 1.75), 1.70, choc);
       phi = mix(phi, 1.57, couche);
       phi = mix(phi, 0.18, assis);
       P.leve = (surface + 0.11) * ech - DEBOUT_Z;
       const roule = [phi + 0.55, phi - 0.25, phi + 0.1];
       const genoux = [2.25, 0.95, 1.30];
-      const allonge = [1.55, 1.35, 1.75];
+      const allonge = [1.55, 1.50, 1.85];   // assis, les jambes a plat sur le tapis
       let ja = mix3(roule, genoux, couche);
       ja = mix3(ja, allonge, assis);
       J[A] = ja;

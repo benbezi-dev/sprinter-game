@@ -189,6 +189,13 @@ export function armerConcoursHauteur(etape) {
       etat: () => e,
       hauteur: true,
       monde: (x, y) => { const p = vue.monde(x, y); return [p[0], p[1] - SprinterCore.C.LANE_W * 0.5]; },
+      // LE DESSUS DU TAPIS, sous le joueur (null ailleurs) : la 3D n'y laisse passer aucune partie du corps
+      plancher: () => local(() => {
+        const j = G.player;
+        if (!e || !j || (e.phase !== 'reception' && e.phase !== 'vol')) return null;
+        const x = j.d, y = yDe(j);
+        return x > BORD_TAPIS - 0.3 && Math.abs(y - BARRE_Y) < TAPIS.largeur / 2 + 0.3 ? TAPIS.hauteur - 0.02 : null;
+      }),
     },
     preparer(r, G2, C) {
       if (!e || r !== G2.player) { r.posture = null; return; }
@@ -687,7 +694,8 @@ function receptionner() {
   r.raison = r.franchi ? null : 'barre';
   e.resultat = r;
   const x = j.d, y = yDe(j);
-  e.reception = { t: 0, x, y, glisse: [DIR[0] * 0.25 + 0.35, DIR[1] * 0.45], phi0: v.V.rotation(v.t), bassin0: v.V.z(v.t) };
+  // il glisse d'une vingtaine de centimetres (« il glisse trop », l'auteur, 27/11 : c'etait soixante)
+  e.reception = { t: 0, x, y, glisse: [DIR[0] * 0.10 + 0.12, DIR[1] * 0.15], phi0: v.V.rotation(v.t), bassin0: v.V.z(v.t) };
   e.impact = { x: x + 0.3, y, t: 0 };
   e.phase = 'reception'; e.t = 0;
   SprinterApp.Audio_.sfx && SprinterApp.Audio_.sfx('trip');

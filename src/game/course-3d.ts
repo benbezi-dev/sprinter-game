@@ -155,7 +155,14 @@ export function rendre(App: any, dt: number) {
     r.squelette3D = true;
     // le saut d'une haie : c'est l'obstacle qui pose la posture, a chaque image (drawRunner, sprinter-app.js)
     if (G.obstacles && (G.obstacles.haies3D || G.obstacles.saut3D)) G.obstacles.preparer(r, G, C);
-    const caps = App.personCapsules(r, cap, lean, false, false, r === G.player ? 0 : 1);
+    let caps = App.personCapsules(r, cap, lean, false, false, r === G.player ? 0 : 1);
+    // SUR LE TAPIS DE LA HAUTEUR, rien ne passe dessous (sautoir.ts) : le corps est remonte de ce qui depasse
+    const plancher = r === G.player && r.posture && G.obstacles && G.obstacles.saut3D && G.obstacles.saut3D.plancher ? G.obstacles.saut3D.plancher() : null;
+    if (plancher != null) {
+      let bas = Infinity;
+      for (const [, e0, e1] of caps) bas = Math.min(bas, (e0[2] - e0[3]) * k, (e1[2] - e1[3]) * k);
+      if (bas < plancher) { r.posture.leve += (plancher - bas) / k; caps = App.personCapsules(r, cap, lean, false, false, 0); }
+    }
     // LE TEMOIN, MEME DANS LA MAIN D'UN VRAI CORPS. La pose du jeu le range parmi les troncs, dans la
     // main qui le tient (`r.temoin`, sprinter-core.js) ; le corps en maillage, lui, n'a pas de temoin :
     // on garde ce seul tronc-la, jaune, et on le pose par-dessus (l'auteur, 14/11 : le relais en 3D).
