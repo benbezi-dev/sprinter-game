@@ -56,6 +56,7 @@ import { voute, pluie, filante } from './course-3d/decors';
 import { videoPub, stade, themeVu, formeVue, stadeVu, construireLeStade, ruelle, pubAnim, hologrammes } from './course-3d/stade';
 import { chargerLeCorps, chargerLeBloc, corps, poserLeCorps } from './course-3d/corps';
 import { poserLesHaies } from './course-3d/haies';
+import { poserLeSautoir } from './course-3d/sautoir';
 import { poserLeRelais } from './course-3d/relais';
 import { chargerLaBete, poserLaBete } from './course-3d/bete';
 import { initialiserLesEffets, dessinerLesEffets } from './course-3d/effets';
@@ -142,6 +143,7 @@ export function rendre(App: any, dt: number) {
     if (tous.indexOf(r) < 0) { monde.remove(c.m.racine); corps.delete(r); }
   }
   poserLesHaies(G, T, C);
+  poserLeSautoir(G, T);
   poserLeRelais(G, T, C);
   let n = 0, nj = 0;
   for (const r of tous) {
@@ -152,7 +154,7 @@ export function rendre(App: any, dt: number) {
     const lean = T.lean(r.d, r.lane, r.v) + (r.roulis || 0);
     r.squelette3D = true;
     // le saut d'une haie : c'est l'obstacle qui pose la posture, a chaque image (drawRunner, sprinter-app.js)
-    if (G.obstacles && G.obstacles.haies3D) G.obstacles.preparer(r, G, C);
+    if (G.obstacles && (G.obstacles.haies3D || G.obstacles.saut3D)) G.obstacles.preparer(r, G, C);
     const caps = App.personCapsules(r, cap, lean, false, false, r === G.player ? 0 : 1);
     // LE TEMOIN, MEME DANS LA MAIN D'UN VRAI CORPS. La pose du jeu le range parmi les troncs, dans la
     // main qui le tient (`r.temoin`, sprinter-core.js) ; le corps en maillage, lui, n'a pas de temoin :

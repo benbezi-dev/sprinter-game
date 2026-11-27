@@ -35,6 +35,7 @@ import { SprinterApp, SprinterCore, resetInputRhythm } from './engine';
 import './sauts-mots.js'; // les mots des sauts, hors de la table commune
 import { poserLeTempo, rendreLeTempo } from './tempo';
 import { stadeDuSaut } from './sauts-stades.js';
+import { RENDU_3D } from './canal';
 import { ELAN, FOSSE, TEMPS_ESSAI } from './longueur.js';
 import {
   AVANCE_PIED, APPEL_MAXI, angleDe, TENUE_MAXI, ANGLE_MIN, ANGLE_PAR_S, RALENTI,
@@ -187,10 +188,14 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   prechargerSable(e.theme);
 
   const C = SprinterCore.C;
-  vue = LE_LONG
+  // EN 3D, LE SAUTOIR EST DANS LA PELOUSE, a PISTE_Y de la corde, le long de la ligne droite : au-dela du
+  // dernier couloir, la tribune du stade 3D ne recule pas et le cachait derriere les panneaux (27/11)
+  vue = RENDU_3D
+    ? creerVue({ rot: 0, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: [LIGNE, PISTE_Y], laneW: C.LANE_W })
+    : LE_LONG
     ? creerVue({ rot: 0, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: [LIGNE, C.LANE_W * C.LANE_COUNT + AU_DELA], laneW: C.LANE_W })
     : creerVue({ rot: PROFIL, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: PIVOT_MONDE, laneW: C.LANE_W });
-  G.ecartTribune = LE_LONG ? ECART_TRIBUNE : 0;
+  G.ecartTribune = LE_LONG && !RENDU_3D ? ECART_TRIBUNE : 0;
   // Tout ce que le moteur demande au saut passe par le repere du sautoir : le
   // coureur y revient le temps de la reponse, et retourne au monde apres.
   const local = (fn) => vue.avec(G.player, fn);
@@ -208,6 +213,13 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
   G.zoneReservee = vue.zone([[debut, PISTE_Y - 4.6], [fond, PISTE_Y - 4.6], [debut, PISTE_Y + 3], [fond, PISTE_Y + 3]]);
   G.obstacles = {
     saut: true,
+    // LE SAUTOIR EN 3D (course-3d/sautoir.ts) : l'etat du saut, et le passage du repere du
+    // sautoir au monde du moteur, en (d, demi) comme un coureur (sauts-vue.js, poser)
+    saut3D: {
+      etat: () => e,
+      fosse: FOSSE,
+      monde: (x, y) => { const p = vue.monde(x, y); return [p[0], p[1] - C.LANE_W * 0.5]; },
+    },
     preparer(r, G2, C) {
       if (!e || r !== G2.player) { r.posture = null; return; }
       r.posture = local(() => postureDe(e, r, C.MODEL_H / r.look.h));

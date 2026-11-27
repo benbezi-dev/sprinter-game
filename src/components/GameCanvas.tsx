@@ -331,8 +331,10 @@ export function GameCanvas() {
       // ... sauf dans la salle Jesse Owens, ou le generique se joue dans la halle en 3D (l'auteur, 3/11 ; poserLeTourDHonneur)
       const generique3D = G.state === 'cut' && G.cut && G.cut.kind === 'ending' && !!G.race && !!(G.race.salle || G.race.salleDroite);
       // (au canal de test, le relais peut rester en 2D : canal.ts, relais2D)
-      const en3D = !!rendu3D && ((EPREUVES_3D.has(G.raceKey) && !(G.raceKey === '4x100' && relais2D())) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
-        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || scenette || generique3D);
+      // le saut en longueur et le triple : leur sautoir a sa 3D (course-3d/sautoir.ts) ; la hauteur reste en 2D
+      const saut3D = jeuCourant() === 'jumper' && !!(G.obstacles && G.obstacles.saut3D) && G.state === 'race';
+      const en3D = !!rendu3D && (((EPREUVES_3D.has(G.raceKey) && !(G.raceKey === '4x100' && relais2D())) || /^nuit-/.test(G.raceKey)) && jeuCourant() !== 'jumper'
+        && (G.state === 'race' || G.state === 'count' || G.state === 'falseout' || scenette || generique3D) || saut3D);
       if (rendu3D && !en3D) rendu3D.afficher(false);
       if (G.state === 'open' || accueilSansScene) {
         const g = ctx.createLinearGradient(0, 0, 0, G.VH);
