@@ -66,6 +66,9 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     const autres = PLANS.filter(k => k !== planCam && !(k === 'rail' && (nuitDuMolosse || !large)) && (droite60 || !PLANS_SALLE.includes(k)));
     planCam = PLANS.includes(force) && (droite60 || !PLANS_SALLE.includes(force)) ? force : autres[Math.floor(Math.random() * autres.length)];
   }
+  // LE SAUT SE REGARDE DE PROFIL (sautoir.ts) : jamais le plan 2D ni le rail tires au hasard
+  const saut3D = G.obstacles && G.obstacles.saut3D && G.obstacles.saut3D.etat();
+  if (saut3D) planCam = '3d';
   const plan2D = !DOS && planCam === '2d', rail = !DOS && planCam === 'rail' && !nuitDuMolosse;
   const fixe = !DOS && salleActive && !T.curved && PLANS_SALLE.includes(planCam) ? planCam : null;
   if (pl) {
@@ -247,6 +250,15 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
       const av = 6.2 + e * 0.12, cote = 1.8;
       voulu.lerp(_c3.set(p[0] + av * ax + cote * ix, -(p[1] + av * ay + cote * iy), 3.1 + e * 0.04), nb);
       vise.lerp(_d3.set(p[0] - e * 0.3 * ax, -(p[1] - e * 0.3 * ay), 0.8), nb);
+    }
+    // LA CAMERA DU SAUT (« camera de cote », l'auteur, 27/11) : cote pelouse, face a la piste d'elan, a hauteur
+    // d'homme, comme la television. Elle roule avec le sauteur, un peu devant lui pour lui laisser la place ou il
+    // va ; en l'air et dans le sable, elle garde l'appel et la fosse dans le meme cadre. En portrait, elle recule.
+    if (saut3D && !DOS) {
+      const D = camera.aspect >= 1 ? 4.2 : 6.5, enAir = saut3D.phase !== 'attente' && saut3D.phase !== 'elan' && saut3D.phase !== 'repos';
+      const devant = enAir ? 2.2 : 1.4;
+      voulu.set(p[0] + devant * ax + D * ix, -(p[1] + devant * ay + D * iy), 1.25);
+      vise.set(p[0] + devant * ax, -(p[1] + devant * ay), 1.0);
     }
     // LE GENERIQUE DANS LA SALLE (scene-generique.ts, poserLeTourDHonneur) : le champion trotte a rebours, la camera
     // le precede, de face, un peu cote pelouse et en hauteur — un salut se regarde de face. Elle y glisse depuis le sacre.
