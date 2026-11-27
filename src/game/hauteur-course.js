@@ -39,6 +39,7 @@ import {
 } from './hauteur-jeu.js';
 import { postureDe, dessinerSol, piecesDebout, dessinerPiece } from './hauteur-rendu.js';
 import { creerVue, PROFIL } from './sauts-vue.js';
+import { RENDU_3D } from './canal';
 
 const D2R = Math.PI / 180;
 const lisse = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
@@ -114,6 +115,9 @@ const EPREUVE = {
  */
 const VOL_RALENTI = 0.45;
 
+/** Apres un elan avorte, le temps pour repartir avant que l'essai ne soit perdu (l'auteur, 27/11). */
+export const RETENTE = 10;
+
 const RAYON_BARRE = BARRE.diametre / 2;
 const BORD_TAPIS = BARRE_X + MONTANTS.jeuTapis;
 
@@ -160,7 +164,10 @@ export function armerConcoursHauteur(etape) {
       laneW: SprinterCore.C.LANE_W,
     },
   };
-  vue = creerVue({ rot: ROT_VUE, pivotLocal: [BARRE_X, BARRE_Y], pivotMonde: PIVOT_MONDE, laneW: SprinterCore.C.LANE_W });
+  // EN 3D, le sautoir garde ses coordonnees : il est deja dans la pelouse, la camera 3D le voit de biais
+  vue = RENDU_3D
+    ? creerVue({ rot: 0, pivotLocal: [BARRE_X, BARRE_Y], pivotMonde: [BARRE_X, BARRE_Y], laneW: SprinterCore.C.LANE_W })
+    : creerVue({ rot: ROT_VUE, pivotLocal: [BARRE_X, BARRE_Y], pivotMonde: PIVOT_MONDE, laneW: SprinterCore.C.LANE_W });
   const local = (fn) => vue.avec(G.player, fn);
   G.sautEnCours = true;
   G.pasSauteur = (j, dt, el) => local(() => pas(j, dt, el));
@@ -177,6 +184,12 @@ export function armerConcoursHauteur(etape) {
   ]);
   G.obstacles = {
     saut: true,
+    // LE SAUTOIR EN 3D (course-3d/sautoir.ts) : l'etat, le passage au monde du moteur (comme la longueur)
+    saut3D: {
+      etat: () => e,
+      hauteur: true,
+      monde: (x, y) => { const p = vue.monde(x, y); return [p[0], p[1] - SprinterCore.C.LANE_W * 0.5]; },
+    },
     preparer(r, G2, C) {
       if (!e || r !== G2.player) { r.posture = null; return; }
       r.posture = local(() => postureDe(e, r, C.MODEL_H / r.look.h));
@@ -458,11 +471,13 @@ function pas(j, dt, elapsed) {
       j.roulis = e.roulis;
       e.vHist.push([elapsed, j.v]);
       if (e.vHist.length > 200) e.vHist.splice(0, e.vHist.length - 200);
-      // PASSE SOUS LA BARRE : il n'a pas pris son appel, il entre dans le
-      // tapis au-dela du plan des montants. C'est un echec.
-      if (pointe().ecart < APPEL_MINI) {
-        e.phase = 'dessous'; e.t = 0;
-        echec('dessous');
+      // L'ELAN AVORTE (l'auteur, 27/11) : il n'a pas pris son appel — il arrive au plan sans s'etre
+      // leve, ou il a cesse de courir. Ce n'est pas un essai : il freine avant le tapis, revient a sa
+      // marque, et a DIX SECONDES pour repartir, sans quoi l'essai est perdu (le temps, 'temps').
+      // Le reglement (TR 27) ne compte que la barre qui tombe et le tapis touche sans avoir franchi.
+      if (pointe().ecart < APPEL_MINI || (e.s > 3 && j.v < 0.8)) {
+        e.phase = 'refus'; e.t = 0;
+        annoncer({ type: 'refus' });
       }
       return;
     }
@@ -536,6 +551,25 @@ function pas(j, dt, elapsed) {
         annoncer({ type: 'marque', resultat: e.resultat });
       }
       if (e.t >= 2.8 && !e.finAnnoncee) { e.finAnnoncee = true; annoncer({ type: 'fin', resultat: e.resultat }); }
+      return;
+    }
+    case 'refus': {
+      // il freine fort et s'arrete avant le tapis, sans le toucher
+      if (!e.arret) {
+        j.v *= Math.exp(-5 * dt);
+        const pas_ = Math.min(j.v * dt, Math.max(0, pointe().ecart - 0.05));
+        e.s += pas_;
+        j.stride += pas_ * (Math.PI / j.strideLength());
+        placer(j);
+        if (j.v < 0.4 || pas_ <= 0) { e.arret = true; j.v = 0; }
+      }
+      if (e.t >= 1.2) {
+        // retour a la marque : dix secondes pour repartir (au plus ce qu'il restait de sa minute)
+        Object.assign(e, essaiNeuf(), { phase: 'attente', horloge: Math.min(e.horloge, RETENTE), refus: (e.refus || 0) + 1 });
+        nouveauSauteur();
+        rendreLeTempo();
+        placerCamera(true);
+      }
       return;
     }
     case 'temps':
@@ -779,7 +813,7 @@ function jauge() {
 function consigne() {
   if (!e) return null;
   switch (e.phase) {
-    case 'attente': return 'haut_c_partir';
+    case 'attente': return e.refus ? 'haut_c_repartir' : 'haut_c_partir';
     case 'elan': return pointe().ecart < 7 ? 'haut_c_appel' : 'haut_c_elan';
     case 'appel': return 'haut_c_angle';
     case 'vol':

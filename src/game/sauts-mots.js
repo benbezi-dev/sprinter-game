@@ -136,6 +136,7 @@ export const MOTS_SAUTS = {
   jumper_reglement: ['LE RÈGLEMENT', 'THE RULES'],
   jumper_comment:   ['COMMENT ON SAUTE', 'HOW TO JUMP'],
   haut_c_partir:   ['ALTERNE POUR T’ÉLANCER', 'ALTERNATE TO RUN UP'],
+  haut_c_repartir: ['ÉLAN MANQUÉ · 10 S POUR REPARTIR', 'RUN-UP ABORTED · 10 S TO GO AGAIN'],
   haut_c_elan:     ['VITESSE CONTRÔLÉE : PAS TROP VITE', 'CONTROLLED SPEED: NOT TOO FAST'],
   haut_c_appel:    ['PIED GAUCHE : APPUIE POUR L’APPEL', 'LEFT FOOT: PRESS TO TAKE OFF'],
   haut_c_angle:    ['TIENS… RELÂCHE POUR T’ENVOLER', 'HOLD… RELEASE TO TAKE OFF'],

@@ -8,6 +8,7 @@
 import * as THREE from 'three';
 import { monde } from './scene';
 import { ici } from './repere';
+import { MONTANTS, BARRE, TAPIS } from '../hauteur.js';
 
 const LARGEUR_PISTE = 1.22;   // longueur.js, PISTE_ELAN.largeur
 const PLANCHE = 0.20;         // la planche d'appel, le long de l'elan
@@ -57,7 +58,10 @@ function creer() {
 export function poserLeSautoir(G: any, T: any) {
   const s = G.obstacles && G.obstacles.saut3D;
   const e = s && s.etat();
-  if (!e) { if (pieces) toutes(pieces).forEach(m => { m.visible = false; }); return; }
+  if (!e || s.hauteur) { if (pieces) toutes(pieces).forEach(m => { m.visible = false; }); }
+  if (!e || !s.hauteur) { if (hauteur) toutesH(hauteur).forEach(m => { m.visible = false; }); }
+  if (!e) return;
+  if (s.hauteur) { poserLaHauteur(s, e, T); return; }
   if (!pieces) pieces = creer();
   const P = pieces;
   // un pave du sautoir : de x0 a x1 le long de l'elan, centre en y (repere du sautoir), du sol a z
@@ -132,4 +136,79 @@ export function poserLeSautoir(G: any, T: any) {
 
 function toutes(P: NonNullable<typeof pieces>): Piece[] {
   return [P.piste, P.sable, P.trace, ...P.lignes, ...P.planches, ...P.plasticines, ...P.cadre, ...P.juge, P.hampe, P.drapeau, P.grains];
+}
+
+/* ------------------------------------------------------------ la hauteur */
+
+// LE SAUT EN HAUTEUR (hauteur-course.js) : l'aire d'elan en tartan, le tapis, les deux montants, la barre — qui
+// TREMBLE quand on l'effleure et TOMBE quand on la touche (e.barre.chute : chaque bout quitte son taquet,
+// longueur-course la fait rebondir sur le tapis) — et le juge au drapeau, a cote du tapis.
+let hauteur: { aire: Piece; tapis: Piece; dessus: Piece; montants: Piece[]; barre: Piece; juge: Piece[]; hampe: Piece; drapeau: Piece } | null = null;
+const _a3 = new THREE.Vector3(), _b3 = new THREE.Vector3(), _d3 = new THREE.Vector3(), _y3 = new THREE.Vector3(0, 1, 0);
+
+function toutesH(H: NonNullable<typeof hauteur>): Piece[] {
+  return [H.aire, H.tapis, H.dessus, ...H.montants, H.barre, ...H.juge, H.hampe, H.drapeau];
+}
+
+function poserLaHauteur(s: any, e: any, T: any) {
+  if (!hauteur) hauteur = {
+    aire: bloc(0x8e3a2a), tapis: bloc(0x1d4f9e), dessus: bloc(0x2a66c4),
+    montants: [bloc(0xb9c0c8), bloc(0xb9c0c8)], barre: bloc(0xf2c21b),
+    juge: [bloc(0x4a4f5a), bloc(0x1f2d55), bloc(0x8a5a3c)], hampe: bloc(0x2a2a2a), drapeau: bloc(0xffffff),
+  };
+  const H = hauteur;
+  // un point du sautoir (x, y, z) dans le monde
+  const ou = (v: THREE.Vector3, x: number, y: number, z: number) => {
+    const [d, h] = s.monde(x, y); const q = ici(T.posDemi(d, 0, h)); return v.set(q[0], q[1], z);
+  };
+  // un pave aligne sur le sautoir : de x0 a x1, de y0 a y1, de z0 a z1
+  const pave = (m: Piece, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => {
+    const xm = (x0 + x1) / 2, ym = (y0 + y1) / 2;
+    ou(_a3, xm, ym, 0); ou(_b3, xm + 1, ym, 0);
+    _f.subVectors(_b3, _a3).normalize(); _l.crossVectors(_u, _f);
+    _B.makeBasis(_f, _l, _u).setPosition(_a3.x, _a3.y, 0);
+    _P.compose(_c.set(0, 0, (z0 + z1) / 2), _q.identity(), _s.set(Math.max(1e-3, x1 - x0), Math.max(1e-3, y1 - y0), Math.max(1e-3, z1 - z0)));
+    m.matrix.copy(_P.premultiply(_B)); m.matrixWorldNeedsUpdate = true; m.visible = true;
+  };
+  // un baton d'un point a l'autre (la barre qui tombe n'est plus alignee)
+  const baton = (m: Piece, a: number[], b: number[], ep: number) => {
+    ou(_a3, a[0], a[1], a[2]); ou(_b3, b[0], b[1], b[2]);
+    _d3.subVectors(_b3, _a3); const L = _d3.length();
+    _q.setFromUnitVectors(_y3, _d3.divideScalar(L));
+    m.matrix.compose(_c.addVectors(_a3, _b3).multiplyScalar(0.5), _q, _s.set(ep, L, ep));
+    m.matrixWorldNeedsUpdate = true; m.visible = true;
+  };
+  const S = e.sautoir, bx = S.x, by = S.y, demi = MONTANTS.ecart / 2;
+  // l'aire d'elan : tout le J, de la marque au plan de la barre, et un peu au-dela
+  // (le demi-cercle d'elan, ramene a un rectangle : de la fin de la courbe au plan, sur la largeur du tapis et du J)
+  pave(H.aire, S.finCourbe[0] - 4, bx + 0.4, by - TAPIS.largeur / 2 - 1, Math.max(S.finCourbe[1], S.courbe[1]) + 1.5, 0, 0.012);
+  // le tapis, a dix centimetres du plan, et son dessus plus clair
+  const tx0 = bx + MONTANTS.jeuTapis;
+  pave(H.tapis, tx0, tx0 + TAPIS.profondeur, by - TAPIS.largeur / 2, by + TAPIS.largeur / 2, 0, TAPIS.hauteur - 0.03);
+  pave(H.dessus, tx0 + 0.02, tx0 + TAPIS.profondeur - 0.02, by - TAPIS.largeur / 2 + 0.02, by + TAPIS.largeur / 2 - 0.02, TAPIS.hauteur - 0.03, TAPIS.hauteur);
+  // les montants, de part et d'autre, trente centimetres au-dessus de la barre
+  const haut = Math.max(2.0, e.hauteur + 0.3);
+  H.montants.forEach((m, i) => pave(m, bx - 0.03, bx + 0.03, by + (i ? 1 : -1) * (demi + MONTANTS.depasse) - 0.03, by + (i ? 1 : -1) * (demi + MONTANTS.depasse) + 0.03, 0, haut));
+  // la barre : posee, tremblante, ou qui tombe bout par bout
+  const ch = e.barre && e.barre.chute, tr = e.barre && e.barre.tremble, ep = BARRE.diametre * 1.6;
+  if (ch) {
+    const [b0, b1] = ch.bouts;
+    baton(H.barre, [b0.x, by - BARRE.longueur / 2, b0.z], [b1.x, by + BARRE.longueur / 2, b1.z], ep);
+  } else {
+    const dz = tr ? tr.amp * Math.sin(tr.t * 38) * Math.exp(-4 * tr.t) : 0;
+    baton(H.barre, [bx, by - BARRE.longueur / 2, e.hauteur], [bx, by + BARRE.longueur / 2, e.hauteur + dz], ep);
+  }
+  // le juge, a cote du tapis cote camera, et son drapeau blanc ou rouge
+  // (au coin du tapis oppose a l'elan : la camera le voit sans qu'il cache la barre)
+  const xj = bx + TAPIS.profondeur + 0.9, yj = by - TAPIS.largeur / 2 + 0.6;
+  pave(H.juge[0], xj - 0.12, xj + 0.12, yj - 0.15, yj + 0.15, 0, 0.82);
+  pave(H.juge[1], xj - 0.14, xj + 0.14, yj - 0.2, yj + 0.2, 0.82, 1.48);
+  pave(H.juge[2], xj - 0.10, xj + 0.10, yj - 0.095, yj + 0.095, 1.50, 1.72);
+  const dr = e.drapeau;
+  if (dr) {
+    const monte = Math.min(1, dr.age / 0.25), hz = 1.25 + 0.95 * monte * (2 - monte);
+    pave(H.hampe, xj - 0.015, xj + 0.015, yj + 0.24, yj + 0.27, hz - 0.65, hz);
+    pave(H.drapeau, xj - 0.01, xj + 0.01, yj + 0.27, yj + 0.77, hz - 0.36, hz);
+    (H.drapeau.material as THREE.MeshLambertMaterial).color.setHex(dr.blanc ? 0xf6f6f2 : 0xd41f26);
+  } else { H.hampe.visible = false; H.drapeau.visible = false; }
 }

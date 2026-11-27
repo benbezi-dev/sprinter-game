@@ -360,11 +360,11 @@ export const HESITE = 0.012;
 export function sortDeLaBarre(marge, alea = Math.random) {
   if (marge >= EFFLEURE) return { tombe: false, tremble: false };
   if (marge >= 0) return { tombe: false, tremble: true };
-  if (marge >= -HESITE) {
-    const p = Math.pow(-marge / HESITE, 0.7);
-    return { tombe: alea() < p, tremble: true };
-  }
-  return { tombe: true, tremble: false };
+  // TOUCHEE, ELLE TOMBE (l'auteur, 27/11 : « la barre doit tomber lorsqu'elle est touchee par le
+  // joueur »). Le reglement ne compte que la barre qui quitte ses taquets ; le jeu la fait toujours
+  // partir au contact — seul l'effleurement, a un centimetre au-dessus, la fait trembler.
+  // (`alea` et HESITE restent pour les appels existants ; ils ne decident plus rien.)
+  return { tombe: true, tremble: marge >= -HESITE };
 }
 
 /* ------------------------------------------------------------- un saut */

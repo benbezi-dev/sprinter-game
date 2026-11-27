@@ -123,9 +123,10 @@ ok('au-dessus de la marge : rien', !sortDeLaBarre(0.02).tombe && !sortDeLaBarre(
 ok('effleuree : elle tremble et tient', !sortDeLaBarre(0.004).tombe && sortDeLaBarre(0.004).tremble);
 ok('franchement dessous : elle tombe', sortDeLaBarre(-0.03).tombe);
 {
+  // touchee, elle tombe toujours (l'auteur, 27/11) — meme d'un millimetre
   let tient = 0;
-  for (let k = 0; k < 400; k++) if (!sortDeLaBarre(-0.004, alea).tombe) tient++;
-  ok(`juste dessous, elle tient parfois (${tient}/400)`, tient > 60 && tient < 340);
+  for (let k = 0; k < 400; k++) if (!sortDeLaBarre(-0.001, alea).tombe) tient++;
+  ok(`touchee d'un millimetre, elle tombe a chaque fois (${400 - tient}/400)`, tient === 0);
 }
 {
   const p = sautParfait(8.0);

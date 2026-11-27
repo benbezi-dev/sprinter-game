@@ -67,7 +67,7 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     planCam = PLANS.includes(force) && (droite60 || !PLANS_SALLE.includes(force)) ? force : autres[Math.floor(Math.random() * autres.length)];
   }
   // LE SAUT SE REGARDE DE PROFIL (sautoir.ts) : jamais le plan 2D ni le rail tires au hasard
-  const saut3D = G.obstacles && G.obstacles.saut3D && G.obstacles.saut3D.etat();
+  const sautoir3D = G.obstacles && G.obstacles.saut3D, saut3D = sautoir3D && sautoir3D.etat();
   if (saut3D) planCam = '3d';
   const plan2D = !DOS && planCam === '2d', rail = !DOS && planCam === 'rail' && !nuitDuMolosse;
   const fixe = !DOS && salleActive && !T.curved && PLANS_SALLE.includes(planCam) ? planCam : null;
@@ -254,7 +254,23 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
     // LA CAMERA DU SAUT (« camera de cote », l'auteur, 27/11) : cote pelouse, face a la piste d'elan, a hauteur
     // d'homme, comme la television. Elle roule avec le sauteur, un peu devant lui pour lui laisser la place ou il
     // va ; en l'air et dans le sable, elle garde l'appel et la fosse dans le meme cadre. En portrait, elle recule.
-    if (saut3D && !DOS) {
+    if (saut3D && saut3D.epreuve === 'hauteur' && !DOS) {
+      // LA HAUTEUR : une camera POSEE, comme a la television, a cote d'un montant, a vingt degres du plan
+      // de la barre (la 2D regarde a vingt-cinq degres du profil, hauteur-course.js, ROT_VUE) : le dos qui
+      // s'enroule au-dessus de la barre se voit de cote. Plus de face, le corps couche filait vers l'objectif
+      // et l'athlete semblait rester debout. Elle tourne la tete pour le suivre dans le J, puis se cale sur la barre.
+      const S = saut3D.sautoir;
+      const D = camera.aspect >= 1 ? 8 : 11;
+      const w = (x: number, y: number) => { const [d, h] = sautoir3D.monde(x, y); return ici(T.posDemi(d, 0, h)); };
+      const c = w(S.x - 0.34 * D, S.y - 0.94 * D), b = w(S.x + 0.3, S.y);
+      const pres = saut3D.phase === 'elan' ? Math.min(1, Math.max(0, (saut3D.s - 4) / 16)) : ['attente', 'repos', 'refus'].includes(saut3D.phase) ? 0 : 1;
+      const k = 0.9 * pres * pres * (3 - 2 * pres);
+      // sur sa marque, elle est a cote de lui (cote pelouse, comme a la longueur) ; elle rejoint sa place
+      // a mesure qu'il entre dans le J
+      const pr = 1 - k / 0.9, Dp = camera.aspect >= 1 ? 4.5 : 6.5;
+      voulu.set(c[0] + (p[0] + Dp * ix - c[0]) * pr, -(c[1] + (p[1] + Dp * iy - c[1]) * pr), (camera.aspect >= 1 ? 1.5 : 1.9) - 0.2 * pr);
+      vise.set(p[0] + (b[0] - p[0]) * k, -(p[1] + (b[1] - p[1]) * k), 0.9 + 0.5 * pres);
+    } else if (saut3D && !DOS) {
       const D = camera.aspect >= 1 ? 4.2 : 6.5, enAir = saut3D.phase !== 'attente' && saut3D.phase !== 'elan' && saut3D.phase !== 'repos';
       const devant = enAir ? 2.2 : 1.4;
       voulu.set(p[0] + devant * ax + D * ix, -(p[1] + devant * ay + D * iy), 1.25);
