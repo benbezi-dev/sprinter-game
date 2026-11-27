@@ -111,6 +111,8 @@ const EPREUVE = {
  * fait quatre centiemes sous le doigt, et le saut se regarde.
  */
 const VOL_RALENTI = 0.75;
+/** Le ralenti de l'impact dans le sable : un tiers, pendant que le bassin se pose. */
+const RALENTI_IMPACT = 0.35;
 
 /** Ce que chaque ramene laisse dans le sable (voir sable.py). */
 const VARIANTE = { parfait: 'avant', bon: 'avant', tot: 'cote', assis: 'assis', tard: 'pieds', sans: 'pieds' };
@@ -643,7 +645,7 @@ function pas(j, dt, elapsed) {
       c.t += dt;
       // Record personnel : les bras montent quand il se releve.
       if (e.celebre) j.celebrate = lisse((c.t - 1.5) / 0.45);
-      if (c.t > 0.3) rendreLeTempo();
+      if (c.t > 0.45) rendreLeTempo();
       if (c.t < 1.75) {
         // LES FESSES DANS LE TROU. A une bonne reception, le bassin ne glisse
         // pas de quarante centimetres puis s'arrete a mi-chemin : les genoux
@@ -786,7 +788,9 @@ function contact() {
     hz0: (v.hauteur(v.duree) - 0.08) * (SprinterCore.C.MODEL_H / j.look.h),
   };
   e.phase = 'reception'; e.t = 0;
-  SprinterApp.Audio_.sfx && SprinterApp.Audio_.sfx('trip');
+  // L'IMPACT SE REGARDE : le sable, puis un ralenti le temps que le bassin se pose (rendu a c.t > 0,45)
+  SprinterApp.Audio_.sfx && SprinterApp.Audio_.sfx(dansLeSable ? 'sable' : 'trip', dansLeSable ? { gain: 0.7 } : undefined);
+  if (dansLeSable) poserLeTempo(RALENTI_IMPACT);
   annoncer({ type: 'contact', resultat: r });
 }
 

@@ -14,7 +14,14 @@ const PLANCHE = 0.20;         // la planche d'appel, le long de l'elan
 const CADRE = 0.12;           // la bordure de la fosse
 
 type Piece = THREE.Mesh;
-let pieces: { piste: Piece; lignes: Piece[]; planches: Piece[]; plasticines: Piece[]; sable: Piece; cadre: Piece[]; trace: Piece } | null = null;
+let pieces: {
+  piste: Piece; lignes: Piece[]; planches: Piece[]; plasticines: Piece[]; sable: Piece; cadre: Piece[]; trace: Piece;
+  juge: Piece[]; hampe: Piece; drapeau: Piece; grains: THREE.InstancedMesh;
+} | null = null;
+const N_GRAINS = 70;
+// un tirage fixe par grain : la gerbe a sa forme, toujours la meme, que la force etire
+const ALEA = Array.from({ length: N_GRAINS * 4 }, (_, i) => { const x = Math.sin(i * 12.9898 + 78.233) * 43758.5453; return x - Math.floor(x); });
+const _g = new THREE.Matrix4(), _gp = new THREE.Vector3(), _gs = new THREE.Vector3(), _gq = new THREE.Quaternion();
 const _B = new THREE.Matrix4(), _P = new THREE.Matrix4(), _q = new THREE.Quaternion();
 const _f = new THREE.Vector3(), _l = new THREE.Vector3(), _u = new THREE.Vector3(0, 0, 1);
 const _c = new THREE.Vector3(), _s = new THREE.Vector3();
@@ -35,6 +42,14 @@ function creer() {
     sable: bloc(0xd8bd85),
     cadre: [bloc(0xe9e6de), bloc(0xe9e6de), bloc(0xe9e6de), bloc(0xe9e6de)],
     trace: bloc(0xa98a55, false),
+    // le juge de la planche, cote piste : pantalon, veste, tete ; et son drapeau
+    juge: [bloc(0x4a4f5a), bloc(0x1f2d55), bloc(0x8a5a3c)],
+    hampe: bloc(0x2a2a2a),
+    drapeau: bloc(0xffffff),
+    grains: (() => {
+      const m = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshLambertMaterial({ color: 0xc9a86c }), N_GRAINS);
+      m.frustumCulled = false; m.count = 0; monde.add(m); return m;
+    })(),
   };
 }
 
@@ -79,8 +94,42 @@ export function poserLeSautoir(G: any, T: any) {
   const t = e.empreinte;
   if (t) pave(P.trace, t.x - 0.25, t.x + 0.55, t.y, 0.45, 0.018, 0.022);
   else P.trace.visible = false;
+
+  // LE JUGE, au bord de la fosse cote piste, face a la camera : il leve le drapeau BLANC quand l'essai est
+  // bon, ROUGE quand il est nul (e.drapeau, longueur-course.js). Le bras monte en un quart de seconde. Pose
+  // a la planche, il levait son drapeau hors du cadre : la camera est alors sur le sauteur, dans le sable.
+  // (il se tient pres de la trace, comme le juge du decametre : un metre derriere elle, cote piste)
+  const xj = Math.max(e.fosseX + 1.4, (e.empreinte ? e.empreinte.x : e.fosseX + 6) - 1.0), yj = y + F.largeur / 2 + 0.9;
+  pave(P.juge[0], xj - 0.12, xj + 0.12, yj, 0.30, 0, 0.82);
+  pave(P.juge[1], xj - 0.14, xj + 0.14, yj, 0.40, 0.82, 1.48);
+  pave(P.juge[2], xj - 0.10, xj + 0.10, yj, 0.19, 1.50, 1.72);
+  const dr = e.drapeau;
+  if (dr) {
+    const monte = Math.min(1, dr.age / 0.25), haut = 1.25 + 0.95 * monte * (2 - monte);
+    pave(P.hampe, xj + 0.13, xj + 0.16, yj + 0.24, 0.03, haut - 0.65, haut);
+    pave(P.drapeau, xj + 0.16, xj + 0.66, yj + 0.24, 0.02, haut - 0.36, haut);
+    (P.drapeau.material as THREE.MeshLambertMaterial).color.setHex(dr.blanc ? 0xf6f6f2 : 0xd41f26);
+  } else { P.hampe.visible = false; P.drapeau.visible = false; }
+
+  // LA GERBE DE SABLE, a l'impact (e.gerbe, 0,7 s) : des grains projetes devant et sur les cotes, qui
+  // retombent ; la force vient de la vitesse du sauteur.
+  const g = e.gerbe;
+  if (g && g.t < 0.7) {
+    const k = g.force || 1, tt = g.t;
+    for (let i = 0; i < N_GRAINS; i++) {
+      const a = ALEA[i * 4], b = ALEA[i * 4 + 1], c = ALEA[i * 4 + 2], d = ALEA[i * 4 + 3];
+      const vx = k * (0.6 + 3.2 * a), vy = (b - 0.5) * 2.6 * k, vz = k * (0.9 + 2.6 * c);
+      const z = Math.max(0.02, 0.03 + vz * tt - 4.9 * tt * tt);
+      const [dd, hh] = s.monde(g.x + vx * tt, g.y + vy * tt);
+      const q = ici(T.posDemi(dd, 0, hh));
+      const taille = (0.022 + 0.03 * d) * Math.max(0, 1 - tt / 0.7);
+      _g.compose(_gp.set(q[0], q[1], z), _gq.identity(), _gs.set(taille, taille, taille));
+      P.grains.setMatrixAt(i, _g);
+    }
+    P.grains.count = N_GRAINS; P.grains.instanceMatrix.needsUpdate = true; P.grains.visible = true;
+  } else P.grains.count = 0;
 }
 
 function toutes(P: NonNullable<typeof pieces>): Piece[] {
-  return [P.piste, P.sable, P.trace, ...P.lignes, ...P.planches, ...P.plasticines, ...P.cadre];
+  return [P.piste, P.sable, P.trace, ...P.lignes, ...P.planches, ...P.plasticines, ...P.cadre, ...P.juge, P.hampe, P.drapeau, P.grains];
 }

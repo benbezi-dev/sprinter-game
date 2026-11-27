@@ -1591,6 +1591,20 @@ import { sponsorDeLaCourse } from './panneaux';
         return this.norm(b);
       };
       this.buf.haie = claque(0.11, 0.5);
+      // LE SABLE (les sauts, 27/11) : un bruit sourd et grenu — un bruit filtre bas qui s'eteint en
+      // quatre dixiemes, sur un coup de grave. Le « trip » des chutes etait un bip.
+      this.buf.sable = (() => {
+        const dur = 0.45, b = this.ctx.createBuffer(1, (dur * sr) | 0, sr), ch = b.getChannelData(0);
+        let seed = 424242, lp = 0, ph = 0;
+        for (let i = 0; i < ch.length; i++) {
+          const q = i / ch.length;
+          seed = (Math.imul(1103515245, seed) + 12345) & 0x7fffffff;
+          lp += 0.18 * ((seed / 0x3fffffff - 1) - lp);           // passe-bas : le grain du sable
+          ph += 68 * (1 - 0.4 * q) / sr;
+          ch[i] = Math.min(1, i / 60) * (0.9 * lp * Math.exp(-7 * q) + 0.6 * Math.sin(TAU * ph) * Math.exp(-14 * q));
+        }
+        return this.norm(b);
+      })();
       yield;
       this.buf.dirge = this.phrase([
         [0, 0.00, 0.34], [-1, 0.34, 0.34], [-4, 0.68, 0.40],
