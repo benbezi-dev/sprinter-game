@@ -213,19 +213,28 @@ export function postureDe(e, r, ech) {
       // hanches a l'impact. L'angle des jambes se deduit de la hauteur du
       // bassin a la reception : les talons touchent pile au contact.
       if (v.tRamene != null) {
-        const k = lisse((t - v.tRamene) / 0.20);
-        const bal = lisse((t - v.tRamene) / 0.30);
+        // RECALE SUR EDWARDS (MediaPipe, 27/11 : « le ramene est trop mecanique ») : les cuisses montent
+        // GENOUX PLIES (100 - 120 degres), ne se tendent qu'au dernier dixieme avant le sable, et le buste
+        // plonge PAR-DESSUS a mesure (de -20 a -50 degres). La jambe et le bras de tete partent un peu
+        // avant les autres : deux membres qui bougent en bloc, c'est un pantin.
+        const dt = t - v.tRamene;
+        const k = lisse(dt / 0.26), kB = lisse((dt - 0.05) / 0.28);
+        const bal = lisse(dt / 0.34), balB = lisse((dt - 0.06) / 0.36);
         const hzC = (v.hauteur(T) - 0.08) * ech;
         const th = Math.acos(Math.max(-1, Math.min(1, (hzC - 0.02 - CHEVILLE) / (CUISSE + JAMBE))));
         const leve = Math.max(th, 1.50 - 0.35 * lisse(t / T));
-        const tendue = [leve, leve + 0.04, leve + 0.55];
-        ja = mix3(ja, tendue, k);
-        jb = mix3(jb, [leve - 0.05, leve, leve + 0.50], k);
-        // les bras : de derriere la tete a devant, puis vers le bas
-        const bras = bal < 0.6 ? mix2([3.3, 3.55], [1.55, 1.65], bal / 0.6) : mix2([1.55, 1.65], [0.75, 0.95], (bal - 0.6) / 0.4);
-        ba = mix2(ba, bras, k);
-        bb = mix2(bb, [bras[0] - 0.08, bras[1] - 0.08], k);
-        buste = mix(buste, -0.66, k);
+        // le genou : plie a la montee (~1 rad), tendu dans les 0,12 s avant le contact
+        const tend = lisse((t - (T - 0.16)) / 0.12);
+        const pli = mix(0.95, 0.06, tend), pliB = mix(1.10, 0.10, lisse((t - (T - 0.13)) / 0.12));
+        ja = mix3(ja, [leve, leve - pli, leve - pli + 0.55 + 0.2 * (1 - tend)], k);
+        jb = mix3(jb, [leve - 0.07, leve - 0.07 - pliB, leve - 0.07 - pliB + 0.50 + 0.2 * (1 - tend)], kB);
+        // les bras : de derriere la tete a devant, puis vers le bas ; le second suit, un peu plus court
+        const bras = (u) => u < 0.6 ? mix2([3.3, 3.55], [1.55, 1.70], u / 0.6) : mix2([1.55, 1.70], [0.75, 1.05], (u - 0.6) / 0.4);
+        ba = mix2(ba, bras(bal), k);
+        const b2 = bras(balB);
+        bb = mix2(bb, [b2[0] - 0.12, b2[1] + 0.10], kB);
+        // le buste se plie avec les jambes, puis plonge quand elles se tendent
+        buste = mix(buste, mix(-0.35, -0.82, tend), lisse(dt / 0.32));
         P.hanche = mix(P.hanche || 0, 0, k);
       }
       J[A] = ja; J[B] = jb; BR[A] = ba; BR[B] = bb;
@@ -278,8 +287,9 @@ export function postureDe(e, r, ech) {
         const plie = lisse((tau - 0.06) / 0.34);
         hz = mix(c.hz0, 0.15, plie) + 0.07 * pousse;
         buste = mix(-0.66, -0.80, plie) - 0.14 * pousse;
-        const re = lisse((tau - 0.35) / 0.45);
-        bras = [mix2([-0.85, -0.55], [1.10, 1.40], re), mix2([-0.90, -0.60], [1.05, 1.35], re)];
+        // les bras ne reviennent pas ensemble : le second suit d'un dixieme, plus bas (MediaPipe, Edwards)
+        const re = lisse((tau - 0.35) / 0.45), re2 = lisse((tau - 0.45) / 0.50);
+        bras = [mix2([-0.85, -0.55], [1.10, 1.40], re), mix2([-0.70, -0.75], [0.85, 1.25], re2)];
       }
       let ja, jb;
       if (pieds) {

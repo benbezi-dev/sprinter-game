@@ -258,7 +258,9 @@ export function cadrer(G: any, T: any, dt: number, nuitDuMolosse: boolean) {
       const D = camera.aspect >= 1 ? 4.2 : 6.5, enAir = saut3D.phase !== 'attente' && saut3D.phase !== 'elan' && saut3D.phase !== 'repos';
       const devant = enAir ? 2.2 : 1.4;
       voulu.set(p[0] + devant * ax + D * ix, -(p[1] + devant * ay + D * iy), 1.25);
-      vise.set(p[0] + devant * ax, -(p[1] + devant * ay), 1.0);
+      // en l'air, elle leve les yeux avec lui : la tete sortait du cadre au sommet du vol
+      const haut = saut3D.phase === 'vol' && saut3D.vol && saut3D.vol.hauteur ? Math.max(0, saut3D.vol.hauteur(saut3D.vol.t) - 0.9) : 0;
+      vise.set(p[0] + devant * ax, -(p[1] + devant * ay), 1.0 + 0.8 * haut);
     }
     // LE GENERIQUE DANS LA SALLE (scene-generique.ts, poserLeTourDHonneur) : le champion trotte a rebours, la camera
     // le precede, de face, un peu cote pelouse et en hauteur — un salut se regarde de face. Elle y glisse depuis le sacre.
