@@ -42,6 +42,7 @@ export function prendreSaPlace({ Runner, PLAYER_LOOK, attente, moi, j, nom, tota
   const place = attente.findIndex((r) => r.name === nom);
   const lui = place >= 0 ? attente[place] : new Runner(nom, 0, { total });
   j.name = nom; j.look = lui.look; j.dossard = lui.dossard || 9;
+  j.adversaire = true;   // pas de fleche « TOI » au-dessus de lui (GameCanvas)
   if (place < 0) return [j, ...attente];
   if (!moi.r) {
     [moi.r] = athletesEnAttente(Runner, ['TOI'], { total, laneW, x0: 0, y: 0, cap: lui.cap });

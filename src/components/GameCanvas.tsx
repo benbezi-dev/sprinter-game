@@ -446,7 +446,7 @@ export function GameCanvas() {
             }
             // et le joueur se reconnait parmi huit (« un indicateur pour que le joueur sache qui
             // il est sur la piste », l'auteur, 24/10)
-            if (G.player && rendu3D.ecranDe) {
+            if (G.player && !G.player.adversaire && rendu3D.ecranDe) {
               // juste au-dessus de la tete : plus haut, de loin, il semblait pose sur le coureur du fond
               const e = rendu3D.ecranDe(SprinterApp, G.player, 1.1);
               if (e) marquerLeJoueur(ctx, e);
