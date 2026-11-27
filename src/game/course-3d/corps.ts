@@ -321,7 +321,7 @@ function corpsDe(r: any): Corps | null {
   const brassiere = tenue.startsWith('brassiere'), culotte = tenue.endsWith('culotte');
   // (une piece : le debardeur reste, le bas prend sa couleur ; la zone peinte du corps avait un bord en dents de scie)
   const bas = tenue === 'une-piece' ? maillot : rgb(L.shorts);
-  if (mats.tripo) reglerTenueTripo(tenueTripo(copie, mats.tripo), maillot, bas, femme, L.kit === 'vrac', dossardDe(((r.lane ?? 0) as number) + 1));
+  if (mats.tripo) reglerTenueTripo(tenueTripo(copie, mats.tripo), maillot, bas, femme, L.kit === 'vrac', dossardDe(r.dossard ?? ((r.lane ?? 0) as number) + 1));
   mats.debardeur?.color.copy(maillot); mats.brassiere?.color.copy(maillot); mats.shortlarge?.color.copy(bas);
   if (mats.debardeur) mats.debardeur.visible = !brassiere;
   if (mats.brassiere) mats.brassiere.visible = brassiere;
@@ -340,7 +340,7 @@ function corpsDe(r: any): Corps | null {
     copie.traverse((o: any) => { if (o.isMesh && o.material === mats.short) { o.geometry.computeBoundingBox(); hautShort = Math.max(hautShort, o.geometry.boundingBox.max.y); } });
     if (hautShort > 0) ceintureHaute(mats.ventre, bas, hautShort + 0.05);
   }
-  if (mats.dossard) { mats.dossard.map = dossardDe(((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
+  if (mats.dossard) { mats.dossard.map = dossardDe(r.dossard ?? ((r.lane ?? 0) as number) + 1); mats.dossard.roughness = 0.9; mats.dossard.side = THREE.DoubleSide; dossardALEndroit(mats.dossard); }
   for (const z of ['debardeur', 'shortlarge', 'brassiere']) if (mats[z]) mats[z].side = THREE.DoubleSide;   // (l'ourlet se voit par-dessous)
   if (L.kit === 'vrac' && mats.debardeur) {
     maillotTripo(mats.debardeur, femme);

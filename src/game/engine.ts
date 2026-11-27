@@ -1369,7 +1369,8 @@ export function updateLogic(dt: number) {
       // qu'un joueur reel n'a pas : sans chrono, la vitesse et la constante de
       // temps ne sont jamais calculees, la position devient NaN, et
       // l'adversaire disparait de la piste sans une erreur.
-      for (const r of G.runners) if (!r.isPlayer && !r.isLive) r.stepAI(step, G.elapsed);
+      // (`attend` : un adversaire du saut, debout au bord du sautoir — sauts-attente.js)
+      for (const r of G.runners) if (!r.isPlayer && !r.isLive && !r.attend) r.stepAI(step, G.elapsed);
       // le peloton du 400 m en salle : la place de chacun en travers, les gestes du coude (sprinter-app.js)
       SprinterApp.placerPeloton(step);
       // la place a l'arrivee, des la ligne : les trois premiers celebrent (Runner.apresLigne)

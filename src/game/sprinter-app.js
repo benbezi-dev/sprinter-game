@@ -9342,6 +9342,8 @@ import { sponsorDeLaCourse } from './panneaux';
   function phaseBlocs(r) {
     // pendant la presentation, l'echauffement mene la posture (game/echauffement.ts)
     if (r.echauffe && G.state === 'cut') return;
+    // un adversaire du saut qui attend son tour (sauts-attente.js) : debout, il fait ses gestes d'attente
+    if (r.attend) { r.enBloc = 0; r.attitudeW = 1; r.attitudeT = G.elapsed || 0; return; }
     const doux = (x) => { x = clamp(x, 0, 1); return x * x * (3 - 2 * x); };
     if (!(r.d <= SORTIE_BLOCS + 0.3)) { r.enBloc = 0; r.attitudeW = 0; return; }
     // Elimine au faux depart : la piste est figee, et chacun reste la ou le

@@ -39,6 +39,7 @@ import {
 } from './hauteur-jeu.js';
 import { postureDe, dessinerSol, piecesDebout, dessinerPiece } from './hauteur-rendu.js';
 import { creerVue, PROFIL } from './sauts-vue.js';
+import { athletesEnAttente } from './sauts-attente.js';
 import { RENDU_3D } from './canal';
 
 const D2R = Math.PI / 180;
@@ -170,7 +171,7 @@ export function etatHauteur() { return e; }
 /* ------------------------------------------------------------ l'armement */
 
 /** Monter le stade du concours, et ouvrir les portes du moteur. */
-export function armerConcoursHauteur(etape) {
+export function armerConcoursHauteur(etape, adversaires = []) {
   const A = SprinterApp, G = A.G;
   if (e) nettoyer();
   sauvegarde = { race: G.race, raceKey: G.raceKey, surRetour: G.surRetourAccueil };
@@ -195,6 +196,10 @@ export function armerConcoursHauteur(etape) {
   vue = RENDU_3D
     ? creerVue({ rot: 0, pivotLocal: [BARRE_X, BARRE_Y], pivotMonde: [BARRE_X, BARRE_Y], laneW: SprinterCore.C.LANE_W })
     : creerVue({ rot: ROT_VUE, pivotLocal: [BARRE_X, BARRE_Y], pivotMonde: PIVOT_MONDE, laneW: SprinterCore.C.LANE_W });
+  // LES ADVERSAIRES, debout le long de la ligne droite du J, du cote de la piste, pres de la marque (3D seulement)
+  e.attente = RENDU_3D ? athletesEnAttente(SprinterCore.Runner, adversaires, {
+    total: G.track.total, laneW: SprinterCore.C.LANE_W, x0: MARQUE[0] - 1, y: MARQUE[1] + 2.2, cap: -Math.PI / 2,
+  }) : [];
   const local = (fn) => vue.avec(G.player, fn);
   G.sautEnCours = true;
   G.pasSauteur = (j, dt, el) => local(() => pas(j, dt, el));
@@ -258,7 +263,7 @@ function nouveauSauteur() {
   j.reaction = 0; j.reactBonus = 0;
   j.legStart = 0;
   G.player = j;
-  G.runners = [j];
+  G.runners = [j, ...e.attente];
   G.reactShown = true;
   G.transShown = false;
   resetInputRhythm();

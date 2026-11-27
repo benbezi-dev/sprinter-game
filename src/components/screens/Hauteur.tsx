@@ -108,7 +108,7 @@ function Concours({ etape, carriere, accent, memoire, onMemoire, onSuivant, onRe
 
   /* --- l'armement du stade, et son rangement --- */
   useEffect(() => {
-    armerConcoursHauteur(etape);
+    armerConcoursHauteur(etape, c.current.athletes.filter((a: any) => !a.joueur).map((a: any) => a.nom));
     montrerBarre(c.current.h);
     return () => { if (!quitte.current) rangerConcoursHauteur(); };
   }, [etape]);

@@ -51,6 +51,7 @@ import {
   postureDe, dessinerSol, piecesDebout, dessinerPiece, prechargerSable,
 } from './longueur-rendu.js';
 import { creerVue, PROFIL } from './sauts-vue.js';
+import { athletesEnAttente } from './sauts-attente.js';
 
 /** La ligne d'appel du saut en longueur, en metres le long de la ligne droite. */
 export const LIGNE = 50;
@@ -167,7 +168,7 @@ function angleVise() {
  * la piste et le sable ; au triple saut, elle choisit aussi la planche.
  * `epreuve` : 'longueur' ou 'triple'.
  */
-export function armerConcoursSaut(etape, epreuve = 'longueur') {
+export function armerConcoursSaut(etape, epreuve = 'longueur', adversaires = []) {
   const A = SprinterApp, G = A.G;
   if (e) nettoyer();
   sauvegarde = { race: G.race, raceKey: G.raceKey, surRetour: G.surRetourAccueil };
@@ -198,6 +199,11 @@ export function armerConcoursSaut(etape, epreuve = 'longueur') {
     : LE_LONG
     ? creerVue({ rot: 0, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: [LIGNE, C.LANE_W * C.LANE_COUNT + AU_DELA], laneW: C.LANE_W })
     : creerVue({ rot: PROFIL, pivotLocal: [LIGNE, PISTE_Y], pivotMonde: PIVOT_MONDE, laneW: C.LANE_W });
+  // LES ADVERSAIRES, debout entre la piste d'elan et la corde, pres de la marque (en 3D seulement :
+  // la 2D tourne le sautoir, et ses tribunes les cacheraient)
+  e.attente = RENDU_3D ? athletesEnAttente(SprinterCore.Runner, adversaires, {
+    total: G.track.total, laneW: C.LANE_W, x0: e.depart - 1, y: PISTE_Y + 2.2, cap: -Math.PI / 2,
+  }) : [];
   G.ecartTribune = LE_LONG && !RENDU_3D ? ECART_TRIBUNE : 0;
   // Tout ce que le moteur demande au saut passe par le repere du sautoir : le
   // coureur y revient le temps de la reponse, et retourne au monde apres.
@@ -271,7 +277,7 @@ function nouveauSauteur() {
   // l'image remanente se merite a chaque elan, par une transition parfaite.
   j.sauteur = true;
   G.player = j;
-  G.runners = [j];
+  G.runners = [j, ...e.attente];
   G.reactShown = true;
   G.transShown = false;
   resetInputRhythm();

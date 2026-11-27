@@ -148,7 +148,7 @@ function Concours({ epreuve, etape, carriere, accent, memoire, onMemoire, onSuiv
 
   /* --- l'armement du stade, et son rangement --- */
   useEffect(() => {
-    armerConcoursSaut(etape, epreuve);
+    armerConcoursSaut(etape, epreuve, c.current.athletes.filter((a: any) => !a.joueur).map((a: any) => a.nom));
     return () => { if (!quitte.current) rangerConcoursSaut(); };
   }, [etape, epreuve]);
 
