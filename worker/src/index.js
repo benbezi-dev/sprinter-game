@@ -3488,7 +3488,9 @@ async function servir(request, env, ctx, porteur) {
           return json({ error: 'ce nom ne t appartient pas' }, 403);
         }
         if (url.pathname === '/noel-equipes/entrer') {
-          const r = await noelEq.entrer(db, { test: canal.test, t, nameKey: key, name });
+          // le choix du clan, definitif (noel-equipes.js, entrer) ; absent : la moins nombreuse
+          const choix = Number.isInteger(body.equipe) && body.equipe >= 0 && body.equipe < 4 ? body.equipe : null;
+          const r = await noelEq.entrer(db, { test: canal.test, t, nameKey: key, name, choix });
           return json(r.corps, r.status);
         }
         const timeMs = Math.round(Number(body.time_ms));
