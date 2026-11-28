@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Loader2, Crown, Ghost, RotateCcw, Swords, Vote, Trophy, Snowflake } from 'lucide-react';
+import { Loader2, Crown, Ghost, RotateCcw, Swords, Vote, Trophy, BookOpen, ChevronRight } from 'lucide-react';
 import { MONTEE, useAnimationsReduites } from '@/lib/mouvement';
 import { SprinterApp } from '@/game/engine';
 import { getSavedName } from '@/game/leaderboard';
@@ -10,18 +10,30 @@ import {
   dernierVerdict, oublierVerdict,
   type TableauEq, type EquipeNoel, type VerdictEq, type FilEq,
 } from '@/game/noel-equipes';
+import { CLANS, clanDe, LEGENDE, MOMENTS, urlBanniere, type Ligne } from '@/game/noel-clans';
 
 /* ---------------------------------------------------------------------------
    NOEL 2026 — LES QUATRE EQUIPES. Une vue par phase du calendrier :
    avant → vote des chefs → departage au 200 m → manches (et leurs
    eliminations) → vainqueur. Les regles : worker/src/noel-equipes.js.
+
+   L'HISTOIRE : LA TREVE DES QUATRE CLANS (game/noel-clans.ts, docs/NOEL_CLANS.md).
+   Les quatre equipes sont quatre clans du Grand Nord — les Braises, les Sapins, les
+   Etoiles, les Givres —, chacun avec sa banniere et sa devise ; chaque etape du
+   calendrier a son recit. Les regles ne changent pas : seule la facon de les dire.
 --------------------------------------------------------------------------- */
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 const GLACE = '#bfe6ff';
 const OR = '#ffd426';
 export const COULEURS = ['#ff5a5a', '#4ade80', OR, GLACE];
-const NOMS_COULEUR = { fr: ['Rouge', 'Vert', 'Or', 'Glace'], en: ['Red', 'Green', 'Gold', 'Ice'] };
+const L = (l: Ligne, fr: boolean) => (fr ? l[0] : l[1]);
+
+/** Le moment de l'histoire qui correspond a l'etat du tableau. */
+function momentDe(t: TableauEq): keyof typeof MOMENTS {
+  if (t.phase === 'manche') return t.pause ? 'pause' : t.manche === 3 ? 'finale' : t.manche === 2 ? 'manche2' : 'manche1';
+  return t.phase;
+}
 
 function useFr() { return SprinterApp.N.getLang() === 'fr'; }
 
@@ -42,26 +54,26 @@ function useTableau() {
 
 const date = (ms: number, fr: boolean) => new Date(ms).toLocaleString(fr ? 'fr-FR' : 'en-GB',
   { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Paris' });
-const nomEquipe = (e: EquipeNoel, fr: boolean) => `${fr ? 'Équipe' : 'Team'} ${e.chef}`;
+const nomEquipe = (e: { n: number; chef: string }, fr: boolean) => `${L(clanDe(e.n).nom, fr)} (${e.chef})`;
 
 /** Ce que dit la banniere selon la phase. */
 function resume(t: TableauEq, fr: boolean): { titre: string; ligne: string } {
   const C = t.calendrier;
+  const m = MOMENTS[momentDe(t)];
   switch (t.phase) {
-    case 'avant': return { titre: fr ? 'Noël : 4 équipes, une seule gagne' : 'Christmas: 4 teams, one winner',
-      ligne: fr ? `Vote des chefs le ${date(C.vote, fr)}` : `Captain vote on ${date(C.vote, fr)}` };
-    case 'vote': return { titre: fr ? 'Vote pour les 4 chefs d’équipe' : 'Vote for the 4 team captains',
-      ligne: fr ? `Les 8 premiers du 60 m · clôture ${date(C.voteFin, fr)}` : `Top 8 of the 60 m · closes ${date(C.voteFin, fr)}` };
-    case 'departage': return { titre: fr ? 'Égalité : départage au 200 m en salle' : 'Tie: 200 m indoor decider',
+    case 'avant': return { titre: L(m.titre, fr),
+      ligne: fr ? `L’Appel des Champions le ${date(C.vote, fr)}` : `Call of Champions on ${date(C.vote, fr)}` };
+    case 'vote': return { titre: L(m.titre, fr),
+      ligne: fr ? `Élis les 4 champions · clôture ${date(C.voteFin, fr)}` : `Elect the 4 champions · closes ${date(C.voteFin, fr)}` };
+    case 'departage': return { titre: L(m.titre, fr),
       ligne: (t.departage?.egalite || []).map(x => x.name).join(' · ') };
     case 'manche': {
       const tete = [...t.equipes].filter(e => e.eliminee == null).sort((a, b) => b.score - a.score)[0];
-      return { titre: t.pause ? (fr ? 'Pause : championnat de France' : 'Break: French championship')
-                              : (t.manche === 3 ? (fr ? 'FINALE de Noël' : 'Christmas FINAL') : (fr ? `Manche ${t.manche} sur 3` : `Round ${t.manche} of 3`)),
-        ligne: tete ? (fr ? `En tête : ${nomEquipe(tete, fr)}, ${tete.score} pts` : `Leading: ${nomEquipe(tete, fr)}, ${tete.score} pts`) : '' };
+      return { titre: L(m.titre, fr),
+        ligne: tete ? (fr ? `En tête : ${nomEquipe(tete, fr)}, ${tete.score} pts` : `Leading: ${nomEquipe(tete, fr)}, ${tete.score} pts`) : L(m.ligne, fr) };
     }
-    default: return { titre: t.vainqueur ? (fr ? `${nomEquipe({ chef: t.vainqueur.chef } as EquipeNoel, fr)} gagne Noël !` : `${t.vainqueur.chef}'s team wins Christmas!`) : (fr ? 'Noël est fini' : 'Christmas is over'),
-      ligne: fr ? 'Le palmarès des quatre équipes' : 'The four teams’ record' };
+    default: return { titre: t.vainqueur ? L(clanDe(t.vainqueur.equipe).sacre, fr).split('.')[0] : L(m.titre, fr),
+      ligne: L(m.ligne, fr) };
   }
 }
 
@@ -81,14 +93,16 @@ export function BanderoleNoelEquipes() {
       <motion.button onClick={() => setOuvert(true)} whileTap={{ scale: 0.98 }}
         className="relative w-full rounded-2xl border-2 overflow-hidden flex items-center gap-3 px-3 py-2.5 text-left"
         style={{ borderColor: GLACE, background: 'linear-gradient(100deg, rgba(255,90,90,0.16), rgba(74,222,128,0.12), rgba(255,212,38,0.14))' }}>
-        <motion.span className="relative shrink-0"
-          animate={reduit ? {} : { rotate: [0, 10, -10, 0] }}
-          transition={reduit ? {} : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}>
-          <Snowflake className="w-7 h-7" style={{ color: GLACE }} aria-hidden />
-        </motion.span>
+        <span className="relative shrink-0 flex -space-x-3" aria-hidden>
+          {CLANS.map((k, i) => (
+            <motion.img key={k.cle} src={urlBanniere(k.n, fr)} alt="" className="w-6 h-9 drop-shadow"
+              animate={reduit ? {} : { rotate: [0, i % 2 ? 6 : -6, 0] }}
+              transition={reduit ? {} : { duration: 2.6, delay: i * 0.3, repeat: Infinity, ease: 'easeInOut' }} />
+          ))}
+        </span>
         <span className="relative flex-1 min-w-0 flex flex-col">
           <span className="text-[9px] font-bold tracking-[0.2em] uppercase text-white/90 truncate">
-            {fr ? 'Noël · 4 équipes · battle royale' : 'Christmas · 4 teams · battle royale'}
+            {fr ? 'Noël · la Trêve des 4 clans' : 'Christmas · the Truce of the 4 clans'}
           </span>
           <span className="font-black text-sm md:text-base leading-tight truncate">{r ? r.titre : '…'}</span>
           <span className="text-[10px] md:text-xs text-foreground/70 leading-snug truncate">{r ? r.ligne : ''}</span>
@@ -113,6 +127,9 @@ export function EcranNoelEquipes({ onClose }: { onClose: () => void }) {
   const [verdict, setVerdict] = useState<VerdictEq | null>(dernierVerdict);
   const [message, setMessage] = useState<string | null>(null);
   const [enRoute, setEnRoute] = useState<string | null>(null);
+  // la legende s'ouvre d'elle-meme a la premiere visite
+  const [legende, setLegende] = useState(() => { try { return !localStorage.getItem('sprinter_legende_treve'); } catch { return false; } });
+  useEffect(() => { try { localStorage.setItem('sprinter_legende_treve', '1'); } catch { /* */ } }, []);
   useEffect(() => { oublierVerdict(); }, []);
   const nom = getSavedName();
 
@@ -135,16 +152,30 @@ export function EcranNoelEquipes({ onClose }: { onClose: () => void }) {
         <div className="w-full flex items-start justify-between gap-3">
           <div className="flex flex-col min-w-0">
             <h2 className="font-display font-black text-2xl md:text-3xl leading-none" style={{ color: GLACE }}>
-              {fr ? 'LES ÉQUIPES DE NOËL' : 'THE CHRISTMAS TEAMS'}
+              {fr ? 'LA TRÊVE DES QUATRE CLANS' : 'THE TRUCE OF THE FOUR CLANS'}
             </h2>
             <span className="text-[9px] md:text-[10px] text-muted-foreground tracking-wide mt-1">
-              {fr ? 'Épreuves en salle · points FFA · une équipe éliminée par manche' : 'Indoor events · FFA points · one team out per round'}
+              {fr ? 'Épreuves en salle · points FFA · un clan éteint sa torche à chaque manche' : 'Indoor events · FFA points · one clan puts out its torch each round'}
             </span>
           </div>
           <button onClick={onClose} className="p-2 rounded-xl bg-card/80 border border-white/10 hover:bg-white/10 transition-colors shrink-0">
             <img src={`${BASE}/icons/cross.png`} alt="" className="w-4 h-4 opacity-80" />
           </button>
         </div>
+
+        <LesBannieres t={t} fr={fr} />
+        {t && (
+          <div className="w-full text-center flex flex-col gap-1">
+            <div className="font-display font-black text-lg" style={{ color: OR }}>{L(MOMENTS[momentDe(t)].titre, fr)}</div>
+            <p className="text-xs text-foreground/80 leading-snug">{L(MOMENTS[momentDe(t)].ligne, fr)}</p>
+          </div>
+        )}
+        <button onClick={() => setLegende(true)}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black tracking-widest"
+          style={{ borderColor: OR + '88', color: OR }}>
+          <BookOpen className="w-4 h-4" aria-hidden /> {fr ? 'LA LÉGENDE DE LA TRÊVE' : 'THE LEGEND OF THE TRUCE'}
+        </button>
+        <AnimatePresence>{legende && <Legende fr={fr} onClose={() => setLegende(false)} />}</AnimatePresence>
 
         {!t && !erreur && <Loader2 className="w-5 h-5 animate-spin text-muted-foreground my-8" aria-hidden />}
         {erreur && !t && (
@@ -177,7 +208,7 @@ function VueVote({ t, fr, voter }: { t: TableauEq; fr: boolean; voter: (k: strin
   return (
     <div className="w-full flex flex-col gap-2">
       <p className="text-xs text-foreground/80 text-center">
-        {fr ? `Les ${t.regles.candidats} premiers du 60 m sont candidats. Les ${t.regles.chefs} plus votés deviennent chefs. Une voix par appareil, tu peux changer d’avis jusqu’au ${date(t.calendrier.voteFin, fr)}.`
+        {fr ? `Les ${t.regles.candidats} premiers du 60 m se présentent. Les ${t.regles.chefs} plus votés deviennent les champions des quatre clans. Une voix par appareil, tu peux changer d’avis jusqu’au ${date(t.calendrier.voteFin, fr)}.`
             : `The top ${t.regles.candidats} of the 60 m are candidates. The ${t.regles.chefs} most voted become captains. One vote per device, you can change it until ${date(t.calendrier.voteFin, fr)}.`}
       </p>
       {t.candidats.map(c => {
@@ -253,23 +284,25 @@ function VueManche({ t, fr, nom, enRoute, courir, attaquer, entrer }: {
   return (
     <div className="w-full flex flex-col gap-3">
       {t.vainqueur && (
-        <div className="w-full rounded-2xl border-2 px-3 py-3 text-center" style={{ borderColor: COULEURS[t.vainqueur.equipe] }}>
-          <Trophy className="w-8 h-8 mx-auto" style={{ color: OR }} aria-hidden />
+        <div className="w-full rounded-2xl border-2 px-3 py-3 text-center flex flex-col items-center gap-1" style={{ borderColor: COULEURS[t.vainqueur.equipe] }}>
+          <img src={urlBanniere(t.vainqueur.equipe, fr)} alt="" className="w-16 h-24" />
+          <Trophy className="w-6 h-6" style={{ color: OR }} aria-hidden />
           <div className="font-black text-lg" style={{ color: COULEURS[t.vainqueur.equipe] }}>
-            {fr ? `L’équipe ${t.vainqueur.chef} gagne Noël` : `${t.vainqueur.chef}'s team wins Christmas`}
+            {fr ? `${L(clanDe(t.vainqueur.equipe).nom, fr)} gagnent Noël` : `${L(clanDe(t.vainqueur.equipe).nom, fr)} win Christmas`}
           </div>
+          <div className="text-xs text-foreground/80">{L(clanDe(t.vainqueur.equipe).sacre, fr)}</div>
           <div className="text-xs text-muted-foreground">{fr ? `${t.vainqueur.points} points en finale` : `${t.vainqueur.points} points in the final`}</div>
         </div>
       )}
       {t.phase === 'manche' && (
         <div className="text-center">
           <div className="font-black" style={{ color: t.pause ? GLACE : OR }}>
-            {t.pause ? (fr ? 'PAUSE : CHAMPIONNAT DE FRANCE, rien ne compte' : 'BREAK: FRENCH CHAMPIONSHIP, nothing counts')
+            {t.pause ? (fr ? 'TRÊVE DU SOLSTICE : championnat de France, rien ne compte' : 'SOLSTICE TRUCE: French championship, nothing counts')
                      : t.manche === 3 ? (fr ? 'FINALE' : 'FINAL') : (fr ? `MANCHE ${t.manche} SUR 3` : `ROUND ${t.manche} OF 3`)}
           </div>
           {fin && <div className="text-[10px] text-muted-foreground">
             {t.manche === 3 ? (fr ? `Vainqueur le ${date(fin, fr)}` : `Winner on ${date(fin, fr)}`)
-                            : (fr ? `La dernière équipe sera éliminée le ${date(fin, fr)}` : `Last team out on ${date(fin, fr)}`)}
+                            : (fr ? `Le dernier clan éteindra sa torche le ${date(fin, fr)}` : `The last clan puts out its torch on ${date(fin, fr)}`)}
           </div>}
         </div>
       )}
@@ -279,16 +312,20 @@ function VueManche({ t, fr, nom, enRoute, courir, attaquer, entrer }: {
       </div>
 
       {t.phase === 'manche' && (
-        !nom ? <p className="text-xs text-center text-muted-foreground">{fr ? 'Choisis ton nom pour rejoindre une équipe.' : 'Pick your name to join a team.'}</p>
+        !nom ? <p className="text-xs text-center text-muted-foreground">{fr ? 'Choisis ton nom pour entrer dans la Trêve.' : 'Pick your name to join the Truce.'}</p>
         : !moi ? (
-          <button onClick={entrer} className="w-full rounded-xl py-3 font-black text-black" style={{ background: GLACE }}>
-            {fr ? 'REJOINDRE UNE ÉQUIPE' : 'JOIN A TEAM'}
-          </button>
+          <div className="w-full flex flex-col gap-2 items-center">
+            <p className="text-xs text-center text-foreground/80 leading-snug">{L(MOMENTS.tirage.ligne, fr)}</p>
+            <button onClick={entrer} className="w-full rounded-xl py-3 font-black text-black" style={{ background: GLACE }}>
+              {fr ? 'LA NEIGE CHOISIT MON CLAN' : 'LET THE SNOW CHOOSE MY CLAN'}
+            </button>
+          </div>
         ) : (
           <>
+            <MonClan n={moi.equipe} fr={fr} />
             <p className="text-xs text-center text-foreground/80">
-              {fr ? `Dans chaque épreuve, ton meilleur chrono du jour rapporte ses points FFA à ton équipe. Bats le fantôme d’un adversaire : +${t.regles.duel}. S’il te bat, son équipe prend +${t.regles.defense}.`
-                  : `In each event, your best time of the day gives its FFA points to your team. Beat a rival's ghost: +${t.regles.duel}. If it beats you, its team takes +${t.regles.defense}.`}
+              {fr ? `Dans chaque épreuve, ton meilleur chrono du jour est ton offrande : ses points FFA vont à ton clan. Bats le fantôme d’un champion adverse : +${t.regles.duel}. S’il te bat, son clan prend +${t.regles.defense}.`
+                  : `In each event, your best time of the day is your offering: its FFA points go to your clan. Beat a rival champion's ghost: +${t.regles.duel}. If it beats you, their clan takes +${t.regles.defense}.`}
             </p>
             <div className="grid grid-cols-4 gap-1" role="tablist">
               {EPREUVES_NOEL.map(ep => (
@@ -301,11 +338,12 @@ function VueManche({ t, fr, nom, enRoute, courir, attaquer, entrer }: {
             </div>
             <button onClick={() => courir(epreuve)} disabled={t.pause} className="w-full rounded-xl py-3 font-black text-black disabled:opacity-40"
                     style={{ background: COULEURS[moi.equipe] }}>
-              {fr ? `COURIR LE ${NOM_EPREUVE[epreuve].fr.toUpperCase()} POUR MON ÉQUIPE` : `RUN THE ${NOM_EPREUVE[epreuve].en.toUpperCase()} FOR MY TEAM`}
+              {fr ? `COURIR LE ${NOM_EPREUVE[epreuve].fr.toUpperCase()} POUR ${L(clanDe(moi.equipe).nom, fr).toUpperCase()}` : `RUN THE ${NOM_EPREUVE[epreuve].en.toUpperCase()} FOR ${L(clanDe(moi.equipe).nom, fr).toUpperCase()}`}
             </button>
             {proies.length > 0 && !t.pause && (
               <div className="w-full flex flex-col gap-1">
-                <h3 className="text-[11px] font-black tracking-[0.2em] uppercase text-white/80">{fr ? `Fantômes à défier · ${NOM_EPREUVE[epreuve].fr}` : `Ghosts to challenge · ${NOM_EPREUVE[epreuve].en}`}</h3>
+                <h3 className="text-[11px] font-black tracking-[0.2em] uppercase text-white/80">{fr ? `Duels de champions · ${NOM_EPREUVE[epreuve].fr}` : `Champions’ duels · ${NOM_EPREUVE[epreuve].en}`}</h3>
+                <p className="text-[10px] text-muted-foreground -mt-0.5">{fr ? 'Même absent, ton ombre défend ton clan.' : 'Even when you’re away, your shadow defends your clan.'}</p>
                 {proies.slice(0, 20).map(p => (
                   <button key={p.key} onClick={() => attaquer(p.key, epreuve)} disabled={!!enRoute}
                     className="w-full rounded-xl border px-3 py-2 flex items-center gap-2 text-left"
@@ -328,19 +366,98 @@ function VueManche({ t, fr, nom, enRoute, courir, attaquer, entrer }: {
 
 function CarteEquipe({ e, fr, mienne }: { e: EquipeNoel; fr: boolean; mienne: boolean }) {
   const c = COULEURS[e.n];
+  const k = clanDe(e.n);
   const out = e.eliminee != null;
   return (
-    <div className="rounded-2xl border-2 px-3 py-2 flex flex-col gap-0.5" style={{ borderColor: c, opacity: out ? 0.45 : 1, background: mienne ? c + '22' : undefined }}>
-      <div className="flex items-center gap-1 text-[9px] font-black tracking-widest uppercase" style={{ color: c }}>
-        {NOMS_COULEUR[fr ? 'fr' : 'en'][e.n]}{mienne && <span className="text-white/80">· {fr ? 'ton équipe' : 'your team'}</span>}
+    <div className="rounded-2xl border-2 px-2 py-2 flex gap-2" style={{ borderColor: c, opacity: out ? 0.45 : 1, background: mienne ? c + '22' : undefined }}>
+      <img src={urlBanniere(e.n, fr)} alt="" className="w-10 h-[3.75rem] shrink-0" style={{ filter: out ? 'grayscale(1)' : undefined }} />
+      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+        <div className="flex items-center gap-1 text-[9px] font-black tracking-widest uppercase truncate" style={{ color: c }}>
+          {L(k.nom, fr)}{mienne && <span className="text-white/80">· {fr ? 'ton clan' : 'your clan'}</span>}
+        </div>
+        <div className="font-black truncate flex items-center gap-1 text-sm"><Crown className="w-3.5 h-3.5 shrink-0" style={{ color: OR }} aria-hidden />{e.chef}</div>
+        <div className="flex items-baseline justify-between">
+          <span className="font-display font-black text-2xl tabular-nums">{out ? '—' : e.score}</span>
+          <span className="text-[10px] text-muted-foreground">{e.effectif} {fr ? 'coureurs' : 'runners'}</span>
+        </div>
+        {out && <div className="text-[10px] font-black leading-tight" style={{ color: c }}>{fr ? `TORCHE ÉTEINTE (manche ${e.eliminee})` : `TORCH OUT (round ${e.eliminee})`}</div>}
       </div>
-      <div className="font-black truncate flex items-center gap-1"><Crown className="w-3.5 h-3.5 shrink-0" style={{ color: OR }} aria-hidden />{e.chef}</div>
-      <div className="flex items-baseline justify-between">
-        <span className="font-display font-black text-2xl tabular-nums">{out ? '—' : e.score}</span>
-        <span className="text-[10px] text-muted-foreground">{e.effectif} {fr ? 'joueurs' : 'players'}</span>
-      </div>
-      {out && <div className="text-[10px] font-black" style={{ color: c }}>{fr ? `ÉLIMINÉE (manche ${e.eliminee})` : `OUT (round ${e.eliminee})`}</div>}
     </div>
+  );
+}
+
+/** Les quatre bannieres cote a cote, chacune avec sa devise ; celles des clans eteints, en gris. */
+function LesBannieres({ t, fr }: { t: TableauEq | null; fr: boolean }) {
+  const reduit = useAnimationsReduites();
+  return (
+    <div className="w-full grid grid-cols-4 gap-2">
+      {CLANS.map((k, i) => {
+        const e = t?.equipes.find(x => x.n === k.n);
+        const out = e?.eliminee != null;
+        return (
+          <div key={k.cle} className="flex flex-col items-center text-center gap-0.5">
+            <motion.img src={urlBanniere(k.n, fr)} alt={L(k.clan, fr)} className="w-full max-w-[5.5rem] drop-shadow-lg"
+              style={{ filter: out ? 'grayscale(1) brightness(0.6)' : undefined }}
+              animate={reduit || out ? {} : { rotate: [0, i % 2 ? 2.5 : -2.5, 0] }}
+              transition={reduit || out ? {} : { duration: 3.2, delay: i * 0.4, repeat: Infinity, ease: 'easeInOut' }} />
+            <span className="text-[9px] italic leading-tight text-white/70">« {L(k.devise, fr)} »</span>
+            {e && <span className="text-[9px] font-black truncate max-w-full" style={{ color: k.couleur }}>{L(k.champion, fr)} : {e.chef}</span>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Ton clan : sa banniere, sa vertu, son cri. */
+function MonClan({ n, fr }: { n: number; fr: boolean }) {
+  const k = clanDe(n);
+  return (
+    <div className="w-full rounded-2xl border-2 px-3 py-2 flex items-center gap-3" style={{ borderColor: k.couleur, background: k.couleur + '18' }}>
+      <img src={urlBanniere(n, fr)} alt="" className="w-12 h-[4.5rem] shrink-0" />
+      <div className="flex-1 min-w-0 flex flex-col">
+        <span className="text-[9px] font-black tracking-[0.2em] uppercase text-white/70">{fr ? 'La neige t’a choisi' : 'The snow chose you'}</span>
+        <span className="font-black text-base leading-tight" style={{ color: k.couleur }}>{L(k.clan, fr)}</span>
+        <span className="text-[11px] text-foreground/80 leading-snug">{L(k.vertu, fr)}</span>
+        <span className="text-[11px] font-black mt-0.5" style={{ color: k.couleur }}>{L(k.cri, fr)}</span>
+      </div>
+    </div>
+  );
+}
+
+/** La legende de la Treve, page a page. */
+function Legende({ fr, onClose }: { fr: boolean; onClose: () => void }) {
+  const [p, setP] = useState(0);
+  const pages = LEGENDE.pages;
+  const derniere = p >= pages.length - 1;
+  return (
+    <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+      <motion.div key={p} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md rounded-2xl border p-5 flex flex-col gap-3"
+        style={{ borderColor: OR, background: 'linear-gradient(170deg, #1a2550, #0c1229)' }}>
+        <span className="text-[10px] font-bold tracking-[0.3em]" style={{ color: GLACE }}>{fr ? 'LA LÉGENDE' : 'THE LEGEND'}</span>
+        <h3 className="font-display font-black text-xl leading-tight" style={{ color: OR }}>{L(LEGENDE.titre, fr)}</h3>
+        {p === 0 && (
+          <div className="grid grid-cols-4 gap-2">
+            {CLANS.map(k => <img key={k.cle} src={urlBanniere(k.n, fr)} alt={L(k.clan, fr)} className="w-full" />)}
+          </div>
+        )}
+        <div className="flex flex-col gap-1.5">
+          {pages[p].map((l, i) => (
+            <motion.p key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 + i * 0.3 }}
+              className="text-[15px] leading-snug text-white/90">{L(l, fr)}</motion.p>
+          ))}
+        </div>
+        <div className="flex items-center justify-between pt-1">
+          <span className="text-[10px] text-white/45 tabular-nums">{p + 1}/{pages.length}</span>
+          <button onClick={() => (derniere ? onClose() : setP(p + 1))}
+            className="flex items-center gap-1 px-4 py-2 rounded-xl font-black text-xs tracking-widest text-black" style={{ background: OR }}>
+            {derniere ? (fr ? 'ENTRER DANS LA TRÊVE' : 'JOIN THE TRUCE') : (fr ? 'SUITE' : 'NEXT')} <ChevronRight className="w-4 h-4" aria-hidden />
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -354,10 +471,10 @@ function Verdict({ v, fr, onDone }: { v: VerdictEq; fr: boolean; onDone: () => v
   else {
     const ep = v.epreuve && NOM_EPREUVE[v.epreuve] ? `${NOM_EPREUVE[v.epreuve][fr ? 'fr' : 'en']} · ` : '';
     titre = ep + (v.niveau ? `${secondes(v.ms, fr)} s · ${v.niveau} (${v.ffa} pts)` : `${secondes(v.ms, fr)} s · ${fr ? 'hors barème' : 'off the table'}`);
-    sous = v.gain ? (fr ? `+${v.gain} pour ton équipe` : `+${v.gain} for your team`) : (fr ? 'Pas mieux que ton meilleur du jour' : 'Not better than your best today');
+    sous = v.gain ? (fr ? `+${v.gain} pour ton clan` : `+${v.gain} for your clan`) : (fr ? 'Pas mieux que ton meilleur du jour' : 'Not better than your best today');
     const d = v.duel;
     if (d && d.compte) sous += d.gagne ? (fr ? ` · fantôme de ${d.cible} battu, +${d.points}` : ` · ${d.cible}'s ghost beaten, +${d.points}`)
-                                       : (fr ? ` · le fantôme de ${d.cible} gagne, son équipe prend +${-d.points}` : ` · ${d.cible}'s ghost wins, their team takes +${-d.points}`);
+                                       : (fr ? ` · le fantôme de ${d.cible} gagne, son clan prend +${-d.points}` : ` · ${d.cible}'s ghost wins, their clan takes +${-d.points}`);
     else if (d) sous += fr ? ` · duel contre ${d.cible} déjà joué aujourd’hui` : ` · already raced ${d.cible} today`;
     couleur = OR;
   }
@@ -382,8 +499,8 @@ function Fil({ fil, equipes, fr }: { fil: FilEq[]; equipes: EquipeNoel[]; fr: bo
       case 'ffa': return fr ? `${f.a} : ${f.b} (+${f.points})` : `${f.a}: ${f.b} (+${f.points})`;
       case 'duel': return fr ? `${f.a} bat le fantôme de ${f.b} (+${f.points})` : `${f.a} beats ${f.b}'s ghost (+${f.points})`;
       case 'defense': return fr ? `Le fantôme de ${f.a} résiste à ${f.b} (+${f.points})` : `${f.a}'s ghost holds off ${f.b} (+${f.points})`;
-      case 'eliminee': return fr ? `✖ L’équipe ${f.a} est éliminée` : `✖ ${f.a}'s team is out`;
-      case 'vainqueur': return fr ? `🏆 L’équipe ${f.a} gagne Noël` : `🏆 ${f.a}'s team wins Christmas`;
+      case 'eliminee': return `✖ ${L(clanDe(f.equipe).extinction, fr)}`;
+      case 'vainqueur': return `🏆 ${L(clanDe(f.equipe).sacre, fr)}`;
       default: return '';
     }
   };
@@ -404,13 +521,13 @@ function Fil({ fil, equipes, fr }: { fil: FilEq[]; equipes: EquipeNoel[]; fr: bo
 function Calendrier({ t, fr }: { t: TableauEq; fr: boolean }) {
   const C = t.calendrier;
   const lignes: [number, string][] = [
-    [C.vote, fr ? 'Vote des chefs (8 premiers du 60 m)' : 'Captain vote (top 8 of the 60 m)'],
-    [C.voteFin, fr ? 'Départage au 200 m en salle si égalité' : 'Indoor 200 m decider if tied'],
-    [C.departageFin, fr ? 'Les équipes s’ouvrent · manche 1' : 'Teams open · round 1'],
-    [C.manches[0].fin, fr ? '1ʳᵉ élimination · manche 2' : '1st elimination · round 2'],
-    [C.pause.debut, fr ? 'Pause : championnat de France' : 'Break: French championship'],
-    [C.manches[1].fin, fr ? '2ᵉ élimination · finale' : '2nd elimination · final'],
-    [C.manches[2].fin, fr ? 'Vainqueur de Noël' : 'Christmas winner'],
+    [C.vote, fr ? 'L’Appel des Champions : vote parmi les 8 premiers du 60 m' : 'Call of Champions: vote among the top 8 of the 60 m'],
+    [C.voteFin, fr ? 'Le Duel des Prétendants : 200 m en salle si égalité' : 'Contenders’ Duel: indoor 200 m if tied'],
+    [C.departageFin, fr ? 'Le Tirage de la Neige · le Feu des Premières Neiges (manche 1)' : 'Drawing of the Snow · Fire of the First Snow (round 1)'],
+    [C.manches[0].fin, fr ? 'Un clan éteint sa torche · la Longue Nuit (manche 2)' : 'A clan puts out its torch · the Long Night (round 2)'],
+    [C.pause.debut, fr ? 'La Trêve du Solstice : championnat de France' : 'Solstice Truce: French championship'],
+    [C.manches[1].fin, fr ? 'Un second clan s’éteint · la Course de l’Étoile (finale)' : 'A second clan goes out · the Star Race (final)'],
+    [C.manches[2].fin, fr ? 'L’Étoile s’allume : le clan vainqueur partage la flamme' : 'The Star is lit: the winning clan shares the flame'],
   ];
   return (
     <div className="w-full flex flex-col gap-1 rounded-2xl border border-white/10 px-3 py-2">
