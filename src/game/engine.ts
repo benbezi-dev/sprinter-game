@@ -67,7 +67,7 @@ import type { RaceKey } from './leaderboard';
 import { suivreTunnel, etapeTunnel, mesurerFinIntro } from './tunnel';
 import { premiereArrivee } from './premiers-pas';
 import { contexteDeLaCourse } from './contexte-course';
-import { DUEL_MARQUES_OUVERT, NOEL_OUVERT } from './canal';
+import { DUEL_MARQUES_OUVERT, NOEL_OUVERT, NOEL_EQUIPES_OUVERT } from './canal';
 import { compterCarriere, poserLesCarrieresDAvant } from './legende/compte';
 import { crediterEtape } from './pieces';
 import { jouerLeFauxDepart, rangerLeFauxDepart } from './faux-depart';
@@ -174,10 +174,16 @@ SprinterApp.G.onRaceRecorded = (race: string, t: number, mode: string, level: nu
   // NOEL 2026, les quatre equipes (game/noel-equipes.ts) : une epreuve en salle
   // de manche, ou le 200 m du departage des chefs.
   const noelEq = (SprinterApp.G.shotOpts || {}).noelEquipes;
-  if (NOEL_OUVERT && noelEq && ['60', '200s', '400s', '60h'].includes(race) && t != null && !SprinterApp.G.rejeu) {
+  if (NOEL_EQUIPES_OUVERT && noelEq && ['60', '200s', '400s', '60h'].includes(race) && t != null && !SprinterApp.G.rejeu) {
     const trace = Array.isArray(SprinterApp.G.recTrace) ? SprinterApp.G.recTrace.slice() : [];
     const cible = noelEq.cible && SprinterApp.G.ghostSet ? String(noelEq.cible) : null;
     import('./noel-equipes').then(m => m.envoyerCourse(race, t, trace, cible)).catch(() => { /* hors ligne */ });
+  }
+  // LE CALENDRIER DE L'AVENT (game/avent.ts) : une course partie d'une case se juge
+  // contre son chrono a battre ; la victoire ouvre le chapitre et la case suivante.
+  const avent = (SprinterApp.G.shotOpts || {}).avent;
+  if (NOEL_OUVERT && avent && Number.isInteger(avent.n) && t != null && !SprinterApp.G.rejeu) {
+    import('./avent').then(m => m.arrivee(avent.n, t)).catch(() => { /* */ });
   }
 };
 

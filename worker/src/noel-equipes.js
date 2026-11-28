@@ -29,8 +29,11 @@
    est passee (`regler`), une seule fois chacune (table noel_eq_etapes, ecrite
    dans le meme lot que ses effets).
 
-   LES DATES. En production : PROD_OUVERT, faux tant que l'auteur n'a pas
-   valide sur le canal de test (« mets-le en test d'abord », 23/11). Sur le
+   LES DATES. En production : ouvert TOUT SEUL a l'ouverture du vote, le
+   7/12 a minuit (heure de Paris), jusqu'a la fermeture du palmares le 1/1
+   (auteur, 28/11 : « ouvre-le automatiquement le jour du 7/12 comme prevu »).
+   Avant, l'evenement est muet (404). Le jeu tient la meme date
+   (src/game/canal.ts, NOEL_EQUIPES_OUVERT) : les deux bougent ensemble. Sur le
    canal de test, on vit le meme calendrier decale : POST /noel-equipes/horloge
    (admin) pose la date simulee.
 --------------------------------------------------------------------------- */
@@ -39,9 +42,6 @@ import { MESSAGE_PLANCHER, sousLePlancher } from './plancher.js';
 
 export const EVENEMENT = 'noel-equipes-2026';
 const evenementDe = test => test ? `${EVENEMENT}-test` : EVENEMENT;
-
-/** Ouvert au public ? Faux jusqu'a la validation de l'auteur. */
-export const PROD_OUVERT = false;
 
 const P = s => Date.parse(s + '+01:00'); // heure de Paris, decembre = UTC+1
 export const CALENDRIER = {
@@ -107,7 +107,10 @@ export function phaseA(t) {
 /** Le jour de Paris (UTC+1 fixe : l'evenement tient en decembre). */
 export const jourDe = t => new Date(t + 3600_000).toISOString().slice(0, 10);
 
-export function ouvert(canalTest) { return canalTest || PROD_OUVERT; }
+/** Ouvert sur ce canal a l'instant `t` ? Le public, du vote (7/12) a la fermeture (1/1). */
+export function ouvert(canalTest, t = Date.now()) {
+  return canalTest || (t >= CALENDRIER.vote && t < CALENDRIER.ferme);
+}
 
 /* ------------------------------------------------------------- les tables */
 

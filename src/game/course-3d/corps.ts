@@ -351,9 +351,42 @@ function corpsDe(r: any): Corps | null {
   copie.traverse((o: any) => { if (o.userData?.semelle) semelles.push(o.userData.semelle); });
   // (le corps de femme est plus petit que celui d'homme : ramene a lui, la taille du look decide seule, comme avant)
   c = { m: modeleDe(copie), mats, echelle: source !== gabarit ? hauteurDe(gabarit) / hauteurDe(source) : undefined, semelles };
+  if (L.pereNoel) habillerPereNoel(copie, c.m);
   monde.add(c.m.racine);
   corps.set(r, c);
   return c;
+}
+
+// LE PERE NOEL EST UN ATHLETE (l'auteur, 15/11, evenement de Noel) : sur le Village de l'Etoile, un des partants
+// court en Pere Noel — tenue rouge (son look, sprinter-core.js VEDETTES), le bonnet a pompon et la barbe blanche ici.
+// Les deux pieces sont construites dans le repere du MODELE (y en haut, z vers l'avant, en metres) puis accrochees a
+// l'os de la tete par l'inverse de sa pose de repos : elles ne dependent ni de l'orientation ni de l'echelle de l'os.
+function habillerPereNoel(racineGltf: THREE.Object3D, m: Modele) {
+  const tete = m.os.get('head');
+  if (!tete) return;
+  racineGltf.updateMatrixWorld(true);
+  const rel = new THREE.Matrix4().copy(racineGltf.matrixWorld).invert().multiply(tete.matrixWorld);
+  const pos = new THREE.Vector3().setFromMatrixPosition(rel);
+  const g = new THREE.Group();
+  g.matrixAutoUpdate = false;
+  g.matrix.copy(rel).invert().multiply(new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z));
+  const rouge = new THREE.MeshStandardMaterial({ color: 0xc41e2a, roughness: 0.75 });
+  const blanc = new THREE.MeshStandardMaterial({ color: 0xf4f4ef, roughness: 0.95 });
+  lisere(rouge); lisere(blanc);
+  const ajoute = (o: THREE.Mesh) => { o.castShadow = OMBRES; o.frustumCulled = false; g.add(o); return o; };
+  // le bonnet : un cone rouge rabattu vers l'arriere, le revers blanc, le pompon
+  const cone = ajoute(new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.26, 18).translate(0, 0.13, 0), rouge));
+  cone.position.set(0, 0.14, -0.01); cone.rotation.x = -0.55;
+  const revers = ajoute(new THREE.Mesh(new THREE.TorusGeometry(0.098, 0.03, 10, 24), blanc));
+  revers.rotation.x = Math.PI / 2; revers.position.set(0, 0.14, -0.005);
+  const pompon = ajoute(new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 10), blanc));
+  pompon.position.set(0, 0.14 + Math.cos(0.55) * 0.26, -0.01 - Math.sin(0.55) * 0.26);
+  // la barbe : une demi-coque blanche sous le menton, et la moustache
+  const barbe = ajoute(new THREE.Mesh(new THREE.SphereGeometry(0.075, 16, 12, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.65), blanc));
+  barbe.scale.set(1.0, 1.35, 0.75); barbe.position.set(0, 0.06, 0.06);
+  const moustache = ajoute(new THREE.Mesh(new THREE.CapsuleGeometry(0.014, 0.07, 4, 8).rotateZ(Math.PI / 2), blanc));
+  moustache.position.set(0, 0.075, 0.105);
+  tete.add(g);
 }
 
 // LE MAILLOT DU VAL-DE-REUIL ATHLETIQUE CLUB (29/10, game/vestiaire.ts MAILLOTS ; d'apres deux photos de l'auteur, sans

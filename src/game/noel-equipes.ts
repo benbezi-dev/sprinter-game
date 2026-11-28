@@ -1,6 +1,6 @@
 // NOEL 2026 — LES QUATRE EQUIPES (23/11/2026). Les regles vivent dans
 // worker/src/noel-equipes.js ; ce module ne fait que lire, voter, entrer,
-// defier et envoyer. Le drapeau d'ouverture reste NOEL_OUVERT (canal.ts).
+// defier et envoyer. Le drapeau d'ouverture est NOEL_EQUIPES_OUVERT (canal.ts) : seul, le 7/12.
 
 import { getDeviceId, getSavedName } from './leaderboard';
 import { SprinterApp } from './engine';

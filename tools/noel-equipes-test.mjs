@@ -192,7 +192,16 @@ ok('vainqueur = l\'equipe de kin', T.vainqueur && T.vainqueur.equipe === ek, T.v
 ok('phase fini', T.phase === 'fini');
 
 titre('le canal');
-ok('ferme en production', N.ouvert(false) === false);
+ok('ferme en production avant le 7/12', N.ouvert(false, Date.parse('2026-12-06T23:59:59+01:00')) === false);
+ok('ouvert en production le 7/12 a minuit', N.ouvert(false, Date.parse('2026-12-07T00:00:00+01:00')) === true);
+ok('ouvert en production pendant la finale', N.ouvert(false, Date.parse('2026-12-24T12:00:00+01:00')) === true);
+ok('ferme en production le 1/1', N.ouvert(false, Date.parse('2027-01-01T00:00:00+01:00')) === false);
+ok('le jeu ouvre a la meme minute que le serveur', (() => {
+  const src = readFileSync(new URL('../src/game/canal.ts', import.meta.url), 'utf8');
+  const m = src.match(/OUVERTURE_NOEL_EQUIPES = Date\.parse\('([^']+)'\)/);
+  const f = src.match(/FERMETURE_NOEL_EQUIPES = Date\.parse\('([^']+)'\)/);
+  return m && f && Date.parse(m[1]) === N.CALENDRIER.vote && Date.parse(f[1]) === N.CALENDRIER.ferme;
+})());
 ok('ouvert sur le canal de test', N.ouvert(true) === true);
 
 console.log(e ? `\n✗ ${e} echec(s)` : '\n✓ tout passe');
