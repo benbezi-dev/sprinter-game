@@ -71,7 +71,7 @@ import { allerAu, mondeVers, MONDES_OUVERTS } from '@/game/mondes';
 import { useJeu, epreuvesDuJeu, nomCourt, jeuDe, estUneCourseDeHaies, epreuvesDuLieu } from '@/game/jeux';
 import { useMenuSansDefiler } from '@/hooks/use-menu-sans-defiler';
 import { InterrupteurLieu, LigneEpreuves, equivalente, estEnSalle, type Lieu } from './ChoixEpreuves';
-import { EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE, NOEL_OUVERT } from '@/game/canal';
+import { EST_TEST, EST_NATIF, APPEL_JOUEUR, HALLOWEEN_OUVERT, DEFI_VEDETTE_OUVERT, LEGENDE_OUVERTE, DUEL_MARQUES_OUVERT, CARRIERE_ATHLETE_OUVERTE, NOEL_OUVERT } from '@/game/canal';
 import { estHalloween } from '@/game/theme-accueil';
 import { MascotteAccueil, MASCOTTE_OUVERTE } from '@/components/MascotteFin';
 // Sans import lui-meme, et appele seulement derriere `LEGENDE_OUVERTE && ...` :
@@ -161,6 +161,25 @@ function PiedLiens({ onTour, onTuto, haies }:
         </button>
       ))}
     </div>
+  );
+}
+
+// La version de test regroupe les rendez-vous sans demonter leurs cartes :
+ // elles continuent ainsi de recevoir leurs mises a jour meme repliees.
+function EvenementsAccueil({ actif, children }: { actif: boolean; children: React.ReactNode }) {
+  if (!actif) return <>{children}</>;
+  return (
+    <details className="group rounded-2xl border border-orange-400/40 bg-black/75 overflow-hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 text-left [&::-webkit-details-marker]:hidden">
+        <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500/20 text-xl">🏆</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-black uppercase tracking-wider text-orange-400">Événements</span>
+          <span className="block text-xs text-white/75">Défis, championnats et éditions spéciales</span>
+        </span>
+        <span aria-hidden="true" className="text-orange-400 transition-transform group-open:rotate-180">⌄</span>
+      </summary>
+      <div className="flex flex-col gap-3 border-t border-white/10 p-3">{children}</div>
+    </details>
   );
 }
 
@@ -464,6 +483,7 @@ export function TitleScreen() {
                           w-[calc(100%+4rem)] max-w-[calc(28rem+4rem)] -mx-8 px-8 -mb-4">
           <div ref={menuContenu} className="my-auto flex flex-col gap-3 sm:gap-4 md:gap-6 serre:gap-2 w-full pt-2 pb-6 serre:pt-1 serre:pb-3">
 
+            <EvenementsAccueil actif={EST_TEST && !haies}>
             {/* L'EDITION DU MOMENT, tout en haut de la colonne.
                 Au-dessus du defi du jour parce qu'elle ne dure qu'une
                 semaine, quand le defi revient tous les jours : c'est la
@@ -489,8 +509,8 @@ export function TitleScreen() {
 
             {/* LE DUEL DES MARQUES, un 100 m : Sprinter seulement. */}
             {!haies && DUEL_MARQUES_OUVERT && <Suspense fallback={null}><BanderoleMarques /></Suspense>}
-            {/* ...et quand il ferme, son tchat reste : le tchat du jeu. */}
-            {!DUEL_MARQUES_OUVERT && <Suspense fallback={null}><TchatDuJeu /></Suspense>}
+            {(!EST_TEST || haies) && !DUEL_MARQUES_OUVERT && <Suspense fallback={null}><TchatDuJeu /></Suspense>}
+
 
 
             {!haies && HALLOWEEN_OUVERT && <Suspense fallback={null}><BanderoleMolosse /></Suspense>}
@@ -522,6 +542,10 @@ export function TitleScreen() {
                 Fermée avec les duels : la sélection lit leur classement, elle
                 ne peut pas ouvrir avant lui. */}
             {DUELS_OUVERTS && !haies && <BanderoleSelection onVoir={() => setTab('versus')} />}
+            </EvenementsAccueil>
+
+            {/* Le tchat reste accessible depuis l'accueil. */}
+            {EST_TEST && !haies && !DUEL_MARQUES_OUVERT && <Suspense fallback={null}><TchatDuJeu /></Suspense>}
 
             {/* Selecteur de mode */}
             {/* Le selecteur flotte au-dessus de la piste, tres claire : sans
