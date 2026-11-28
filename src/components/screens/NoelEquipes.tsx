@@ -10,7 +10,7 @@ import {
   dernierVerdict, oublierVerdict,
   type TableauEq, type EquipeNoel, type VerdictEq, type FilEq,
 } from '@/game/noel-equipes';
-import { CLANS, clanDe, LEGENDE, MOMENTS, urlBanniere, type Ligne } from '@/game/noel-clans';
+import { CLANS, clanDe, LEGENDE, MOMENTS, HEROS, PAROLES, RENCONTRE, urlBanniere, type Ligne } from '@/game/noel-clans';
 
 /* ---------------------------------------------------------------------------
    NOEL 2026 — LES QUATRE EQUIPES. Une vue par phase du calendrier :
@@ -170,6 +170,7 @@ export function EcranNoelEquipes({ onClose }: { onClose: () => void }) {
             <p className="text-xs text-foreground/80 leading-snug">{L(MOMENTS[momentDe(t)].ligne, fr)}</p>
           </div>
         )}
+        {t && <MotDesHeros moment={!t.moi && t.phase === 'manche' ? 'tirage' : momentDe(t)} fr={fr} />}
         <button onClick={() => setLegende(true)}
           className="flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[11px] font-black tracking-widest"
           style={{ borderColor: OR + '88', color: OR }}>
@@ -425,32 +426,84 @@ function MonClan({ n, fr }: { n: number; fr: boolean }) {
   );
 }
 
-/** La legende de la Treve, page a page. */
+/** Le mot des trois heros sur le moment de la Treve : le Pere Noel, Sonny, Frost. */
+function MotDesHeros({ moment, fr }: { moment: keyof typeof PAROLES; fr: boolean }) {
+  const paroles = PAROLES[moment];
+  return (
+    <div className="w-full flex flex-col gap-1.5">
+      {HEROS.map((h, i) => (
+        <motion.div key={h.cle} initial={{ opacity: 0, x: i % 2 ? 12 : -12 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15 * i }}
+          className={`flex items-end gap-2 ${i % 2 ? 'flex-row-reverse text-right' : ''}`}>
+          <img src={`${BASE}/${h.portrait}`} alt={L(h.nom, fr)} className="w-11 h-11 rounded-full object-cover shrink-0 border-2"
+               style={{ borderColor: h.couleur, background: '#0c1229' }} />
+          <div className="flex-1 min-w-0 rounded-2xl px-3 py-1.5 border" style={{ borderColor: h.couleur + '66', background: h.couleur + '14' }}>
+            <span className="block text-[9px] font-black tracking-[0.15em] uppercase" style={{ color: h.couleur }}>
+              {L(h.nom, fr)} · {L(h.role, fr)}
+            </span>
+            <span className="block text-[12px] leading-snug text-white/90">{L(paroles[i], fr)}</span>
+          </div>
+        </motion.div>
+      ))}
+    </div>
+  );
+}
+
+/** La legende de la Treve, page a page ; puis les heros, et comment Sonny et Frost sont devenus amis. */
 function Legende({ fr, onClose }: { fr: boolean; onClose: () => void }) {
   const [p, setP] = useState(0);
   const pages = LEGENDE.pages;
-  const derniere = p >= pages.length - 1;
+  const total = pages.length + 2;
+  const derniere = p >= total - 1;
+  const pageHeros = p === pages.length, pageRencontre = p === pages.length + 1;
   return (
-    <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4"
+    <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4 overflow-y-auto"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
       <motion.div key={p} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md rounded-2xl border p-5 flex flex-col gap-3"
+        className="w-full max-w-md rounded-2xl border p-5 flex flex-col gap-3 my-auto"
         style={{ borderColor: OR, background: 'linear-gradient(170deg, #1a2550, #0c1229)' }}>
-        <span className="text-[10px] font-bold tracking-[0.3em]" style={{ color: GLACE }}>{fr ? 'LA LÉGENDE' : 'THE LEGEND'}</span>
-        <h3 className="font-display font-black text-xl leading-tight" style={{ color: OR }}>{L(LEGENDE.titre, fr)}</h3>
+        <span className="text-[10px] font-bold tracking-[0.3em]" style={{ color: GLACE }}>
+          {pageHeros || pageRencontre ? (fr ? 'LES HÉROS DE LA TRÊVE' : 'HEROES OF THE TRUCE') : (fr ? 'LA LÉGENDE' : 'THE LEGEND')}
+        </span>
+        <h3 className="font-display font-black text-xl leading-tight" style={{ color: OR }}>
+          {pageHeros ? (fr ? 'TOUJOURS AUX CÔTÉS DU PÈRE NOËL' : 'ALWAYS BY SANTA’S SIDE')
+            : pageRencontre ? (fr ? 'SONNY ET FROST' : 'SONNY AND FROST') : L(LEGENDE.titre, fr)}
+        </h3>
         {p === 0 && (
           <div className="grid grid-cols-4 gap-2">
             {CLANS.map(k => <img key={k.cle} src={urlBanniere(k.n, fr)} alt={L(k.clan, fr)} className="w-full" />)}
           </div>
         )}
-        <div className="flex flex-col gap-1.5">
-          {pages[p].map((l, i) => (
-            <motion.p key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 + i * 0.3 }}
-              className="text-[15px] leading-snug text-white/90">{L(l, fr)}</motion.p>
-          ))}
-        </div>
+        {pageHeros ? (
+          <div className="flex flex-col gap-3">
+            {HEROS.map((h, i) => (
+              <motion.div key={h.cle} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 + i * 0.3 }} className="flex gap-3">
+                <img src={`${BASE}/${h.portrait}`} alt="" className="w-16 h-16 rounded-full object-cover shrink-0 border-2" style={{ borderColor: h.couleur, background: '#0c1229' }} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-black leading-tight" style={{ color: h.couleur }}>{L(h.nom, fr)}</div>
+                  <div className="text-[10px] font-bold tracking-widest uppercase text-white/60">{L(h.role, fr)}</div>
+                  <p className="text-[13px] leading-snug text-white/90 mt-0.5">{L(h.portraitTexte, fr)}</p>
+                  <p className="text-[12px] leading-snug italic text-white/65 mt-0.5">{L(h.travers, fr)}</p>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {pageRencontre && (
+              <div className="flex justify-center gap-3 mb-1">
+                {HEROS.filter(h => h.cle !== 'pere-noel').map(h => (
+                  <img key={h.cle} src={`${BASE}/${h.portrait}`} alt={L(h.nom, fr)} className="w-20 h-20 rounded-full object-cover border-2" style={{ borderColor: h.couleur, background: '#0c1229' }} />
+                ))}
+              </div>
+            )}
+            {(pageRencontre ? RENCONTRE : pages[p]).map((l, i) => (
+              <motion.p key={i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.2 + i * 0.3 }}
+                className="text-[15px] leading-snug text-white/90">{L(l, fr)}</motion.p>
+            ))}
+          </div>
+        )}
         <div className="flex items-center justify-between pt-1">
-          <span className="text-[10px] text-white/45 tabular-nums">{p + 1}/{pages.length}</span>
+          <span className="text-[10px] text-white/45 tabular-nums">{p + 1}/{total}</span>
           <button onClick={() => (derniere ? onClose() : setP(p + 1))}
             className="flex items-center gap-1 px-4 py-2 rounded-xl font-black text-xs tracking-widest text-black" style={{ background: OR }}>
             {derniere ? (fr ? 'ENTRER DANS LA TRÊVE' : 'JOIN THE TRUCE') : (fr ? 'SUITE' : 'NEXT')} <ChevronRight className="w-4 h-4" aria-hidden />

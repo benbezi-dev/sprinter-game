@@ -58,6 +58,35 @@ l'Étoile : le Gardien de la Trêve.
 
 ---
 
+## Les héros de la Trêve
+
+Toujours aux côtés du Père Noël sprinteur, les deux mascottes du jeu. Leur
+caractère vient de leurs gestes et de leurs réactions dans le jeu
+(`src/game/mascotte-reactions.ts`). Leurs noms sont une **proposition** : le jeu
+ne leur en donnait pas.
+
+| | Le Père Noël | Sonny (le héros) | Frost (le rival) |
+|---|---|---|---|
+| Rôle | Gardien de la Trêve | Porte-Voix de la Trêve | Chronométreur de la Trêve |
+| Qui il est | Le vieil homme en rouge du lac gelé. Un sprinteur que personne n'a jamais battu sur cent mètres, un rire qui fait trembler les vitres. | Le bandeau blanc, le cœur sur la main. Il vit chaque course comme si c'était la sienne : il fête plus fort que les vainqueurs et pleure plus fort que les perdants. | Les lunettes bleues sur la tête, même en pleine nuit. Il toise, regarde sa montre, a toujours une remarque. Rien ne l'impressionne… en apparence. |
+| Son petit travers | Il raconte « la fois où il a battu un renne au sprint » à chaque repas. | Le pire perdant du Grand Nord : il a boudé deux jours pour un centième. | Il perd son sang-froid dès qu'on le bat, et garde dans sa poche la liste de ceux qui l'ont fait. Il les respecte. Il ne le dira jamais. |
+
+**Ils sont neutres** : aucun n'appartient à un clan, pour ne favoriser aucune
+équipe.
+
+**Sonny et Frost, la Trêve en petit.** L'hiver dernier, ils ne se supportaient
+pas : quarante défis, vingt victoires chacun. Le Père Noël les a assis au coin
+du feu, comme les quatre coureurs du lac. Depuis, ils ne se quittent plus, et
+se chamaillent toujours : c'est leur façon de s'aimer.
+
+**Dans le jeu**, ils parlent à chaque étape (« le mot des héros », trois bulles
+avec leur portrait, `PAROLES` dans `noel-clans.ts`), et la légende se termine
+par deux pages à leur sujet.
+
+Les portraits sont dans `public/noel/heros/` : Sonny et Frost photographiés
+depuis leurs modèles 3D (`mascotte-3d.ts`), le Père Noël recadré dans
+l'illustration de la bande-annonce (générée avec ElevenLabs).
+
 ## Les quatre clans
 
 | | Les Braises | Les Sapins | Les Étoiles | Les Givres |
@@ -134,6 +163,9 @@ Dans `NoelEquipes.tsx` :
   fait un rite (le Tirage de la Neige), mais on ne choisit pas. Laisser le
   choix demanderait de changer la règle du serveur, par exemple un choix
   plafonné (« ce clan est complet, la neige t'envoie ailleurs »).
+- **Les mascottes avaient été retirées du jeu public** (elles ne restaient que
+  sur le canal de test). Avec cette histoire, leurs portraits et leurs noms
+  apparaissent dans l'événement de Noël, donc en public à partir du 7/12.
 - Les noms des clans ne vivent que dans le jeu : le serveur garde ses équipes
   numérotées, et les notifications éventuelles disent encore « équipe ».
 - Pas de traduction des textes du serveur (messages d'erreur).

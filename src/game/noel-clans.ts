@@ -136,6 +136,114 @@ export const MOMENTS: Record<'avant' | 'vote' | 'departage' | 'tirage' | 'manche
     ligne: ['La Trêve s’achève. Les quatre bannières flottent côte à côte jusqu’à l’an prochain.', 'The Truce ends. The four banners fly side by side until next year.'] },
 };
 
+/* ---------------------------------------------------------------- les heros */
+
+/**
+ * LES HEROS DE LA TREVE (l'auteur, 28/11 : « garde le Pere Noel sprinter, ajoute nos heros
+ * toujours a ses cotes, avec des personnalites attachantes basees sur leurs caracteres »).
+ *
+ * Les deux mascottes du jeu (mascotte-3d.ts, mascotte-reactions.ts) gardent ici le caractere
+ * que leurs gestes leur donnent deja :
+ *   - LE HEROS (bandeau blanc, maillot or et marine) : le frimeur et le mauvais perdant du jeu,
+ *     qui vit chaque course comme la sienne — il fete, rit aux larmes, trepigne, pleure a genoux ;
+ *   - LE RIVAL (lunettes bleues, tenue noire et turquoise) : il provoque, toise, regarde sa
+ *     montre, nargue quand tu perds, perd son sang-froid quand tu gagnes.
+ * Leurs NOMS (Sonny, Frost) sont une proposition : le jeu ne leur en donnait pas.
+ *
+ * Ils sont NEUTRES : aucun des deux n'est d'un clan, pour ne pas favoriser une equipe. Le Pere
+ * Noel est le Gardien de la Treve ; Sonny en est le Porte-Voix, Frost le Chronometreur.
+ */
+export type Heros = {
+  cle: 'pere-noel' | 'sonny' | 'frost';
+  nom: Ligne;
+  role: Ligne;
+  /** public/noel/heros/<cle>.webp */
+  portrait: string;
+  couleur: string;
+  /** Qui il est, en deux phrases. */
+  portraitTexte: Ligne;
+  /** Le petit travers qui le rend attachant. */
+  travers: Ligne;
+};
+
+export const HEROS: readonly Heros[] = [
+  { cle: 'pere-noel', nom: ['Le Père Noël', 'Santa Claus'], role: ['Gardien de la Trêve', 'Keeper of the Truce'],
+    portrait: 'noel/heros/pere-noel.webp', couleur: '#ff5a5a',
+    portraitTexte: ['Le vieil homme en rouge du lac gelé. Un sprinteur que personne n’a jamais battu sur cent mètres, rire à faire trembler les vitres.',
+                    'The old man in red from the frozen lake. A sprinter no one has ever beaten over a hundred metres, with a laugh that rattles the windows.'],
+    travers: ['Il raconte « la fois où il a battu un renne au sprint » à chaque repas. Personne n’ose lui dire qu’on la connaît.',
+              'He tells the story of “the time he outran a reindeer” at every meal. Nobody dares tell him they’ve heard it.'] },
+  { cle: 'sonny', nom: ['Sonny', 'Sonny'], role: ['Porte-Voix de la Trêve', 'Herald of the Truce'],
+    portrait: 'noel/heros/sonny.webp', couleur: '#ffd426',
+    portraitTexte: ['Le bandeau blanc, le cœur sur la main. Il vit chaque course comme si c’était la sienne : il fête plus fort que les vainqueurs et pleure plus fort que les perdants.',
+                    'White headband, heart on his sleeve. He lives every race as if it were his own: he celebrates louder than the winners and cries louder than the losers.'],
+    travers: ['Il est le pire perdant du Grand Nord. Il a déjà boudé deux jours pour un centième.',
+              'He is the worst loser in the Far North. He once sulked for two days over a hundredth of a second.'] },
+  { cle: 'frost', nom: ['Frost', 'Frost'], role: ['Chronométreur de la Trêve', 'Timekeeper of the Truce'],
+    portrait: 'noel/heros/frost.webp', couleur: '#bfe6ff',
+    portraitTexte: ['Les lunettes bleues sur la tête, même en pleine nuit. Il toise, il regarde sa montre, il a toujours une remarque. Rien ne l’impressionne… en apparence.',
+                    'Blue shades on his head, even at midnight. He sizes you up, checks his watch, always has a remark. Nothing impresses him… on the surface.'],
+    travers: ['Il perd son sang-froid dès qu’on le bat. Et il garde, dans sa poche, la liste de tous ceux qui l’ont fait. Il les respecte. Il ne le dira jamais.',
+              'He loses his cool the moment you beat him. And he keeps, in his pocket, a list of everyone who has. He respects them. He will never say so.'] },
+];
+
+/** Comment Sonny et Frost sont arrives aux cotes du Pere Noel : la Treve, en petit. */
+export const RENCONTRE: Ligne[] = [
+  ['L’hiver dernier, Sonny et Frost ne se supportaient pas.', 'Last winter, Sonny and Frost couldn’t stand each other.'],
+  ['Le premier riait trop fort, le second ne riait jamais. Ils se sont défiés quarante fois.', 'One laughed too loud, the other never laughed. They raced each other forty times.'],
+  ['Vingt victoires chacun. Le Père Noël les a assis au coin du feu, comme les quatre coureurs du lac.', 'Twenty wins each. Santa sat them by the fire, like the four runners on the lake.'],
+  ['Depuis, ils ne se quittent plus. Ils se chamaillent toujours. C’est leur façon de s’aimer.', 'Since then, they’re inseparable. They still bicker. It’s how they love each other.'],
+];
+
+/** Ce que disent les trois heros a chaque moment de la Treve : [Pere Noel, Sonny, Frost]. */
+export const PAROLES: Record<keyof typeof MOMENTS, [Ligne, Ligne, Ligne]> = {
+  avant: [
+    ['Ho ho ho ! La neige tombe. Lacez vos pointes, la Trêve approche.', 'Ho ho ho! The snow is falling. Lace up, the Truce is coming.'],
+    ['Quatre clans, quatre bannières, un seul feu ! J’en ai des frissons… ou c’est le froid.', 'Four clans, four banners, one fire! I’ve got chills… or it’s the cold.'],
+    ['Il reste quelques jours. Je chronomètre déjà votre impatience.', 'A few days left. I’m already timing your impatience.'],
+  ],
+  vote: [
+    ['Choisissez vos champions avec le cœur. Pas seulement avec le chrono.', 'Choose your champions with your heart. Not just the clock.'],
+    ['Votez pour moi ! Ah, je ne suis pas candidat ? C’est une erreur.', 'Vote for me! Oh, I’m not a candidate? That’s a mistake.'],
+    ['Huit candidats. J’ai leurs temps. Je ne dis rien. Je regarde.', 'Eight candidates. I have their times. I say nothing. I watch.'],
+  ],
+  departage: [
+    ['Égalité ! Comme au temps du lac. On règle ça proprement : en courant.', 'A tie! Just like the lake. We settle it properly: by running.'],
+    ['Un duel au 200 m ? Je ne vais pas survivre à la tension. Quelqu’un me tient la main ?', 'A 200 m duel? I won’t survive the tension. Can someone hold my hand?'],
+    ['Deux cents mètres. Pas d’excuse, pas de vent. Juste la montre.', 'Two hundred metres. No excuses, no wind. Just the watch.'],
+  ],
+  tirage: [
+    ['La neige ne se trompe jamais. Elle t’envoie là où on a besoin de toi.', 'The snow is never wrong. It sends you where you are needed.'],
+    ['Peu importe ton clan, je crierai ton nom. Promis. Je crie très fort.', 'Whatever your clan, I’ll shout your name. Promise. I shout very loud.'],
+    ['Ton clan ne te rendra pas plus rapide. Tes jambes, si.', 'Your clan won’t make you faster. Your legs will.'],
+  ],
+  manche1: [
+    ['Le Feu des Premières Neiges est lancé. Courez pour votre foyer.', 'The Fire of the First Snow is lit. Run for your hearth.'],
+    ['Allez, allez, allez ! Ah, il faut aussi que je respire ? Bon.', 'Go, go, go! Oh, I also need to breathe? Fine.'],
+    ['Un clan éteindra sa torche dans quelques jours. Je sais déjà lequel. Je plaisante. Peut-être.', 'One clan will put out its torch in a few days. I already know which. Kidding. Maybe.'],
+  ],
+  manche2: [
+    ['Une torche s’est éteinte, mais son feu court encore dans les trois autres.', 'A torch went out, but its fire still runs in the other three.'],
+    ['J’ai pleuré pour le clan éliminé. Deux fois. Bon, trois.', 'I cried for the clan that went out. Twice. Okay, three times.'],
+    ['Trois clans. Les chronos baissent. Enfin quelque chose d’intéressant.', 'Three clans. The times are dropping. Finally, something interesting.'],
+  ],
+  pause: [
+    ['La nuit la plus longue. On pose les pointes, on se souvient du lac.', 'The longest night. We lay down our spikes and remember the lake.'],
+    ['Pas de course ? Je ne sais pas quoi faire de mes bras. Je vais danser.', 'No racing? I don’t know what to do with my arms. I’ll dance.'],
+    ['Pause. Même ma montre se repose. Non, je mens : elle tourne toujours.', 'A break. Even my watch is resting. No, I lie: it’s still ticking.'],
+  ],
+  finale: [
+    ['Deux clans, une Étoile. Celui qui l’allumera devra la partager. C’est ça, gagner.', 'Two clans, one Star. Whoever lights it must share it. That’s what winning is.'],
+    ['LA FINALE ! Je n’ai pas dormi. Je ne dormirai pas. Personne ne dort !', 'THE FINAL! I haven’t slept. I won’t sleep. Nobody sleeps!'],
+    ['Finale. Je retire mes lunettes. C’est dire si c’est sérieux.', 'Final. I’m taking off my shades. That’s how serious it is.'],
+  ],
+  fini: [
+    ['L’Étoile brille. Quatre bannières, un seul feu. Joyeux Noël, mes champions.', 'The Star shines. Four banners, one fire. Merry Christmas, my champions.'],
+    ['On a gagné ! Enfin… ils ont gagné. On a tous gagné. Je pleure. C’est de joie.', 'We won! Well… they won. We all won. I’m crying. Happy tears.'],
+    ['Bien couru. Tous. … Ne le répétez pas.', 'Well run. All of you. … Don’t repeat that.'],
+  ],
+};
+
 /* ---------------------------------------------------------------- les bannieres */
 
 /** L'embleme de chaque clan, dessine dans un carre 60 x 60 centre en (0, 0). */
