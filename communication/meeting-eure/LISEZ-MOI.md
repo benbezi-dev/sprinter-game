@@ -80,6 +80,10 @@ co-signé, visible sur les deux comptes) et ajouter #MeetingdeLEure.
 
 ---
 
+## Si le meeting répond
+
+Les réponses prêtes à copier, chacune en un seul message Instagram : `reponses.md`.
+
 ## Les fichiers
 
 ### video/
