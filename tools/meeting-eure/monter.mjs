@@ -57,11 +57,11 @@ const style = `
   *{margin:0;padding:0;box-sizing:border-box} html,body{width:${L}px;height:${H}px;background:transparent;overflow:hidden}
   .bloc{position:absolute;left:${paysage ? 110 * k : 70 * k}px;top:${paysage ? 120 * k : 250 * k}px;right:${70 * k}px}
   .k{font:600 ${26 * k}px/1.2 Jakarta;letter-spacing:.22em;text-transform:uppercase;color:#fff;display:inline-block;background:rgba(8,13,28,.72);padding:${12 * k}px ${18 * k}px;border-radius:${10 * k}px}
-  h1{margin-top:${18 * k}px;font:900 ${(paysage ? 96 : 104) * k}px/0.98 Outfit;color:#fff;text-transform:uppercase;text-shadow:0 ${4 * k}px ${26 * k}px rgba(0,0,0,.7),0 0 ${4 * k}px rgba(0,0,0,.5)}
+  h1{margin-top:${18 * k}px;font:900 ${(paysage ? 80 : 104) * k}px/0.98 Outfit;color:#fff;text-transform:uppercase;text-shadow:0 ${4 * k}px ${26 * k}px rgba(0,0,0,.7),0 0 ${4 * k}px rgba(0,0,0,.5)}
   h1 em{font-style:normal;color:#FFD23F}
-  .coin{position:absolute;${paysage ? `right:${36 * k}px;bottom:${40 * k}px` : `left:50%;transform:translateX(-50%);bottom:${420 * k}px;white-space:nowrap`};font:900 ${30 * k}px/1 Outfit;color:#0b1222;background:#FFD23F;padding:${14 * k}px ${20 * k}px;border-radius:${12 * k}px;letter-spacing:.03em}`;
+  .coin{position:absolute;${paysage ? `right:${36 * k}px;top:${150 * k}px` : `left:50%;transform:translateX(-50%);bottom:${420 * k}px;white-space:nowrap`};font:900 ${30 * k}px/1 Outfit;color:#0b1222;background:#FFD23F;padding:${14 * k}px ${20 * k}px;border-radius:${12 * k}px;letter-spacing:.03em}`;
 const CALQUES = {
-  accroche: `<div class="bloc"><div class="k">Val-de-Reuil · 30.01.2027</div><h1>Cette année,<br>le public<br><em>prend le départ.</em></h1></div>`,
+  accroche: `<div class="bloc"><div class="k">Val-de-Reuil · 30.01.2027</div><h1>Cette année,<br>le public<br><em>prend${paysage ? '<br>' : ' '}le départ.</em></h1></div>`,
   coin: `<div class="coin">SALLE JESSE OWENS · 60 M</div>`,
 };
 const TMP = path.join(RUSH, '.montage');
