@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Loader2, Crown, Ghost, RotateCcw, Swords, Vote, Trophy, BookOpen, ChevronRight } from 'lucide-react';
 import { MONTEE, useAnimationsReduites } from '@/lib/mouvement';
@@ -194,7 +195,7 @@ export function EcranNoelEquipes({ onClose }: { onClose: () => void }) {
         )}
         {t && (t.phase === 'manche' || t.phase === 'fini') && (
           <VueManche t={t} fr={fr} nom={nom} enRoute={enRoute}
-            courir={ep => partir(() => courir(ep))} attaquer={attaquer} entrer={() => agir(entrer())} />
+            courir={ep => partir(() => courir(ep))} attaquer={attaquer} entrer={n => agir(entrer(n))} />
         )}
         {t && t.phase !== 'avant' && t.phase !== 'vote' && <Calendrier t={t} fr={fr} />}
       </div>
@@ -267,7 +268,7 @@ function VueDepartage({ t, fr, moiKey, courir }: { t: TableauEq; fr: boolean; mo
 
 function VueManche({ t, fr, nom, enRoute, courir, attaquer, entrer }: {
   t: TableauEq; fr: boolean; nom: string | null; enRoute: string | null;
-  courir: (epreuve: string) => void; attaquer: (k: string, epreuve: string) => void; entrer: () => void;
+  courir: (epreuve: string) => void; attaquer: (k: string, epreuve: string) => void; entrer: (n: number) => void;
 }) {
   const [epreuve, setEpreuve] = useState<string>(EPREUVES_NOEL[0]);
   const moi = t.moi;
@@ -315,12 +316,7 @@ function VueManche({ t, fr, nom, enRoute, courir, attaquer, entrer }: {
       {t.phase === 'manche' && (
         !nom ? <p className="text-xs text-center text-muted-foreground">{fr ? 'Choisis ton nom pour entrer dans la Trêve.' : 'Pick your name to join the Truce.'}</p>
         : !moi ? (
-          <div className="w-full flex flex-col gap-2 items-center">
-            <p className="text-xs text-center text-foreground/80 leading-snug">{L(MOMENTS.tirage.ligne, fr)}</p>
-            <button onClick={entrer} className="w-full rounded-xl py-3 font-black text-black" style={{ background: GLACE }}>
-              {fr ? 'LA NEIGE CHOISIT MON CLAN' : 'LET THE SNOW CHOOSE MY CLAN'}
-            </button>
-          </div>
+          <ChoixDuClan t={t} fr={fr} entrer={entrer} />
         ) : (
           <>
             <MonClan n={moi.equipe} fr={fr} />
@@ -410,6 +406,71 @@ function LesBannieres({ t, fr }: { t: TableauEq | null; fr: boolean }) {
   );
 }
 
+/**
+ * LE SERMENT DE LA BANNIERE : le joueur choisit son clan parmi les actifs, et ce choix est
+ * DEFINITIF (l'auteur, 28/11 ; worker/src/noel-equipes.js, entrer). Une confirmation
+ * avant l'envoi : on ne change plus de banniere jusqu'a Noel.
+ */
+function ChoixDuClan({ t, fr, entrer }: { t: TableauEq; fr: boolean; entrer: (n: number) => void }) {
+  const [vise, setVise] = useState<number | null>(null);
+  const actives = t.equipes.filter(e => e.eliminee == null);
+  const k = vise !== null ? clanDe(vise) : null;
+  return (
+    <div className="w-full flex flex-col gap-2">
+      <div className="text-center">
+        <div className="font-display font-black text-base" style={{ color: OR }}>{L(MOMENTS.tirage.titre, fr)}</div>
+        <p className="text-xs text-foreground/80 leading-snug">{L(MOMENTS.tirage.ligne, fr)}</p>
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {actives.map(e => {
+          const c = clanDe(e.n);
+          return (
+            <motion.button key={e.n} onClick={() => setVise(e.n)} whileTap={{ scale: 0.97 }}
+              className="rounded-2xl border-2 p-2 flex flex-col items-center text-center gap-1"
+              style={{ borderColor: vise === e.n ? c.couleur : c.couleur + '55', background: vise === e.n ? c.couleur + '26' : c.couleur + '0d' }}>
+              <img src={urlBanniere(e.n, fr)} alt="" className="w-16 h-24" />
+              <span className="font-black text-sm leading-tight" style={{ color: c.couleur }}>{L(c.nom, fr)}</span>
+              <span className="text-[10px] italic text-white/75 leading-tight">« {L(c.devise, fr)} »</span>
+              <span className="text-[10px] text-white/60 leading-tight">{L(c.vertu, fr)}</span>
+              <span className="text-[10px] font-bold text-white/70">{L(c.champion, fr)} : {e.chef} · {e.effectif} {fr ? 'coureurs' : 'runners'}</span>
+            </motion.button>
+          );
+        })}
+      </div>
+      {/* dans un portail : l'ecran est un conteneur anime qui defile, et un « fixed » pose dedans
+          suivait son defilement — la confirmation sortait coupee en haut */}
+      {createPortal(<AnimatePresence>
+        {k && vise !== null && (
+          <motion.div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4"
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setVise(null)}>
+            <motion.div onClick={ev => ev.stopPropagation()} initial={{ y: 16 }} animate={{ y: 0 }}
+              className="w-full max-w-sm rounded-2xl border-2 p-5 flex flex-col items-center text-center gap-2"
+              style={{ borderColor: k.couleur, background: 'linear-gradient(170deg, #1a2550, #0c1229)' }}>
+              <img src={urlBanniere(vise, fr)} alt="" className="w-20 h-[7.5rem]" />
+              <div className="font-display font-black text-xl" style={{ color: k.couleur }}>{L(k.clan, fr)}</div>
+              <p className="text-sm text-white/85 leading-snug">
+                {fr ? `Tu jures fidélité à la bannière des ${L(k.nom, fr).replace(/^Les /, '')}. Ce choix est définitif : tu ne pourras plus changer de clan jusqu’à Noël.`
+                    : `You swear loyalty to the banner of ${L(k.nom, fr)}. This choice is final: you cannot change clans until Christmas.`}
+              </p>
+              <p className="text-[11px] text-white/55 leading-snug">
+                {fr ? 'Seule exception : si ton clan éteint sa torche, son feu passe dans les autres, et toi avec.'
+                    : 'One exception: if your clan puts out its torch, its fire passes to the others, and you with it.'}
+              </p>
+              <button onClick={() => { const n = vise; setVise(null); entrer(n); }}
+                className="w-full rounded-xl py-3 font-black text-black mt-1" style={{ background: k.couleur }}>
+                {fr ? `JE JURE : ${L(k.cri, fr).toUpperCase()}` : `I SWEAR: ${L(k.cri, fr).toUpperCase()}`}
+              </button>
+              <button onClick={() => setVise(null)} className="text-xs text-white/60 underline">
+                {fr ? 'Je réfléchis encore' : 'Let me think again'}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>, document.body)}
+    </div>
+  );
+}
+
 /** Ton clan : sa banniere, sa vertu, son cri. */
 function MonClan({ n, fr }: { n: number; fr: boolean }) {
   const k = clanDe(n);
@@ -417,7 +478,7 @@ function MonClan({ n, fr }: { n: number; fr: boolean }) {
     <div className="w-full rounded-2xl border-2 px-3 py-2 flex items-center gap-3" style={{ borderColor: k.couleur, background: k.couleur + '18' }}>
       <img src={urlBanniere(n, fr)} alt="" className="w-12 h-[4.5rem] shrink-0" />
       <div className="flex-1 min-w-0 flex flex-col">
-        <span className="text-[9px] font-black tracking-[0.2em] uppercase text-white/70">{fr ? 'La neige t’a choisi' : 'The snow chose you'}</span>
+        <span className="text-[9px] font-black tracking-[0.2em] uppercase text-white/70">{fr ? 'Ta bannière, jusqu’à Noël' : 'Your banner, until Christmas'}</span>
         <span className="font-black text-base leading-tight" style={{ color: k.couleur }}>{L(k.clan, fr)}</span>
         <span className="text-[11px] text-foreground/80 leading-snug">{L(k.vertu, fr)}</span>
         <span className="text-[11px] font-black mt-0.5" style={{ color: k.couleur }}>{L(k.cri, fr)}</span>
@@ -576,7 +637,7 @@ function Calendrier({ t, fr }: { t: TableauEq; fr: boolean }) {
   const lignes: [number, string][] = [
     [C.vote, fr ? 'L’Appel des Champions : vote parmi les 8 premiers du 60 m' : 'Call of Champions: vote among the top 8 of the 60 m'],
     [C.voteFin, fr ? 'Le Duel des Prétendants : 200 m en salle si égalité' : 'Contenders’ Duel: indoor 200 m if tied'],
-    [C.departageFin, fr ? 'Le Tirage de la Neige · le Feu des Premières Neiges (manche 1)' : 'Drawing of the Snow · Fire of the First Snow (round 1)'],
+    [C.departageFin, fr ? 'Le Serment de la Bannière · le Feu des Premières Neiges (manche 1)' : 'Oath of the Banner · Fire of the First Snow (round 1)'],
     [C.manches[0].fin, fr ? 'Un clan éteint sa torche · la Longue Nuit (manche 2)' : 'A clan puts out its torch · the Long Night (round 2)'],
     [C.pause.debut, fr ? 'La Trêve du Solstice : championnat de France' : 'Solstice Truce: French championship'],
     [C.manches[1].fin, fr ? 'Un second clan s’éteint · la Course de l’Étoile (finale)' : 'A second clan goes out · the Star Race (final)'],

@@ -8,9 +8,12 @@
    departagent au 200 m en salle (meilleur chrono du jour de departage ; qui ne
    court pas passe apres, puis le rang au 60 m).
 
-   LES EQUIPES. Chaque chef ouvre la sienne. Tout nouvel arrivant va dans
-   l'equipe active la moins nombreuse : les affrontements restent a effectifs
-   proches.
+   LES EQUIPES. Chaque chef ouvre la sienne. LE JOUEUR CHOISIT SON EQUIPE (son
+   clan, cote jeu : src/game/noel-clans.ts) parmi les actives, et ce choix est
+   DEFINITIF — l'auteur, 28/11 : « un choix definitif ». Un second choix est
+   refuse (409). Sans choix (une version de l'appli d'avant le choix, ou une
+   course courue avant d'avoir choisi), l'arrivant va dans l'equipe active la
+   moins nombreuse, comme avant.
 
    LES POINTS, par manche (remis a zero a chaque manche — auteur, 23/11) :
    - le barème FFA (IA 40 … D7 2) du MEILLEUR 60 m du jour de chaque joueur,
@@ -324,21 +327,38 @@ export async function voter(db, { test, t, deviceId, cibleKey }) {
 
 /* ------------------------------------------------------------- rejoindre */
 
-async function rejoindre(db, ev, { nameKey, name, t }) {
+async function rejoindre(db, ev, { nameKey, name, t, choix = null }) {
   const deja = await membre(db, ev, nameKey);
   if (deja) return deja;
   const eqs = await equipes(db, ev);
-  const dest = plusPetite(eqs, await effectifs(db, ev));
+  // le choix du joueur, s'il en a fait un (et seulement vers une equipe encore active)
+  const voulue = Number.isInteger(choix) ? eqs.find(e => e.n === choix && e.eliminee == null) : null;
+  const dest = voulue || plusPetite(eqs, await effectifs(db, ev));
   if (!dest) return null;
   await db.prepare(`INSERT OR IGNORE INTO noel_eq_membres (evenement, name_key, name, equipe, arrivee) VALUES (?, ?, ?, ?, ?)`)
     .bind(ev, nameKey, name, dest.n, t).run();
   return membre(db, ev, nameKey);
 }
 
-export async function entrer(db, { test, t, nameKey, name }) {
+/**
+ * Entrer dans une equipe. `choix` : l'equipe voulue (0..3), DEFINITIF — un joueur deja
+ * membre ne change pas (409 s'il en demande une autre). Une equipe eliminee ne se choisit
+ * pas (409). Sans `choix` : la moins nombreuse.
+ */
+export async function entrer(db, { test, t, nameKey, name, choix = null }) {
   const ev = evenementDe(test);
   if (phaseA(t).phase !== 'manche') return { status: 409, corps: { error: 'les equipes ne sont pas ouvertes' } };
-  const m = await rejoindre(db, ev, { nameKey, name, t });
+  const deja = await membre(db, ev, nameKey);
+  if (deja) {
+    if (Number.isInteger(choix) && choix !== deja.equipe) return { status: 409, corps: { error: 'ton choix est definitif', equipe: deja.equipe } };
+    return { status: 200, corps: { ok: true, equipe: deja.equipe } };
+  }
+  if (Number.isInteger(choix)) {
+    const e = (await equipes(db, ev)).find(x => x.n === choix);
+    if (!e) return { status: 400, corps: { error: 'equipe inconnue' } };
+    if (e.eliminee != null) return { status: 409, corps: { error: 'cette equipe est eliminee' } };
+  }
+  const m = await rejoindre(db, ev, { nameKey, name, t, choix });
   if (!m) return { status: 409, corps: { error: 'pas encore d equipes' } };
   return { status: 200, corps: { ok: true, equipe: m.equipe } };
 }

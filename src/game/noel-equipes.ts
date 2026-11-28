@@ -54,7 +54,8 @@ async function poster(chemin: string, corps: Record<string, unknown>) {
 }
 
 export const voter = (cible: string) => poster('voter', { cible });
-export const entrer = () => poster('entrer', {});
+/** Entrer dans la Treve : `equipe` est le clan choisi (0..3), DEFINITIF (worker/src/noel-equipes.js, entrer). */
+export const entrer = (equipe?: number) => poster('entrer', Number.isInteger(equipe) ? { equipe } : {});
 
 /** Les epreuves en salle du jeu de Noel, et leur nom a l'ecran. */
 export const EPREUVES_NOEL = ['60', '200s', '400s', '60h'] as const;

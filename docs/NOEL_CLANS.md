@@ -50,8 +50,9 @@ C'est l'esprit de Noël au cœur de la compétition : on ne gagne pas pour
 > haïr l'autre.
 >
 > Depuis, chaque décembre, la Trêve revient. Les clans élisent leurs
-> champions. La neige tire au sort leurs coureurs. On ne gagne pas Noël en
-> écrasant les autres. On le gagne pour avoir le droit de partager le feu.
+> champions. Chaque coureur choisit sa bannière et lui jure fidélité : on n'en
+> change plus jusqu'à Noël. On ne gagne pas Noël en écrasant les autres. On le
+> gagne pour avoir le droit de partager le feu.
 
 Le vieil homme en rouge, c'est le Père Noël, le sprinteur noir du Village de
 l'Étoile : le Gardien de la Trêve.
@@ -123,7 +124,7 @@ Les règles du serveur ne changent pas. Seule la façon de les dire change.
 | Avant le 7/12 | **La Trêve des Quatre Clans** : la première neige tombe, les clans attendent. |
 | Vote des 4 chefs parmi les 8 premiers du 60 m (7–9/12) | **L'Appel des Champions** : les plus rapides se présentent, le peuple élit un champion par clan. |
 | Départage au 200 m en salle (9/12) | **Le Duel des Prétendants**. |
-| Le joueur rejoint l'équipe la moins nombreuse | **Le Tirage de la Neige** : on ne choisit pas son clan, la neige le choisit, comme au premier jour de la Trêve où les clans s'échangèrent leurs enfants. |
+| Le joueur choisit son équipe, une fois pour toutes | **Le Serment de la Bannière** : tu choisis ton clan et tu jures fidélité à sa bannière ; on n'en change plus jusqu'à Noël. |
 | Manche 1 (10–15/12) | **Le Feu des Premières Neiges**. |
 | L'équipe la plus faible est éliminée, ses joueurs répartis | **Un clan éteint sa torche** : son feu passe dans les trois autres foyers. |
 | Manche 2 (15–22/12) | **La Longue Nuit**. |
@@ -149,20 +150,26 @@ Dans `NoelEquipes.tsx` :
 - **Le moment** du calendrier est raconté en une ligne.
 - **Les cartes de clan** portent la bannière, le nom du clan, le champion, le
   score et l'effectif.
-- **« La neige t'a choisi »** : une carte pour ton clan, avec sa vertu et son
-  cri. Le bouton pour rejoindre devient « La neige choisit mon clan ».
+- **Le Serment de la Bannière** : les clans encore en course, chacun avec sa
+  bannière, sa devise, sa vertu, son champion et son effectif ; une
+  confirmation (« Je jure : Givres, sur le vent ! ») rappelle que le choix est
+  définitif. Ensuite, la carte « Ta bannière, jusqu'à Noël » montre ton clan,
+  sa vertu et son cri.
 - **Le fil** raconte les éliminations (« Les Braises éteignent leur torche… »)
   et la victoire (« Les Sapins allument l'Étoile… »).
 - **Le calendrier** porte les noms de l'histoire.
 
 ## Ce qui n'est pas fait
 
-- **Choisir son clan.** Tu as demandé une histoire qui donne envie de
-  *choisir* un clan. Le serveur, lui, place chaque nouvel arrivant dans
-  l'équipe la moins nombreuse, pour garder des effectifs proches. L'histoire en
-  fait un rite (le Tirage de la Neige), mais on ne choisit pas. Laisser le
-  choix demanderait de changer la règle du serveur, par exemple un choix
-  plafonné (« ce clan est complet, la neige t'envoie ailleurs »).
+- **Le choix est définitif, sans plafond** (l'auteur, 28/11 : « un choix
+  définitif »). Le serveur refuse un second choix (409) et le choix d'un clan
+  éliminé. Si ton clan est éliminé, ses coureurs sont toujours répartis vers
+  les clans les moins nombreux. Sans choix (une version de l'appli d'avant le
+  choix), le joueur va dans le clan le moins nombreux, comme avant.
+  **Le risque** : sans plafond, un clan populaire peut grossir beaucoup plus
+  que les autres. Les points FFA s'additionnent par joueur, donc un gros clan
+  marque plus. Un plafond (« ce clan est complet ») reste possible si ça se
+  produit.
 - **Les mascottes avaient été retirées du jeu public** (elles ne restaient que
   sur le canal de test). Avec cette histoire, leurs portraits et leurs noms
   apparaissent dans l'événement de Noël, donc en public à partir du 7/12.

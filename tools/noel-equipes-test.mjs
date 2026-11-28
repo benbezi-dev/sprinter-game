@@ -191,6 +191,30 @@ T = await tab(t);
 ok('vainqueur = l\'equipe de kin', T.vainqueur && T.vainqueur.equipe === ek, T.vainqueur);
 ok('phase fini', T.phase === 'fini');
 
+titre('le choix du clan, definitif');
+{
+  // de retour en finale (manche 3) : apres les verifications du vainqueur, pour ne rien fausser plus haut
+  const tf = C.manches[2].debut + H;
+  const Tf = await tab(tf);
+  const actives = Tf.equipes.filter(x => x.eliminee == null).map(x => x.n);
+  const eliminee = Tf.equipes.find(x => x.eliminee != null).n;
+  // choisir la plus nombreuse des actives : la preuve que c'est le choix, pas l'equilibre
+  const plusNombreuse = [...Tf.equipes].filter(x => x.eliminee == null).sort((a, b) => b.effectif - a.effectif)[0].n;
+  let rc = await N.entrer(db, { test: true, t: tf, nameKey: 'choix1', name: 'Choix1', choix: plusNombreuse });
+  ok('le joueur entre dans le clan choisi, meme le plus nombreux', rc.status === 200 && rc.corps.equipe === plusNombreuse, rc);
+  const autre = actives.find(n => n !== plusNombreuse);
+  rc = await N.entrer(db, { test: true, t: tf, nameKey: 'choix1', name: 'Choix1', choix: autre });
+  ok('changer de clan est refuse : le choix est definitif', rc.status === 409 && rc.corps.equipe === plusNombreuse, rc);
+  rc = await N.entrer(db, { test: true, t: tf, nameKey: 'choix1', name: 'Choix1', choix: plusNombreuse });
+  ok('redemander le meme clan ne casse rien', rc.status === 200 && rc.corps.equipe === plusNombreuse, rc);
+  rc = await N.entrer(db, { test: true, t: tf, nameKey: 'choix2', name: 'Choix2', choix: eliminee });
+  ok('un clan elimine ne se choisit pas', rc.status === 409, rc);
+  rc = await N.entrer(db, { test: true, t: tf, nameKey: 'choix3', name: 'Choix3', choix: 9 });
+  ok('un clan inconnu est refuse', rc.status === 400, rc);
+  rc = await N.entrer(db, { test: true, t: tf, nameKey: 'choix4', name: 'Choix4' });
+  ok('sans choix (ancienne appli) : la moins nombreuse, comme avant', rc.status === 200 && actives.includes(rc.corps.equipe), rc);
+}
+
 titre('le canal');
 ok('ferme en production avant le 7/12', N.ouvert(false, Date.parse('2026-12-06T23:59:59+01:00')) === false);
 ok('ouvert en production le 7/12 a minuit', N.ouvert(false, Date.parse('2026-12-07T00:00:00+01:00')) === true);
