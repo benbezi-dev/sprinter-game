@@ -19,6 +19,7 @@ import { ULTRA, palier } from './paliers';
 import { monde, texteCanvas, scene, hemi, soleil, renderer } from './scene';
 import { salleActive, ici, milieu, capIci } from './repere';
 import { chargerLaPlage, uFoule, atlasPlage, atlasPublic, P_SIL, P_GESTES, laFoule } from './public';
+import { construireNoel, toileDeNeige } from '../noel-3d';
 import { carteNeon, retirerLaPluie, oublierLEspace, espaceAutour, pieceDuStade, planetesSousLaPiste, voute, villeNeon, poserLesPieces } from './decors';
 import { lExtinction, presente, presenteTexte, presenteMoi, lesLampesDuPublic, laPresentationAuSol, DUREE_EXTINCTION, lesLignesRouges, lArriveeEnOr } from './salle-noire';
 import { uLisere, eclairerLesCorps, uLisereCoul, uLisereForce, uLisereFace, blocLots, _T } from './corps';
@@ -267,6 +268,14 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
     uLisere.value = 1; uLisereCoul.value.set(0xffd890); uLisereForce.value = 0.22; uLisereFace.value = 0;
     if (!envPalais && renderer) envPalais = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
   }
+  // LE VILLAGE DE L'ETOILE (« plus lumineux », l'auteur, 15/11) : un soir d'hiver eclaire, pas une nuit noire —
+  // une ambiance froide et claire renvoyee par la neige, des projecteurs chauds, le public bien visible
+  if (th.noel) {
+    hemi.color.set(0xd4e2ff); hemi.groundColor.set(0x8090b8); hemi.intensity = 1.35;
+    soleil.color.set(0xfff0dc); soleil.intensity = 2.4;
+    uFoule.uLum.value = 0.95;
+    scene.fog = new THREE.Fog(c3(th.skyBot, [128, 158, 214]).getHex(), 180, 520);
+  }
   if (cyber && !envNeon && renderer) envNeon = carteNeon(renderer);
   if (plage) scene.fog = nuit ? new THREE.Fog(0x0c1530, 220, 1100) : new THREE.Fog(0xf3c9a2, 260, 1300);
   if (luxe) scene.fog = new THREE.Fog(c3(th.skyBot, [28, 21, 13]).getHex(), 70, 300);
@@ -482,6 +491,8 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
   tonte.wrapS = THREE.RepeatWrapping; tonte.repeat.set(10, 1);
   // a Amsalem, l'herbe a du grain (amsalem-3d.ts)
   if (amsalem) { const p = pelouseAmsalem(herbe, hasard); tonte.image = p.image; tonte.wrapT = THREE.RepeatWrapping; tonte.repeat.set(10, 10); tonte.needsUpdate = true; }
+  // au Village de l'Etoile, de la neige et pas d'herbe (noel-3d.ts)
+  if (th.noel) { tonte.image = toileDeNeige(herbe, hasard); tonte.wrapT = THREE.RepeatWrapping; tonte.repeat.set(24, 24); tonte.needsUpdate = true; }
   // (au Champ-de-Mars, le parc s'etend jusqu'aux facades)
   if (cdm) tonte.repeat.set(30, 1);
   // la Nuit etoilee peint sa pelouse a coups de pinceau ; la tonte « en long » suit la piste
@@ -1283,7 +1294,10 @@ export function construireLeStade(nCouloirs: number, th: any, T: any, C: any, st
   // (ni dans le vide de l'espace, ni autour d'un stade de nuit au sol noir, ni au Champ-de-Mars : ses rideaux de tilleuls)
   // LES ARBRES DU LIEU (stades-classiques-3d.ts) : platanes, palmiers, cypres — a la place des blocs
   const ctxClassique = { stade, th, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard };
-  const arbresPoses = !(luxe || cyber || plage || palais || cdm || espace || amsalem) && arbresDuLieu(ctxClassique);
+  // LE VILLAGE DE L'ETOILE (noel-3d.ts) : ses sapins enneiges a la place des arbres du lieu
+  const noel = !!th.noel;
+  const arbresPoses = !(luxe || cyber || plage || palais || cdm || espace || amsalem || noel) && arbresDuLieu(ctxClassique);
+  if (noel) pubAnim.push(construireNoel({ stade, W, R: R_CORDE, D0: DROITE0, D1: DROITE1, hasard }));
   if (th.piscine && !plage) pubAnim.push(riviera(ctxClassique));
   if (th.tourbillons) pubAnim.push(nuitEtoilee(ctxClassique));
   // 0.Games : son decor propre, a la place du materiel du Championnat du monde (voir poserLesPieces)

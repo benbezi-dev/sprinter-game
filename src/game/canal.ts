@@ -267,6 +267,23 @@ export const LANCEMENT_NOEL: number =
   typeof __LANCEMENT_NOEL__ === 'number' ? __LANCEMENT_NOEL__ : Infinity;
 export const DUREE_NOEL_MS: number = typeof __DUREE_NOEL_MS__ === 'number' ? __DUREE_NOEL_MS__ : 0;
 export const NOEL_OUVERT = EST_TEST || (Date.now() >= LANCEMENT_NOEL && Date.now() < LANCEMENT_NOEL + DUREE_NOEL_MS);
+// (28/11, l'auteur : la bataille de boules de neige reste FERMEE pour de bon, la battle
+// royale par equipes la remplace — LANCEMENT_NOEL reste nul. NOEL_OUVERT ne garde donc que
+// le canal de test : le calendrier de l'Avent au Village de l'Etoile (Avent.tsx) y vit.)
+
+/**
+ * NOEL 2026 — LA BATTLE ROYALE PAR EQUIPES (NoelEquipes.tsx). Ouverte TOUTE SEULE au
+ * public a l'ouverture du vote des chefs, le 7/12 a minuit a Paris, jusqu'au 1/1 (le
+ * palmares reste une semaine) — l'auteur, 28/11 : « ouvre-le automatiquement le jour du
+ * 7/12 comme prevu ». Lu a l'heure de l'appareil, comme la 3D ; le serveur tient la meme
+ * date (worker/src/noel-equipes.js, CALENDRIER.vote et .ferme) et reste muet avant : une
+ * montre avancee montre une banderole, pas un evenement. tools/noel-equipes-test.mjs
+ * verifie que les deux dates sont egales.
+ */
+export const OUVERTURE_NOEL_EQUIPES = Date.parse('2026-12-07T00:00:00+01:00');
+export const FERMETURE_NOEL_EQUIPES = Date.parse('2027-01-01T00:00:00+01:00');
+export const NOEL_EQUIPES_OUVERT = EST_TEST
+  || (Date.now() >= OUVERTURE_NOEL_EQUIPES && Date.now() < FERMETURE_NOEL_EQUIPES);
 
 /**
  * L'APPEL DECLENCHE PAR LE JOUEUR — le prototype, etape 1.
