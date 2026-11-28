@@ -487,7 +487,7 @@ function MonClan({ n, fr }: { n: number; fr: boolean }) {
   );
 }
 
-/** Le mot des trois heros sur le moment de la Treve : le Pere Noel, Sonny, Frost. */
+/** Le mot des trois heros sur le moment de la Treve : le Pere Noel, Grelot, Tic-Tac. */
 function MotDesHeros({ moment, fr }: { moment: keyof typeof PAROLES; fr: boolean }) {
   const paroles = PAROLES[moment];
   return (
@@ -509,7 +509,7 @@ function MotDesHeros({ moment, fr }: { moment: keyof typeof PAROLES; fr: boolean
   );
 }
 
-/** La legende de la Treve, page a page ; puis les heros, et comment Sonny et Frost sont devenus amis. */
+/** La legende de la Treve, page a page ; puis les heros, et comment Grelot et Tic-Tac sont devenus amis. */
 function Legende({ fr, onClose }: { fr: boolean; onClose: () => void }) {
   const [p, setP] = useState(0);
   const pages = LEGENDE.pages;

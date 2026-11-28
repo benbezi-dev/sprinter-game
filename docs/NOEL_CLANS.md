@@ -66,7 +66,13 @@ caractère vient de leurs gestes et de leurs réactions dans le jeu
 (`src/game/mascotte-reactions.ts`). Leurs noms sont une **proposition** : le jeu
 ne leur en donnait pas.
 
-| | Le Père Noël | Sonny (le héros) | Frost (le rival) |
+**Les noms (28/11, « les noms, change »)** : Grelot (en anglais Jingle), celui
+qu'on entend de loin, toujours en fête ; Tic-Tac (Tick-Tock), le chronométreur,
+la montre à la main. Ils remplacent Sonny et Frost : « Frost » se confondait
+avec les Givres (« The Frosts ») et avec Givre, le compagnon du calendrier de
+l'Avent.
+
+| | Le Père Noël | Grelot (le héros) | Tic-Tac (le rival) |
 |---|---|---|---|
 | Rôle | Gardien de la Trêve | Porte-Voix de la Trêve | Chronométreur de la Trêve |
 | Qui il est | Le vieil homme en rouge du lac gelé. Un sprinteur que personne n'a jamais battu sur cent mètres, un rire qui fait trembler les vitres. | Le bandeau blanc, le cœur sur la main. Il vit chaque course comme si c'était la sienne : il fête plus fort que les vainqueurs et pleure plus fort que les perdants. | Les lunettes bleues sur la tête, même en pleine nuit. Il toise, regarde sa montre, a toujours une remarque. Rien ne l'impressionne… en apparence. |
@@ -75,7 +81,7 @@ ne leur en donnait pas.
 **Ils sont neutres** : aucun n'appartient à un clan, pour ne favoriser aucune
 équipe.
 
-**Sonny et Frost, la Trêve en petit.** L'hiver dernier, ils ne se supportaient
+**Grelot et Tic-Tac, la Trêve en petit.** L'hiver dernier, ils ne se supportaient
 pas : quarante défis, vingt victoires chacun. Le Père Noël les a assis au coin
 du feu, comme les quatre coureurs du lac. Depuis, ils ne se quittent plus, et
 se chamaillent toujours : c'est leur façon de s'aimer.
@@ -84,7 +90,7 @@ se chamaillent toujours : c'est leur façon de s'aimer.
 avec leur portrait, `PAROLES` dans `noel-clans.ts`), et la légende se termine
 par deux pages à leur sujet.
 
-Les portraits sont dans `public/noel/heros/` : Sonny et Frost photographiés
+Les portraits sont dans `public/noel/heros/` : Grelot et Tic-Tac photographiés
 depuis leurs modèles 3D (`mascotte-3d.ts`), le Père Noël recadré dans
 l'illustration de la bande-annonce (générée avec ElevenLabs).
 

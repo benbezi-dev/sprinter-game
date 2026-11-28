@@ -148,13 +148,13 @@ export const MOMENTS: Record<'avant' | 'vote' | 'departage' | 'tirage' | 'manche
  *     qui vit chaque course comme la sienne — il fete, rit aux larmes, trepigne, pleure a genoux ;
  *   - LE RIVAL (lunettes bleues, tenue noire et turquoise) : il provoque, toise, regarde sa
  *     montre, nargue quand tu perds, perd son sang-froid quand tu gagnes.
- * Leurs NOMS (Sonny, Frost) sont une proposition : le jeu ne leur en donnait pas.
+ * Leurs NOMS (Grelot, Tic-Tac) sont une proposition : le jeu ne leur en donnait pas.
  *
  * Ils sont NEUTRES : aucun des deux n'est d'un clan, pour ne pas favoriser une equipe. Le Pere
- * Noel est le Gardien de la Treve ; Sonny en est le Porte-Voix, Frost le Chronometreur.
+ * Noel est le Gardien de la Treve ; Grelot en est le Porte-Voix, Tic-Tac le Chronometreur.
  */
 export type Heros = {
-  cle: 'pere-noel' | 'sonny' | 'frost';
+  cle: 'pere-noel' | 'grelot' | 'tictac';
   nom: Ligne;
   role: Ligne;
   /** public/noel/heros/<cle>.webp */
@@ -173,29 +173,29 @@ export const HEROS: readonly Heros[] = [
                     'The old man in red from the frozen lake. A sprinter no one has ever beaten over a hundred metres, with a laugh that rattles the windows.'],
     travers: ['Il raconte « la fois où il a battu un renne au sprint » à chaque repas. Personne n’ose lui dire qu’on la connaît.',
               'He tells the story of “the time he outran a reindeer” at every meal. Nobody dares tell him they’ve heard it.'] },
-  { cle: 'sonny', nom: ['Sonny', 'Sonny'], role: ['Porte-Voix de la Trêve', 'Herald of the Truce'],
-    portrait: 'noel/heros/sonny.webp', couleur: '#ffd426',
+  { cle: 'grelot', nom: ['Grelot', 'Jingle'], role: ['Porte-Voix de la Trêve', 'Herald of the Truce'],
+    portrait: 'noel/heros/grelot.webp', couleur: '#ffd426',
     portraitTexte: ['Le bandeau blanc, le cœur sur la main. Il vit chaque course comme si c’était la sienne : il fête plus fort que les vainqueurs et pleure plus fort que les perdants.',
                     'White headband, heart on his sleeve. He lives every race as if it were his own: he celebrates louder than the winners and cries louder than the losers.'],
     travers: ['Il est le pire perdant du Grand Nord. Il a déjà boudé deux jours pour un centième.',
               'He is the worst loser in the Far North. He once sulked for two days over a hundredth of a second.'] },
-  { cle: 'frost', nom: ['Frost', 'Frost'], role: ['Chronométreur de la Trêve', 'Timekeeper of the Truce'],
-    portrait: 'noel/heros/frost.webp', couleur: '#bfe6ff',
+  { cle: 'tictac', nom: ['Tic-Tac', 'Tick-Tock'], role: ['Chronométreur de la Trêve', 'Timekeeper of the Truce'],
+    portrait: 'noel/heros/tictac.webp', couleur: '#bfe6ff',
     portraitTexte: ['Les lunettes bleues sur la tête, même en pleine nuit. Il toise, il regarde sa montre, il a toujours une remarque. Rien ne l’impressionne… en apparence.',
                     'Blue shades on his head, even at midnight. He sizes you up, checks his watch, always has a remark. Nothing impresses him… on the surface.'],
     travers: ['Il perd son sang-froid dès qu’on le bat. Et il garde, dans sa poche, la liste de tous ceux qui l’ont fait. Il les respecte. Il ne le dira jamais.',
               'He loses his cool the moment you beat him. And he keeps, in his pocket, a list of everyone who has. He respects them. He will never say so.'] },
 ];
 
-/** Comment Sonny et Frost sont arrives aux cotes du Pere Noel : la Treve, en petit. */
+/** Comment Grelot et Tic-Tac sont arrives aux cotes du Pere Noel : la Treve, en petit. */
 export const RENCONTRE: Ligne[] = [
-  ['L’hiver dernier, Sonny et Frost ne se supportaient pas.', 'Last winter, Sonny and Frost couldn’t stand each other.'],
+  ['L’hiver dernier, Grelot et Tic-Tac ne se supportaient pas.', 'Last winter, Jingle and Tick-Tock couldn’t stand each other.'],
   ['Le premier riait trop fort, le second ne riait jamais. Ils se sont défiés quarante fois.', 'One laughed too loud, the other never laughed. They raced each other forty times.'],
   ['Vingt victoires chacun. Le Père Noël les a assis au coin du feu, comme les quatre coureurs du lac.', 'Twenty wins each. Santa sat them by the fire, like the four runners on the lake.'],
   ['Depuis, ils ne se quittent plus. Ils se chamaillent toujours. C’est leur façon de s’aimer.', 'Since then, they’re inseparable. They still bicker. It’s how they love each other.'],
 ];
 
-/** Ce que disent les trois heros a chaque moment de la Treve : [Pere Noel, Sonny, Frost]. */
+/** Ce que disent les trois heros a chaque moment de la Treve : [Pere Noel, Grelot, Tic-Tac]. */
 export const PAROLES: Record<keyof typeof MOMENTS, [Ligne, Ligne, Ligne]> = {
   avant: [
     ['Ho ho ho ! La neige tombe. Lacez vos pointes, la Trêve approche.', 'Ho ho ho! The snow is falling. Lace up, the Truce is coming.'],
