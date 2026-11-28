@@ -45,6 +45,7 @@ import { nomDuClub, logoDuClub, CLUB_PARTENAIRE } from '@/game/athlete/partenair
 import { DEPARTEMENTS, REGIONS, DEPARTEMENT_DEFAUT, regionDe } from '@/game/athlete/departements';
 import { type Soin, etatDeSante, soigner, soinPossible, resteACharge, certificatRequis, EXAMEN } from '@/game/athlete/sante';
 import { TenirDansLEcran } from '@/components/TenirDansLEcran';
+import { ATHLETE_RELU } from '@/game/profil';
 
 /* ---------------------------------------------------------------------------
    LA CARRIERE D'ATHLETE — les ecrans du mode
@@ -78,6 +79,8 @@ function athlete(): Athlete | null {
   if (courant === undefined) courant = charger();
   return courant;
 }
+// panneau ferme : la prochaine ouverture relit la version reprise du serveur
+if (typeof window !== 'undefined') window.addEventListener(ATHLETE_RELU, () => { courant = undefined; });
 
 /* ===========================================================================
    DANS L'ONGLET CARRIERE
@@ -125,6 +128,12 @@ export function PanneauAthlete() {
   // le premier matin, le telephone a deja ses messages (telephone.ts)
   const cree = (n: Athlete) => { messagesDeBienvenue(n); messagesDuReveil(n); courant = n; sauver(n); setA(n); setCreation(false); setOuvert(true); };
   const efface = () => { courant = null; sauver(null); setA(null); setOuvert(false); };
+  // la carriere reprise du serveur (profil.ts) remplace celle de la visite
+  useEffect(() => {
+    const relire = () => { courant = charger(); setA(courant); if (!courant) setOuvert(false); };
+    window.addEventListener(ATHLETE_RELU, relire);
+    return () => window.removeEventListener(ATHLETE_RELU, relire);
+  }, []);
 
   // les animations suivent le reglage « reduire les animations » du telephone (portails compris : le contexte React les suit)
   return (

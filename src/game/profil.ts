@@ -35,14 +35,21 @@ const CLE_REV = 'sprinter_profil_rev';
 
 /** Le profil a ete repris d'un autre appareil (l'accueil peut le dire). */
 export const PROFIL_REPRIS = 'sprinter:profil-repris';
+/** L'athlete a ete remplace par la version du serveur. */
+export const ATHLETE_RELU = 'sprinter:athlete-relu';
 
 type Profil = Record<string, string>;
+
+/** Au-dela, la carriere d'athlete reste sur l'appareil : le serveur refuserait tout le profil (PROFIL_MAX_OCTETS, 256 Ko). */
+const ATHLETE_MAX = 100 * 1024;
 
 function instantane(): Profil {
   const p: Profil = {};
   for (const k of CLES_PROFIL) {
     try { const v = localStorage.getItem(k); if (v != null) p[k] = v; } catch { /* stockage ferme */ }
   }
+  // shortcut: le palmares grandit sans plafond ; si une carriere depasse 100 Ko, l'alleger plutot que l'exclure.
+  if ((p.sprinter_athlete_v1?.length || 0) > ATHLETE_MAX) delete p.sprinter_athlete_v1;
   return p;
 }
 
@@ -60,6 +67,10 @@ function appliquer(avant: Profil, apres: Profil): boolean {
   // shortcut: un ecran de saut ouvert pendant une fusion garde son etat d'avant jusqu'a sa reouverture.
   try { SprinterApp.load(); } catch { /* moteur absent : relu au prochain lancement */ }
   try { relireVestiaire(); } catch { /* idem */ }
+  // La carriere d'athlete garde l'athlete en memoire (CarriereAthlete.tsx) : on lui dit de le relire.
+  if ('sprinter_athlete_v1' in apres && avant.sprinter_athlete_v1 !== apres.sprinter_athlete_v1) {
+    try { window.dispatchEvent(new Event(ATHLETE_RELU)); } catch { /* hors navigateur */ }
+  }
   return true;
 }
 

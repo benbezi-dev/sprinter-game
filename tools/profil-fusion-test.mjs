@@ -66,6 +66,20 @@ const s = P(ab['sprinter.longueur.v1']);
 ok('saut : deblocage max, meilleure marque, marques reunies', s.debloque === 3 && s.plusLoin === 2
   && s.pb.m === 7.1 && s.marques.length === 2 && s.marques[0].m === 7.1);
 
+console.log('\n── LA CARRIERE D\'ATHLETE ──');
+{
+  const vieille = J({ v: 2, nee: 1000, semaine: 300, jour: 2, heure: 600, nom: 'ANCIENNE' });
+  const neuve = J({ v: 2, nee: 2000, semaine: 1, jour: 0, heure: 420, nom: 'NEUVE' });
+  const plusLoin = J({ v: 2, nee: 1000, semaine: 300, jour: 3, heure: 420, nom: 'ANCIENNE' });
+  const sansNee = J({ v: 2, semaine: 50, nom: 'AVANT' });
+  ok('une carriere recommencee n\'est pas ecrasee par l\'ancienne', P(fusionnerCle('sprinter_athlete_v1', neuve, vieille)).nom === 'NEUVE');
+  ok('ni dans l\'autre sens', P(fusionnerCle('sprinter_athlete_v1', vieille, neuve)).nom === 'NEUVE');
+  ok('la meme carriere : la plus avancee, entiere', fusionnerCle('sprinter_athlete_v1', vieille, plusLoin) === plusLoin);
+  ok('un telephone neuf reprend la carriere', fusionnerCle('sprinter_athlete_v1', null, vieille) === vieille);
+  ok('une sauvegarde d\'avant `nee` cede a une carriere datee', P(fusionnerCle('sprinter_athlete_v1', sansNee, vieille)).nom === 'ANCIENNE');
+  ok('la carriere fait partie du profil', 'sprinter_athlete_v1' in fusionnerProfils({ sprinter_athlete_v1: vieille }, {}));
+}
+
 console.log('\n── CE QUI NE SE LIT PAS ──');
 ok('une valeur illisible ici cede a celle du serveur', fusionnerCle('sprinter_legende_v1', '{oups', a.sprinter_legende_v1) === a.sprinter_legende_v1);
 ok('une valeur illisible au serveur ne remplace rien', fusionnerCle('sprinter_legende_v1', a.sprinter_legende_v1, '{oups') === a.sprinter_legende_v1);

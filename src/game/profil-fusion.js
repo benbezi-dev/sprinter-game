@@ -19,6 +19,7 @@ export const CLES_PROFIL = [
   'sprinter_defis_vedettes_battus',
   'sprinter_defis_vedettes',
   'halloween2026.v1',              // le carnet du molosse (pas celui du testeur)
+  'sprinter_athlete_v1',           // la carriere d'athlete (canal de test)
   'sprinter.longueur.v1', 'sprinter.triple.v1', 'sprinter.hauteur.v1',
   ...Array.from({ length: 13 }, (_, i) => `sprinter_halloween_piece_${i + 1}_vue`),
 ];
@@ -90,6 +91,15 @@ const REGLES = {
     const t = c => [nombre(c.tenues) || 0, nombre(c.dernierJour) || 0];
     const [ta, ja] = t(a), [tb, jb] = t(b);
     return tb > ta || (tb === ta && jb > ja) ? b : a;
+  },
+  // Une vie d'athlete ne se decoupe pas : on la garde ENTIERE. Deux carrieres
+  // differentes (nee ≠) : la plus recente, celle qu'on vient de recommencer.
+  // La meme : la plus avancee dans le temps du jeu.
+  sprinter_athlete_v1(a, b) {
+    const na = nombre(a.nee) || 0, nb = nombre(b.nee) || 0;
+    if (na !== nb) return nb > na ? b : a;
+    const t = c => ((nombre(c.semaine) || 0) * 7 + (nombre(c.jour) || 0)) * 1440 + (nombre(c.heure) || 0);
+    return t(b) > t(a) ? b : a;
   },
 };
 

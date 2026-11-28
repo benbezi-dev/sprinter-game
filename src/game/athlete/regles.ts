@@ -49,6 +49,8 @@ export type Ligne = { s: number; fr: string; en: string };
 
 export type Athlete = {
   v: 2;
+  /** L'heure de creation (ms) : distingue une carriere recommencee de l'ancienne (profil-fusion.js). */
+  nee?: number;
   nom: string;
   origine: Origine;
   voie: Voie;
@@ -513,6 +515,7 @@ export function nouvelAthlete(nom: string, origine: Origine, voie: Voie, special
   const adulte = age >= 18;
   const a: Athlete = {
     v: 2,
+    nee: Date.now(),
     nom: nom || 'TOI',
     origine,
     voie,
